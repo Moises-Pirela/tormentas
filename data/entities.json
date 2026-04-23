@@ -1,0 +1,254 @@
+[
+    {
+        "name": "player",
+        "render":    { "name": "Wanderer", "sprite": "player_wanderer", "sprite_scale": 1.0 },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 80, "max": 100, "corruption": 0, "energy": 60, "max_energy": 100 },
+        "input":     {},
+        "collider":  { "radius": 16, "faction": 0 },
+        "dodge":     { "duration": 0.18, "speed": 490, "cooldown": 0.72 }
+    },
+    {
+        "name": "weapon_pistol",
+        "render": { "name": "Pistol Mk.I" },
+        "weapon": {
+            "type":             "ranged",
+            "damage":           25,
+            "fire_rate":        5,
+            "projectile_speed": 500,
+            "projectile_life":  1.5,
+            "range":            750,
+            "ammo_max":         8,
+            "reload_time":      1.5
+        }
+    },
+    {
+        "name": "weapon_shotgun",
+        "render": { "name": "Lupara" },
+        "weapon": {
+            "type":             "ranged",
+            "damage":           18,
+            "fire_rate":        0.8,
+            "projectile_speed": 360,
+            "projectile_life":  0.48,
+            "range":            400,
+            "ammo_max":         0
+        }
+    },
+    {
+        "name": "weapon_rifle",
+        "render": { "name": "Carabina" },
+        "weapon": {
+            "type":             "ranged",
+            "damage":           48,
+            "fire_rate":        0.45,
+            "projectile_speed": 720,
+            "projectile_life":  2.4,
+            "range":            1100,
+            "ammo_max":         5,
+            "reload_time":      3.2
+        }
+    },
+    {
+        "name": "enemy_melee",
+        "render":    { "name": "Revenant", "sprite": "enemy_melee", "sprite_scale": 1.0 },
+        "transform": { "position": [200, 100, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 50, "max": 50, "corruption": 0 },
+        "collider":  { "radius": 14, "faction": 1 },
+        "ai_agent":  {
+            "ai_type":      "melee",
+            "aggro_range":  280,
+            "attack_range": 44,
+            "cooldown":     1.5,
+            "speed":        72,
+            "damage":       12
+        }
+    },
+    {
+        "name": "enemy_brute",
+        "render":    { "name": "Bruto", "sprite": "enemy_brute", "sprite_scale": 1.1 },
+        "transform": { "position": [120, -200, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 160, "max": 160, "corruption": 0 },
+        "collider":  { "radius": 20, "faction": 1 },
+        "ai_agent":  {
+            "ai_type":      "melee",
+            "aggro_range":  310,
+            "attack_range": 54,
+            "cooldown":     2.2,
+            "speed":        42,
+            "damage":       32
+        }
+    },
+    {
+        "name": "enemy_hunter",
+        "render":    { "name": "Cazador", "sprite": "enemy_hunter", "sprite_scale": 0.95 },
+        "transform": { "position": [-300, 220, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 28, "max": 28, "corruption": 0 },
+        "collider":  { "radius": 11, "faction": 1 },
+        "ai_agent":  {
+            "ai_type":      "melee",
+            "aggro_range":  360,
+            "attack_range": 36,
+            "cooldown":     0.75,
+            "speed":        145,
+            "damage":       8
+        }
+    },
+    {
+        "name": "enemy_ranged",
+        "render":    { "name": "Pistolero", "sprite": "enemy_ranged", "sprite_scale": 1.0 },
+        "transform": { "position": [-220, -140, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 40, "max": 40, "corruption": 0 },
+        "collider":  { "radius": 14, "faction": 1 },
+        "ai_agent":  {
+            "ai_type":      "ranged",
+            "aggro_range":  400,
+            "attack_range": 340,
+            "cooldown":     2.2,
+            "speed":        50,
+            "damage":       18,
+            "pellet_count": 5,
+            "spread_angle": 0.45
+        }
+    },
+    {
+        "name": "enemy_sniper",
+        "render":    { "name": "enemy_sniper", "sprite": "enemy_sniper", "sprite_scale": 1.0 },
+        "transform": { "position": [380, 290, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 35, "max": 35, "corruption": 0 },
+        "collider":  { "radius": 13, "faction": 1 },
+        "ai_agent":  {
+            "ai_type":      "ranged",
+            "aggro_range":  620,
+            "attack_range": 560,
+            "cooldown":     3.8,
+            "speed":        28,
+            "damage":       46,
+            "pellet_count": 1,
+            "spread_angle": 0.04
+        }
+    },
+    {
+        "name": "npc_shopkeeper",
+        "render":    { "name": "El Mercader", "sprite": "npc_shopkeeper", "sprite_scale": 1.0 },
+        "transform": { "position": [160, 160, 0], "rotation": 0 },
+        "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "shopkeeper", "interact_radius": 80 }
+    },
+    {
+        "name": "npc_mutation_workbench",
+        "render":    { "name": "Mutator Shrine", "sprite": "mutation_workbench", "sprite_scale": 1.15 },
+        "transform": { "position": [220, 160, 0], "rotation": 0 },
+        "collider":  { "radius": 18, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "mutation_workbench", "interact_radius": 84 }
+    },
+    {
+        "name": "mut_glass_cannon",
+        "mut_damage_mult": { "mult": 5.0 },
+        "mut_lock_hp_to_one": {}
+    },
+    {
+        "name": "mut_serrated_hands",
+        "mut_block_ranged": {},
+        "mut_body_melee": {
+            "damage": 60,
+            "arc_angle": 1.5708,
+            "range": 80,
+            "cooldown_max": 0.4
+        }
+    },
+    {
+        "name": "mut_hollow_bones",
+        "mut_move_speed_mult": { "mult": 1.7 },
+        "mut_extra_dodge_charges": { "count": 2, "recharge_max": 1.5 },
+        "mut_damage_taken_mult": { "mult": 1.8 }
+    },
+    {
+        "name": "mut_exoskeleton",
+        "mut_stationary_shield": { "shield_max": 40, "regen_rate": 14 }
+    },
+    {
+        "name": "mut_symbiote"
+    },
+    {
+        "name": "mut_living_bomb",
+        "mut_on_death_explode": {
+            "radius": 150,
+            "damage_pct": 1.0,
+            "cooldown_max": 45.0
+        }
+    },
+    {
+        "name": "mut_blind_fire",
+        "mut_hide_enemy_sprites": {},
+        "mut_unseen_damage_mult": { "mult": 4.0, "vision_radius": 0.0 }
+    },
+    {
+        "name": "mut_timelock",
+        "mut_root_on_fire": {
+            "duration": 0.4,
+            "damage_mult_while_rooted": 2.0,
+            "projectile_speed_mult": 0.3
+        }
+    },
+    {
+        "name": "mut_blood_frenzy",
+        "mut_block_healing": {},
+        "mut_timed_self_damage": { "grace": 8.0, "dps": 8.0 },
+        "mut_kill_heal": { "heal_pct": 1.0 }
+    },
+    {
+        "name": "mut_toxic_flesh",
+        "mut_proximity_damage": { "radius": 90, "dps": 20, "self_fraction": 0.5 }
+    },
+    {
+        "name": "mut_parasite_king",
+        "mut_block_pickup_heal": {},
+        "mut_lifesteal": { "hp_per_hit": 4.0 }
+    },
+    {
+        "name": "mut_spectral_form",
+        "mut_damage_mult": { "mult": 2.0 },
+        "mut_block_pickups": {},
+        "mut_wall_phase": {}
+    },
+    {
+        "name": "mut_corpse_tide",
+        "mut_nonlethal_shots": {},
+        "mut_corpse_trigger": { "radius": 80, "dps": 200 }
+    },
+    {
+        "name": "mut_deadmans_trigger",
+        "mut_early_death_threshold": { "threshold_pct": 0.15 },
+        "mut_missing_health_damage": { "max_mult": 6.0, "floor_hp_pct": 0.15 }
+    },
+    {
+        "name": "mut_metamorphosis",
+        "mut_disable_actives": {},
+        "mut_passive_power": { "mult": 2.0 },
+        "mut_serum_gain_mult": { "mult": 3.0 }
+    },
+    {
+        "name": "enemy_boss",
+        "render":    { "name": "El Verdugo", "sprite": "enemy_brute", "sprite_scale": 2.2 },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 1400, "max": 1400 },
+        "collider":  { "radius": 38, "faction": 1 },
+        "fog_of_war": {},
+        "ai_agent":  {
+            "ai_type":      "melee",
+            "aggro_range":  600,
+            "attack_range": 72,
+            "cooldown":     1.6,
+            "speed":        68,
+            "damage":       60
+        }
+    }
+]

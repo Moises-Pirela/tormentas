@@ -1,0 +1,10 @@
+bin/
+dist/
+save/
+4coder/
+.claude/
+.vscode/
+*.exe
+*.dll
+*.so
+*.dylib

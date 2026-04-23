@@ -1,0 +1,15 @@
+{
+	"move_up": 87,
+	"move_down": 83,
+	"move_left": 65,
+	"move_right": 68,
+	"reload": 82,
+	"dodge": 32,
+	"skill1": 81,
+	"skill2": 69,
+	"skill3": 70,
+	"open_inventory": 73,
+	"open_stats": 67,
+	"open_abilities": 75,
+	"pause": 256
+}

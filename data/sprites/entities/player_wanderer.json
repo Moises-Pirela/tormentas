@@ -1,0 +1,12 @@
+{
+    "frame_width": 64,
+    "frame_height": 64,
+    "columns": 1,
+    "states": {
+        "idle":   { "start_frame": 0, "frame_count": 1, "fps": 6,  "looping": true  },
+        "walk":   { "start_frame": 0, "frame_count": 1, "fps": 10, "looping": true  },
+        "dodge":  { "start_frame": 0, "frame_count": 1, "fps": 16, "looping": false },
+        "attack": { "start_frame": 0, "frame_count": 1, "fps": 12, "looping": false },
+        "death":  { "start_frame": 0, "frame_count": 1, "fps": 8,  "looping": false }
+    }
+}
