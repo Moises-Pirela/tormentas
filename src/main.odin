@@ -280,9 +280,7 @@ draw_playing :: proc() {
         draw_hub_world(w)
     }
     draw_editor_world()
-    draw_ground_items(w)
-    draw_melee_arcs(w)
-    draw_projectiles(w)
+    draw_entities(w, .WorldFX)
     draw_extraction_zones(w)
     draw_shop_world(w)
     rl.EndMode2D()
@@ -297,9 +295,7 @@ draw_playing :: proc() {
     rl.BeginTextureMode(g_sprite_rt)
     rl.ClearBackground(rl.BLANK)
     rl.BeginMode2D(g_camera^)
-    draw_world_npcs(w)
-    draw_enemies(w)
-    draw_player(w)
+    draw_entities(w, .Sprite)
     rl.EndMode2D()
     rl.EndTextureMode()
 

@@ -68,15 +68,15 @@ draw_hub_world :: proc(w: ^cw.World) {
     px := HUB_PORTAL_POS[0]
     py := HUB_PORTAL_POS[1]
     t  := f32(rl.GetTime())
+    center := rl.Vector2{ px, py }
+    iso := world_to_iso_v(center)
 
     pulse      := 0.7 + 0.3 * math.sin(t * 2.0)
     fill_alpha := u8(50  * pulse)
     ring_alpha := u8(200 * pulse)
 
-    rl.DrawCircleV({px, py}, HUB_PORTAL_RADIUS,
-        rl.Color{40, 60, 180, fill_alpha})
-    rl.DrawCircleLines(i32(px), i32(py), HUB_PORTAL_RADIUS,
-        rl.Color{100, 140, 255, ring_alpha})
+    draw_world_circle(center, HUB_PORTAL_RADIUS, rl.Color{40, 60, 180, fill_alpha})
+    draw_world_circle_lines(center, HUB_PORTAL_RADIUS, rl.Color{100, 140, 255, ring_alpha})
 
     if cw.world_is_valid(w, w.player_id) &&
        cw.world_has_component(w, w.player_id, .Transform) {
@@ -88,7 +88,7 @@ draw_hub_world :: proc(w: ^cw.World) {
             lbl_fs := f32(12)
             lsz    := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
             rl.DrawTextEx(g_font, lbl,
-                {px - lsz.x * 0.5, py - HUB_PORTAL_RADIUS - lbl_fs - 4},
+                {iso.x - lsz.x * 0.5, iso.y - HUB_PORTAL_RADIUS - lbl_fs - 4},
                 lbl_fs, 0.5, rl.Color{160, 200, 255, 230})
         }
     }

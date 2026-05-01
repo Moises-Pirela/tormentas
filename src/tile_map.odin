@@ -154,19 +154,61 @@ wall_has_floor_neighbor :: proc(tx, ty: int) -> bool {
 
 draw_tilemap :: proc() {
     for k, v in g_tilemap {
-        x := f32(k[0] * TILE_SIZE)
-        y := f32(k[1] * TILE_SIZE)
-        ts := f32(TILE_SIZE)
+        center, top, right, bottom, left := iso_tile_bounds(k[0], k[1])
         entry := g_tile_sprites[int(v)]
-        dst := rl.Rectangle{ x, y, ts, ts }
+        dst := rl.Rectangle{
+            center.x - ISO_TILE_W * 0.5,
+            center.y - ISO_TILE_H * 0.5,
+            ISO_TILE_W,
+            ISO_TILE_H,
+        }
+        border := rl.Color{ 18, 16, 12, 130 }
         switch v {
         case .Floor:
-            rl.DrawTexturePro(entry.tex, entry.src, dst, {0, 0}, 0, rl.WHITE)
+            floor_tint := rl.Color{ 230, 226, 214, 255 }
+            rl.DrawTexturePro(entry.tex, entry.src, dst, {0, 0}, 0, floor_tint)
+            rl.DrawTriangle(top, right, center, rl.Color{ 255, 248, 224, 22 })
+            rl.DrawTriangle(top, left, center, rl.Color{ 255, 244, 212, 12 })
+            rl.DrawTriangle(bottom, left, center, rl.Color{ 0, 0, 0, 12 })
+            rl.DrawTriangle(bottom, right, center, rl.Color{ 0, 0, 0, 18 })
+            rl.DrawLineV(top, right, border)
+            rl.DrawLineV(right, bottom, border)
+            rl.DrawLineV(bottom, left, border)
+            rl.DrawLineV(left, top, border)
         case .Wall:
-            rl.DrawTexturePro(entry.tex, entry.src, dst, {0, 0}, 0, rl.WHITE)
+            wall_depth := ISO_TILE_H * 1.15
+            wall_top := rl.Rectangle{
+                center.x - ISO_TILE_W * 0.5,
+                center.y - ISO_TILE_H,
+                ISO_TILE_W,
+                ISO_TILE_H,
+            }
+            rl.DrawTexturePro(entry.tex, entry.src, wall_top, {0, 0}, 0, rl.Color{ 228, 218, 206, 255 })
+
+            bottom_l := rl.Vector2{ left.x, left.y + wall_depth }
+            bottom_r := rl.Vector2{ right.x, right.y + wall_depth }
+            bottom_d := rl.Vector2{ bottom.x, bottom.y + wall_depth }
+
+            face_col_l := rl.Color{ 46, 40, 34, 215 }
+            face_col_r := rl.Color{ 76, 66, 54, 225 }
+            face_hi    := rl.Color{ 214, 194, 164, 24 }
+
+            rl.DrawTriangle(bottom, left, bottom_l, face_col_l)
+            rl.DrawTriangle(bottom, bottom_l, bottom_d, face_col_l)
+            rl.DrawTriangle(bottom, right, bottom_r, face_col_r)
+            rl.DrawTriangle(bottom, bottom_r, bottom_d, face_col_r)
+            rl.DrawTriangle(bottom, right, center, face_hi)
+
+            rl.DrawLineV(top, right, rl.Color{ 180, 162, 132, 180 })
+            rl.DrawLineV(right, bottom, border)
+            rl.DrawLineV(bottom, left, rl.Color{ 26, 22, 18, 170 })
+            rl.DrawLineV(left, top, rl.Color{ 110, 96, 74, 150 })
+            rl.DrawLineV(left, bottom_l, rl.Color{ 18, 14, 12, 160 })
+            rl.DrawLineV(bottom, bottom_d, rl.Color{ 18, 14, 12, 160 })
+            rl.DrawLineV(right, bottom_r, rl.Color{ 30, 24, 18, 150 })
         case .Water:
             t_anim  := f32(rl.GetTime())
-            wave    := math.sin(t_anim * 1.8 + (x + y) * 0.07) * 0.5 + 0.5
+            wave    := math.sin(t_anim * 1.8 + (center.x + center.y) * 0.02) * 0.5 + 0.5
             tint := rl.Color{
                 u8(42 + int(wave * 20)),
                 u8(84 + int(wave * 24)),
@@ -174,6 +216,11 @@ draw_tilemap :: proc() {
                 255,
             }
             rl.DrawTexturePro(entry.tex, entry.src, dst, {0, 0}, 0, tint)
+            rl.DrawTriangle(top, right, center, rl.Color{ 185, 225, 255, 22 })
+            rl.DrawLineV(top, right, rl.Color{ 120, 180, 220, 120 })
+            rl.DrawLineV(right, bottom, rl.Color{ 24, 40, 70, 140 })
+            rl.DrawLineV(bottom, left, rl.Color{ 24, 40, 70, 140 })
+            rl.DrawLineV(left, top, rl.Color{ 120, 180, 220, 120 })
         }
     }
 }

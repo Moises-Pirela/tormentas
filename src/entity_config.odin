@@ -71,6 +71,10 @@ RenderConfigDef :: struct {
     display_name: string,   
     sprite_name:  string,
     sprite_scale: f32,
+    world_size:   f32,
+    render_layer: cw.RenderLayer,
+    show_hp_bar:  bool,
+    show_dir_tip: bool,
 }
 
 NPCDef :: struct {
@@ -337,6 +341,25 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
             if v, ok2 := r_obj["sprite_scale"]; ok2 {
                 r.sprite_scale = jf32(v)
             }
+            if v, ok2 := r_obj["world_size"]; ok2 {
+                r.world_size = jf32(v)
+            }
+            if v, ok2 := r_obj["show_hp_bar"].(bool); ok2 {
+                r.show_hp_bar = v
+            }
+            if v, ok2 := r_obj["show_dir_tip"].(bool); ok2 {
+                r.show_dir_tip = v
+            }
+            if v, ok2 := r_obj["layer"].(string); ok2 {
+                switch v {
+                case "sprite":
+                    r.render_layer = .Sprite
+                case "world_fx":
+                    r.render_layer = .WorldFX
+                case:
+                    r.render_layer = .None
+                }
+            }
             def.render_cfg = r
         }
 
@@ -577,6 +600,10 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
             cw.render_config_set_sprite(&comp, rc.sprite_name)
         }
         comp.sprite_scale = rc.sprite_scale if rc.sprite_scale > 0 else 1.0
+        comp.world_size   = rc.world_size
+        comp.render_layer = rc.render_layer
+        comp.show_hp_bar  = rc.show_hp_bar
+        comp.show_dir_tip = rc.show_dir_tip
         cw.world_set_render_config(w, id, comp)
 
         cw.world_set_anim_state(w, id, cw.AnimStateComp{})

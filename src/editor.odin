@@ -431,11 +431,20 @@ update_editor :: proc(dt: f32) {
     g_camera.zoom = ed_base_zoom() * g_ed_zoom
 
     PAN :: f32(400)
-    spd := PAN / g_ed_zoom
-    if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    { g_camera.target.y -= spd * dt }
-    if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  { g_camera.target.y += spd * dt }
-    if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)  { g_camera.target.x -= spd * dt }
-    if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) { g_camera.target.x += spd * dt }
+    pan_screen: [2]f32
+    if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    { pan_screen[1] -= 1 }
+    if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  { pan_screen[1] += 1 }
+    if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)  { pan_screen[0] -= 1 }
+    if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) { pan_screen[0] += 1 }
+    pan_mag := math.sqrt(pan_screen[0]*pan_screen[0] + pan_screen[1]*pan_screen[1])
+    if pan_mag > 0 {
+        pan_screen[0] /= pan_mag
+        pan_screen[1] /= pan_mag
+    }
+    pan_mult := f32(1.8) if rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT) else f32(1.0)
+    spd := PAN / g_ed_zoom * pan_mult
+    g_camera.target.x += pan_screen[0] * spd * dt
+    g_camera.target.y += pan_screen[1] * spd * dt
 
     if rl.IsMouseButtonDown(.MIDDLE) {
         d := rl.GetMouseDelta()
@@ -444,7 +453,7 @@ update_editor :: proc(dt: f32) {
     }
 
     if !over_ui {
-        world_mp := rl.GetScreenToWorld2D(mp, g_camera^)
+        world_mp := screen_to_world_cartesian(mp)
         tx, ty   := world_to_tile(world_mp.x, world_mp.y)
         if rl.IsMouseButtonDown(.LEFT)  { ed_paint(tx, ty) }
         if rl.IsMouseButtonDown(.RIGHT) { ed_erase(tx, ty) }
@@ -621,8 +630,8 @@ draw_editor_world :: proc() {
     sh := f32(rl.GetScreenHeight())
     lw := 1.0 / g_camera.zoom
 
-    tl := rl.GetScreenToWorld2D({0,  0 }, g_camera^)
-    br := rl.GetScreenToWorld2D({sw, sh}, g_camera^)
+    tl := screen_to_world_cartesian({0, 0})
+    br := screen_to_world_cartesian({sw, sh})
 
     tx0 := int(math.floor(tl.x / f32(TILE_SIZE))) - 1
     ty0 := int(math.floor(tl.y / f32(TILE_SIZE))) - 1
@@ -631,12 +640,14 @@ draw_editor_world :: proc() {
 
     grid_col := rl.Color{80, 76, 60, 55}
     for gx in tx0..=tx1 {
-        wx := f32(gx * TILE_SIZE)
-        rl.DrawLineEx({wx, tl.y}, {wx, br.y}, lw, grid_col)
-    }
-    for gy in ty0..=ty1 {
-        wy := f32(gy * TILE_SIZE)
-        rl.DrawLineEx({tl.x, wy}, {br.x, wy}, lw, grid_col)
+        for gy in ty0..=ty1 {
+            if !tile_exists(gx, gy) { continue }
+            _, top, right, bottom, left := iso_tile_bounds(gx, gy)
+            rl.DrawLineEx(top, right, lw, grid_col)
+            rl.DrawLineEx(right, bottom, lw, grid_col)
+            rl.DrawLineEx(bottom, left, lw, grid_col)
+            rl.DrawLineEx(left, top, lw, grid_col)
+        }
     }
 
     ts := f32(TILE_SIZE)
@@ -646,44 +657,48 @@ draw_editor_world :: proc() {
     for sp in g_level_data.spawns {
         wx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
         col := spawn_marker_color(sp.enemy_type)
-        rl.DrawCircleV({wx, wy}, cr, col)
-        rl.DrawCircleV({wx, wy}, cr * 0.65, rl.Color{0, 0, 0, 100})
+        rl.DrawCircleV(ip, cr, col)
+        rl.DrawCircleV(ip, cr * 0.65, rl.Color{0, 0, 0, 100})
         lbl := spawn_marker_label(sp.enemy_type)
         lsz := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
-        rl.DrawTextEx(g_font, lbl, {wx - lsz.x*0.5, wy - lsz.y*0.5}, fs, 0.5,
+        rl.DrawTextEx(g_font, lbl, {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5}, fs, 0.5,
             rl.Color{255, 240, 200, 230})
     }
 
     EXIT_COL :: rl.Color{50, 200, 90, 180}
     for ex in g_level_data.exits {
-        wx := f32(int(ex.tx) * TILE_SIZE)
-        wy := f32(int(ex.ty) * TILE_SIZE)
-        rl.DrawRectangleV({wx, wy}, {ts, ts}, rl.Color{30, 140, 60, 80})
-        rl.DrawRectangleLinesEx({wx, wy, ts, ts}, lw * 2.5, EXIT_COL)
+        center, top, right, bottom, left := iso_tile_bounds(int(ex.tx), int(ex.ty))
+        iso_draw_shadow_diamond(center, ISO_TILE_W, ISO_TILE_H, rl.Color{30, 140, 60, 80})
+        rl.DrawLineEx(top, right, lw * 2.5, EXIT_COL)
+        rl.DrawLineEx(right, bottom, lw * 2.5, EXIT_COL)
+        rl.DrawLineEx(bottom, left, lw * 2.5, EXIT_COL)
+        rl.DrawLineEx(left, top, lw * 2.5, EXIT_COL)
         buf: [8]u8
         s := fmt.bprintf(buf[:7], "->%d", ex.target_level)
         buf[len(s)] = 0
         lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs, 0.5)
         rl.DrawTextEx(g_font, cstring(&buf[0]),
-            {wx + ts*0.5 - lsz.x*0.5, wy + ts*0.5 - lsz.y*0.5},
+            {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
             fs, 0.5, rl.Color{140, 255, 160, 230})
     }
 
     for npc in g_level_data.npcs {
         wx := f32(int(npc.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(npc.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
         col := rl.Color{212, 190, 92, 220}
         label := cstring("S")
         if npc.npc_type == .MutationWorkbench {
             col = rl.Color{180, 90, 220, 220}
             label = cstring("M")
         }
-        rl.DrawRectangleV({wx - ts * 0.33, wy - ts * 0.33}, {ts * 0.66, ts * 0.66}, rl.Color{col.r, col.g, col.b, 70})
-        rl.DrawRectangleLinesEx({wx - ts * 0.33, wy - ts * 0.33, ts * 0.66, ts * 0.66}, lw * 2.0, col)
+        rl.DrawRectangleV({ip.x - ts * 0.18, ip.y - ts * 0.30}, {ts * 0.36, ts * 0.36}, rl.Color{col.r, col.g, col.b, 70})
+        rl.DrawRectangleLinesEx({ip.x - ts * 0.18, ip.y - ts * 0.30, ts * 0.36, ts * 0.36}, lw * 2.0, col)
         lsz := rl.MeasureTextEx(g_font, label, fs * 1.1, 0.5)
         rl.DrawTextEx(g_font, label,
-            {wx - lsz.x * 0.5, wy - lsz.y * 0.5},
+            {ip.x - lsz.x * 0.5, ip.y - lsz.y * 0.5},
             fs * 1.1, 0.5, col)
     }
 
@@ -691,38 +706,43 @@ draw_editor_world :: proc() {
     for lt in g_level_data.lights {
         wx := f32(int(lt.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(lt.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
         // Soft glow circle showing radius
-        rl.DrawCircleV({wx, wy}, cr * 1.2, rl.Color{lt.r, lt.g, lt.b, 60})
-        rl.DrawCircleV({wx, wy}, cr * 0.7, LIGHT_COL)
-        rl.DrawCircleLinesV({wx, wy}, cr * 1.2, rl.Color{255, 220, 100, 160})
+        rl.DrawCircleV(ip, cr * 1.2, rl.Color{lt.r, lt.g, lt.b, 60})
+        rl.DrawCircleV(ip, cr * 0.7, LIGHT_COL)
+        rl.DrawCircleLinesV(ip, cr * 1.2, rl.Color{255, 220, 100, 160})
         lsz := rl.MeasureTextEx(g_font, "L", fs * 1.1, 0.5)
         rl.DrawTextEx(g_font, "L",
-            {wx - lsz.x*0.5, wy - lsz.y*0.5},
+            {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5},
             fs * 1.1, 0.5, rl.Color{40, 30, 0, 240})
     }
 
     ps := g_level_data.player_start
     if ps[0] != 0 || ps[1] != 0 {
         ptx, pty := world_to_tile(ps[0], ps[1])
-        wx := f32(ptx * TILE_SIZE)
-        wy := f32(pty * TILE_SIZE)
-        rl.DrawRectangleV({wx, wy}, {ts, ts}, rl.Color{200, 160, 30, 70})
-        rl.DrawRectangleLinesEx({wx, wy, ts, ts}, lw * 2.5, rl.Color{255, 200, 50, 220})
+        center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
+        iso_draw_shadow_diamond(center, ISO_TILE_W, ISO_TILE_H, rl.Color{200, 160, 30, 70})
+        rl.DrawLineEx(top, right, lw * 2.5, rl.Color{255, 200, 50, 220})
+        rl.DrawLineEx(right, bottom, lw * 2.5, rl.Color{255, 200, 50, 220})
+        rl.DrawLineEx(bottom, left, lw * 2.5, rl.Color{255, 200, 50, 220})
+        rl.DrawLineEx(left, top, lw * 2.5, rl.Color{255, 200, 50, 220})
         lsz := rl.MeasureTextEx(g_font, "P", fs*1.2, 0.5)
         rl.DrawTextEx(g_font, "P",
-            {wx + ts*0.5 - lsz.x*0.5, wy + ts*0.5 - lsz.y*0.5},
+            {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
             fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
     }
 
     mp       := rl.GetMousePosition()
-    world_mp := rl.GetScreenToWorld2D(mp, g_camera^)
+    world_mp := screen_to_world_cartesian(mp)
     ctx, cty := world_to_tile(world_mp.x, world_mp.y)
-    cx := f32(ctx * TILE_SIZE)
-    cy := f32(cty * TILE_SIZE)
+    center, top, right, bottom, left := iso_tile_bounds(ctx, cty)
 
     fill_col, brd_col := ed_brush_colors(g_ed_brush)
-    rl.DrawRectangleV({cx, cy}, {ts, ts}, fill_col)
-    rl.DrawRectangleLinesEx({cx, cy, ts, ts}, lw * 2, brd_col)
+    iso_draw_shadow_diamond(center, ISO_TILE_W, ISO_TILE_H, fill_col)
+    rl.DrawLineEx(top, right, lw * 2, brd_col)
+    rl.DrawLineEx(right, bottom, lw * 2, brd_col)
+    rl.DrawLineEx(bottom, left, lw * 2, brd_col)
+    rl.DrawLineEx(left, top, lw * 2, brd_col)
 }
 
 @(private = "file")

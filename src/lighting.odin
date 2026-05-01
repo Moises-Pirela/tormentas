@@ -251,18 +251,7 @@ g_light_widget_scroll: f32 = 0
 
 @(private = "file")
 world_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-    p0 := rl.GetScreenToWorld2D({ -pad, -pad }, g_camera^)
-    p1 := rl.GetScreenToWorld2D({ sw + pad, -pad }, g_camera^)
-    p2 := rl.GetScreenToWorld2D({ -pad, sh + pad }, g_camera^)
-    p3 := rl.GetScreenToWorld2D({ sw + pad, sh + pad }, g_camera^)
-
-    min_x = min(min(p0.x, p1.x), min(p2.x, p3.x))
-    min_y = min(min(p0.y, p1.y), min(p2.y, p3.y))
-    max_x = max(max(p0.x, p1.x), max(p2.x, p3.x))
-    max_y = max(max(p0.y, p1.y), max(p2.y, p3.y))
-    return
+    return cartesian_view_bounds(pad)
 }
 
 @(private = "file") g_godray_shader: rl.Shader
@@ -604,16 +593,13 @@ draw_wall_sun_shadows :: proc() {
         if x < min_x - TILE_SIZE || x > max_x + TILE_SIZE ||
            y < min_y - TILE_SIZE || y > max_y + TILE_SIZE { continue }
 
-        shadow_len := f32(TILE_SIZE) * 1.35
-        for i in 0..<4 {
-            t := f32(i) / 4.0
+        shadow_len := f32(TILE_SIZE) * 2.1
+        for i in 0..<5 {
+            t := f32(i) / 5.0
             off := shadow_len * t
-            a   := u8(clamp(58 * (1.0 - t), 0, 255))
-            rl.DrawRectangleV(
-                { x + dir[0] * off, y + dir[1] * off },
-                { f32(TILE_SIZE), f32(TILE_SIZE) },
-                rl.Color{ 10, 10, 10, a },
-            )
+            a   := u8(clamp(72 * (1.0 - t), 0, 255))
+            center := world_to_iso_xy(x + f32(TILE_SIZE) * 0.5 + dir[0] * off, y + f32(TILE_SIZE) * 0.5 + dir[1] * off)
+            iso_draw_shadow_diamond(center, ISO_TILE_W * (1.0 + t * 0.08), ISO_TILE_H * (1.0 + t * 0.04), rl.Color{ 10, 10, 10, a })
         }
     }
 }
@@ -633,86 +619,48 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
         pos := rl.Vector2{ tr.position[0], tr.position[1] }
         rot := tr.rotation
 
-        radius := f32(PLAYER_RADIUS)
-        if cw.world_has_component(w, id, .Collider) {
-            radius = cw.world_get_collider(w, id).radius
-        } else if cw.world_has_component(w, id, .NPC) {
-            radius = f32(14)
-        } else {
+        vis := draw_entity_visual_info(w, id)
+        if !vis.ok {
             continue
         }
+        radius := vis.world_size * 0.22
 
         if cw.world_has_component(w, id, .Respawn) &&
            cw.world_get_respawn(w, id).timer > 0 {
             continue
         }
 
-        contact_offset := radius * 0.5
-        for ci in 0..<3 {
-            t_frac := f32(ci) / 2.0
-            off := contact_offset + radius * t_frac * 0.6
+        contact_offset := radius * 0.6
+        for ci in 0..<4 {
+            t_frac := f32(ci) / 3.0
+            off := contact_offset + radius * t_frac * 0.9
             cp := rl.Vector2{
                 pos.x + dir[0] * off,
                 pos.y + dir[1] * off,
             }
-            r := radius * (0.8 - t_frac * 0.15)
-            a := u8(clamp(160 * (1.0 - t_frac * 0.35), 0, 255))
-            rl.DrawEllipse(i32(cp.x), i32(cp.y), r, r * 0.5, rl.Color{ 6, 6, 4, a })
+            r := radius * (0.9 - t_frac * 0.18)
+            a := u8(clamp(180 * (1.0 - t_frac * 0.42), 0, 255))
+            icp := world_to_iso_v(cp)
+            rl.DrawEllipse(i32(icp.x), i32(icp.y), r * 1.08, max(r * 0.42, 1), rl.Color{ 6, 6, 4, a })
         }
 
-        sprite_key   := cstring("enemy_melee")
-        sprite_scale := f32(1.0)
-        size_mult    := f32(4.2)  // enemy default
-
-        is_player := false
-        for slot in 0..<2 {
-            if id == w.player_ids[slot] { is_player = true; break }
-        }
-        if is_player {
-            sprite_key = cstring("player_wanderer")
-            size_mult  = 4.4
-        } else if cw.world_has_component(w, id, .AIAgent) {
-            ai := cw.world_get_ai(w, id)
-            if ai.ai_type == .Ranged {
-                sprite_key = cstring("enemy_ranged")
-            }
-        } else if cw.world_has_component(w, id, .NPC) {
-            sprite_key = cstring("npc_shopkeeper")
-        }
-
-        if cw.world_has_component(w, id, .RenderConfig) {
-            rc := cw.world_get_render_config(w, id)
-            if rc.sprite_len > 0 { sprite_key = cw.render_config_sprite_cstr(rc) }
-            if rc.sprite_scale > 0 { sprite_scale = rc.sprite_scale }
-        }
-
-        entry, sprite_ok := get_or_load_entity_sprite(sprite_key)
+        entry, sprite_ok := get_or_load_entity_sprite(vis.sprite_key)
         if !sprite_ok { continue }
 
-        stem := string(sprite_key)
+        stem := string(vis.sprite_key)
         src := anim_source_rect(w, id, entry.src, stem) if !entry.from_rt else entry.src
-        world_size := radius * size_mult * sprite_scale
+        world_size := vis.world_size
 
-        for i in 0..<3 {
-            t_frac := f32(i) / 2.0
-            offset := radius * (0.4 + t_frac * 0.8)
-            a      := u8(clamp(190 * (1.0 - t_frac * 0.4), 0, 255))
+        for i in 0..<4 {
+            t_frac := f32(i) / 3.0
+            offset := radius * (0.45 + t_frac * 0.95)
+            a      := u8(clamp(155 * (1.0 - t_frac * 0.48), 0, 255))
 
             shadow_pos := rl.Vector2{
                 pos.x + dir[0] * offset,
                 pos.y + dir[1] * offset,
             }
-
-            dst := rl.Rectangle{
-                shadow_pos.x,
-                shadow_pos.y,
-                world_size,
-                world_size * 0.55,
-            }
-            origin := rl.Vector2{ world_size * 0.5, world_size * 0.55 * 0.5 }
-            rl.DrawTexturePro(entry.tex, src, dst, origin,
-                math.to_degrees(rot) + 90.0,
-                rl.Color{ 8, 10, 6, a })
+            draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, rl.Color{ 8, 10, 6, a })
         }
     }
 }

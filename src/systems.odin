@@ -13,16 +13,19 @@ collect_local_input :: proc() -> p2p.InputFrame {
 
     if g_console_open { return f }
 
-    dir: [2]f32
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_up))    || rl.IsKeyDown(.UP)    { dir[1] -= 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_down))  || rl.IsKeyDown(.DOWN)  { dir[1] += 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_left))  || rl.IsKeyDown(.LEFT)  { dir[0] -= 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_right)) || rl.IsKeyDown(.RIGHT) { dir[0] += 1 }
-    mag := math.sqrt(dir[0]*dir[0] + dir[1]*dir[1])
-    if mag > 0 { dir[0] /= mag; dir[1] /= mag }
-    f.move = dir
+    screen_dir: [2]f32
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_up))    || rl.IsKeyDown(.UP)    { screen_dir[1] -= 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_down))  || rl.IsKeyDown(.DOWN)  { screen_dir[1] += 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_left))  || rl.IsKeyDown(.LEFT)  { screen_dir[0] -= 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_right)) || rl.IsKeyDown(.RIGHT) { screen_dir[0] += 1 }
+    mag := math.sqrt(screen_dir[0]*screen_dir[0] + screen_dir[1]*screen_dir[1])
+    if mag > 0 {
+        screen_dir[0] /= mag
+        screen_dir[1] /= mag
+    }
+    f.move = screen_dir_to_world_dir(screen_dir)
 
-    mp    := rl.GetScreenToWorld2D(rl.GetMousePosition(), g_camera^)
+    mp    := screen_to_world_cartesian(rl.GetMousePosition())
     f.aim  = { mp.x, mp.y }
 
     if rl.IsMouseButtonDown(.LEFT)                              { f.actions += {.Fire}   }
@@ -175,5 +178,5 @@ camera_follow_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if !cw.world_is_valid(w, w.player_id) { return }
 
     pos := cw.world_get_transform(w, w.player_id).position
-    g_camera.target = { pos[0], pos[1] }
+    camera_set_target_world(pos[0], pos[1])
 }

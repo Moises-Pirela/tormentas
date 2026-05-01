@@ -241,7 +241,7 @@ draw_shop_world :: proc(w: ^cw.World) {
         dist_sq := dx*dx + dy*dy
 
         // Name tag
-        pos := rl.Vector2{ nt.position[0], nt.position[1] }
+        pos := world_to_iso_xy(nt.position[0], nt.position[1])
         rc   := cw.world_get_render_config(w, nid)
         name := cw.render_config_name_cstr(rc)
         nfs  := f32(10)

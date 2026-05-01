@@ -640,6 +640,12 @@ RENDER_ICON_CAP :: 48
 RENDER_SPRITE_CAP :: 48 
 RENDER_DESC_CAP :: 128  
 
+RenderLayer :: enum u8 {
+    None,
+    WorldFX,
+    Sprite,
+}
+
 RenderConfigComp :: struct {
     display_name: [RENDER_NAME_CAP]u8,
     name_len:     u8,
@@ -648,6 +654,10 @@ RenderConfigComp :: struct {
     sprite_name:  [RENDER_SPRITE_CAP]u8,
     sprite_len:   u8,
     sprite_scale: f32,
+    world_size:   f32,
+    render_layer: RenderLayer,
+    show_hp_bar:  bool,
+    show_dir_tip: bool,
     desc:         [RENDER_DESC_CAP]u8,
     desc_len:     u8,
 }

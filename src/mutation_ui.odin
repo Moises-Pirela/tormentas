@@ -132,8 +132,9 @@ draw_mutation_workbench_world :: proc(w: ^cw.World) {
     fs := f32(10)
     sz := rl.MeasureTextEx(g_font, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
+    p := world_to_iso_xy(pos[0], pos[1])
     rl.DrawTextEx(g_font, prompt,
-        { pos[0] - sz.x * 0.5, pos[1] - 48 },
+        { p.x - sz.x * 0.5, p.y - 48 },
         fs, 0.5, rl.Color{ 220, 170, 255, pulse })
 }
 

@@ -131,14 +131,15 @@ draw_extraction_zones :: proc(w: ^cw.World) {
         cy  := pos[1]
         r   := ext.interact_radius
 
-        rl.DrawCircleV({ cx, cy }, r, rl.Color{ 55, 220, 85, 18 })
+        center := rl.Vector2{ cx, cy }
+        draw_world_circle(center, r, rl.Color{ 55, 220, 85, 18 })
 
         pulse := f32(0.5) + f32(0.5) * math.sin(time * 2.6)
         ring_r   := r * (1.0 + 0.04 * pulse)
         ring_col := rl.Color{ 55, 220, 85, u8(80 + i32(pulse * 60)) }
-        rl.DrawCircleLinesV({ cx, cy }, ring_r, ring_col)
+        draw_world_circle_lines(center, ring_r, ring_col)
 
-        rl.DrawCircleLinesV({ cx, cy }, r * 0.72, rl.Color{ 55, 220, 85, 45 })
+        draw_world_circle_lines(center, r * 0.72, rl.Color{ 55, 220, 85, 45 })
 
         SPOKES :: 3
         for i in 0..<SPOKES {
@@ -147,20 +148,20 @@ draw_extraction_zones :: proc(w: ^cw.World) {
                 cx + math.cos(angle) * r * 0.88,
                 cy + math.sin(angle) * r * 0.88,
             }
-            rl.DrawLineEx({ cx, cy }, ep, 1.5,
-                rl.Color{ 55, 220, 85, 55 })
+            draw_world_line(center, ep, 1.5, rl.Color{ 55, 220, 85, 55 })
         }
 
         cs := f32(10)
-        rl.DrawLineEx({ cx - cs, cy }, { cx + cs, cy }, 2.0, rl.Color{ 55, 220, 85, 255 })
-        rl.DrawLineEx({ cx, cy - cs }, { cx, cy + cs }, 2.0, rl.Color{ 55, 220, 85, 255 })
+        draw_world_line({ cx - cs, cy }, { cx + cs, cy }, 2.0, rl.Color{ 55, 220, 85, 255 })
+        draw_world_line({ cx, cy - cs }, { cx, cy + cs }, 2.0, rl.Color{ 55, 220, 85, 255 })
 
         lbl_fs  := f32(14)
         lbl     := cstring("EXTRACT")
         lbl_sz  := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
         lbl_blink := u8(180 + i32(pulse * 60))
+        center_iso := world_to_iso_v(center)
         rl.DrawTextEx(g_font, lbl,
-            { cx - lbl_sz.x * 0.5, cy - r - lbl_sz.y - 6 },
+            { center_iso.x - lbl_sz.x * 0.5, center_iso.y - r * 0.55 - lbl_sz.y - 6 },
             lbl_fs, 0.5,
             rl.Color{ 100, 240, 110, lbl_blink })
 
@@ -184,7 +185,7 @@ draw_extraction_zones :: proc(w: ^cw.World) {
                 p0 := rl.Vector2{ cx + math.cos(t0) * arc_r, cy + math.sin(t0) * arc_r }
                 p1 := rl.Vector2{ cx + math.cos(t1) * arc_r, cy + math.sin(t1) * arc_r }
                 a  := u8(160 + i32(progress * 95))
-                rl.DrawLineEx(p0, p1, 3.0, rl.Color{ 80, 245, 100, a })
+                draw_world_line(p0, p1, 3.0, rl.Color{ 80, 245, 100, a })
             }
 
             secs_left := ext.activate_time - ext.timer
@@ -194,7 +195,7 @@ draw_extraction_zones :: proc(w: ^cw.World) {
             s_fs  := f32(18)
             s_sz  := rl.MeasureTextEx(g_font, cstring(&secs_buf[0]), s_fs, 0.5)
             rl.DrawTextEx(g_font, cstring(&secs_buf[0]),
-                { cx - s_sz.x * 0.5, cy - s_sz.y * 0.5 },
+                { center_iso.x - s_sz.x * 0.5, center_iso.y - s_sz.y * 0.5 },
                 s_fs, 0.5,
                 rl.Color{ 130, 255, 140, 230 })
         }
@@ -467,72 +468,246 @@ PLAYER_SLOT_COLORS := [cw.MAX_PLAYERS][3]rl.Color{
     { { 100,  55,  10, 255 }, { 180, 110,  30, 255 }, {255, 180,  40, 255} },  // slot 3 — orange
 }
 
-draw_player :: proc(w: ^cw.World) {
+EntityVisualInfo :: struct {
+    sprite_key:   cstring,
+    world_size:   f32,
+    sprite_scale: f32,
+    ok:           bool,
+}
+
+draw_world_circle :: proc(pos: rl.Vector2, radius: f32, color: rl.Color) {
+    ip := world_to_iso_v(pos)
+    rl.DrawEllipse(i32(ip.x), i32(ip.y), radius, max(radius * 0.55, 1), color)
+}
+
+draw_world_circle_lines :: proc(pos: rl.Vector2, radius: f32, color: rl.Color) {
+    ip := world_to_iso_v(pos)
+    rl.DrawEllipseLines(i32(ip.x), i32(ip.y), max(radius, 1), max(radius * 0.55, 1), color)
+}
+
+draw_world_line :: proc(a, b: rl.Vector2, thick: f32, color: rl.Color) {
+    rl.DrawLineEx(world_to_iso_v(a), world_to_iso_v(b), thick, color)
+}
+
+is_player_entity :: proc(w: ^cw.World, id: int) -> bool {
+    for pid in w.player_ids {
+        if pid == id { return true }
+    }
+    return false
+}
+
+player_slot_for_id :: proc(w: ^cw.World, id: int) -> int {
     for slot in 0..<cw.MAX_PLAYERS {
-        id := w.player_ids[slot]
-        if !cw.world_is_valid(w, id) { continue }
-        if !cw.world_has_component(w, id, .Transform) { continue }
+        if w.player_ids[slot] == id { return slot }
+    }
+    return -1
+}
 
-        t   := cw.world_get_transform(w, id)
-        pos := rl.Vector2{ t.position[0], t.position[1] }
-        rot := t.rotation
+draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
+    info := EntityVisualInfo{sprite_scale = 1.0}
 
-        if cw.world_has_component(w, id, .Respawn) {
-            rsp := cw.world_get_respawn(w, id)
-            if rsp.timer > 0 {
-                if math.sin(rsp.timer * math.PI * 10) > 0 {
-                    sprite_key := cstring("player_wanderer")
-                    sprite_scale := f32(1.0)
-                    if cw.world_has_component(w, id, .RenderConfig) {
-                        rc := cw.world_get_render_config(w, id)
-                        if rc.sprite_len > 0 { sprite_key = cw.render_config_sprite_cstr(rc) }
-                        if rc.sprite_scale > 0 { sprite_scale = rc.sprite_scale }
-                    }
-                    if entry, ok := get_or_load_entity_sprite(sprite_key); ok {
-                        src := anim_source_rect(w, id, entry.src, string(sprite_key)) if !entry.from_rt else entry.src
-                        draw_entity_sprite_quad_ex(entry.tex, src, pos, PLAYER_RADIUS * 4.4 * sprite_scale, rot, rl.Color{ 210, 220, 235, 140 })
-                    }
-                }
-                continue   
+    if cw.world_has_component(w, id, .RenderConfig) {
+        rc := cw.world_get_render_config(w, id)
+        if rc.sprite_len > 0 {
+            info.sprite_key = cw.render_config_sprite_cstr(rc)
+        }
+        if rc.world_size > 0 {
+            info.world_size = rc.world_size
+        }
+        if rc.sprite_scale > 0 {
+            info.sprite_scale = rc.sprite_scale
+        }
+    }
+
+    if info.world_size <= 0 {
+        if cw.world_has_component(w, id, .Collider) {
+            info.world_size = cw.world_get_collider(w, id).radius * 4.2
+        }
+        if is_player_entity(w, id) {
+            info.world_size = PLAYER_RADIUS * 4.4
+        }
+        if cw.world_has_component(w, id, .NPC) {
+            npc := cw.world_get_npc(w, id)
+            switch npc.npc_type {
+            case .Shopkeeper:        info.world_size = 64
+            case .MutationWorkbench: info.world_size = 78
             }
         }
+    }
 
-        palette   := PLAYER_SLOT_COLORS[slot]
-        body_col  := palette[0]
-        inner_col := palette[1]
-        line_col  := palette[2]
-
-        is_dodging := cw.world_has_component(w, id, .DodgeState) &&
-                      cw.world_get_dodge(w, id).active
-        if is_dodging {
-            body_col  = rl.Color{ 90, 190, 255, 200 }
-            inner_col = rl.Color{200, 235, 255, 160 }
+    if info.sprite_key == nil {
+        if is_player_entity(w, id) {
+            info.sprite_key = cstring("player_wanderer")
+        } else if cw.world_has_component(w, id, .NPC) {
+            npc := cw.world_get_npc(w, id)
+            switch npc.npc_type {
+            case .Shopkeeper:        info.sprite_key = cstring("npc_shopkeeper")
+            case .MutationWorkbench: info.sprite_key = cstring("mutation_workbench")
+            }
+        } else if cw.world_has_component(w, id, .AIAgent) {
+            ai := cw.world_get_ai(w, id)
+            info.sprite_key = cstring("enemy_ranged") if ai.ai_type == .Ranged else cstring("enemy_melee")
         }
+    }
 
-        sprite_key := cstring("player_wanderer")
-        sprite_scale := f32(1.0)
-        if cw.world_has_component(w, id, .RenderConfig) {
-            rc := cw.world_get_render_config(w, id)
-            if rc.sprite_len > 0 { sprite_key = cw.render_config_sprite_cstr(rc) }
-            if rc.sprite_scale > 0 { sprite_scale = rc.sprite_scale }
-        }
+    if info.sprite_key != nil && info.world_size > 0 {
+        info.world_size *= info.sprite_scale
+        info.ok = true
+    }
+    return info
+}
 
-        tint := rl.WHITE
-        if is_dodging {
-            tint = rl.Color{ 180, 220, 255, 255 }
-        }
-        if entry, ok := get_or_load_entity_sprite(sprite_key); ok {
-            src := anim_source_rect(w, id, entry.src, string(sprite_key)) if !entry.from_rt else entry.src
-            draw_entity_sprite_quad_ex(entry.tex, src, pos, PLAYER_RADIUS * 4.4 * sprite_scale, rot, tint)
-        }
+entity_render_layer :: proc(w: ^cw.World, id: int) -> cw.RenderLayer {
+    if cw.world_has_component(w, id, .RenderConfig) {
+        rc := cw.world_get_render_config(w, id)
+        if rc.render_layer != .None { return rc.render_layer }
+    }
+    if cw.world_has_component(w, id, .GroundItem) ||
+       cw.world_has_component(w, id, .ProjectileTag) ||
+       cw.world_has_component(w, id, .MeleeArc) {
+        return .WorldFX
+    }
+    if is_player_entity(w, id) ||
+       cw.world_has_component(w, id, .AIAgent) ||
+       cw.world_has_component(w, id, .NPC) {
+        return .Sprite
+    }
+    return .None
+}
 
+entity_blindfire_hidden :: proc(w: ^cw.World, id: int) -> bool {
+    if !cw.world_has_component(w, id, .AIAgent) { return false }
+    if !player_has_mutation_effect(w, w.player_id, .MutHideEnemySprites) { return false }
+    if !cw.world_has_component(w, w.player_id, .Transform) || !cw.world_has_component(w, id, .Transform) {
+        return false
+    }
+
+    radius := f32(0)
+    if cw.world_has_component(w, w.player_id, .MutationContainer) {
+        mc := cw.world_get_mutation(w, w.player_id)
+        for i in 0..<mc.entity_count {
+            mid := mc.entities[i]
+            if !cw.world_is_valid(w, mid) { continue }
+            if !cw.world_has_component(w, mid, .MutUnseenDamageMult) { continue }
+            radius = cw.world_get_mut_unseen_damage_mult(w, mid).vision_radius
+            break
+        }
+    }
+    if radius <= 0 { return true }
+    pp := cw.world_get_transform(w, w.player_id).position
+    ep := cw.world_get_transform(w, id).position
+    dx := ep[0] - pp[0]
+    dy := ep[1] - pp[1]
+    return dx*dx + dy*dy > radius*radius
+}
+
+draw_iso_arc :: proc(center: rl.Vector2, radius, angle, spread: f32, width: f32, color: rl.Color) {
+    STEPS :: 20
+    for i in 0..<STEPS {
+        t0 := angle - spread + (f32(i) / STEPS) * (spread * 2)
+        t1 := angle - spread + (f32(i + 1) / STEPS) * (spread * 2)
+        p0 := rl.Vector2{ center.x + math.cos(t0) * radius, center.y + math.sin(t0) * radius }
+        p1 := rl.Vector2{ center.x + math.cos(t1) * radius, center.y + math.sin(t1) * radius }
+        draw_world_line(p0, p1, width, color)
+    }
+}
+
+draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
+    if !cw.world_has_component(w, id, .Transform) || is_fog_hidden(w, id) { return }
+    tr := cw.world_get_transform(w, id)
+    pos := rl.Vector2{ tr.position[0], tr.position[1] }
+
+    if cw.world_has_component(w, id, .GroundItem) && cw.world_has_component(w, id, .Item) {
+        t := f32(rl.GetTime())
+        pulse := (math.sin(t * 3.2) + 1) * 0.5
+        item := cw.world_get_item(w, id)
+        rc := rarity_color(item.rarity)
+        draw_world_circle(pos, 12, rl.Color{ rc.r, rc.g, rc.b, u8(70 + pulse * 90) })
+        draw_world_circle(pos, 6, rl.Color{ rc.r, rc.g, rc.b, u8(170 + pulse * 85) })
+        draw_world_circle(pos, 2, rl.Color{ 255, 255, 255, 200 })
+        return
+    }
+
+    if cw.world_has_component(w, id, .ProjectileTag) {
+        p := cw.world_get_projectile(w, id)
+        switch p.visual {
+        case .Standard:
+            draw_world_circle(pos, 4, rl.Color{ 220, 190, 60, 255 })
+        case .Smoke:
+            fade := f32(1)
+            if p.max_lifetime > 0 { fade = clamp(p.lifetime / p.max_lifetime, 0, 1) }
+            draw_world_circle(pos, 7, rl.Color{ 130, 122, 118, u8(clamp(fade * 55, 0, 255)) })
+            draw_world_circle(pos, 4, rl.Color{ 178, 168, 162, u8(clamp(fade * 130, 0, 255)) })
+            draw_world_circle(pos, 2, rl.Color{ 215, 208, 204, u8(clamp(fade * 200, 0, 255)) })
+        }
+        return
+    }
+
+    if cw.world_has_component(w, id, .MeleeArc) {
+        arc := cw.world_get_melee_arc(w, id)
+        fade := f32(1)
+        if cw.world_has_component(w, id, .SelfDestruct) && arc.lifetime > 0 {
+            fade = cw.world_get_self_destruct(w, id).timer / arc.lifetime
+        }
+        draw_iso_arc(pos, arc.radius - 2, arc.angle, arc.arc_spread, 5, rl.Color{ 215, 90, 20, u8(clamp(fade, 0, 1) * 210) })
+        draw_iso_arc(pos, arc.radius, arc.angle, arc.arc_spread, 2, rl.Color{ 255, 165, 60, u8(clamp(fade, 0, 1) * 255) })
+        return
+    }
+}
+
+draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base_size: f32, rot: f32) {
+    slot := player_slot_for_id(w, id)
+    is_player := slot >= 0
+    show_hp := false
+    show_tip := false
+    if cw.world_has_component(w, id, .RenderConfig) {
+        rc := cw.world_get_render_config(w, id)
+        show_hp = rc.show_hp_bar
+        show_tip = rc.show_dir_tip
+    }
+    if is_player { show_tip = true }
+    if cw.world_has_component(w, id, .AIAgent) {
+        show_hp = true
+        show_tip = true
+    }
+
+    if show_tip {
+        line_col := rl.Color{ 200, 55, 55, 200 }
+        if is_player {
+            line_col = PLAYER_SLOT_COLORS[slot][2]
+        } else if cw.world_has_component(w, id, .AIAgent) && cw.world_get_ai(w, id).ai_type == .Ranged {
+            line_col = rl.Color{ 80, 128, 205, 200 }
+        }
         tip := rl.Vector2{
-            pos.x + math.cos(rot) * (PLAYER_RADIUS + 10),
-            pos.y + math.sin(rot) * (PLAYER_RADIUS + 10),
+            pos.x + math.cos(rot) * (base_size * 0.22 + 8),
+            pos.y + math.sin(rot) * (base_size * 0.22 + 8),
         }
-        rl.DrawLineV(pos, tip, line_col)
-        rl.DrawCircleV(tip, 5, line_col)
+        draw_world_line(pos, tip, 2, line_col)
+        draw_world_circle(tip, 5, line_col)
+    }
 
+    // After ISO_SPRITE_Y squish the sprite's visual half-height in screen space
+    // is base_size * ISO_SPRITE_Y * 0.5 = base_size * 0.25.
+    // All vertical offsets below are relative to that compressed top edge.
+    sprite_top := base_size * ISO_SPRITE_Y * 0.5   // screen px above iso centre
+
+    if show_hp && cw.world_has_component(w, id, .Health) {
+        h := cw.world_get_health(w, id)
+        if h.max > 0 {
+            iso   := world_to_iso_v(pos)
+            bar_w := base_size * 0.65
+            bx    := iso.x - bar_w * 0.5
+            by    := iso.y - sprite_top - 5
+            rl.DrawRectangle(i32(bx - 1), i32(by - 1), i32(bar_w + 2), 5, rl.Color{ 10, 8, 8, 200 })
+            rl.DrawRectangle(i32(bx), i32(by), i32(bar_w), 3, rl.Color{ 30, 14, 14, 200 })
+            frac   := clamp(h.current / h.max, 0, 1)
+            fill_r := u8(60 + (1 - frac) * 180)
+            fill_g := u8(200 - (1 - frac) * 170)
+            rl.DrawRectangle(i32(bx), i32(by), i32(bar_w * frac), 3, rl.Color{ fill_r, fill_g, 30, 240 })
+        }
+    }
+
+    if is_player {
         name_str: cstring
         if g_player_names[slot][0] != 0 {
             name_str = cstring(&g_player_names[slot][0])
@@ -540,12 +715,13 @@ draw_player :: proc(w: ^cw.World) {
             placeholder: [4]u8 = {'P', u8('1' + slot), 0, 0}
             name_str = cstring(&placeholder[0])
         }
-        name_fs   := f32(11)   
-        name_sz   := rl.MeasureTextEx(g_font, name_str, name_fs, 0.5)
-        name_col  := rl.Color{ line_col.r, line_col.g, line_col.b, 210 }
+        iso      := world_to_iso_v(pos)
+        name_fs  := f32(11)
+        name_sz  := rl.MeasureTextEx(g_font, name_str, name_fs, 0.5)
+        line_col := PLAYER_SLOT_COLORS[slot][2]
         rl.DrawTextEx(g_font, name_str,
-            { pos.x - name_sz.x * 0.5, pos.y - PLAYER_RADIUS - name_fs - 3 },
-            name_fs, 0.5, name_col)
+            { iso.x - name_sz.x * 0.5, iso.y - sprite_top - name_fs - 3 },
+            name_fs, 0.5, rl.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
         // ── HeartCage visual ─────────────────────────────────────────────────
         if cw.world_has_component(w, id, .MutationContainer) {
@@ -559,274 +735,132 @@ draw_player :: proc(w: ^cw.World) {
                 hrad  := f32(7.0)
 
                 if hc.heart_hp > 0 {
-                    hpos: rl.Vector2
+                    hworld: rl.Vector2
                     if cw.world_is_valid(w, hc.heart_id) &&
                        cw.world_has_component(w, hc.heart_id, .Transform) {
-                        ht   := cw.world_get_transform(w, hc.heart_id)
-                        hpos  = { ht.position[0], ht.position[1] }
+                        ht     := cw.world_get_transform(w, hc.heart_id)
+                        hworld  = { ht.position[0], ht.position[1] }
                     } else {
-                        hpos = { pos.x + 24, pos.y }
+                        hworld = { pos.x + 24, pos.y }
                     }
+                    hiso   := world_to_iso_v(hworld)
                     hp_pct := hc.heart_hp / hc.heart_max_hp
                     pulse  := f32(0.8) + f32(0.2) * math.sin(t_now * 5.0)
                     alpha  := u8(180 + int(40.0 * pulse))
-                    // Soft outer glow
-                    rl.DrawCircleV(hpos, hrad + 4, rl.Color{200, 40, 60, 50})
-                    // Main body
-                    rl.DrawCircleV(hpos, hrad, rl.Color{210, 50, 65, alpha})
-                    rl.DrawCircleLinesV(hpos, hrad, rl.Color{255, 120, 140, 200})
-                    // HP bar
-                    bw := f32(22);  bh := f32(3)
-                    bx := hpos.x - bw * 0.5;  by := hpos.y - hrad - 6
-                    rl.DrawRectangleRec({bx, by, bw, bh},              rl.Color{50, 10, 15, 180})
-                    rl.DrawRectangleRec({bx, by, bw * hp_pct, bh},     rl.Color{220, 60, 80, 240})
+                    // Draw using world helpers so ellipse matches iso projection
+                    draw_world_circle(hworld, hrad + 4, rl.Color{200, 40, 60, 50})
+                    draw_world_circle(hworld, hrad, rl.Color{210, 50, 65, alpha})
+                    draw_world_circle_lines(hworld, hrad, rl.Color{255, 120, 140, 200})
+                    // HP bar in screen space above the heart ellipse
+                    bw  := f32(22);  bh := f32(3)
+                    bx  := hiso.x - bw * 0.5
+                    by  := hiso.y - hrad * 0.55 - 6
+                    rl.DrawRectangleRec({bx, by, bw, bh},          rl.Color{50, 10, 15, 180})
+                    rl.DrawRectangleRec({bx, by, bw * hp_pct, bh}, rl.Color{220, 60, 80, 240})
                 } else if hc.respawn_timer > 0 {
-                    // Heart broken — ghost outline that brightens as respawn nears
-                    ghost_pos := rl.Vector2{pos.x + 24, pos.y}
-                    time_pct  := hc.respawn_timer / cw.HEART_CAGE_RESPAWN
-                    ring_a    := u8(20 + int(40.0 * (1.0 - time_pct)))
-                    rl.DrawCircleLinesV(ghost_pos, hrad,     rl.Color{160, 40, 60, ring_a})
-                    rl.DrawCircleLinesV(ghost_pos, hrad + 3, rl.Color{100, 20, 40, ring_a / 2})
+                    hworld   := rl.Vector2{pos.x + 24, pos.y}
+                    time_pct := hc.respawn_timer / cw.HEART_CAGE_RESPAWN
+                    ring_a   := u8(20 + int(40.0 * (1.0 - time_pct)))
+                    draw_world_circle_lines(hworld, hrad,     rl.Color{160, 40, 60, ring_a})
+                    draw_world_circle_lines(hworld, hrad + 3, rl.Color{100, 20, 40, ring_a / 2})
                 }
-                break  // only one HeartCage per player
-            }
-        }
-    }
-}
-
-draw_floor :: proc() {
-    HALF :: TILE_SIZE / 2
-    for x in -28..=28 {
-        for y in -18..=18 {
-            col := rl.Color{30, 30, 35, 255} if (x+y) % 2 == 0 else rl.Color{22, 22, 28, 255}
-            rl.DrawRectangle(
-                i32(x*TILE_SIZE - HALF),
-                i32(y*TILE_SIZE - HALF),
-                TILE_SIZE, TILE_SIZE,
-                col)
-        }
-    }
-}
-
-draw_enemies :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform))
-    defer delete(ids)
-
-    blind_fire_active := player_has_mutation_effect(w, w.player_id, .MutHideEnemySprites)
-    blind_vision_radius := f32(0)
-    if blind_fire_active {
-        if cw.world_has_component(w, w.player_id, .MutationContainer) {
-            mc := cw.world_get_mutation(w, w.player_id)
-            for i in 0..<mc.entity_count {
-                eid := mc.entities[i]
-                if !cw.world_is_valid(w, eid)                            { continue }
-                if !cw.world_has_component(w, eid, .MutUnseenDamageMult) { continue }
-                blind_vision_radius = cw.world_get_mut_unseen_damage_mult(w, eid).vision_radius
                 break
             }
         }
     }
-    player_pos: [3]f32
-    if cw.world_has_component(w, w.player_id, .Transform) {
-        player_pos = cw.world_get_transform(w, w.player_id).position
+}
+
+draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
+    if !cw.world_has_component(w, id, .Transform) || is_fog_hidden(w, id) || entity_blindfire_hidden(w, id) { return }
+    tr := cw.world_get_transform(w, id)
+    pos := rl.Vector2{ tr.position[0], tr.position[1] }
+    rot := tr.rotation
+
+    if cw.world_has_component(w, id, .Respawn) {
+        rsp := cw.world_get_respawn(w, id)
+        if rsp.timer > 0 && math.sin(rsp.timer * math.PI * 10) <= 0 {
+            return
+        }
+    }
+
+    vis := draw_entity_visual_info(w, id)
+    if !vis.ok { return }
+
+    tint := rl.WHITE
+    if is_player_entity(w, id) && cw.world_has_component(w, id, .DodgeState) && cw.world_get_dodge(w, id).active {
+        tint = rl.Color{ 180, 220, 255, 255 }
+    } else if cw.world_has_component(w, id, .AIAgent) && cw.world_get_ai(w, id).ai_type == .Ranged {
+        tint = color_mix(rl.Color{ 230, 238, 255, 255 }, rl.Color{ 255, 245, 235, 255 }, 0.18)
+    } else if cw.world_has_component(w, id, .NPC) && cw.world_get_npc(w, id).npc_type == .MutationWorkbench {
+        tint = rl.Color{ 250, 242, 255, 255 }
+    }
+    tint = color_mix(tint, rl.WHITE, get_hit_flash_intensity(id) * 0.75)
+
+    if entry, ok := get_or_load_entity_sprite(vis.sprite_key); ok {
+        src := anim_source_rect(w, id, entry.src, string(vis.sprite_key)) if !entry.from_rt else entry.src
+        draw_entity_sprite_quad_ex(entry.tex, src, pos, vis.world_size, rot, tint)
+    }
+    draw_entity_sprite_overlays(w, id, pos, vis.world_size, rot)
+}
+
+draw_entities :: proc(w: ^cw.World, pass: cw.RenderLayer) {
+    ids := cw.world_query(w, cw.query_mask(.Transform))
+    defer delete(ids)
+
+    if pass == .Sprite {
+        for i in 1..<len(ids) {
+            key := ids[i]
+            key_t := cw.world_get_transform(w, key).position
+            key_sort := iso_depth_sort_y(key_t[0], key_t[1])
+            j := i
+            for j > 0 {
+                prev := ids[j - 1]
+                prev_t := cw.world_get_transform(w, prev).position
+                if iso_depth_sort_y(prev_t[0], prev_t[1]) <= key_sort { break }
+                ids[j] = prev
+                j -= 1
+            }
+            ids[j] = key
+        }
     }
 
     for id in ids {
-        if is_fog_hidden(w, id) { continue }
-        if blind_fire_active && cw.world_has_component(w, id, .Transform) {
-            ep := cw.world_get_transform(w, id).position
-            dx := ep[0] - player_pos[0]
-            dy := ep[1] - player_pos[1]
-            if blind_vision_radius <= 0 || dx*dx + dy*dy > blind_vision_radius*blind_vision_radius {
-                continue
-            }
-        }
-
-        t   := cw.world_get_transform(w, id)
-        ai  := cw.world_get_ai(w, id)
-        pos := rl.Vector2{ t.position[0], t.position[1] }
-        rot := t.rotation
-
-        is_ranged := ai.ai_type == .Ranged
-
-        line_col  := rl.Color{ 200, 55,  55,  200 } if !is_ranged else rl.Color{ 80, 128, 205,  200 }
-
-        radius: f32 = 14
-        if cw.world_has_component(w, id, .Collider) {
-            radius = cw.world_get_collider(w, id).radius
-        }
-
-        flash := get_hit_flash_intensity(id)
-        sprite_key := cstring("enemy_melee")
-        sprite_scale := f32(1.0)
-        if cw.world_has_component(w, id, .RenderConfig) {
-            rc := cw.world_get_render_config(w, id)
-            if rc.sprite_len > 0 { sprite_key = cw.render_config_sprite_cstr(rc) }
-            if rc.sprite_scale > 0 { sprite_scale = rc.sprite_scale }
-        } else if is_ranged {
-            sprite_key = cstring("enemy_ranged")
-        }
-
-        tint := rl.WHITE
-        if is_ranged {
-            tint = rl.Color{ 230, 238, 255, 255 }
-        }
-        tint = color_mix(tint, rl.Color{ 255, 245, 235, 255 }, 0.18)
-        tint = color_mix(tint, rl.WHITE, flash * 0.75)
-        if entry, ok := get_or_load_entity_sprite(sprite_key); ok {
-            src := anim_source_rect(w, id, entry.src, string(sprite_key)) if !entry.from_rt else entry.src
-            draw_entity_sprite_quad_ex(entry.tex, src, pos, radius * 4.2 * sprite_scale, rot, tint)
-        }
-
-        tip := rl.Vector2{
-            pos.x + math.cos(rot) * (radius + 6),
-            pos.y + math.sin(rot) * (radius + 6),
-        }
-        rl.DrawLineEx(pos, tip, 2, line_col)
-
-        if cw.world_has_component(w, id, .Health) {
-            h := cw.world_get_health(w, id)
-            if h.max > 0 {
-                bar_w := radius * 2.2
-                BAR_H :: f32(3)
-                bx    := pos.x - bar_w * 0.5
-                by    := pos.y - radius - 7
-                rl.DrawRectangle(i32(bx - 1), i32(by - 1), i32(bar_w + 2), i32(BAR_H + 2),
-                    rl.Color{ 10, 8, 8, 200 })
-                rl.DrawRectangle(i32(bx), i32(by), i32(bar_w), i32(BAR_H),
-                    rl.Color{ 30, 14, 14, 200 })
-                frac   := clamp(h.current / h.max, 0, 1)
-                fill_r := u8(60  + (1 - frac) * 180)   // 60 full → 240 empty
-                fill_g := u8(200 - (1 - frac) * 170)   // 200 full → 30 empty
-                fill_w := bar_w * frac
-                rl.DrawRectangle(i32(bx), i32(by), i32(fill_w), i32(BAR_H),
-                    rl.Color{ fill_r, fill_g, 30, 240 })
-            }
+        if entity_render_layer(w, id) != pass { continue }
+        #partial switch pass {
+        case .WorldFX:
+            draw_entity_world_fx(w, id)
+        case .Sprite:
+            draw_entity_sprite_visual(w, id)
         }
     }
+}
+
+draw_player :: proc(w: ^cw.World) {
+    // Legacy entry point retired. Use draw_entities(w, .Sprite).
+}
+
+draw_floor :: proc() {
+    // Retired with tilemap sprite rendering.
+}
+
+draw_enemies :: proc(w: ^cw.World) {
+    // Legacy entry point retired. Use draw_entities(w, .Sprite).
 }
 
 draw_world_npcs :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
-    defer delete(ids)
-
-    for id in ids {
-        if is_fog_hidden(w, id) { continue }
-
-        npc := cw.world_get_npc(w, id)
-        tr  := cw.world_get_transform(w, id)
-        pos := rl.Vector2{ tr.position[0], tr.position[1] }
-
-        sprite_key := cstring("npc_shopkeeper")
-        sprite_scale := f32(1.0)
-        world_size := f32(64)
-        tint := rl.WHITE
-
-        switch npc.npc_type {
-        case .Shopkeeper:
-            world_size = 64
-        case .MutationWorkbench:
-            sprite_key = cstring("mutation_workbench")
-            world_size = 78
-            tint = rl.Color{ 250, 242, 255, 255 }
-        }
-
-        if cw.world_has_component(w, id, .RenderConfig) {
-            rc := cw.world_get_render_config(w, id)
-            if rc.sprite_len > 0 { sprite_key = cw.render_config_sprite_cstr(rc) }
-            if rc.sprite_scale > 0 { sprite_scale = rc.sprite_scale }
-        }
-
-        if entry, ok := get_or_load_entity_sprite(sprite_key); ok {
-            src := anim_source_rect(w, id, entry.src, string(sprite_key)) if !entry.from_rt else entry.src
-            draw_entity_sprite_quad_ex(entry.tex, src, pos, world_size * sprite_scale, tr.rotation, tint)
-        }
-    }
+    // Legacy entry point retired. Use draw_entities(w, .Sprite).
 }
 
 draw_melee_arcs :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.MeleeArc, .Transform))
-    defer delete(ids)
-    for id in ids {
-        if is_fog_hidden(w, id) { continue }
-
-        arc := cw.world_get_melee_arc(w, id)
-        t   := cw.world_get_transform(w, id)
-        pos := rl.Vector2{ t.position[0], t.position[1] }
-
-        fade: f32 = 1
-        if cw.world_has_component(w, id, .SelfDestruct) && arc.lifetime > 0 {
-            fade = cw.world_get_self_destruct(w, id).timer / arc.lifetime
-        }
-        t_main  := u8(clamp(fade, 0, 1) * 210)
-        t_edge  := u8(clamp(fade, 0, 1) * 255)
-
-        angle_d  := math.to_degrees(arc.angle)
-        spread_d := math.to_degrees(arc.arc_spread)
-        start_d  := angle_d - spread_d
-        end_d    := angle_d + spread_d
-        SEGS     :: i32(20)
-
-        rl.DrawRing(pos, 5, arc.radius - 4, start_d, end_d, SEGS,
-            rl.Color{ 215, 90, 20, t_main })
-        rl.DrawRing(pos, arc.radius - 5, arc.radius, start_d, end_d, SEGS,
-            rl.Color{ 255, 165, 60, t_edge })
-    }
+    // Legacy entry point retired. Use draw_entities(w, .WorldFX).
 }
 
 draw_projectiles :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.ProjectileTag, .Transform))
-    defer delete(ids)
-    for id in ids {
-        if is_fog_hidden(w, id) { continue }
-
-        t   := cw.world_get_transform(w, id)
-        p   := cw.world_get_projectile(w, id)
-        pos := rl.Vector2{ t.position[0], t.position[1] }
-
-        switch p.visual {
-
-        case .Standard:
-            rl.DrawCircleV(pos, 4, rl.Color{ 220, 190, 60, 255 })   // warm brass
-
-        case .Smoke:
-            // Fade ratio: 1 when freshly spawned → 0 at expiry
-            fade: f32 = 1
-            if p.max_lifetime > 0 {
-                fade = clamp(p.lifetime / p.max_lifetime, 0, 1)
-            }
-            haze_a := u8(clamp(fade * 55,  0, 255))
-            body_a := u8(clamp(fade * 130, 0, 255))
-            core_a := u8(clamp(fade * 200, 0, 255))
-
-            rl.DrawCircleV(pos, 7, rl.Color{ 130, 122, 118, haze_a })  // wispy outer haze
-            rl.DrawCircleV(pos, 4, rl.Color{ 178, 168, 162, body_a })  // smoke body
-            rl.DrawCircleV(pos, 2, rl.Color{ 215, 208, 204, core_a })  // hot dense core
-        }
-    }
+    // Legacy entry point retired. Use draw_entities(w, .WorldFX).
 }
 
 draw_ground_items :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.GroundItem, .Transform, .Item))
-    defer delete(ids)
-    t := f32(rl.GetTime())
-    for id in ids {
-        if is_fog_hidden(w, id) { continue }
-
-        tr    := cw.world_get_transform(w, id)
-        pos   := rl.Vector2{ tr.position[0], tr.position[1] }
-        pulse := (math.sin(t * 3.2) + 1) * 0.5   // 0..1, ~1.6 Hz
-
-        item := cw.world_get_item(w, id)
-        rc   := rarity_color(item.rarity)
-
-        outer_a := u8(70  + pulse * 90)
-        inner_a := u8(170 + pulse * 85)
-
-        rl.DrawCircleV(pos, 12, rl.Color{ rc.r, rc.g, rc.b, outer_a })
-        rl.DrawCircleV(pos,  6, rl.Color{ rc.r, rc.g, rc.b, inner_a })
-        rl.DrawCircleV(pos,  2, rl.Color{ 255, 255, 255, 200 })
-    }
+    // Legacy entry point retired. Use draw_entities(w, .WorldFX).
 }
 
 COL_PARCH   :: rl.Color{ 222, 207, 162, 245 }
@@ -1902,9 +1936,16 @@ draw_entity_sprite_quad :: proc(entry: EntitySpriteEntry, pos: rl.Vector2, world
     draw_entity_sprite_quad_ex(entry.tex, entry.src, pos, world_size, rotation_rad, tint)
 }
 
+// ISO_SPRITE_Y is the vertical scale applied to all entity sprite quads so
+// that their screen footprint matches the 2:1 isometric projection.
+// (ISO_TILE_H / ISO_TILE_W = 0.5)
+ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W   // = 0.5
+
 draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color) {
-    dst := rl.Rectangle{ pos.x, pos.y, world_size, world_size }
-    origin := rl.Vector2{ world_size * 0.5, world_size * 0.5 }
+    iso    := world_to_iso_v(pos)
+    iso_h  := world_size * ISO_SPRITE_Y
+    dst    := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
+    origin := rl.Vector2{ world_size * 0.5, iso_h * 0.5 }
     rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(rotation_rad) + 90.0, tint)
 }
 
@@ -3012,3 +3053,4 @@ draw_levelup_flash :: proc() {
         { f32(sw)*0.5 - ssz.x*0.5, f32(sh)*0.36 + tsz.y*0.5 + uis(6) },
         sfs, 1, { 200, 180, 120, salp })
 }
+
