@@ -40,13 +40,22 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         stationary := status_is_stationary(w, id, slot)
 
-        affix_hp_pct         := f32(0)
-        affix_armor          := f32(0)
-        affix_speed_pct      := f32(0)
-        affix_energy_pct     := f32(0)
-        affix_damage_pct     := f32(0)
-        affix_fire_rate_pct  := f32(0)
-        affix_reload_spd_pct := f32(0)
+        affix_hp_pct          := f32(0)
+        affix_armor           := f32(0)
+        affix_speed_pct       := f32(0)
+        affix_energy_pct      := f32(0)
+        affix_damage_pct      := f32(0)
+        affix_fire_rate_pct   := f32(0)
+        affix_reload_spd_pct  := f32(0)
+        affix_hp_regen        := f32(0)
+        affix_proj_speed_pct  := f32(0)
+        affix_pierce          := f32(0)
+        affix_ammo_pct        := f32(0)
+        affix_melee_dmg_pct   := f32(0)
+        affix_melee_range_pct := f32(0)
+        affix_melee_speed_pct := f32(0)
+        base_armor_sum        := f32(0)  // sum of ItemComp.base_armor across equipped slots
+        base_shield_sum       := f32(0)  // sum of ItemComp.base_shield across equipped slots
 
         if cw.world_has_component(w, id, .Inventory) {
             inv := cw.world_get_inventory(w, id)
@@ -57,16 +66,25 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if !cw.world_has_component(w, eid, .Item) { continue }
 
                 item := cw.world_get_item(w, eid)
+                base_armor_sum  += item.base_armor
+                base_shield_sum += item.base_shield
                 for i in 0..<int(item.affix_count) {
                     a := item.affixes[i]
                     switch a.type {
-                    case .BonusHP:          affix_hp_pct         += a.value
-                    case .Armor:            affix_armor          += a.value
-                    case .BonusMoveSpeed:   affix_speed_pct      += a.value
-                    case .BonusEnergy:      affix_energy_pct     += a.value
-                    case .BonusDamage:      affix_damage_pct     += a.value
-                    case .BonusFireRate:    affix_fire_rate_pct  += a.value
-                    case .BonusReloadSpeed: affix_reload_spd_pct += a.value
+                    case .BonusHP:          affix_hp_pct          += a.value
+                    case .Armor:            affix_armor           += a.value
+                    case .BonusMoveSpeed:   affix_speed_pct       += a.value
+                    case .BonusEnergy:      affix_energy_pct      += a.value
+                    case .BonusDamage:      affix_damage_pct      += a.value
+                    case .BonusFireRate:    affix_fire_rate_pct   += a.value
+                    case .BonusReloadSpeed: affix_reload_spd_pct  += a.value
+                    case .HealthRegen:      affix_hp_regen        += a.value
+                    case .BonusProjSpeed:   affix_proj_speed_pct  += a.value
+                    case .BonusPierce:      affix_pierce          += a.value
+                    case .BonusAmmo:        affix_ammo_pct        += a.value
+                    case .BonusMeleeDamage: affix_melee_dmg_pct   += a.value
+                    case .BonusMeleeRange:  affix_melee_range_pct += a.value
+                    case .BonusMeleeSpeed:  affix_melee_speed_pct += a.value
                     case .None:
                     }
                 }
@@ -187,12 +205,12 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         damage_mult *= mut_damage_mult
         damage_mult *= missing_hp_damage_mult
 
-        projectile_speed_mult := f32(1.0)
+        projectile_speed_mult := 1.0 + affix_proj_speed_pct
         movement_blocked      := false
         if root_on_fire_active {
-            movement_blocked      = true
-            damage_mult          *= root_damage_mult
-            projectile_speed_mult = root_proj_speed_mult
+            movement_blocked       = true
+            damage_mult           *= root_damage_mult
+            projectile_speed_mult *= root_proj_speed_mult
         }
 
         if player_has_ability(w, id, .EagleEye) {
@@ -206,7 +224,8 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         st.fire_rate_mult           = dex_mult * (1.0 + affix_fire_rate_pct)
         st.reload_speed_mult        = dex_mult * (1.0 + affix_reload_spd_pct)
         st.projectile_speed_mult    = projectile_speed_mult
-        st.armor                    = clamp(affix_armor, 0, 0.75)
+        st.armor                    = clamp(affix_armor + base_armor_sum, 0, 0.75)
+        st.hp_regen_pct             = affix_hp_regen
         st.crit_chance              = clamp(crit_chance, 0, 0.95)
         st.special_ability_crit     = f32(ABILITY_DEFS[.EagleEye].param2 * passive_power) if player_has_ability(w, id, .EagleEye) else 0
         st.dodge_cooldown_reduction = f32(ABILITY_DEFS[.HuntersReflex].param1 * passive_power) if player_has_ability(w, id, .HuntersReflex) else 0
@@ -221,6 +240,21 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         st.ranged_attacks_blocked   = mut_ranged_blocked
         st.nonlethal_shots          = mut_nonlethal_shots
         st.hp_locked_to_one         = has_mut_lock_hp_to_one
+        st.bonus_ammo_pct           = affix_ammo_pct
+        st.bonus_pierce             = int(affix_pierce)
+        st.melee_damage_mult        = 1.0 + affix_melee_dmg_pct
+        st.melee_range_mult         = 1.0 + affix_melee_range_pct
+        st.melee_speed_mult         = 1.0 + affix_melee_speed_pct
+
+        // Shield: update max from equipped items; fill any newly added capacity.
+        old_shield_max := st.shield_max
+        st.shield_max   = base_shield_sum
+        if st.shield_max > old_shield_max {
+            // Equipping a new shield item fills the added portion.
+            h.shield = clamp(h.shield + (st.shield_max - old_shield_max), 0, st.shield_max)
+        } else {
+            h.shield = clamp(h.shield, 0, st.shield_max)
+        }
 
         new_max_hp     := st.base_hp * st.max_hp_mult
         new_max_energy := st.base_energy * st.max_energy_mult
@@ -243,6 +277,11 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         h.max_energy = new_max_energy
         if st.hp_locked_to_one && h.current > 1 {
             h.current = 1
+        }
+
+        // Apply HP regeneration from affixes (fraction of max HP per second).
+        if st.hp_regen_pct > 0 && !st.healing_blocked && h.current < h.max && h.current > 0 {
+            h.current = min(h.current + st.hp_regen_pct * h.max * dt, h.max)
         }
     }
 }

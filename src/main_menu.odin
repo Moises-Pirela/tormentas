@@ -3,20 +3,36 @@ package main
 import rl     "vendor:raylib"
 import        "core:fmt"
 import        "core:strings"
+import        "core:mem"
 import p2p    "p2p"
 
-MenuFocus :: enum { None, Name, IP }
+MenuPhase :: enum { CharSelect, PlayOptions }
+MenuFocus :: enum { None, NewName, IP }
 
 @(private = "file")
 g_mm: struct {
-    focus:         MenuFocus,
-    show_join:     bool,       
-    ip:            [64]u8,
-    conn_timer:    f32,        
-    settings_open: bool,       
+    phase:          MenuPhase,
+    selected_slot:  int,
+    creating_slot:  int,
+    confirm_delete: bool,
+    new_name:       [PLAYER_NAME_MAX + 1]u8,
+    focus:          MenuFocus,
+    show_join:      bool,
+    ip:             [64]u8,
+    conn_timer:     f32,
 }
 
 CONN_TIMEOUT :: f32(15.0)
+
+@(private)
+_mm_init :: proc() {
+    g_mm.phase         = .CharSelect
+    g_mm.selected_slot = -1
+    g_mm.creating_slot = -1
+    g_mm.confirm_delete = false
+    g_mm.focus         = .None
+    g_mm.show_join     = false
+}
 
 @(private)
 _on_black_singleplayer :: proc() {
@@ -41,123 +57,35 @@ _on_black_start_online :: proc() {
 _on_black_to_menu :: proc() {
     shutdown_game()
     g_app_state = .MainMenu
+    _mm_init()
     fade_from_black()
 }
+
+// ── top-level dispatchers ─────────────────────────────────────────────────
 
 update_main_menu :: proc(dt: f32) {
     if g_disconnect_msg_timer > 0 { g_disconnect_msg_timer -= dt }
 
-    if g_mm.settings_open {
-        update_keybinds_screen()
-        if update_settings_overlay() {
-            g_mm.settings_open = false
-            g_keybinds_open    = false
-            g_rebind_idx       = -1
-        }
-        return
-    }
-
-    mp := rl.GetMousePosition()
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-
-    cx      := sw * 0.5
-    field_w := sw * 0.28
-    btn_w   := sw * 0.20
-    btn_h   := uis(44)
-    gap     := uis(10)
-
-    name_r := rl.Rectangle{cx - field_w * 0.5, sh * 0.42, field_w, uis(34)}
-    if rl.IsMouseButtonPressed(.LEFT) {
-        if rl.CheckCollisionPointRec(mp, name_r) {
-            g_mm.focus = .Name
-        } else if g_mm.focus == .Name {
-            g_mm.focus = .None
-        }
-    }
-    if g_mm.focus == .Name {
-        _mm_text_input(g_player_name[:PLAYER_NAME_MAX])
-    }
-
-    total  := btn_w * 3 + gap * 2
-    b0x    := cx - total * 0.5
-    btn_y  := sh * 0.57
-
-    sp_r   := rl.Rectangle{b0x,                        btn_y, btn_w, btn_h}
-    host_r := rl.Rectangle{b0x + btn_w + gap,           btn_y, btn_w, btn_h}
-    join_r := rl.Rectangle{b0x + (btn_w + gap) * 2,    btn_y, btn_w, btn_h}
-
-    if _mm_btn_hit(sp_r) {
-        g_mm.show_join = false
-        g_mm.focus     = .None
-        fade_to_black(_on_black_singleplayer)
-    }
-
-    if _mm_btn_hit(host_r) {
-        g_mm.show_join = false
-        g_mm.focus     = .None
-        g_is_host      = true
-        copy(g_session.local_name[:], g_player_name[:])
-        p2p.session_host(&g_session, 7777)
-        g_mm.conn_timer = 0
-        g_app_state = .Connecting
-    }
-
-    if _mm_btn_hit(join_r) {
-        g_mm.show_join = !g_mm.show_join
-        if g_mm.show_join { g_mm.focus = .IP } else { g_mm.focus = .None }
-    }
-
-    if g_mm.show_join {
-        ip_r := rl.Rectangle{cx - field_w * 0.5, sh * 0.70, field_w, uis(34)}
-        if rl.IsMouseButtonPressed(.LEFT) {
-            if rl.CheckCollisionPointRec(mp, ip_r) {
-                g_mm.focus = .IP
-            } else if g_mm.focus == .IP {
-                g_mm.focus = .None
+    // When any panel is open, route input to the topmost one.
+    // Universal ESC (main loop) handles closing; we only do per-panel logic.
+    if ui_any() {
+        top, ok := ui_top()
+        if ok {
+            switch top {
+            case .Settings:
+                update_settings_overlay()
+            case .Keybinds:
+                update_keybinds_screen()
+            case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .PauseMenu, .LevelSelect:
+                // not opened from the main menu
             }
         }
-        if g_mm.focus == .IP {
-            _mm_text_input(g_mm.ip[:63])
-        }
-
-        conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.80, btn_w, btn_h}
-        if _mm_btn_hit(conn_r) {
-            ip_raw := strings.clone_from_cstring(cstring(&g_mm.ip[0]),
-                context.temp_allocator)
-            if ip_raw == "" { ip_raw = "127.0.0.1" }
-            g_is_host = false
-            copy(g_session.local_name[:], g_player_name[:])
-            p2p.session_join(&g_session, ip_raw, 7777)
-            g_mm.conn_timer = 0
-            g_mm.focus      = .None
-            g_app_state     = .Connecting
-        }
-    }
-}
-
-update_connecting :: proc(dt: f32) {
-    g_mm.conn_timer += dt
-
-    p2p.session_poll(&g_session, dt)
-
-    // Handshake succeeded
-    if p2p.session_is_online(&g_session) && g_fade_phase == .Idle {
-        fade_to_black(_on_black_start_online)
         return
     }
 
-    if p2p.session_is_disconnected(&g_session) {
-        p2p.session_shutdown(&g_session)
-        g_disconnect_msg_timer = DISCONNECT_MSG_DURATION
-        g_app_state = .MainMenu
-        return
-    }
-
-    if rl.IsKeyPressed(.ESCAPE) || g_mm.conn_timer >= CONN_TIMEOUT {
-        p2p.session_shutdown(&g_session)
-        g_is_host   = false
-        g_app_state = .MainMenu
+    switch g_mm.phase {
+    case .CharSelect:  _mm_update_char_select()
+    case .PlayOptions: _mm_update_play_options()
     }
 }
 
@@ -191,23 +119,380 @@ draw_main_menu :: proc() {
             mfs, 0.5, rl.Color{220, 80, 60, a})
     }
 
-    field_w := sw * 0.28
+    switch g_mm.phase {
+    case .CharSelect:  _mm_draw_char_select()
+    case .PlayOptions: _mm_draw_play_options()
+    }
+
+    btn_fs  := uis(10)
+    btn_bh  := btn_fs + uis(14)
+
+    set_lbl := cstring("SETTINGS")
+    set_sz  := rl.MeasureTextEx(g_font, set_lbl, btn_fs, 0.5)
+    set_bw  := set_sz.x + uis(22)
+    set_r   := rl.Rectangle{
+        sw - set_bw - uis(12),
+        sh - btn_bh - uis(12),
+        set_bw, btn_bh,
+    }
+    set_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), set_r)
+    rl.DrawRectangleRec(set_r, rl.Color{24, 20, 14, 240} if set_hot else rl.Color{14, 11, 8, 200})
+    rl.DrawRectangleLinesEx(set_r, 1, COL_BRASS if set_hot else COL_RULE)
+    rl.DrawTextEx(g_font, set_lbl,
+        {set_r.x + (set_bw - set_sz.x) * 0.5, set_r.y + (btn_bh - btn_fs) * 0.5},
+        btn_fs, 0.5, COL_BRASS if set_hot else COL_MUTED)
+    if set_hot && rl.IsMouseButtonReleased(.LEFT) {
+        ui_open(.Settings)
+    }
+
+    exit_lbl := cstring("EXIT")
+    exit_sz  := rl.MeasureTextEx(g_font, exit_lbl, btn_fs, 0.5)
+    exit_bw  := exit_sz.x + uis(22)
+    exit_r   := rl.Rectangle{
+        uis(12),
+        sh - btn_bh - uis(12),
+        exit_bw, btn_bh,
+    }
+    exit_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_r)
+    rl.DrawRectangleRec(exit_r, rl.Color{24, 14, 14, 240} if exit_hot else rl.Color{14, 11, 8, 200})
+    rl.DrawRectangleLinesEx(exit_r, 1, rl.Color{200, 80, 60, 220} if exit_hot else COL_RULE)
+    rl.DrawTextEx(g_font, exit_lbl,
+        {exit_r.x + (exit_bw - exit_sz.x) * 0.5, exit_r.y + (btn_bh - btn_fs) * 0.5},
+        btn_fs, 0.5, rl.Color{220, 100, 80, 255} if exit_hot else COL_MUTED)
+    if exit_hot && rl.IsMouseButtonReleased(.LEFT) {
+        g_should_exit = true
+    }
+
+    // Settings and Keybinds panels are drawn by ui_draw() in the main loop.
+}
+
+// ── CharSelect ────────────────────────────────────────────────────────────
+
+SLOT_CARD_W :: f32(160)
+SLOT_CARD_H :: f32(110)
+SLOT_CARD_GAP :: f32(14)
+
+@(private = "file")
+_mm_update_char_select :: proc() {
+    sw  := f32(rl.GetScreenWidth())
+    sh  := f32(rl.GetScreenHeight())
+
+    total_w := SLOT_CARD_W * MAX_CHAR_SLOTS + SLOT_CARD_GAP * (MAX_CHAR_SLOTS - 1)
+    cards_x := sw * 0.5 - total_w * 0.5
+    cards_y := sh * 0.42
+
+    for i in 0..<MAX_CHAR_SLOTS {
+        cx := cards_x + f32(i) * (SLOT_CARD_W + SLOT_CARD_GAP)
+        r  := rl.Rectangle{cx, cards_y, SLOT_CARD_W, SLOT_CARD_H}
+        if _mm_btn_hit(r) {
+            if g_mm.creating_slot >= 0 && g_mm.creating_slot != i {
+                g_mm.creating_slot = -1
+                mem.zero_slice(g_mm.new_name[:])
+                g_mm.focus = .None
+            }
+            g_mm.confirm_delete = false
+            s := &g_char_save.slots[i]
+            if s.exists == 1 {
+                g_mm.selected_slot = i
+            } else {
+                g_mm.selected_slot = i
+                g_mm.creating_slot = i
+                mem.zero_slice(g_mm.new_name[:])
+                g_mm.focus = .NewName
+            }
+        }
+    }
+
+    if g_mm.focus == .NewName {
+        _mm_text_input(g_mm.new_name[:PLAYER_NAME_MAX])
+        if rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.KP_ENTER) {
+            _mm_confirm_create()
+        }
+    }
+
+    btn_y   := cards_y + SLOT_CARD_H + uis(28)
+    btn_w   := sw * 0.14
+    btn_h   := uis(38)
+    cx_base := sw * 0.5
+
+    if g_mm.creating_slot >= 0 {
+        create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        if _mm_btn_hit(create_r) { _mm_confirm_create() }
+        if _mm_btn_hit(cancel_r) {
+            g_mm.creating_slot = -1
+            g_mm.selected_slot = -1
+            mem.zero_slice(g_mm.new_name[:])
+            g_mm.focus = .None
+        }
+    } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
+        play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        if _mm_btn_hit(play_r) {
+            _mm_select_slot(g_mm.selected_slot)
+            g_mm.phase = .PlayOptions
+        }
+        if _mm_btn_hit(delete_r) {
+            if g_mm.confirm_delete {
+                char_slot_delete(g_mm.selected_slot)
+                g_mm.selected_slot  = -1
+                g_mm.confirm_delete = false
+            } else {
+                g_mm.confirm_delete = true
+            }
+        } else if rl.IsMouseButtonPressed(.LEFT) {
+            g_mm.confirm_delete = false
+        }
+    }
+}
+
+@(private = "file")
+_mm_confirm_create :: proc() {
+    if g_mm.new_name[0] == 0 { return }
+    idx := g_mm.creating_slot
+    char_slot_create(idx, g_mm.new_name[:])
+    g_mm.creating_slot = -1
+    g_mm.focus         = .None
+    g_mm.selected_slot = idx
+}
+
+@(private = "file")
+_mm_select_slot :: proc(idx: int) {
+    g_active_slot = idx
+    mem.zero_slice(g_player_name[:])
+    copy(g_player_name[:], g_char_save.slots[idx].name[:])
+}
+
+@(private = "file")
+_mm_draw_char_select :: proc() {
+    sw := f32(rl.GetScreenWidth())
+    sh := f32(rl.GetScreenHeight())
+
+    total_w := SLOT_CARD_W * MAX_CHAR_SLOTS + SLOT_CARD_GAP * (MAX_CHAR_SLOTS - 1)
+    cards_x := sw * 0.5 - total_w * 0.5
+    cards_y := sh * 0.42
+
+    lbl    := cstring("SELECT CHARACTER")
+    lfs    := uis(10)
+    lsz    := rl.MeasureTextEx(g_font, lbl, lfs, 0.5)
+    rl.DrawTextEx(g_font, lbl,
+        {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(14)},
+        lfs, 0.5, rl.Color{130, 118, 82, 200})
+
+    for i in 0..<MAX_CHAR_SLOTS {
+        cx := cards_x + f32(i) * (SLOT_CARD_W + SLOT_CARD_GAP)
+        r  := rl.Rectangle{cx, cards_y, SLOT_CARD_W, SLOT_CARD_H}
+        _mm_draw_slot_card(r, i)
+    }
+
+    btn_y   := cards_y + SLOT_CARD_H + uis(28)
+    btn_w   := sw * 0.14
+    btn_h   := uis(38)
+    cx_base := sw * 0.5
+
+    if g_mm.creating_slot >= 0 {
+        name_w := sw * 0.24
+        name_r := rl.Rectangle{sw * 0.5 - name_w * 0.5, btn_y - uis(52), name_w, uis(32)}
+        n_lbl  := cstring("NAME YOUR CHARACTER")
+        n_lfs  := uis(9)
+        n_lsz  := rl.MeasureTextEx(g_font, n_lbl, n_lfs, 0.5)
+        rl.DrawTextEx(g_font, n_lbl,
+            {sw * 0.5 - n_lsz.x * 0.5, name_r.y - n_lfs - uis(5)},
+            n_lfs, 0.5, rl.Color{130, 118, 82, 200})
+        _mm_field_draw(name_r, g_mm.new_name[:], g_mm.focus == .NewName, "Wanderer")
+
+        create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        _mm_btn_draw(create_r, "CREATE", false)
+        _mm_btn_draw(cancel_r, "CANCEL", false)
+    } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
+        play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        _mm_btn_draw(play_r, "PLAY", false)
+
+        if g_mm.confirm_delete {
+            _mm_btn_draw(delete_r, "CONFIRM?", true)
+        } else {
+            _mm_btn_draw(delete_r, "DELETE", false)
+        }
+    }
+}
+
+@(private = "file")
+_mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
+    s       := &g_char_save.slots[idx]
+    sel     := g_mm.selected_slot == idx
+    creating := g_mm.creating_slot == idx
+    mp      := rl.GetMousePosition()
+    over    := rl.CheckCollisionPointRec(mp, r)
+    hot     := over || sel
+
+    bg     := rl.Color{52, 46, 34, 255} if hot else rl.Color{18, 16, 12, 255}
+    border := COL_BRASS                  if sel  else (rl.Color{100, 88, 58, 200} if over else COL_RULE)
+    rl.DrawRectangleRec(r, bg)
+    rl.DrawRectangleLinesEx(r, 1, border)
+
+    if creating {
+        lbl := cstring("NEW")
+        fs  := uis(11)
+        sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
+        rl.DrawTextEx(g_font, lbl,
+            {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
+            fs, 0.5, COL_BRASS)
+        return
+    }
+
+    if s.exists == 0 {
+        lbl := cstring("— NEW —")
+        fs  := uis(10)
+        sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
+        rl.DrawTextEx(g_font, lbl,
+            {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
+            fs, 0.5, rl.Color{80, 72, 52, 180} if !over else rl.Color{140, 126, 82, 220})
+        return
+    }
+
+    name_cs := cstring(&s.name[0])
+    nfs     := uis(12)
+    nsz     := rl.MeasureTextEx(g_font, name_cs, nfs, 0.5)
+    rl.DrawTextEx(g_font, name_cs,
+        {r.x + (r.width - nsz.x) * 0.5, r.y + uis(18)},
+        nfs, 0.5, rl.Color{218, 206, 160, 255})
+
+    num_buf: [32]u8
+    lv_s   := fmt.bprintf(num_buf[:], "Lv. %d", s.level)
+    num_buf[len(lv_s)] = 0
+    lv_fs  := uis(10)
+    lv_sz  := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), lv_fs, 0.5)
+    rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+        {r.x + (r.width - lv_sz.x) * 0.5, r.y + uis(42)},
+        lv_fs, 0.5, rl.Color{160, 148, 100, 220})
+
+    raid_s := fmt.bprintf(num_buf[:], "%d raids", s.raids_done)
+    num_buf[len(raid_s)] = 0
+    rd_fs  := uis(9)
+    rd_sz  := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), rd_fs, 0.5)
+    rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+        {r.x + (r.width - rd_sz.x) * 0.5, r.y + uis(62)},
+        rd_fs, 0.5, rl.Color{120, 110, 76, 180})
+
+    if s.deaths > 0 {
+        death_s := fmt.bprintf(num_buf[:], "%d deaths", s.deaths)
+        num_buf[len(death_s)] = 0
+        dt_fs := uis(9)
+        dt_sz := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), dt_fs, 0.5)
+        rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+            {r.x + (r.width - dt_sz.x) * 0.5, r.y + uis(80)},
+            dt_fs, 0.5, rl.Color{160, 80, 70, 160})
+    }
+}
+
+// ── PlayOptions ───────────────────────────────────────────────────────────
+
+@(private = "file")
+_mm_update_play_options :: proc() {
+    mp := rl.GetMousePosition()
+    sw := f32(rl.GetScreenWidth())
+    sh := f32(rl.GetScreenHeight())
+
+    cx      := sw * 0.5
     btn_w   := sw * 0.20
     btn_h   := uis(44)
     gap     := uis(10)
 
-    lbl    := cstring("PLAYER NAME")
-    lbl_fs := uis(10)
-    lsz    := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
-    name_r := rl.Rectangle{cx - field_w * 0.5, sh * 0.42, field_w, uis(34)}
-    rl.DrawTextEx(g_font, lbl,
-        {cx - lsz.x * 0.5, name_r.y - lbl_fs - uis(5)},
-        lbl_fs, 0.5, rl.Color{130, 118, 82, 200})
-    _mm_field_draw(name_r, g_player_name[:], g_mm.focus == .Name, "Wanderer")
+    total  := btn_w * 3 + gap * 2
+    b0x    := cx - total * 0.5
+    btn_y  := sh * 0.54
 
-    total := btn_w * 3 + gap * 2
-    b0x   := cx - total * 0.5
-    btn_y := sh * 0.57
+    sp_r   := rl.Rectangle{b0x,                        btn_y, btn_w, btn_h}
+    host_r := rl.Rectangle{b0x + btn_w + gap,           btn_y, btn_w, btn_h}
+    join_r := rl.Rectangle{b0x + (btn_w + gap) * 2,    btn_y, btn_w, btn_h}
+
+    if _mm_btn_hit(sp_r) {
+        g_mm.show_join = false
+        g_mm.focus     = .None
+        fade_to_black(_on_black_singleplayer)
+    }
+
+    if _mm_btn_hit(host_r) {
+        g_mm.show_join = false
+        g_mm.focus     = .None
+        g_is_host      = true
+        copy(g_session.local_name[:], g_player_name[:])
+        p2p.session_host(&g_session, 7777)
+        g_mm.conn_timer = 0
+        g_app_state = .Connecting
+    }
+
+    if _mm_btn_hit(join_r) {
+        g_mm.show_join = !g_mm.show_join
+        if g_mm.show_join { g_mm.focus = .IP } else { g_mm.focus = .None }
+    }
+
+    if g_mm.show_join {
+        field_w := sw * 0.28
+        ip_r := rl.Rectangle{cx - field_w * 0.5, sh * 0.68, field_w, uis(34)}
+        if rl.IsMouseButtonPressed(.LEFT) {
+            if rl.CheckCollisionPointRec(mp, ip_r) {
+                g_mm.focus = .IP
+            } else if g_mm.focus == .IP {
+                g_mm.focus = .None
+            }
+        }
+        if g_mm.focus == .IP {
+            _mm_text_input(g_mm.ip[:63])
+        }
+
+        conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.78, btn_w, btn_h}
+        if _mm_btn_hit(conn_r) {
+            ip_raw := strings.clone_from_cstring(cstring(&g_mm.ip[0]),
+                context.temp_allocator)
+            if ip_raw == "" { ip_raw = "127.0.0.1" }
+            g_is_host = false
+            copy(g_session.local_name[:], g_player_name[:])
+            p2p.session_join(&g_session, ip_raw, 7777)
+            g_mm.conn_timer = 0
+            g_mm.focus      = .None
+            g_app_state     = .Connecting
+        }
+    }
+
+    back_w := sw * 0.12
+    back_r := rl.Rectangle{sw * 0.5 - back_w * 0.5, sh * 0.88, back_w, uis(32)}
+    if _mm_btn_hit(back_r) {
+        g_mm.phase     = .CharSelect
+        g_mm.show_join = false
+        g_mm.focus     = .None
+        g_active_slot  = -1
+    }
+}
+
+@(private = "file")
+_mm_draw_play_options :: proc() {
+    sw := f32(rl.GetScreenWidth())
+    sh := f32(rl.GetScreenHeight())
+    cx := sw * 0.5
+
+    if g_active_slot >= 0 && g_active_slot < MAX_CHAR_SLOTS {
+        s      := &g_char_save.slots[g_active_slot]
+        name_s := cstring(&s.name[0]) if s.name[0] != 0 else cstring("Wanderer")
+        num_buf: [64]u8
+        sub_s  := fmt.bprintf(num_buf[:], "Playing as: %s  |  Lv. %d", name_s, s.level)
+        num_buf[len(sub_s)] = 0
+        sfs    := uis(10)
+        ssz    := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), sfs, 0.5)
+        rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+            {cx - ssz.x * 0.5, sh * 0.40},
+            sfs, 0.5, rl.Color{160, 148, 100, 200})
+    }
+
+    btn_w   := sw * 0.20
+    btn_h   := uis(44)
+    gap     := uis(10)
+
+    total  := btn_w * 3 + gap * 2
+    b0x    := cx - total * 0.5
+    btn_y  := sh * 0.54
 
     sp_r   := rl.Rectangle{b0x,                        btn_y, btn_w, btn_h}
     host_r := rl.Rectangle{b0x + btn_w + gap,           btn_y, btn_w, btn_h}
@@ -215,46 +500,51 @@ draw_main_menu :: proc() {
 
     _mm_btn_draw(sp_r,   "SINGLEPLAYER", false)
     _mm_btn_draw(host_r, "HOST GAME",    false)
-    _mm_btn_draw(join_r, "JOIN GAME",    g_mm.show_join) // highlighted when open
+    _mm_btn_draw(join_r, "JOIN GAME",    g_mm.show_join)
 
     if g_mm.show_join {
+        field_w := sw * 0.28
         ip_lbl    := cstring("HOST IP  (port 7777)")
         ip_lbl_fs := uis(10)
         ilsz      := rl.MeasureTextEx(g_font, ip_lbl, ip_lbl_fs, 0.5)
-        ip_r      := rl.Rectangle{cx - field_w * 0.5, sh * 0.70, field_w, uis(34)}
+        ip_r      := rl.Rectangle{cx - field_w * 0.5, sh * 0.68, field_w, uis(34)}
         rl.DrawTextEx(g_font, ip_lbl,
             {cx - ilsz.x * 0.5, ip_r.y - ip_lbl_fs - uis(5)},
             ip_lbl_fs, 0.5, rl.Color{130, 118, 82, 200})
         _mm_field_draw(ip_r, g_mm.ip[:], g_mm.focus == .IP, "127.0.0.1")
 
-        conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.80, btn_w, btn_h}
+        conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.78, btn_w, btn_h}
         _mm_btn_draw(conn_r, "CONNECT", false)
     }
 
-    set_fs   := uis(10)
-    set_lbl  := cstring("SETTINGS")
-    set_sz   := rl.MeasureTextEx(g_font, set_lbl, set_fs, 0.5)
-    set_bw   := set_sz.x + uis(22)
-    set_bh   := set_fs + uis(14)
-    set_r    := rl.Rectangle{
-        sw - set_bw - uis(12),
-        sh - set_bh - uis(12),
-        set_bw, set_bh,
-    }
-    set_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), set_r)
-    rl.DrawRectangleRec(set_r, rl.Color{24, 20, 14, 240} if set_hot else rl.Color{14, 11, 8, 200})
-    rl.DrawRectangleLinesEx(set_r, 1, COL_BRASS if set_hot else COL_RULE)
-    rl.DrawTextEx(g_font, set_lbl,
-        {set_r.x + (set_bw - set_sz.x) * 0.5, set_r.y + (set_bh - set_fs) * 0.5},
-        set_fs, 0.5, COL_BRASS if set_hot else COL_MUTED)
+    back_w := sw * 0.12
+    back_r := rl.Rectangle{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
+    _mm_btn_draw(back_r, "← BACK", false)
+}
 
-    if set_hot && rl.IsMouseButtonReleased(.LEFT) {
-        g_mm.settings_open = true
+// ── Connecting screen ─────────────────────────────────────────────────────
+
+update_connecting :: proc(dt: f32) {
+    g_mm.conn_timer += dt
+
+    p2p.session_poll(&g_session, dt)
+
+    if p2p.session_is_online(&g_session) && g_fade_phase == .Idle {
+        fade_to_black(_on_black_start_online)
+        return
     }
 
-    if g_mm.settings_open {
-        draw_settings_overlay()
-        draw_keybinds_screen()
+    if p2p.session_is_disconnected(&g_session) {
+        p2p.session_shutdown(&g_session)
+        g_disconnect_msg_timer = DISCONNECT_MSG_DURATION
+        g_app_state = .MainMenu
+        return
+    }
+
+    if rl.IsKeyPressed(.ESCAPE) || g_mm.conn_timer >= CONN_TIMEOUT {
+        p2p.session_shutdown(&g_session)
+        g_is_host   = false
+        g_app_state = .MainMenu
     }
 }
 
@@ -295,6 +585,8 @@ draw_connecting :: proc() {
         {cx - csz.x * 0.5, sh * 0.58},
         cfs, 0.5, rl.Color{110, 100, 72, 180})
 }
+
+// ── shared helpers ────────────────────────────────────────────────────────
 
 @(private = "file")
 _mm_btn_hit :: proc(r: rl.Rectangle) -> bool {

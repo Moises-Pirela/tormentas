@@ -12,8 +12,6 @@ import cw  "clockwork"
 MAX_SHOP_STOCK   :: 6    // max items any shopkeeper stocks at once
 GOLD_DROP_MIN    :: 3    // min coins per enemy kill
 GOLD_DROP_MAX    :: 18   // max coins per enemy kill
-INTERACT_KEY     :: rl.KeyboardKey.E
-
 // Base sell price = buy price × SELL_RATIO
 SELL_RATIO :: f32(0.4)
 
@@ -22,7 +20,7 @@ SELL_RATIO :: f32(0.4)
 // ---------------------------------------------------------------------------
 
 ShopEntry :: struct {
-    loot_idx:   int,    // index into LOOT_TABLE in items.odin
+    item_name:  string, // matches LootDef.name in g_loot_table
     base_price: int,    // gold cost at rarity Normal; multiplied by rarity
 }
 
@@ -36,24 +34,24 @@ RARITY_PRICE_MULT := [cw.ItemRarity]int{
 }
 
 // SHOP_CATALOGUE lists every item a shopkeeper might carry.
-// Indices must match LOOT_TABLE order in items.odin.
+// item_name must match a LootDef.name in g_loot_table (loaded from loot_table.csv).
 @(private = "file")
 SHOP_CATALOGUE := [?]ShopEntry{
-    { loot_idx = 0,  base_price = 30  },   // Reliquia Corrupta
-    { loot_idx = 1,  base_price = 40  },   // Coraza de Cuero
-    { loot_idx = 2,  base_price = 65  },   // Coraza de Hierro
-    { loot_idx = 3,  base_price = 25  },   // Cartucho
-    { loot_idx = 4,  base_price = 35  },   // Fragmento Etéreo
-    { loot_idx = 5,  base_price = 30  },   // Botas de Coyote
-    { loot_idx = 6,  base_price = 45  },   // Fetiche de Hueso
-    { loot_idx = 7,  base_price = 30  },   // Percutor Reforzado
-    { loot_idx = 8,  base_price = 30  },   // Resorte Ligero
-    { loot_idx = 9,  base_price = 35  },   // Cargador Extendido
-    { loot_idx = 10, base_price = 50  },   // Machete del Desierto
-    { loot_idx = 11, base_price = 80  },   // Hacha de Guerra
-    { loot_idx = 12, base_price = 45  },   // Navaja Veloz
-    { loot_idx = 13, base_price = 20  },   // Suero Necrótico
-    { loot_idx = 14, base_price = 55  },   // Suero Necrótico x3
+    { item_name = "Corrupted Reliquary", base_price = 30 },
+    { item_name = "Leather Carapace",    base_price = 40 },
+    { item_name = "Iron Bulwark",        base_price = 65 },
+    { item_name = "Bandolier Rig",       base_price = 25 },
+    { item_name = "Ethereal Shard",      base_price = 35 },
+    { item_name = "Coyote Striders",     base_price = 30 },
+    { item_name = "Bone Fetish",         base_price = 45 },
+    { item_name = "Hammerlock Pistol",   base_price = 30 },
+    { item_name = "Lightcoil Repeater",  base_price = 30 },
+    { item_name = "Drumfeed Carbine",    base_price = 35 },
+    { item_name = "Desert Machete",      base_price = 50 },
+    { item_name = "War Cleaver",         base_price = 80 },
+    { item_name = "Quickfang Knife",     base_price = 45 },
+    { item_name = "Necrotic Serum",      base_price = 20 },
+    { item_name = "Necrotic Serum (x3)", base_price = 55 },
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +126,8 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
 
     for i in 0..<n {
         cat := SHOP_CATALOGUE[cat_copy[i]]
-        def := &LOOT_TABLE[cat.loot_idx]
+        def := loot_find_by_name(cat.item_name)
+        if def == nil { continue }
 
         // Spawn the item entity (not as GroundItem — it lives in the shop)
         item_id := cw.world_create_entity(w)
@@ -150,6 +149,16 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
         item_comp.melee_range        = def.melee_range
         item_comp.melee_spread       = def.melee_spread
         item_comp.melee_cooldown_max = def.melee_cooldown_max
+        item_comp.weapon_archetype   = def.weapon_archetype
+        item_comp.base_damage        = def.base_damage
+        item_comp.base_fire_rate     = def.base_fire_rate
+        item_comp.base_ammo_max      = def.base_ammo_max
+        item_comp.base_reload_time   = def.base_reload_time
+        item_comp.base_proj_speed    = def.base_proj_speed
+        item_comp.base_armor         = def.base_armor
+        item_comp.base_shield        = def.base_shield
+        item_comp.affix_count        = def.base_affix_count
+        for affix in 0..<int(def.base_affix_count) { item_comp.affixes[affix] = def.base_affixes[affix] }
         roll_affixes(&item_comp)
         cw.world_set_item(w, item_id, item_comp)
 
@@ -197,13 +206,13 @@ update_shop :: proc(w: ^cw.World) {
     if !cw.world_has_component(w, pid, .Transform) { return }
     player_pos := cw.world_get_transform(w, pid).position
 
-    if g_playing_state == .Shop {
+    if ui_has(.Shop) {
         _update_shop_panel(w)
         return
     }
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
 
-    // Proximity check — open on E (only from Gameplay)
+    // Proximity check — open on E
     npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
     defer delete(npc_ids)
     for nid in npc_ids {
@@ -213,9 +222,9 @@ update_shop :: proc(w: ^cw.World) {
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         if dx*dx + dy*dy <= npc.interact_radius * npc.interact_radius {
-            if rl.IsKeyPressed(INTERACT_KEY) {
+            if input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
                 g_shop_npc_id = nid
-                set_playing_state(.Shop)
+                ui_open(.Shop)
             }
             break
         }
@@ -251,7 +260,7 @@ draw_shop_world :: proc(w: ^cw.World) {
             nfs, 0.5, rl.Color{ 240, 215, 120, 220 })
 
         // "E: Shop" prompt when nearby
-        if g_playing_state != .Shop && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
+        if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
             prompt    := cstring("[E] Shop")
             pfs       := f32(9)
             psz       := rl.MeasureTextEx(g_font, prompt, pfs, 0.5)
@@ -266,9 +275,9 @@ draw_shop_world :: proc(w: ^cw.World) {
 
 // draw_shop_hud draws the full shop panel (call outside BeginMode2D).
 draw_shop_hud :: proc(w: ^cw.World) {
-    if g_playing_state != .Shop { return }
+    if !ui_has(.Shop) { return }
     if !cw.world_is_valid(w, g_shop_npc_id) {
-        set_playing_state(.Gameplay)
+        ui_close_top()
         return
     }
 
@@ -465,7 +474,8 @@ shop_sell_price :: proc(item: ^cw.ItemComp, base_price: int) -> int {
 item_gold_value :: proc(item: ^cw.ItemComp) -> int {
     base := 25
     for ce in SHOP_CATALOGUE {
-        def := &LOOT_TABLE[ce.loot_idx]
+        def := loot_find_by_name(ce.item_name)
+        if def == nil { continue }
         if def.slot == item.slot && def.is_melee == item.is_melee {
             base = ce.base_price
             break
@@ -489,7 +499,8 @@ _shop_sell :: proc(w: ^cw.World, item_id: int) {
     // Find the base price from the catalogue by matching slot + is_melee flags
     base_price := 25   // fallback
     for ce in SHOP_CATALOGUE {
-        def := &LOOT_TABLE[ce.loot_idx]
+        def := loot_find_by_name(ce.item_name)
+        if def == nil { continue }
         if def.slot == item.slot && def.is_melee == item.is_melee {
             base_price = ce.base_price
             break

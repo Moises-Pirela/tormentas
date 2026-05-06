@@ -1,0 +1,16 @@
+name,icon,slot,grid_w,grid_h,serum_value,desc,req_str,req_dex,req_sci,is_two_handed,is_melee,melee_damage,melee_range,melee_spread,melee_cooldown_max,rarities,roll_weight,base_affixes,weapon_archetype,base_damage,base_fire_rate,base_ammo_max,base_reload_time,base_proj_speed,base_armor,base_shield
+Corrupted Reliquary,reliquia,Head,2,1,0,A defiled medallion humming with forgotten prayers. Its bearer hears voices that do not belong to the living.,0,0,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,10,,,0,0,0,0,0,0.03,0
+Leather Carapace,coraza,Chest,2,2,0,Layered hardened leather built to endure beatings that would shatter bone.,2,0,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,10,,,0,0,0,0,0,0.05,20
+Iron Bulwark,coraza,Chest,2,2,0,"A forged iron breastplate. Deflects blades, shrapnel, and bad decisions.",4,0,0,0,0,0,0,0,0,Rare|Epic|Legendary,8,,,0,0,0,0,0,0.10,40
+Bandolier Rig,cartucho,Chest,1,1,0,Reinforced ammunition harness. Reloads become instinct.,0,1,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,10,BonusReloadSpeed:0.05,,0,0,0,0,0,0,0
+Ethereal Shard,fragmento,Boots,1,2,0,A crystallized fragment of raw ether. Movement feels unnaturally precise.,0,2,1,0,0,0,0,0,0,Rare|Epic|Legendary,8,BonusMoveSpeed:0.05,,0,0,0,0,0,0,0
+Coyote Striders,botas,Boots,2,1,0,"Crafted from desert predator hide. Silent steps, sudden bursts of speed.",0,2,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,10,BonusMoveSpeed:0.08,,0,0,0,0,0,0,0
+Bone Fetish,fetiche,Head,2,2,0,A ritual bone charm radiating unease. Enemies falter before striking.,3,0,0,0,0,0,0,0,0,Rare|Epic|Legendary,8,HealthRegen:0.005,,0,0,0,0,0,0.04,0
+Hammerlock Pistol,weapon_pistol,WeaponPrimary,1,1,0,A heavy-frame handgun built around impact force. Every shot lands with authority.,0,1,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,12,BonusDamage:0.05,Pistol,25,4.0,8,1.5,500,0,0
+Lightcoil Repeater,weapon_rifle,WeaponPrimary,1,1,0,A spring-driven rapid firearm engineered for relentless firing rhythm.,0,2,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,12,BonusFireRate:0.50,Rifle,12,6.0,20,2.0,550,0,0
+Drumfeed Carbine,weapon_shotgun,WeaponPrimary,2,1,0,"A bulky drum-fed rifle designed for sustained combat. Heavy, loud, dependable.",0,1,1,1,0,0,0,0,0,Rare|Epic|Legendary,8,BonusDamage:0.05;BonusFireRate:0.03,Shotgun,18,1.8,6,3.0,350,0,0
+Desert Machete,weapon_sword,WeaponPrimary,2,1,0,"A long, dust-worn blade built for close and quiet executions.",2,0,0,0,1,30,72,0.65,0.55,Normal|Rare|Epic|Legendary,8,BonusDamage:0.05,Sword,0,0,0,0,0,0,0
+War Cleaver,weapon_axe,WeaponPrimary,2,2,0,"A brutal two-handed axe. Devastating impact, mercilessly slow.",4,0,0,1,1,65,80,0.45,1.1,Epic|Legendary,5,BonusDamage:0.10;BonusHP:0.05,Axe,0,0,0,0,0,0,0
+Quickfang Knife,weapon_knife,WeaponPrimary,1,1,0,A compact folding blade striking faster than thought.,0,3,0,0,1,14,56,0.8,0.28,Normal|Rare|Epic|Legendary,10,BonusMoveSpeed:0.05,Knife,0,0,0,0,0,0,0
+Necrotic Serum,serum,Consumable,1,1,1,A volatile vial of corrupted biomatter. Inject to graft unstable mutations.,0,0,0,0,0,0,0,0,0,Normal,10,,,0,0,0,0,0,0,0
+Necrotic Serum (x3),serum,Consumable,1,1,3,Three doses of necrotic essence — sufficient for a major mutation graft.,0,0,0,0,0,0,0,0,0,Normal,4,,,0,0,0,0,0,0,0

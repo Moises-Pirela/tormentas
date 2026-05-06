@@ -11,6 +11,7 @@ HUB_PORTAL_RADIUS  :: f32(50)
 
 HUB_SHOPKEEPER_POS :: [3]f32{ 200, 0, 0 }
 HUB_MUTATION_WORKBENCH_POS :: [3]f32{ 300, -40, 0 }
+HUB_STASH_POS :: [3]f32{ 105, -95, 0 }
 
 MAX_RAID_LEVELS :: 3
 
@@ -25,6 +26,11 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     hub_apply(w)
     spawn_players(w)
     load_player(w, w.player_id)
+    // Full HP on hub entry (safe zone).
+    if cw.world_has_component(w, w.player_id, .Health) {
+        h := cw.world_get_health(w, w.player_id)
+        h.current = h.max
+    }
     g_hub_active       = true
     g_was_player_alive = true
     set_playing_state(.Hub)
@@ -45,6 +51,16 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     spawn_extraction_point(w)
     spawn_players(w)
     load_player(w, w.player_id)
+    // Full HP at the start of every raid.
+    if cw.world_has_component(w, w.player_id, .Health) {
+        h := cw.world_get_health(w, w.player_id)
+        h.current = h.max
+    }
+    // Capture serum baseline so on_player_extract can compute delta.
+    g_raid_serums_start = 0
+    if cw.world_has_component(w, w.player_id, .MutationContainer) {
+        g_raid_serums_start = cw.world_get_mutation(w, w.player_id).serums
+    }
     g_hub_active       = false
     g_was_player_alive = true
     set_playing_state(.Gameplay)
@@ -59,8 +75,8 @@ update_hub_portal :: proc(w: ^cw.World) {
     dy   := pos[1] - HUB_PORTAL_POS[1]
     near := dx*dx + dy*dy < (HUB_PORTAL_RADIUS * 2) * (HUB_PORTAL_RADIUS * 2)
 
-    if near && rl.IsKeyPressed(.E) {
-        set_playing_state(.LevelSelect)
+    if near && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+        ui_open(.LevelSelect)
     }
 }
 
@@ -297,8 +313,8 @@ draw_extract_screen :: proc(w: ^cw.World) {
     rl.DrawLineEx({px + uis(16), sep_y}, {px + pw - uis(16), sep_y}, 1, COL_RULE)
     rl.DrawTextEx(g_font, "Stash total", {px + uis(24), r3y}, row_fs, 1, COL_MUTED)
     {
-        buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "%d gold", g_stash.gold)
+        buf: [48]u8
+        s   := fmt.bprintf(buf[:47], "%d gold   %d serums", g_stash.gold, g_stash.serums)
         buf[len(s)] = 0
         sz := rl.MeasureTextEx(g_font, cstring(&buf[0]), row_fs, 1)
         rl.DrawTextEx(g_font, cstring(&buf[0]),

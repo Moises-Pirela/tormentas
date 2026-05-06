@@ -72,8 +72,10 @@ float wall_occlusion(vec2 pos, vec2 light_pos) {
 }
 
 void main() {
+    // Reconstruct world-space position (see sprite_light.fs for derivation).
     vec2 screen_px = vec2(gl_FragCoord.x, u_screen_size.y - gl_FragCoord.y);
-    vec2 world_pos = u_camera_target + (screen_px - u_camera_offset) / u_camera_zoom;
+    vec2 iso_pos   = u_camera_target + (screen_px - u_camera_offset) / u_camera_zoom;
+    vec2 world_pos = vec2(iso_pos.x * 0.5 + iso_pos.y, iso_pos.y - iso_pos.x * 0.5);
 
     // ── Base fog ──────────────────────────────────────────────────────────
     float fog = u_fog_density;

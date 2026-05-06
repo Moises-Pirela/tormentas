@@ -4,7 +4,7 @@ import "core:math/rand"
 import cw "clockwork"
 
 @(private = "file")
-DropPending :: struct { pos: [3]f32, seed: u64, entity_id: int }
+DropPending :: struct { pos: [3]f32, seed: u64, entity_id: int, was_boss: bool }
 
 RESPAWN_DELAY      :: f32(2.0)
 XP_PER_KILL        :: f32(20)
@@ -13,9 +13,22 @@ LEVELUP_FLASH_TIME :: f32(2.5)
 damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
-    pending_drops := make([dynamic]DropPending, context.temp_allocator)
+    pending_drops       := make([dynamic]DropPending, context.temp_allocator)
+    heart_killed_player := false   // set when a HeartCage heart is destroyed
+
+    // Entities whose bomb triggered this tick.
+    // All subsequent damage events for these entities are skipped so same-tick
+    // multi-hits cannot kill the revived entity before the frame ends.
+    bomb_skip   : [32]int
+    bomb_skip_n : int
 
     for ev in w.damage_events {
+        // Skip further events for entities that already detonated this tick.
+        {
+            skip := false
+            for i in 0..<bomb_skip_n { if bomb_skip[i] == ev.target_id { skip = true; break } }
+            if skip { continue }
+        }
         if !cw.world_is_valid(w, ev.target_id)               { continue }
         if !cw.world_has_component(w, ev.target_id, .Health) { continue }
 
@@ -25,6 +38,13 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if ev.amount > 0 &&
            cw.world_has_component(w, ev.target_id, .Stats) {
             amount *= (1.0 - cw.world_get_stats(w, ev.target_id).armor)
+        }
+
+        // Shield absorbs remaining damage before HP (when the entity has a shield).
+        if amount > 0 && h.shield > 0 {
+            absorbed  := min(h.shield, amount)
+            h.shield  -= absorbed
+            amount    -= absorbed
         }
 
         if amount > 0 && ev.source_id != 0 &&
@@ -63,8 +83,6 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        // HeartCage: redirect incoming damage to the external heart's HP pool
-        // (before the stationary shield so both can partially absorb a hit)
         if amount > 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
             tgt_mc := cw.world_get_mutation(w, ev.target_id)
             for mi in 0..<tgt_mc.entity_count {
@@ -72,11 +90,19 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if !cw.world_is_valid(w, meid)                     { continue }
                 if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
                 hc := cw.world_get_mut_heart_cage(w, meid)
-                if hc.heart_hp > 0 {
-                    absorbed    := min(hc.heart_hp, amount)
-                    hc.heart_hp -= absorbed
-                    amount      -= absorbed
+                // Don't redirect damage to heart if source is the owner
+                if ev.source_id == ev.target_id { continue }
+                if cw.world_is_valid(w, hc.heart_id) &&
+                   cw.world_has_component(w, hc.heart_id, .Health) {
+                    hh := cw.world_get_health(w, hc.heart_id)
+                    if hh.current > 0 {
+                        hh.current = max(0, hh.current - amount)
+                        if hh.current <= 0 {
+                            heart_killed_player = true
+                        }
+                    }
                 }
+                amount = 0
                 break
             }
         }
@@ -124,21 +150,18 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        // BloodFrenzy
         if amount < 0 &&
            cw.world_has_component(w, ev.target_id, .Stats) &&
            cw.world_get_stats(w, ev.target_id).healing_blocked {
             amount = 0
         }
 
-        // ParasiteKing
         if amount < 0 && ev.source_id == 0 &&
            cw.world_has_component(w, ev.target_id, .Stats) &&
            cw.world_get_stats(w, ev.target_id).pickup_healing_blocked {
             amount = 0
         }
 
-        // ThornPact: halve all healing received
         if amount < 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
             tgt_mc := cw.world_get_mutation(w, ev.target_id)
             for mi in 0..<tgt_mc.entity_count {
@@ -151,7 +174,6 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        // DeadmansTrigger
         force_death := false
         if amount > 0 && cw.world_has_component(w, ev.target_id, .Stats) {
             threshold := h.max * cw.world_get_stats(w, ev.target_id).deadman_early_death_pct
@@ -204,6 +226,12 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             h.current = clamp(h.current - amount, 0, h.max)
         }
 
+        // God mode: player cannot die.
+        if g_god_mode && ev.target_id == w.player_id {
+            if h.current <= 0 { h.current = 1 }
+            force_death = false
+        }
+
         // GlassCannon
         if cw.world_has_component(w, ev.target_id, .Stats) &&
            cw.world_get_stats(w, ev.target_id).hp_locked_to_one {
@@ -251,22 +279,50 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if cw.world_has_component(w, ev.target_id, .Transform) {
                     epos := cw.world_get_transform(w, ev.target_id).position
                     r2   := ode.radius * ode.radius
-                    ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
-                    for ai_id in ai_ids {
-                        ap  := cw.world_get_transform(w, ai_id).position
-                        dx  := ap[0] - epos[0]
-                        dy  := ap[1] - epos[1]
-                        if dx*dx + dy*dy <= r2 {
-                            cw.world_push_damage(w, ai_id, exp_dmg, ev.target_id)
+                    if is_player_entity(w, ev.target_id) {
+                        // Player bomb — damages all enemies in radius
+                        ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
+                        for ai_id in ai_ids {
+                            ap  := cw.world_get_transform(w, ai_id).position
+                            dx  := ap[0] - epos[0]
+                            dy  := ap[1] - epos[1]
+                            if dx*dx + dy*dy <= r2 {
+                                cw.world_push_damage(w, ai_id, exp_dmg, ev.target_id)
+                            }
                         }
+                        camera_shake(5)
+                        push_explosion(epos[0], epos[1], ode.radius, 255, 140, 30)
+                    } else {
+                        // Enemy bomb — damages players in radius
+                        for pslot in 0..<cw.MAX_PLAYERS {
+                            ppid := w.player_ids[pslot]
+                            if !cw.world_is_valid(w, ppid)                  { continue }
+                            if !cw.world_has_component(w, ppid, .Transform) { continue }
+                            if cw.world_has_component(w, ppid, .Respawn) &&
+                               cw.world_get_respawn(w, ppid).timer > 0      { continue }
+                            pp  := cw.world_get_transform(w, ppid).position
+                            dx  := pp[0] - epos[0]
+                            dy  := pp[1] - epos[1]
+                            if dx*dx + dy*dy <= r2 {
+                                cw.world_push_damage(w, ppid, exp_dmg, ev.target_id)
+                            }
+                        }
+                        push_explosion(epos[0], epos[1], ode.radius, 220, 60, 60)
                     }
-                    if ev.target_id == w.player_id { camera_shake(5) }
+                    play_sfx_at("explosion", epos)
                 }
-                tgt_h.current = 1
-                ode.timer     = ode.cooldown_max
+                tgt_h.current  = 1
+                ode.timer      = ode.cooldown_max
                 bomb_triggered = true
                 break
             }
+        }
+
+        // Record and skip all remaining events for this entity this tick.
+        if bomb_triggered {
+            bomb_skip[min(bomb_skip_n, len(bomb_skip) - 1)] = ev.target_id
+            bomb_skip_n += 1
+            continue
         }
 
         if !bomb_triggered && cw.world_has_component(w, ev.target_id, .Respawn) {
@@ -278,6 +334,30 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         } else if !bomb_triggered {
             // Reanimated servants die silently — no XP/loot, just destroy.
             if cw.world_has_component(w, ev.target_id, .Reanimated) {
+                cw.world_tag_destroy(w, ev.target_id)
+                continue
+            }
+
+            // HeartCage: if the dying entity is a heart, flag the owning player
+            // for death.  heart_killed_player triggers on_player_death after the loop.
+            is_heart := false
+            heart_check: for pslot in 0..<cw.MAX_PLAYERS {
+                ppid := w.player_ids[pslot]
+                if !cw.world_is_valid(w, ppid)                          { continue }
+                if !cw.world_has_component(w, ppid, .MutationContainer) { continue }
+                ppmc := cw.world_get_mutation(w, ppid)
+                for mi in 0..<ppmc.entity_count {
+                    meid := ppmc.entities[mi]
+                    if !cw.world_is_valid(w, meid)                     { continue }
+                    if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
+                    if cw.world_get_mut_heart_cage(w, meid).heart_id == ev.target_id {
+                        heart_killed_player = true
+                        is_heart            = true
+                    }
+                    break heart_check
+                }
+            }
+            if is_heart {
                 cw.world_tag_destroy(w, ev.target_id)
                 continue
             }
@@ -328,6 +408,7 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                             pos       = death_pos,
                             seed      = loot_seed(w.tick, ev.target_id),
                             entity_id = ev.target_id,
+                            was_boss  = ev.target_id == g_boss_id,
                         })
                     }
                 }
@@ -386,11 +467,42 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
     cw.world_clear_damage_events(w)
 
+    // HeartCage: heart was destroyed this tick — end the run.
+    if heart_killed_player && g_playing_state == .Gameplay {
+        on_player_death(w)
+        return
+    }
+
     for d in pending_drops {
         spawn_loot_drop(w, d.pos, d.seed)
+
+        // Separate serum roll — independent of the weapon/gear loot pick.
+        // Uses a different seed so it doesn't correlate with the item roll.
+        serum_rng := rand.create(d.seed ~ 0xfeedc0de_beefcafe)
+        context.random_generator = rand.default_random_generator(&serum_rng)
+        if rand.float32() < SERUM_DROP_CHANCE {
+            serum_pos := [3]f32{ d.pos[0] - 18, d.pos[1] + 10, 0 }
+            spawn_serum_drop(w, serum_pos, d.seed ~ 0xc0ffee11_deadbeef)
+        }
+
         gold_amt := gold_drop_amount(w.tick, d.entity_id)
         gold_pos := [3]f32{ d.pos[0] + 16, d.pos[1] - 8, 0 }
         spawn_gold_drop(w, gold_pos, gold_amt)
+
+        // Ability drops: boss guarantees two, regular enemies have a small chance.
+        if d.was_boss {
+            spawn_ability_drop(w, {d.pos[0] - 24, d.pos[1] - 18, 0},
+                d.seed ~ 0xab11_cafe_babe)
+            spawn_ability_drop(w, {d.pos[0] + 24, d.pos[1] + 18, 0},
+                d.seed ~ 0xab22_dead_beef)
+        } else {
+            ab_rng := rand.create(d.seed ~ 0xab33_feed_face)
+            context.random_generator = rand.default_random_generator(&ab_rng)
+            if rand.float32() < ABILITY_DROP_CHANCE {
+                spawn_ability_drop(w, {d.pos[0] + 12, d.pos[1] - 14, 0},
+                    d.seed ~ 0xab44_c0ff_ee11)
+            }
+        }
     }
 
     rsp_ids := cw.world_query(w, cw.query_mask(.Respawn))

@@ -14,10 +14,10 @@ collect_local_input :: proc() -> p2p.InputFrame {
     if g_console_open { return f }
 
     screen_dir: [2]f32
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_up))    || rl.IsKeyDown(.UP)    { screen_dir[1] -= 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_down))  || rl.IsKeyDown(.DOWN)  { screen_dir[1] += 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_left))  || rl.IsKeyDown(.LEFT)  { screen_dir[0] -= 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.move_right)) || rl.IsKeyDown(.RIGHT) { screen_dir[0] += 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_up))    || rl.IsKeyDown(.UP)    { screen_dir[1] -= 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_down))  || rl.IsKeyDown(.DOWN)  { screen_dir[1] += 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_left))  || rl.IsKeyDown(.LEFT)  { screen_dir[0] -= 1 }
+    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_right)) || rl.IsKeyDown(.RIGHT) { screen_dir[0] += 1 }
     mag := math.sqrt(screen_dir[0]*screen_dir[0] + screen_dir[1]*screen_dir[1])
     if mag > 0 {
         screen_dir[0] /= mag
@@ -29,12 +29,12 @@ collect_local_input :: proc() -> p2p.InputFrame {
     f.aim  = { mp.x, mp.y }
 
     if rl.IsMouseButtonDown(.LEFT)                              { f.actions += {.Fire}   }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.reload))          { f.actions += {.Reload} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.dodge))           { f.actions += {.Dodge}  }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.skill1))          { f.actions += {.Skill1} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.skill2))          { f.actions += {.Skill2} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.skill3))          { f.actions += {.Skill3} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.skill4))          { f.actions += {.Skill4} }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload} }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))  { f.actions += {.Dodge}  }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1)) { f.actions += {.Skill1} }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill2)) { f.actions += {.Skill2} }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill3)) { f.actions += {.Skill3} }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill4)) { f.actions += {.Skill4} }
     return f
 }
 

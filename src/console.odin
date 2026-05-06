@@ -12,6 +12,7 @@ CONSOLE_SLIDE_SPD  :: f32(12.0)   // panel-heights per second
 CONSOLE_SCROLL_AMT :: 3           // lines per wheel tick
 
 g_console_open: bool   // true = input captured, game input blocked
+g_god_mode:     bool   // when true, player HP cannot drop below 1
 
 @(private = "file")
 ConsoleLine :: struct {
@@ -243,6 +244,7 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
         console_log("  gold <n>         add gold to wallet")
         console_log("  hp <n>           set player current HP")
         console_log("  kill             kill player")
+        console_log("  god_mode         toggle invincibility (player HP floor = 1)")
         console_log("  clear            clear console log")
         console_log("available mutations:")
         for mt in cw.MutationType {
@@ -316,6 +318,14 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
             cw.world_get_health(w, w.player_id).current = 0
         }
         console_log("player killed")
+
+    case "god_mode":
+        g_god_mode = !g_god_mode
+        if g_god_mode {
+            console_log("god mode ON — player cannot die")
+        } else {
+            console_log("god mode OFF")
+        }
 
     case:
         console_logf("unknown command '%s' — type 'help'", cmd)

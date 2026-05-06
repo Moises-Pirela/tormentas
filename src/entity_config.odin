@@ -127,9 +127,17 @@ MutLifestealDef :: struct {
 }
 
 MutProximityDamageDef :: struct {
-    radius:        f32,
-    dps:           f32,
-    self_fraction: f32,
+    radius:          f32,
+    dps:             f32,
+    self_fraction:   f32,
+    effect_type:     cw.StatusEffectType,
+    effect_strength: f32,
+    effect_duration: f32,
+    light_r:         f32,
+    light_g:         f32,
+    light_b:         f32,
+    light_radius:    f32,
+    light_intensity: f32,
 }
 
 MutOnDeathExplodeDef :: struct {
@@ -212,6 +220,9 @@ EntityDef :: struct {
     has_mut_disable_actives: bool,
     has_mut_wall_phase:       bool,
     has_mut_hide_enemy_sprites: bool,
+
+    // Mutations to apply at spawn time (owned MutationContainer is auto-created).
+    mutations: [dynamic]string,
 }
 
 load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs: []EntityDef, ok: bool) {
@@ -371,6 +382,8 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
                     n.npc_type = .Shopkeeper
                 case "mutation_workbench":
                     n.npc_type = .MutationWorkbench
+                case "stash":
+                    n.npc_type = .Stash
                 case:
                     n.npc_type = .Shopkeeper
                 }
@@ -445,9 +458,27 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
 
         if pd_obj, pd_ok := obj["mut_proximity_damage"].(json.Object); pd_ok {
             pd: MutProximityDamageDef
-            if v, ok2 := pd_obj["radius"];        ok2 { pd.radius        = jf32(v) }
-            if v, ok2 := pd_obj["dps"];           ok2 { pd.dps           = jf32(v) }
-            if v, ok2 := pd_obj["self_fraction"]; ok2 { pd.self_fraction = jf32(v) }
+            if v, ok2 := pd_obj["radius"];           ok2 { pd.radius          = jf32(v) }
+            if v, ok2 := pd_obj["dps"];              ok2 { pd.dps             = jf32(v) }
+            if v, ok2 := pd_obj["self_fraction"];    ok2 { pd.self_fraction   = jf32(v) }
+            if v, ok2 := pd_obj["effect_strength"];  ok2 { pd.effect_strength = jf32(v) }
+            if v, ok2 := pd_obj["effect_duration"];  ok2 { pd.effect_duration = jf32(v) }
+            if v, ok2 := pd_obj["effect_type"];      ok2 {
+                if s, s_ok := v.(json.String); s_ok {
+                    switch s {
+                    case "poison": pd.effect_type = .Poison
+                    case "burn":   pd.effect_type = .Burn
+                    case "slow":   pd.effect_type = .Slow
+                    case "stun":   pd.effect_type = .Stun
+                    case "root":   pd.effect_type = .Root
+                    }
+                }
+            }
+            if v, ok2 := pd_obj["light_r"];         ok2 { pd.light_r         = jf32(v) }
+            if v, ok2 := pd_obj["light_g"];         ok2 { pd.light_g         = jf32(v) }
+            if v, ok2 := pd_obj["light_b"];         ok2 { pd.light_b         = jf32(v) }
+            if v, ok2 := pd_obj["light_radius"];    ok2 { pd.light_radius    = jf32(v) }
+            if v, ok2 := pd_obj["light_intensity"]; ok2 { pd.light_intensity = jf32(v) }
             def.mut_proximity_damage = pd
         }
 
@@ -501,6 +532,15 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
             if v, ok2 := udm_obj["vision_radius"]; ok2 { udm.vision_radius = jf32(v) }
             def.mut_unseen_damage_mult = udm
         }
+
+        if m_arr, m_ok := obj["mutations"].(json.Array); m_ok {
+            def.mutations = make([dynamic]string, 0, len(m_arr), allocator)
+            for mv in m_arr {
+                if s, s_ok := mv.(json.String); s_ok {
+                    append(&def.mutations, strings.clone(s, allocator))
+                }
+            }
+        }
     }
 
     return result, true
@@ -513,6 +553,10 @@ destroy_entity_defs :: proc(defs: []EntityDef, allocator := context.allocator) {
             delete(rc.display_name, allocator)
             delete(rc.sprite_name, allocator)
         }
+        for s in d.mutations {
+            delete(s, allocator)
+        }
+        delete(d.mutations)
     }
     delete(defs, allocator)
 }
@@ -686,9 +730,15 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
     }
     if pd, ok := def.mut_proximity_damage.?; ok {
         cw.world_set_mut_proximity_damage(w, id, cw.MutProximityDamageComp{
-            radius        = pd.radius,
-            dps           = pd.dps,
-            self_fraction = pd.self_fraction,
+            radius          = pd.radius,
+            dps             = pd.dps,
+            self_fraction   = pd.self_fraction,
+            effect_type     = pd.effect_type,
+            effect_strength = pd.effect_strength,
+            effect_duration = pd.effect_duration,
+            light_color     = { pd.light_r, pd.light_g, pd.light_b },
+            light_radius    = pd.light_radius,
+            light_intensity = pd.light_intensity,
         })
     }
     if ode, ok := def.mut_on_death_explode.?; ok {
@@ -739,6 +789,17 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
             mult          = udm.mult,
             vision_radius = udm.vision_radius,
         })
+    }
+
+    // Mutations listed in the def are applied at spawn via MutationContainer.
+    if len(def.mutations) > 0 {
+        cw.world_set_mutation(w, id, cw.mutation_container_empty())
+        for name in def.mutations {
+            mt := mutation_name_to_type(name)
+            if mt != .None {
+                mutation_restore_direct(w, id, mt)
+            }
+        }
     }
 
     return id

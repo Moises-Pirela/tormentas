@@ -1,5 +1,6 @@
 package main
 
+import "core:math"
 import rl "vendor:raylib"
 
 ISO_TILE_W :: f32(TILE_SIZE)
@@ -46,6 +47,12 @@ screen_dir_to_world_dir :: proc(dir: [2]f32) -> [2]f32 {
     wy := dir[1] - dir[0] * 0.5
     if wx == 0 && wy == 0 { return {} }
     return { wx, wy }
+}
+
+world_rot_to_iso :: proc(angle: f32) -> f32 {
+    c := math.cos(angle)
+    s := math.sin(angle)
+    return math.atan2((c + s) * 0.5, c - s)
 }
 
 iso_depth_sort_y :: proc(wx, wy: f32) -> f32 {

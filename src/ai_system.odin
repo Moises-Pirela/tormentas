@@ -1,6 +1,7 @@
 package main
 
 import "core:math"
+import "core:math/rand"
 import cw "clockwork"
 
 ARC_LIFETIME :: f32(0.22)          
@@ -9,8 +10,12 @@ ARC_SPREAD   :: f32(math.PI / 2.8)
 RANGED_SPAWN_OFFSET :: f32(20) 
 
 
+// Max random aim offset applied to ranged enemies when their target is at full speed.
+// Scales linearly with target speed down to 0 when standing still.
+AI_AIM_DEVIATION_MAX :: f32(math.PI / 6.0)   // 30° at full sprint
+
 @(private)
-nearest_player_pos :: proc(w: ^cw.World, origin: [3]f32) -> (pos: [3]f32, found: bool) {
+nearest_player_pos :: proc(w: ^cw.World, origin: [3]f32) -> (pos: [3]f32, target_id: int, found: bool) {
     best_dist := f32(1e30)
     best_id   := -1
     for slot in 0..<cw.MAX_PLAYERS {
@@ -28,8 +33,27 @@ nearest_player_pos :: proc(w: ^cw.World, origin: [3]f32) -> (pos: [3]f32, found:
             best_id   = pid
         }
     }
-    if best_id < 0 { return {}, false }
-    return cw.world_get_transform(w, best_id).position, true
+    if best_id < 0 { return {}, -1, false }
+
+    // HeartCage: direct enemies toward the heart's position while it lives.
+    if cw.world_has_component(w, best_id, .MutationContainer) {
+        mc := cw.world_get_mutation(w, best_id)
+        for mi in 0..<mc.entity_count {
+            meid := mc.entities[mi]
+            if !cw.world_is_valid(w, meid)                     { continue }
+            if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
+            hc := cw.world_get_mut_heart_cage(w, meid)
+            if cw.world_is_valid(w, hc.heart_id) &&
+               cw.world_has_component(w, hc.heart_id, .Transform) &&
+               cw.world_has_component(w, hc.heart_id, .Health) &&
+               cw.world_get_health(w, hc.heart_id).current > 0 {
+                return cw.world_get_transform(w, hc.heart_id).position, best_id, true
+            }
+            break
+        }
+    }
+
+    return cw.world_get_transform(w, best_id).position, best_id, true
 }
 
 ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
@@ -48,7 +72,7 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             if ai.cooldown < 0 { ai.cooldown = 0 }
         }
 
-        player_pos, has_player := nearest_player_pos(w, t.position)
+        player_pos, target_pid, has_player := nearest_player_pos(w, t.position)
         if !has_player {
             v.value = {}
             continue
@@ -121,10 +145,26 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     pellets := ai_snap.pellet_count if ai_snap.pellet_count > 0 else 5
                     spread  := ai_snap.spread_angle if ai_snap.spread_angle > 0 else (math.PI / 6)
 
+                    // Aim deviation — scales with how fast the target is moving.
+                    // Standing still → perfect accuracy.  Full sprint → max offset.
+                    // Seed is deterministic so both peers in lockstep agree.
+                    aim_deviation: f32 = 0
+                    if target_pid >= 0 && cw.world_has_component(w, target_pid, .Velocity) {
+                        tv  := cw.world_get_velocity(w, target_pid).value
+                        spd := math.sqrt(tv[0]*tv[0] + tv[1]*tv[1])
+                        if spd > 1.0 {
+                            speed_factor := min(spd / MOVE_SPEED, 1.0)
+                            rng          := rand.create(u64(w.tick) ~ (u64(id) * 6364136223846793005))
+                            ctx          := rand.default_random_generator(&rng)
+                            r            := rand.float32(ctx)
+                            aim_deviation = (r * 2.0 - 1.0) * AI_AIM_DEVIATION_MAX * speed_factor
+                        }
+                    }
+
                     for i in 0..<pellets {
                         t_ratio      := f32(i) / f32(max(pellets - 1, 1))
                         offset_angle := spread * (t_ratio - 0.5)
-                        pellet_angle := angle + offset_angle
+                        pellet_angle := angle + offset_angle + aim_deviation
                         pdir := [3]f32{
                             math.cos(pellet_angle),
                             math.sin(pellet_angle),

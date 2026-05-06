@@ -1,0 +1,339 @@
+package main
+
+// =============================================================================
+// ui_character.odin — Clay-based Character / Stats modal
+//
+// Replaces render.odin's draw_stats_screen + update_stats_screen.
+// Interactivity (+ button clicks to spend stat points) is handled inline
+// inside the Clay layout pass using clay.Hovered() — no separate update proc.
+//
+// Layout (centered floating modal):
+//
+//   ┌─────────────────── C H A R A C T E R ───────────────────────────────┐
+//   │  Level  N                                                            │
+//   │  [════════════════ XP bar ══════════════]                            │
+//   │  N / N xp                                                            │
+//   │ ───────────────────────────────────────────────────────────────────  │
+//   │  STATS                                    N points available         │
+//   │  ┌───────────────────────────────┐                                   │
+//   │  │ Strength    +N% HP      [+]  │                                   │
+//   │  │ Dexterity   +N% Speed   [+]  │                                   │
+//   │  │ Science     +N% Energy  [+]  │                                   │
+//   │  └───────────────────────────────┘                                   │
+//   │ ───────────────────────────────────────────────────────────────────  │
+//   │  HISTORY                                                              │
+//   │  Raids completed ────────────────────────────────────────────────  N │
+//   │  Enemies killed  ─────────────────────────────────────────────────  N │
+//   │  Deaths          ─────────────────────────────────────────────────  N │
+//   │  Best extract    ────────────────────────────────────────────── N g   │
+//   │ ───────────────────────────────────────────────────────────────────  │
+//   │  [C]  Close                                                          │
+//   └──────────────────────────────────────────────────────────────────────┘
+//
+// =============================================================================
+
+import rl   "vendor:raylib"
+import clay "../clay"
+import cw   "clockwork"
+import      "core:fmt"
+
+@(private = "file") CHAR_W_BASE :: f32(380)
+@(private = "file") CHAR_H_BASE :: f32(590)
+
+// draw_stats_screen replaces render.odin's draw_stats_screen + update_stats_screen.
+// It must be called from the draw phase — input is handled inline via clay.Hovered().
+draw_stats_screen :: proc(w: ^cw.World) {
+    if !cw.world_is_valid(w, w.player_id) { return }
+    if !cw.world_has_component(w, w.player_id, .Stats) { return }
+
+    st := cw.world_get_stats(w, w.player_id)
+
+    PW   := uis(CHAR_W_BASE)
+    PH   := uis(CHAR_H_BASE)
+    HPAD := u16(uis(24))
+    VGAP := u16(uis(6))
+
+    stat_names  := [3]string{ "Strength", "Dexterity", "Science" }
+    stat_values := [3]int{ st.strength, st.dexterity, st.science }
+
+    // XP ratio
+    xp_ratio := clamp(st.xp / st.xp_next, 0, 1) if st.xp_next > 0 else f32(0)
+
+    // Stat-row sizes
+    ROW_H  := uis(60)
+    BTN_W  := uis(28)
+    BTN_H  := uis(24)
+
+    // Effect text for each stat (using current value)
+    eff_bufs: [3][32]u8
+    eff_strs: [3]string
+    for i in 0..<3 {
+        s: string
+        switch i {
+        case 0: s = fmt.bprintf(eff_bufs[i][:31], "+%.0f%%  HP",     f32(stat_values[i]-1)*15)
+        case 1: s = fmt.bprintf(eff_bufs[i][:31], "+%.0f%%  Speed",  f32(stat_values[i]-1)*8)
+        case 2: s = fmt.bprintf(eff_bufs[i][:31], "+%.0f%%  Energy", f32(stat_values[i]-1)*12)
+        }
+        eff_bufs[i][len(s)] = 0
+        eff_strs[i] = s
+    }
+
+    // XP / level display strings
+    lv_buf: [32]u8
+    lv_s := fmt.bprintf(lv_buf[:31], "Level  %d", st.level)
+    lv_buf[len(lv_s)] = 0
+
+    xp_buf: [48]u8
+    xp_s := fmt.bprintf(xp_buf[:47], "%.0f / %.0f xp", st.xp, st.xp_next)
+    xp_buf[len(xp_s)] = 0
+
+    // Points-available string
+    pts_buf: [48]u8
+    pts_s := fmt.bprintf(pts_buf[:47], "%d  point%s  available",
+        st.stat_points, "s" if st.stat_points != 1 else "")
+    pts_buf[len(pts_s)] = 0
+
+    // History rows
+    hist_rows := [4][2]string{
+        { "Raids completed",  fmt.tprintf("%d",   g_lifetime_stats.successful_raids)    },
+        { "Enemies killed",   fmt.tprintf("%d",   g_lifetime_stats.enemies_killed)      },
+        { "Deaths",           fmt.tprintf("%d",   g_lifetime_stats.deaths)              },
+        { "Best extract",     fmt.tprintf("%d g", int(g_lifetime_stats.max_extract_gold)) },
+    }
+
+    // ── Clay layout ──────────────────────────────────────────────────────
+    ui_frame_reset()
+    clay.BeginLayout()
+
+    if clay.UI(clay.ID("StatsPanel"))({
+        layout = {
+            layoutDirection = .TopToBottom,
+            childGap        = VGAP,
+            childAlignment  = { x = .Center },
+            padding         = { left = HPAD, right = HPAD, top = u16(uis(12)), bottom = u16(uis(12)) },
+            sizing          = { clay.SizingFixed(PW), clay.SizingFixed(PH) },
+        },
+        floating = {
+            offset     = { 0, 0 },
+            attachment = { element = .CenterCenter, parent = .CenterCenter },
+            attachTo   = .Root,
+        },
+        backgroundColor = ui_clay_color(COL_PANEL),
+        border          = { color = ui_clay_color(COL_RULE), width = { 1, 1, 1, 1, 0 } },
+    }) {
+
+        // ── Title ─────────────────────────────────────────────────────────
+        if clay.UI(clay.ID("CharTitle"))({
+            layout = {
+                sizing         = { clay.SizingGrow(), clay.SizingFit() },
+                childAlignment = { x = .Center },
+            },
+        }) {
+            clay.TextDynamic("C H A R A C T E R", clay.TextConfig({
+                fontSize      = u16(uis(22)),
+                textColor     = ui_clay_color(COL_PARCH),
+                letterSpacing = 10,
+            }))
+        }
+
+        ui_divider("CharDiv0")
+
+        // ── Level line ────────────────────────────────────────────────────
+        if clay.UI(clay.ID("CharLevel"))({
+            layout = { sizing = { clay.SizingGrow(), clay.SizingFit() } },
+        }) {
+            clay.TextDynamic(string(lv_s), clay.TextConfig({
+                fontSize  = u16(uis(18)),
+                textColor = ui_clay_color(COL_PARCH),
+            }))
+        }
+
+        // ── XP bar ────────────────────────────────────────────────────────
+        ui_hbar("CharXP", xp_ratio,
+            rl.Color{ 180, 148, 36, 255 },
+            rl.Color{  30,  24, 10, 255 },
+            uis(12))
+
+        // XP text below bar (centred)
+        if clay.UI(clay.ID("CharXPText"))({
+            layout = {
+                sizing         = { clay.SizingGrow(), clay.SizingFit() },
+                childAlignment = { x = .Center },
+            },
+        }) {
+            clay.TextDynamic(string(xp_s), clay.TextConfig({
+                fontSize      = u16(uis(12)),
+                textColor     = ui_clay_color(COL_MUTED),
+                letterSpacing = 5,
+            }))
+        }
+
+        ui_divider("CharDiv1")
+
+        // ── STATS header row ──────────────────────────────────────────────
+        if clay.UI(clay.ID("CharStatsHdr"))({
+            layout = {
+                layoutDirection = .LeftToRight,
+                sizing          = { clay.SizingGrow(), clay.SizingFit() },
+            },
+        }) {
+            ui_label("CharStatsLbl", "STATS", uis(14), COL_MUTED)
+
+            if clay.UI(clay.ID("CharStatsHdrSep"))({
+                layout = { sizing = { clay.SizingGrow(), clay.SizingFit() } },
+            }) {}
+
+            if st.stat_points > 0 {
+                ui_label("CharStatsAvail", string(pts_s), uis(14), rl.Color{ 200, 175, 60, 230 }, 0.5)
+            }
+        }
+
+        // ── Stat rows ─────────────────────────────────────────────────────
+        btn_active := st.stat_points > 0
+
+        for i in 0..<3 {
+            row_id  := fmt.tprintf("CharStatRow%d",  i)
+            name_id := fmt.tprintf("CharStatName%d", i)
+            eff_id  := fmt.tprintf("CharStatEff%d",  i)
+            btn_id  := fmt.tprintf("CharStatBtn%d",  i)
+
+            btn_bg  := rl.Color{ 55, 44, 18, 200 } if btn_active else rl.Color{ 28, 22, 12, 140 }
+            btn_brd := COL_RULE                     if btn_active else rl.Color{ 55, 48, 32,  80 }
+            btn_tc  := COL_PARCH                    if btn_active else rl.Color{ 80, 70, 45, 100 }
+
+            // Hover tint on button (uses previous-frame bounds — 1-frame lag acceptable)
+            hov_btn := false
+
+            if clay.UI(clay.ID(row_id))({
+                layout = {
+                    layoutDirection = .LeftToRight,
+                    childGap        = u16(uis(8)),
+                    childAlignment  = { y = .Center },
+                    padding         = { left = u16(uis(12)), right = u16(uis(8)),
+                                        top = 0, bottom = 0 },
+                    sizing          = { clay.SizingGrow(), clay.SizingFixed(ROW_H) },
+                },
+                backgroundColor = { 18, 14, 10, 200 },
+                border          = { color = { 80, 65, 42, 130 }, width = { 1, 1, 1, 1, 0 } },
+            }) {
+
+                // Left column: name + value stacked
+                if clay.UI(clay.ID(name_id))({
+                    layout = {
+                        layoutDirection = .TopToBottom,
+                        childGap        = u16(uis(2)),
+                        sizing          = { clay.SizingFit(), clay.SizingFit() },
+                    },
+                }) {
+                    clay.TextDynamic(stat_names[i], clay.TextConfig({
+                        fontSize  = u16(uis(18)),
+                        textColor = ui_clay_color(COL_PARCH),
+                    }))
+                    val_str := fmt.tprintf("%d", stat_values[i])
+                    clay.TextDynamic(val_str, clay.TextConfig({
+                        fontSize  = u16(uis(18)),
+                        textColor = ui_clay_color(COL_BRASS),
+                    }))
+                }
+
+                // Spacer pushes effect + button to the right
+                if clay.UI(clay.ID(fmt.tprintf("CharStatSep%d", i)))({
+                    layout = { sizing = { clay.SizingGrow(), clay.SizingGrow() } },
+                }) {}
+
+                // Effect text (right-of-center)
+                if clay.UI(clay.ID(eff_id))({
+                    layout = { sizing = { clay.SizingFit(), clay.SizingFit() } },
+                }) {
+                    clay.TextDynamic(eff_strs[i], clay.TextConfig({
+                        fontSize      = u16(uis(13)),
+                        textColor     = ui_clay_color(COL_MUTED),
+                        letterSpacing = 5,
+                    }))
+                }
+
+                // + button
+                if clay.UI(clay.ID(btn_id))({
+                    layout = {
+                        sizing         = { clay.SizingFixed(BTN_W), clay.SizingFixed(BTN_H) },
+                        childAlignment = { x = .Center, y = .Center },
+                    },
+                    backgroundColor = ui_clay_color(btn_bg),
+                    border          = { color = ui_clay_color(btn_brd), width = { 1, 1, 1, 1, 0 } },
+                }) {
+                    clay.TextDynamic("+", clay.TextConfig({
+                        fontSize  = u16(uis(16)),
+                        textColor = ui_clay_color(btn_tc),
+                    }))
+                    hov_btn = clay.Hovered()
+                }
+
+            } // row
+
+            // Click check: must be outside the row's clay.UI block but before EndLayout resets state
+            if btn_active && hov_btn && rl.IsMouseButtonPressed(.LEFT) {
+                switch i {
+                case 0: st.strength  += 1
+                case 1: st.dexterity += 1
+                case 2: st.science   += 1
+                }
+                st.stat_points -= 1
+                play_sfx("stat_up")
+                if cw.world_is_valid(w, w.player_id) {
+                    save_player(w, w.player_id)
+                }
+            }
+        } // for stat rows
+
+        ui_divider("CharDiv2")
+
+        // ── HISTORY section ───────────────────────────────────────────────
+        ui_section("CharHistHdr", "HISTORY")
+
+        for ri in 0..<4 {
+            row_id   := fmt.tprintf("CharHistRow%d", ri)
+
+            if clay.UI(clay.ID(row_id))({
+                layout = {
+                    layoutDirection = .LeftToRight,
+                    sizing          = { clay.SizingGrow(), clay.SizingFit() },
+                },
+            }) {
+                clay.TextDynamic(hist_rows[ri][0], clay.TextConfig({
+                    fontSize      = u16(uis(14)),
+                    textColor     = ui_clay_color(COL_MUTED),
+                    letterSpacing = 5,
+                }))
+                // Grow spacer between label and value
+                if clay.UI(clay.ID(fmt.tprintf("CharHistSep%d", ri)))({
+                    layout = { sizing = { clay.SizingGrow(), clay.SizingFit() } },
+                }) {}
+                clay.TextDynamic(hist_rows[ri][1], clay.TextConfig({
+                    fontSize      = u16(uis(14)),
+                    textColor     = ui_clay_color(COL_PARCH),
+                    letterSpacing = 5,
+                }))
+            }
+        }
+
+        ui_divider("CharDiv3")
+
+        // ── Spacer + Close hint ───────────────────────────────────────────
+        if clay.UI(clay.ID("CharClose"))({
+            layout = {
+                sizing         = { clay.SizingGrow(), clay.SizingFit() },
+                childAlignment = { x = .Center },
+            },
+        }) {
+            clay.TextDynamic("[C]  Close", clay.TextConfig({
+                fontSize      = u16(uis(13)),
+                textColor     = ui_clay_color(COL_MUTED),
+                letterSpacing = 5,
+            }))
+        }
+
+    } // StatsPanel
+
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
+}

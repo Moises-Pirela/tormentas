@@ -473,6 +473,8 @@ level_apply :: proc(w: ^cw.World) {
             def_name = "npc_shopkeeper"
         case .MutationWorkbench:
             def_name = "npc_mutation_workbench"
+        case .Stash:
+            def_name = "npc_stash"
         }
         if def_name == "" { return cw.INVALID_ENTITY }
 
@@ -486,6 +488,7 @@ level_apply :: proc(w: ^cw.World) {
             cw.world_set_wallet(w, id, cw.WalletComp{ gold = 200 })
             shop_roll_stock(w, id, 0)
         case .MutationWorkbench:
+        case .Stash:
         }
         return id
     }
@@ -575,6 +578,7 @@ spawn_players :: proc(w: ^cw.World) {
         })
         cw.world_set_player(w, pid, cw.PlayerComp{ slot = slot })
         cw.world_set_wallet(w, pid, cw.WalletComp{ gold = 0 })
+        cw.world_set_status_effect(w, pid, cw.StatusEffectComp{})
         w.player_ids[slot] = pid
     }
 
@@ -596,9 +600,15 @@ level_clear :: proc(w: ^cw.World) {
 
     cw.world_reset(w)
 
-    g_shop_npc_id = cw.INVALID_ENTITY
-    if g_playing_state == .Shop {
-        set_playing_state(.Hub if g_hub_active else .Gameplay)
+    if ui_has(.Shop) {
+        ui_close(.Shop)  // _ui_on_close clears g_shop_npc_id
+    } else {
+        g_shop_npc_id = cw.INVALID_ENTITY
+    }
+    if ui_has(.Stash) {
+        ui_close(.Stash)
+    } else {
+        g_stash_npc_id = cw.INVALID_ENTITY
     }
 }
 
@@ -616,12 +626,15 @@ _clear_all_shop_stock :: proc(w: ^cw.World) {
 hub_apply :: proc(w: ^cw.World) {
     has_shopkeeper := false
     has_mutation_workbench := false
+    has_stash := false
     for npc in g_level_data.npcs {
         switch npc.npc_type {
         case .Shopkeeper:
             has_shopkeeper = true
         case .MutationWorkbench:
             has_mutation_workbench = true
+        case .Stash:
+            has_stash = true
         }
     }
 
@@ -640,6 +653,13 @@ hub_apply :: proc(w: ^cw.World) {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_mutation_workbench"))
         if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
             cw.world_get_transform(w, npc_id).position = HUB_MUTATION_WORKBENCH_POS
+        }
+    }
+
+    if !has_stash {
+        npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_stash"))
+        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
+            cw.world_get_transform(w, npc_id).position = HUB_STASH_POS
         }
     }
 }
@@ -725,47 +745,26 @@ on_player_extract :: proc(w: ^cw.World) {
     }
     raid_result_gold = gold_earned
 
+    // Serums auto-collect to mc.serums during the raid and never enter the backpack.
+    // Use the delta vs. the baseline captured at raid start so the extract screen shows
+    // only what was earned this run (not the lifetime total).
     serums_earned := 0
-    if cw.world_has_component(w, w.player_id, .Inventory) {
-        inv := cw.world_get_inventory(w, w.player_id)
-        for cell_id in inv.backpack {
-            if cell_id == cw.INVALID_ENTITY { continue }
-            if !cw.world_is_valid(w, cell_id) { continue }
-            if cw.world_has_component(w, cell_id, .Item) {
-                item := cw.world_get_item(w, cell_id)
-                if item.serum_value > 0 && item.pack_x >= 0 {
-                    serums_earned += item.serum_value
-                }
-            }
-        }
+    if cw.world_has_component(w, w.player_id, .MutationContainer) {
+        mc            := cw.world_get_mutation(w, w.player_id)
+        serums_earned  = mc.serums - g_raid_serums_start
+        if serums_earned < 0 { serums_earned = 0 }   // player spent some this raid
+        // Sync stash counter so hub header and save file stay consistent with mc.serums.
+        g_stash.serums = mc.serums
     }
-
-    serums_earned = _count_serum_value(w)
-    g_stash.serums   += serums_earned
     raid_result_serums = serums_earned
+
+    if cw.world_is_valid(w, w.player_id) {
+        save_player(w, w.player_id)
+    }
 
     set_playing_state(.ExtractScreen)
 }
 
-@(private = "file")
-_count_serum_value :: proc(w: ^cw.World) -> int {
-    if !cw.world_has_component(w, w.player_id, .Inventory) { return 0 }
-    inv   := cw.world_get_inventory(w, w.player_id)
-    total := 0
-    for row in 0..<cw.BACKPACK_ROWS {
-        for col in 0..<cw.BACKPACK_COLS {
-            cell_id := inv.backpack[row * cw.BACKPACK_COLS + col]
-            if cell_id == cw.INVALID_ENTITY  { continue }
-            if !cw.world_is_valid(w, cell_id) { continue }
-            if !cw.world_has_component(w, cell_id, .Item) { continue }
-            item := cw.world_get_item(w, cell_id)
-            if item.serum_value > 0 && item.pack_x == col && item.pack_y == row {
-                total += item.serum_value
-            }
-        }
-    }
-    return total
-}
 
 on_player_death :: proc(w: ^cw.World) {
     g_lifetime_stats.deaths += 1

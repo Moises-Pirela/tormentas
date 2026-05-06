@@ -74,6 +74,7 @@ init_game :: proc() {
     cw.sim_register_system(&g_sim, { .Update      }, melee_arc_system)
     cw.sim_register_system(&g_sim, { .Update      }, projectile_collision_system)
     cw.sim_register_system(&g_sim, { .Update      }, pickup_system)
+    cw.sim_register_system(&g_sim, { .Update      }, status_effect_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, damage_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
@@ -90,7 +91,14 @@ init_game :: proc() {
     level_apply(w)
     hub_apply(w)
     spawn_players(w)
+    g_stash = stash_make_empty()
     load_player(w, w.player_id)
+
+    // Full HP on first spawn-in.
+    if cw.world_has_component(&g_sim.world, g_sim.world.player_id, .Health) {
+        h := cw.world_get_health(&g_sim.world, g_sim.world.player_id)
+        h.current = h.max
+    }
 
     play_music("main_theme")
     play_ambience("wind")
@@ -120,10 +128,15 @@ shutdown_game :: proc() {
     g_stall_acc  = 0
     g_accumulator = 0
 
+    ui_close_all()   // clear any open UI panels instantly
+
     set_playing_state(.Gameplay)
     g_pending_level_switch = 0
     g_raid_timer           = 0
-    g_is_host            = false
+    g_is_host              = false
+    g_stash                = stash_make_empty()
+    g_active_slot          = -1
+    g_lifetime_stats       = {}
 }
 
 @(private)
@@ -138,7 +151,7 @@ update_playing :: proc(dt: f32) {
     {
         sw       := f32(rl.GetScreenWidth())
         sh       := f32(rl.GetScreenHeight())
-        inv_open := g_playing_state == .Inventory || g_playing_state == .Shop
+        inv_open := ui_has(.Inventory) || ui_has(.Shop) || ui_has(.Stash)
         if inv_open {
             g_camera.offset = { (sw - f32(g_inv.panel_w)) * 0.5, sh * 0.5 }
         } else {
@@ -157,7 +170,7 @@ update_playing :: proc(dt: f32) {
         set_audio_listener(cw.world_get_transform(w, w.player_id).position)
     }
 
-    if rl.IsKeyPressed(.F1) && g_is_host && !g_console_open {
+    if input_pressed(.F1) && g_is_host && !g_console_open {
         if g_playing_state == .Editor {
             set_playing_state(.Hub if g_hub_active else .Gameplay)
         } else if g_playing_state == .Gameplay || g_playing_state == .Hub {
@@ -167,72 +180,88 @@ update_playing :: proc(dt: f32) {
     update_lighting_widget()
 
     if !g_console_open {
-    switch g_playing_state {
+        // ── World-state specific update ─────────────────────────────────────
+        switch g_playing_state {
 
-    case .Hub:
-        if rl.IsKeyPressed(rl.KeyboardKey(g_binds.pause)) {
-            set_playing_state(.PauseMenu)
-        }
-        if rl.IsKeyPressed(rl.KeyboardKey(g_binds.open_inventory)) {
-            set_playing_state(.Inventory)
-        }
-        if rl.IsKeyPressed(rl.KeyboardKey(g_binds.open_stats)) {
-            set_playing_state(.Stats)
-        }
-        update_mutation_workbench(w)
-        update_shop(w)
-        update_hub_portal(w)
+        case .Editor:
+            update_editor(dt)
 
-    case .LevelSelect:
-        if rl.IsKeyPressed(.ESCAPE) {
-            set_playing_state(.Hub)
-        }
-
-    case .Editor:
-        update_editor(dt)
-
-    case .PauseMenu:
-        update_keybinds_screen()
-        if update_pause_menu() {
-            fade_to_black(_on_black_to_menu)
-            return
-        }
-        if !g_paused {
-            set_playing_state(.Hub if g_hub_active else .Gameplay)
-        }
-
-    case .ExtractScreen:
-
-    case .DeathScreen:
-
-    case .Gameplay, .Inventory, .Stats, .MutationTree, .Shop:
-        if rl.IsKeyPressed(rl.KeyboardKey(g_binds.pause)) {
-            if g_playing_state != .Gameplay {
-                set_playing_state(.Hub if g_hub_active else .Gameplay)
-            } else {
-                set_playing_state(.PauseMenu)
+        case .Hub:
+            // input_is_gameplay() is true when no panel is open (mode == .Gameplay)
+            if input_is_gameplay() {
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
+                    ui_open(.PauseMenu)
+                }
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_inventory)) {
+                    ui_open(.Inventory)
+                }
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_stats)) {
+                    ui_open(.Stats)
+                }
+                update_mutation_workbench(w)
+                update_shop(w)
+                update_stash(w)
+                update_hub_portal(w)
             }
-        }
-        if g_playing_state == .Gameplay {
-            if rl.IsKeyPressed(rl.KeyboardKey(g_binds.open_inventory)) {
-                set_playing_state(.Inventory)
-            }
-            if rl.IsKeyPressed(rl.KeyboardKey(g_binds.open_stats)) {
-                set_playing_state(.Stats)
-            }
-        }
-        #partial switch g_playing_state {
-        case .Inventory:    update_inventory(w)
-        case .Stats:        update_stats_screen(w)
-        case .MutationTree: update_mutation_tree(w)
-        case .Shop:
-            update_inventory(w)
-            update_shop(w)
+
         case .Gameplay:
-            update_mutation_workbench(w)
-            update_shop(w)
+            if input_is_gameplay() {
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
+                    ui_open(.PauseMenu)
+                }
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_inventory)) {
+                    ui_open(.Inventory)
+                }
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_stats)) {
+                    ui_open(.Stats)
+                }
+                update_mutation_workbench(w)
+                update_shop(w)
+                update_stash(w)
+                // Cycle loot filter: Normal → Rare → Epic → Legendary → Normal
+                if input_pressed(rl.KeyboardKey(g_binds.gameplay.loot_filter)) {
+                    switch g_loot_filter_rarity {
+                    case .Normal:    g_loot_filter_rarity = .Rare
+                    case .Rare:      g_loot_filter_rarity = .Epic
+                    case .Epic:      g_loot_filter_rarity = .Legendary
+                    case .Legendary: g_loot_filter_rarity = .Normal
+                    case .Unique:    g_loot_filter_rarity = .Normal
+                    }
+                }
+            }
+
+        case .ExtractScreen, .DeathScreen:
+            // All interaction is handled inside the draw procs.
+
         }
-    }
+
+        // ── Panel-specific update (active when mode == .UI) ─────────────────
+        // ESC to close the topmost panel is handled universally in the main
+        // loop AFTER this block, so individual cases only do what is unique
+        // to that panel (button logic, sub-state updates, quit detection).
+        if input_is_ui() {
+            top, ok := ui_top()
+            if ok {
+                switch top {
+                case .PauseMenu:
+                    if update_pause_menu() {
+                        fade_to_black(_on_black_to_menu)
+                        return
+                    }
+                case .Keybinds:
+                    update_keybinds_screen()
+                case .MutationTree:
+                    update_mutation_tree(w)
+                case .Shop:
+                    update_shop(w)
+                case .Stash:
+                    update_stash(w)
+                case .Settings, .LevelSelect, .Inventory, .Stats:
+                    // No panel-specific update needed; universal ESC and
+                    // mouse clicks inside the draw proc handle interaction.
+                }
+            }
+        }
     }
 
     if g_playing_state != .DeathScreen && g_playing_state != .ExtractScreen {
@@ -261,6 +290,7 @@ update_playing :: proc(dt: f32) {
         level_do_switch(w, int(g_pending_level_switch))
     }
     tick_camera_shake(dt)
+    tick_explosions(dt)
     tick_hit_flashes(dt)
 }
 
@@ -276,7 +306,7 @@ draw_playing :: proc() {
     rl.ClearBackground(rl.BLANK)
     rl.BeginMode2D(g_camera^)
     draw_tilemap()
-    if g_playing_state == .Hub || g_playing_state == .LevelSelect {
+    if g_playing_state == .Hub {
         draw_hub_world(w)
     }
     draw_editor_world()
@@ -307,47 +337,41 @@ draw_playing :: proc() {
 
     rl.BeginMode2D(g_camera^)
     draw_mutation_workbench_world(w)
+    draw_stash_world(w)
+    draw_enemy_mutation_auras(w)
+    draw_ground_item_labels(w)
+    draw_explosions()
     update_draw_dmg_numbers(rl.GetFrameTime())
     rl.EndMode2D()
 
     draw_editor_hud()
     if !g_editor_mode {
+        update_entity_hover(w)
         draw_boss_warning()
-        draw_boss_hud(w)
+        draw_entity_inspect_hud(w)
         draw_raid_timer()
-        draw_hud_clay(w)
-        draw_ammo_ring(w)
-        draw_ability_hud(w)
+        draw_hud(w)
 
+        // Hub HUD persists while LevelSelect panel is open (world stays .Hub).
+        if g_playing_state == .Hub {
+            draw_hub_hud(w)
+        }
+
+        // World-state overlays that are not managed by UIManager.
         switch g_playing_state {
-        case .Hub:
-            draw_hub_hud(w)
-        case .LevelSelect:
-            draw_hub_hud(w)
-            draw_level_select(w)
-        case .Gameplay:
-            // no overlay
-        case .Inventory:
-            draw_inventory(w)
-        case .Stats:
-            draw_stats_screen(w)
-        case .MutationTree:
-            draw_mutation_tree(w)
-        case .Shop:
-            draw_inventory(w)
-            draw_shop_hud(w)
-        case .PauseMenu:
-            draw_pause_menu()
-            draw_keybinds_screen()
         case .ExtractScreen:
             draw_extract_screen(w)
         case .DeathScreen:
             draw_death_screen(w)
-        case .Editor:
+        case .Gameplay, .Hub, .Editor:
+            // no extra overlay
         }
 
         draw_levelup_flash()
+        draw_loot_filter_hud()
     }
+    // NOTE: ui_draw() is called from the main loop (not here) so it runs
+    // in all app states and fades work across main-menu and playing alike.
     draw_lighting_widget()
 }
 
@@ -379,6 +403,9 @@ main :: proc() {
 
     init_clay()
     defer shutdown_clay()
+
+    ui_init()
+    defer ui_destroy()
 
     init_font()
     defer shutdown_font()
@@ -426,6 +453,9 @@ main :: proc() {
     level_data_init()
     defer level_data_destroy()
 
+    if !loot_table_load("data/loot_table.csv") { return }
+    defer loot_table_destroy()
+
     {
         defs, ok := load_entity_defs("data/entities.json")
         if !ok { return }
@@ -433,13 +463,15 @@ main :: proc() {
     }
     defer destroy_entity_defs(g_entity_defs)
 
-    copy(g_player_name[:], "Wanderer")
+    chars_load_all()
+    _mm_init()
 
-    for !rl.WindowShouldClose() {
+    for !rl.WindowShouldClose() && !g_should_exit {
         dt := rl.GetFrameTime()
         defer free_all(context.temp_allocator)
 
         update_clay_input()
+        input_begin_frame()   // resets consumption, derives mode from ui_any()
         update_audio()
         update_fade(dt)
         update_console(dt)
@@ -453,6 +485,14 @@ main :: proc() {
             update_playing(dt)
         }
 
+        // Universal ESC: close topmost UI layer in any app state.
+        // Per-panel updates above run first so they can consume the key
+        // (e.g. cancelling a rebind-listen) before this handler sees it.
+        if ui_any() && input_pressed(rl.KeyboardKey(g_binds.ui.close_panel)) {
+            ui_close_top()
+        }
+        ui_update(dt)
+
         rl.BeginDrawing()
         rl.ClearBackground({10, 10, 14, 255})
 
@@ -463,6 +503,16 @@ main :: proc() {
             draw_connecting()
         case .Playing:
             draw_playing()
+        }
+
+        // UI panels are rendered last (on top of everything) across all
+        // app states so Settings/Keybinds work from the main menu too.
+        {
+            ui_w := (^cw.World)(nil)
+            if g_app_state == .Playing && g_sim_alive {
+                ui_w = &g_sim.world
+            }
+            ui_draw(ui_w)
         }
 
         draw_fade()

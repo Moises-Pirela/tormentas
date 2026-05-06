@@ -66,16 +66,13 @@ ComponentType :: enum u8 {
     MutCorpseTrigger,
     MutHideEnemySprites,
     MutUnseenDamageMult,
-    // Corpus flagship
     MutHeartCage,
     MutThornPact,
-    // Shadow flagship
     MutCarrionCrown,
     MutFalseSaint,
-    // Venom flagship
     MutBlackLung,
-    // Reanimated-servant tag (not a mutation per se)
     Reanimated,
+    StatusEffect,
 }
 
 COMPONENT_COUNT :: len(ComponentType)
@@ -116,10 +113,29 @@ entity_empty :: proc() -> Entity {
     return Entity{ id = INVALID_ENTITY }
 }
 
+StatusEffectType :: enum { Slow, Poison, Burn, Stun, Root }
+EffectApplicationPolicy :: enum {Flat, Base, Percent}
+EffectStackPolicy  :: enum {Stack, Refresh, Extend}
+
+StatusEffect :: struct {
+    type:     StatusEffectType,
+    application: EffectApplicationPolicy,
+    stack_behavior: EffectStackPolicy,
+    duration: f32,
+    strength: f32, 
+    source_id: int,
+}
+
+MAX_STATUS_EFFECTS :: 8   
+
+StatusEffectComp :: struct {
+    effects: [len(StatusEffectType)]StatusEffect,
+    count:   int,
+}
 
 TransformComp :: struct {
     position: [3]f32,
-    rotation: f32,      // radians XY plane
+    rotation: f32,
 }
 
 VelocityComp :: struct {
@@ -132,6 +148,7 @@ HealthComp :: struct {
     energy:             f32,
     max_energy:         f32,
     iron_will_consumed: bool,   // true after IronHeart has saved the player this life
+    shield:             f32,    // current shield HP (absorbs damage before HP)
 }
 
 InputStateComp :: struct {
@@ -230,9 +247,18 @@ MutLifestealComp :: struct {
 }
 
 MutProximityDamageComp :: struct {
-    radius:        f32,
-    dps:           f32,
-    self_fraction: f32,
+    radius:          f32,   // aura radius in world units
+    // Direct damage (scaled by dt each tick)
+    dps:             f32,   // damage per second; 0 = disabled
+    self_fraction:   f32,   // fraction of dps applied back to owner
+    // Status-effect application
+    effect_type:     StatusEffectType,  // Slow, Poison, Burn, Stun, Root
+    effect_strength: f32,   // effect strength parameter; 0 = disabled
+    effect_duration: f32,   // how long the status lasts on the target
+    // Optional point light
+    light_color:     [3]f32,  // RGB 0-255; all zero = no light
+    light_radius:    f32,
+    light_intensity: f32,
 }
 
 MutOnDeathExplodeComp :: struct {
@@ -282,17 +308,17 @@ MutUnseenDamageMultComp :: struct {
     vision_radius: f32,
 }
 
-HEART_CAGE_RESPAWN   :: f32(15.0)
-CARRION_MAX_SERVANTS :: 3
+HEART_CAGE_ORBIT_RADIUS :: f32(80.0)   // world-space pixels from player centre
+HEART_CAGE_ORBIT_SPEED  :: f32(0.9)    // radians per second
+CARRION_MAX_SERVANTS    :: 3
 
-// HeartCage: an external heart that absorbs incoming damage; its HP is
-// stored here so it never enters the normal damage pipeline.
+// HeartCage: an external heart that orbits the player.  While it lives,
+// enemies target it and the player is immune to all damage.  When the
+// heart is destroyed the player dies — no respawn.
 MutHeartCageComp :: struct {
-    heart_id:      int,   // entity used for visual position tracking
-    heart_hp:      f32,
-    heart_max_hp:  f32,
-    respawn_timer: f32,   // counts down when heart_hp <= 0
-    max_hp_pct:    f32,   // heart_max_hp = player.max * max_hp_pct
+    heart_id:    int,   // entity whose Transform + Health track the heart
+    max_hp_pct:  f32,   // heart max_hp = player.max * max_hp_pct (stored for respawn)
+    orbit_angle: f32,   // current angle in radians (advances each tick)
 }
 
 // CarrionCrown: tracks reanimated servant entity IDs.
@@ -326,6 +352,7 @@ MutFalseSaintComp :: struct {
     slow_mult:     f32,   // velocity multiplier (< 1 = slower)
     beacon_radius: f32,   // idle enemies inside are forced to aggro
 }
+
 
 PointLightComp :: struct {
     color:     [3]f32,  // RGB 0..255
@@ -363,6 +390,7 @@ GoldComp :: struct {
 NPCType :: enum u8 {
     Shopkeeper,
     MutationWorkbench,
+    Stash,
 }
 
 NPCComp :: struct {
@@ -501,7 +529,7 @@ MutationType :: enum u8 {
     BlackLung,
 }
 
-MAX_AFFIXES :: 3
+MAX_AFFIXES :: 6
 
 AbilityType :: enum u8 {
     None,
@@ -536,9 +564,18 @@ AffixType :: enum u8 {
     Armor,            // +X% incoming damage reduction (capped at 75%)
     BonusMoveSpeed,   // +X% move speed
     BonusEnergy,      // +X% max energy
-    BonusDamage,      // +X% weapon damage
+    BonusDamage,      // +X% weapon damage (ranged + melee)
     BonusFireRate,    // +X% fire rate
     BonusReloadSpeed, // +X% reload speed
+    HealthRegen,      // +X% of max HP regenerated per second
+    // Ranged-specific
+    BonusProjSpeed,   // +X% projectile speed
+    BonusPierce,      // +1 enemies pierced per projectile (flat; value always 1.0)
+    BonusAmmo,        // +X% magazine capacity
+    // Melee-specific
+    BonusMeleeDamage, // +X% melee damage (stacks with BonusDamage)
+    BonusMeleeRange,  // +X% melee arc radius
+    BonusMeleeSpeed,  // +X% attack speed (reduces cooldown)
 }
 
 Affix :: struct {
@@ -568,9 +605,20 @@ ItemComp :: struct {
     is_melee:           bool,
     melee_damage:       f32,
     melee_range:        f32,
-    melee_spread:       f32,   
-    melee_cooldown:     f32,   
+    melee_spread:       f32,
+    melee_cooldown:     f32,
     melee_cooldown_max: f32,
+
+    weapon_archetype: WeaponArchetype,
+
+    // Explicit per-item base combat stats (0 = unset; weapon_system falls back to archetype defaults)
+    base_damage:      f32,   // ranged: damage per shot; melee uses melee_damage
+    base_fire_rate:   f32,   // ranged: shots per second
+    base_ammo_max:    u8,    // ranged: magazine capacity
+    base_reload_time: f32,   // ranged: reload duration in seconds
+    base_proj_speed:  f32,   // ranged: projectile speed
+    base_armor:       f32,   // flat damage reduction fraction (additive with Armor affixes)
+    base_shield:      f32,   // max shield HP granted by this item
 }
 
 item_empty :: proc() -> ItemComp {
@@ -582,6 +630,16 @@ GroundItemComp :: struct {}
 ProjectileTagComp :: struct {}
 
 FogOfWarComp :: struct {}
+
+WeaponArchetype :: enum u8 {
+    None,
+    Pistol,
+    Rifle,
+    Shotgun,
+    Axe,
+    Knife,
+    Sword,
+}
 
 WeaponType :: enum u8 { Melee, Ranged }
 
@@ -783,6 +841,7 @@ World :: struct {
     mut_false_saint:        [dynamic]MutFalseSaintComp,
     mut_black_lung:         [dynamic]MutBlackLungComp,
     reanimateds:            [dynamic]ReanimatedComp,
+    status_effects:         [dynamic]StatusEffectComp,
 
     damage_events:   [dynamic]DamageEvent,
 
@@ -863,6 +922,7 @@ make_world :: proc() -> World {
     resize(&w.mut_false_saint,        CHUNK_SIZE)
     resize(&w.mut_black_lung,         CHUNK_SIZE)
     resize(&w.reanimateds,            CHUNK_SIZE)
+    resize(&w.status_effects,         CHUNK_SIZE)
 
     for i in 0..<CHUNK_SIZE {
         w.entities[i] = entity_empty()
@@ -940,6 +1000,7 @@ destroy_world :: proc(w: ^World) {
     delete(w.reanimateds)
     delete(w.damage_events)
     delete(w.recycled_ids)
+    delete(w.status_effects)
 }
 
 world_create_entity :: proc(w: ^World) -> int {
@@ -1036,7 +1097,7 @@ world_destroy_entity :: proc(w: ^World, id: int) {
     w.mut_false_saint[id]        = {}
     w.mut_black_lung[id]         = {}
     w.reanimateds[id]            = {}
-
+    w.status_effects[id]           = {}
     append(&w.recycled_ids, id)
 }
 
@@ -1133,6 +1194,7 @@ world_ensure_capacity :: proc(w: ^World, id: int) {
     resize(&w.mut_false_saint,        target)
     resize(&w.mut_black_lung,         target)
     resize(&w.reanimateds,            target)
+    resize(&w.status_effects,         target)
 }
 
 world_set_transform :: proc(w: ^World, id: int, c: TransformComp) {
@@ -1460,6 +1522,7 @@ world_get_mut_black_lung :: proc(w: ^World, id: int) -> ^MutBlackLungComp {
     return &w.mut_black_lung[id]
 }
 
+
 world_set_reanimated :: proc(w: ^World, id: int, c: ReanimatedComp) {
     w.reanimateds[id] = c
     entity_sig_set(&w.entities[id].signature, .Reanimated)
@@ -1624,6 +1687,61 @@ world_get_render_config :: proc(w: ^World, id: int) -> ^RenderConfigComp {
     return &w.render_configs[id]
 }
 
+world_set_status_effect :: proc(w: ^World, id: int, c: StatusEffectComp) {
+    w.status_effects[id] = c
+    entity_sig_set(&w.entities[id].signature, .StatusEffect)
+}
+
+world_get_status_effects :: proc(w: ^World, id: int) -> ^StatusEffectComp {
+    return &w.status_effects[id]
+}
+
+status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
+    if !world_has_component(w, id, .StatusEffect) {
+        world_set_status_effect(w, id, StatusEffectComp{})
+    }
+    
+    sec := world_get_status_effects(w, id)
+    et := int(effect.type)
+    current := &sec.effects[et]
+    
+    if current.duration <= 0 {
+        // No active effect, apply new one
+        current^ = effect
+        sec.count += 1
+    } else {
+        // Effect already active, apply stacking policy
+        #partial switch effect.application {
+        case .Flat:
+            current.strength += effect.strength
+        case .Base:
+            current.strength *= effect.strength
+        case .Percent:
+            current.strength += effect.strength
+        }
+        
+        #partial switch effect.stack_behavior {
+        case .Stack:
+            // Already added strength above
+            current.duration = max(current.duration, effect.duration)
+        case .Refresh:
+            current.duration = effect.duration
+        case .Extend:
+            current.duration += effect.duration
+        }
+    }
+}
+
+status_effect_is_active :: proc(sec: ^StatusEffectComp, stype: StatusEffectType) -> bool {
+    et := int(stype)
+    return sec.effects[et].duration > 0
+}
+
+status_effect_get :: proc(sec: ^StatusEffectComp, stype: StatusEffectType) -> ^StatusEffect {
+    et := int(stype)
+    return &sec.effects[et]
+}
+
 StatsComp :: struct {
     strength:    int,
     dexterity:   int,
@@ -1646,6 +1764,7 @@ StatsComp :: struct {
     reload_speed_mult:          f32,
     projectile_speed_mult:      f32,
     armor:                      f32,
+    hp_regen_pct:               f32,   // fraction of max HP regenerated per second (from affixes)
     crit_chance:                f32,
     special_ability_crit:       f32,
     dodge_cooldown_reduction:   f32,
@@ -1660,6 +1779,18 @@ StatsComp :: struct {
     ranged_attacks_blocked:     bool,
     nonlethal_shots:            bool,
     hp_locked_to_one:           bool,
+
+    // Ranged-weapon affix stats (computed each frame from equipped item affixes)
+    bonus_ammo_pct:  f32,  // fractional bonus to ammo_max (0.20 = +20%)
+    bonus_pierce:    int,  // extra enemies each projectile passes through
+
+    // Melee-weapon affix stats (computed each frame from equipped item affixes)
+    melee_damage_mult: f32,  // multiplicative bonus on top of damage_mult
+    melee_range_mult:  f32,  // scales arc radius
+    melee_speed_mult:  f32,  // divides cooldown_max (higher = faster swings)
+
+    // Shield resource (computed each frame from equipped items' base_shield)
+    shield_max: f32,  // max shield HP; 0 when no shield items equipped
 }
 
 world_set_ability :: proc(w: ^World, id: int, c: AbilityComp) {
@@ -1793,9 +1924,19 @@ movement_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     for id in ids {
         t := world_get_transform(w, id)
         v := world_get_velocity(w, id)
-        t.position[0] += v.value[0] * dt
-        t.position[1] += v.value[1] * dt
-        t.position[2] += v.value[2] * dt
+        
+        vel_mult := f32(1.0)
+        if world_has_component(w, id, .StatusEffect) {
+            sec := world_get_status_effects(w, id)
+            if status_effect_is_active(sec, .Slow) {
+                slow := status_effect_get(sec, .Slow)
+                vel_mult *= (1.0 - slow.strength)
+            }
+        }
+        
+        t.position[0] += v.value[0] * vel_mult * dt
+        t.position[1] += v.value[1] * vel_mult * dt
+        t.position[2] += v.value[2] * vel_mult * dt
     }
 }
 

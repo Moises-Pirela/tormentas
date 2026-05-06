@@ -1,15 +1,14 @@
 package main
 
+import "core:math"
 import cw "clockwork"
 
 mutation_effects_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     #partial switch event {
     case .EarlyUpdate:
 
-        for slot in 0..<cw.MAX_PLAYERS {
-            pid := w.player_ids[slot]
-            if !cw.world_is_valid(w, pid)                          { continue }
-            if !cw.world_has_component(w, pid, .MutationContainer) { continue }
+        mut_owners := cw.world_query(w, cw.query_mask(.MutationContainer), context.temp_allocator)
+        for pid in mut_owners {
             mc := cw.world_get_mutation(w, pid)
             for i in 0..<mc.entity_count {
                 eid := mc.entities[i]
@@ -19,11 +18,8 @@ mutation_effects_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
     case .Update:
-        for slot in 0..<cw.MAX_PLAYERS {
-            pid := w.player_ids[slot]
-            if !cw.world_is_valid(w, pid)                          { continue }
-            if !cw.world_has_component(w, pid, .MutationContainer) { continue }
-
+        mut_owners := cw.world_query(w, cw.query_mask(.MutationContainer), context.temp_allocator)
+        for pid in mut_owners {
             mc := cw.world_get_mutation(w, pid)
             for i in 0..<mc.entity_count {
                 eid := mc.entities[i]
@@ -46,23 +42,66 @@ mutation_effects_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 @(private = "file")
 _mut_tick_proximity_damage :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
-    if !cw.world_has_component(w, eid, .MutProximityDamage) { return }
-    if !cw.world_has_component(w, pid, .Transform)          { return }
+    if !cw.world_has_component(w, eid, .MutProximityDamage)  { return }
+    if !cw.world_has_component(w, pid, .Transform)           { return }
 
-    pd  := cw.world_get_mut_proximity_damage(w, eid)
+    pd  := cw.world_get_mut_proximity_damage(w, eid)^  // copy — world_set_* can resize the array
+
     pos := cw.world_get_transform(w, pid).position
+    r2  := pd.radius * pd.radius
 
-    r2 := pd.radius * pd.radius
+    if is_player_entity(w, pid) {
+        ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
+        for ai_id in ai_ids {
+            if cw.world_has_component(w, ai_id, .Reanimated) { continue }
+            ap := cw.world_get_transform(w, ai_id).position
+            dx := ap[0] - pos[0]
+            dy := ap[1] - pos[1]
+            if dx*dx + dy*dy > r2 { continue }
 
-    ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
-    for ai_id in ai_ids {
-        ap  := cw.world_get_transform(w, ai_id).position
-        dx  := ap[0] - pos[0]
-        dy  := ap[1] - pos[1]
-        if dx*dx + dy*dy > r2 { continue }
-        cw.world_push_damage(w, ai_id, pd.dps * dt, pid)
+            if pd.dps > 0 {
+                cw.world_push_damage(w, ai_id, pd.dps * dt, pid)
+            }
+            if pd.effect_strength > 0 {
+                cw.status_effect_apply(w, ai_id, cw.StatusEffect{
+                    type           = pd.effect_type,
+                    application    = .Percent,
+                    stack_behavior = .Refresh,
+                    duration       = pd.effect_duration,
+                    strength       = pd.effect_strength,
+                    source_id      = pid,
+                })
+            }
+        }
+    } else {
+        for slot in 0..<cw.MAX_PLAYERS {
+            target_id := w.player_ids[slot]
+            if !cw.world_is_valid(w, target_id)                  { continue }
+            if !cw.world_has_component(w, target_id, .Transform) { continue }
+            if cw.world_has_component(w, target_id, .Respawn) &&
+               cw.world_get_respawn(w, target_id).timer > 0      { continue }
+            tp := cw.world_get_transform(w, target_id).position
+            dx := tp[0] - pos[0]
+            dy := tp[1] - pos[1]
+            if dx*dx + dy*dy > r2 { continue }
+            if pd.dps > 0 {
+                cw.world_push_damage(w, target_id, pd.dps * dt, pid)
+            }
+        }
     }
-    cw.world_push_damage(w, pid, pd.dps * pd.self_fraction * dt)
+
+    if pd.light_radius > 0 {
+        lc := cw.PointLightComp{
+            color     = pd.light_color,
+            radius    = pd.light_radius,
+            intensity = pd.light_intensity,
+        }
+        if !cw.world_has_component(w, pid, .PointLight) {
+            cw.world_set_point_light(w, pid, lc)
+        } else {
+            cw.world_get_point_light(w, pid)^ = lc
+        }
+    }
 }
 
 @(private = "file")
@@ -150,38 +189,39 @@ _mut_tick_heart_cage :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
     hc := cw.world_get_mut_heart_cage(w, eid)
     if hc.heart_id == cw.INVALID_ENTITY { return }
 
-    if hc.heart_hp <= 0 {
-        if hc.respawn_timer <= 0 {
-            hc.respawn_timer = cw.HEART_CAGE_RESPAWN
-        }
-        hc.respawn_timer -= dt
-        if hc.respawn_timer <= 0 {
-            hc.respawn_timer = 0
-            if cw.world_has_component(w, pid, .Health) {
-                ph := cw.world_get_health(w, pid)
-                hc.heart_max_hp = ph.max * hc.max_hp_pct
-            }
-            hc.heart_hp = hc.heart_max_hp
-        }
-    } else {
-        if cw.world_is_valid(w, hc.heart_id) &&
-           cw.world_has_component(w, pid, .Transform) {
-            pt := cw.world_get_transform(w, pid)
-            ht := cw.world_get_transform(w, hc.heart_id)
-            ht.position    = pt.position
-            ht.position[0] += 24
-        }
+    // Orbit angle advances every tick.
+    hc.orbit_angle += cw.HEART_CAGE_ORBIT_SPEED * dt
+
+    // Stop updating orbit position once the heart is dead.
+    if !cw.world_is_valid(w, hc.heart_id)                        { return }
+    if !cw.world_has_component(w, hc.heart_id, .Health)          { return }
+    if cw.world_get_health(w, hc.heart_id).current <= 0          { return }
+
+    // Update heart entity's world-space position to the current orbit point.
+    if cw.world_is_valid(w, hc.heart_id) &&
+       cw.world_has_component(w, pid, .Transform) {
+        pt := cw.world_get_transform(w, pid)
+        ht := cw.world_get_transform(w, hc.heart_id)
+        r  := cw.HEART_CAGE_ORBIT_RADIUS
+        ht.position[0] = pt.position[0] + math.cos(hc.orbit_angle) * r
+        ht.position[1] = pt.position[1] + math.sin(hc.orbit_angle) * r
+        ht.position[2] = pt.position[2]
     }
 }
 
-_spawn_heart_entity :: proc(w: ^cw.World, owner_id: int) -> int {
+_spawn_heart_entity :: proc(w: ^cw.World, owner_id: int, max_hp: f32) -> int {
     id  := cw.world_create_entity(w)
     pos : [3]f32
     if cw.world_has_component(w, owner_id, .Transform) {
         pos    = cw.world_get_transform(w, owner_id).position
-        pos[0] += 24
+        pos[0] += cw.HEART_CAGE_ORBIT_RADIUS
     }
     cw.world_set_transform(w, id, cw.TransformComp{ position = pos })
+    // Collider (faction=0) lets enemy projectiles hit the heart — enemy shots are
+    // faction=1, which != 0, so they collide.  Player shots are faction=0 and skip it.
+    cw.world_set_collider(w, id, cw.ColliderComp{ radius = 14, faction = 0 })
+    // Health lives directly on the entity; damage_system tracks it like any other.
+    cw.world_set_health(w, id, cw.HealthComp{ current = max_hp, max = max_hp })
     return id
 }
 
@@ -199,21 +239,38 @@ _mut_tick_black_lung :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
     dps := bl.dps_max * (bl.pressure / 100.0)
     r2  := bl.radius * bl.radius
 
-    ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
-    for ai_id in ai_ids {
-        if cw.world_has_component(w, ai_id, .Reanimated) { continue }
-        ap := cw.world_get_transform(w, ai_id).position
-        dx := ap[0] - pos[0]
-        dy := ap[1] - pos[1]
-        if dx*dx + dy*dy > r2 { continue }
-        cw.world_push_damage(w, ai_id, dps * dt, pid)
+    if is_player_entity(w, pid) {
+        ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
+        for ai_id in ai_ids {
+            if cw.world_has_component(w, ai_id, .Reanimated) { continue }
+            ap := cw.world_get_transform(w, ai_id).position
+            dx := ap[0] - pos[0]
+            dy := ap[1] - pos[1]
+            if dx*dx + dy*dy > r2 { continue }
+            cw.world_push_damage(w, ai_id, dps * dt, pid)
+        }
+    } else {
+        for slot in 0..<cw.MAX_PLAYERS {
+            target_id := w.player_ids[slot]
+            if !cw.world_is_valid(w, target_id)                  { continue }
+            if !cw.world_has_component(w, target_id, .Transform) { continue }
+            if cw.world_has_component(w, target_id, .Respawn) &&
+               cw.world_get_respawn(w, target_id).timer > 0      { continue }
+            tp := cw.world_get_transform(w, target_id).position
+            dx := tp[0] - pos[0]
+            dy := tp[1] - pos[1]
+            if dx*dx + dy*dy > r2 { continue }
+            cw.world_push_damage(w, target_id, dps * dt, pid)
+        }
     }
 }
+
 
 @(private = "file")
 _mut_early_false_saint_beacon :: proc(w: ^cw.World, pid: int, eid: int) {
     if !cw.world_has_component(w, eid, .MutFalseSaint) { return }
     if !cw.world_has_component(w, pid, .Transform)      { return }
+    if !is_player_entity(w, pid)                        { return }
 
     fs  := cw.world_get_mut_false_saint(w, eid)
     pos := cw.world_get_transform(w, pid).position
@@ -237,6 +294,7 @@ _mut_early_false_saint_beacon :: proc(w: ^cw.World, pid: int, eid: int) {
 _mut_tick_false_saint_slow :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
     if !cw.world_has_component(w, eid, .MutFalseSaint) { return }
     if !cw.world_has_component(w, pid, .Transform)      { return }
+    if !is_player_entity(w, pid)                        { return }
 
     fs  := cw.world_get_mut_false_saint(w, eid)
     pos := cw.world_get_transform(w, pid).position
@@ -279,10 +337,8 @@ reanimated_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         _tick_reanimated_servant(w, sid)
     }
 
-    for slot in 0..<cw.MAX_PLAYERS {
-        pid := w.player_ids[slot]
-        if !cw.world_is_valid(w, pid)                          { continue }
-        if !cw.world_has_component(w, pid, .MutationContainer) { continue }
+    cc_owners := cw.world_query(w, cw.query_mask(.MutationContainer), context.temp_allocator)
+    for pid in cc_owners {
         mc := cw.world_get_mutation(w, pid)
         for i in 0..<mc.entity_count {
             meid := mc.entities[i]

@@ -1,12 +1,17 @@
 package main
 
 import "core:os"
+import "core:mem"
 import cw "clockwork"
 
-SAVE_PATH      :: "save/player.bin"
-SAVE_MAGIC     :: u32(0x544F524D)
-SAVE_VERSION   :: u16(3)
-SAVE_MAX_ITEMS :: 64
+SAVE_PATH        :: "save/player.bin"    // legacy — migration only
+CHAR_SAVE_PATH   :: "save/characters.bin"
+SAVE_MAGIC       :: u32(0x544F524D)
+SAVE_VERSION     :: u16(5)
+SAVE_MAX_ITEMS   :: 64
+CHAR_SAVE_MAGIC  :: u32(0x544F524E)
+CHAR_SAVE_VER    :: u16(2)
+MAX_CHAR_SLOTS   :: 5
 
 PlayerLifetimeStats :: struct #packed {
     successful_raids: i32,
@@ -43,11 +48,19 @@ SavedItem :: struct #packed {
     req_sci:            u8,
     affix_count:        u8,
     flags:              u8,
-    _pad2:              u8,
+    weapon_archetype:   u8,
     melee_damage:       f32,
     melee_range:        f32,
     melee_spread:       f32,
     melee_cooldown_max: f32,
+    base_damage:        f32,
+    base_fire_rate:     f32,
+    base_ammo_max:      u8,
+    _base_ammo_pad:     [3]u8,
+    base_reload_time:   f32,
+    base_proj_speed:    f32,
+    base_armor:         f32,
+    base_shield:        f32,
     affixes:            [cw.MAX_AFFIXES]SavedAffix,
 
     name_len: u8,
@@ -75,6 +88,47 @@ PlayerSaveFile :: struct #packed {
     base_speed:     f32,
     current_hp:     f32,
     current_energy: f32,
+    current_shield: f32,
+    wallet_gold:    i32,
+
+    stash_gold:     i32,
+    stash_serums:   i32,
+    stash_item_count: u16,
+    _stash_pad:       u16,
+    stash_items:      [STASH_MAX_ITEMS]SavedItem,
+
+    item_count:     u16,
+    _pad2:          u16,
+
+    lifetime:       PlayerLifetimeStats,
+
+    mut_serums:     i32,
+    mut_count:      u8,
+    _mut_pad:       [3]u8,
+    mut_types:      [cw.MAX_MUTATION_SLOTS]u8,
+    _mut_align:     u8,
+
+    items:          [SAVE_MAX_ITEMS]SavedItem,
+}
+
+PlayerSaveFileV4 :: struct #packed {
+    magic:          u32,
+    version:        u16,
+    _pad:           u16,
+
+    level:          i32,
+    xp:             f32,
+    xp_next:        f32,
+    stat_points:    i32,
+    strength:       i32,
+    dexterity:      i32,
+    science:        i32,
+    base_hp:        f32,
+    base_energy:    f32,
+    base_speed:     f32,
+    current_hp:     f32,
+    current_energy: f32,
+    current_shield: f32,
     wallet_gold:    i32,
 
     stash_gold:     i32,
@@ -92,6 +146,165 @@ PlayerSaveFile :: struct #packed {
     _mut_align:     u8,
 
     items:          [SAVE_MAX_ITEMS]SavedItem,
+}
+
+CharSlot :: struct #packed {
+    exists:     u8,
+    _pad:       [7]u8,
+    name:       [PLAYER_NAME_MAX + 1]u8,
+    _npad:      [6]u8,
+    level:      i32,
+    deaths:     i32,
+    raids_done: i32,
+    _reserved:  [32]u8,
+    player:     PlayerSaveFile,
+}
+
+CharSaveFile :: struct #packed {
+    magic:   u32,
+    version: u16,
+    _pad:    u16,
+    slots:   [MAX_CHAR_SLOTS]CharSlot,
+}
+
+CharSlotV1 :: struct #packed {
+    exists:     u8,
+    _pad:       [7]u8,
+    name:       [PLAYER_NAME_MAX + 1]u8,
+    _npad:      [6]u8,
+    level:      i32,
+    deaths:     i32,
+    raids_done: i32,
+    _reserved:  [32]u8,
+    player:     PlayerSaveFileV4,
+}
+
+CharSaveFileV1 :: struct #packed {
+    magic:   u32,
+    version: u16,
+    _pad:    u16,
+    slots:   [MAX_CHAR_SLOTS]CharSlotV1,
+}
+
+g_active_slot: int = -1
+g_char_save:   CharSaveFile
+
+chars_load_all :: proc() {
+    raw, ok := os.read_entire_file(CHAR_SAVE_PATH)
+    if ok {
+        defer delete(raw)
+        if len(raw) >= size_of(CharSaveFile) {
+            csf := (^CharSaveFile)(raw_data(raw))^
+            if csf.magic == CHAR_SAVE_MAGIC && csf.version == CHAR_SAVE_VER {
+                g_char_save = csf
+                return
+            }
+        }
+        if len(raw) >= size_of(CharSaveFileV1) {
+            old := (^CharSaveFileV1)(raw_data(raw))^
+            if old.magic == CHAR_SAVE_MAGIC && old.version == 1 {
+                g_char_save = {}
+                g_char_save.magic   = CHAR_SAVE_MAGIC
+                g_char_save.version = CHAR_SAVE_VER
+                for i in 0..<MAX_CHAR_SLOTS {
+                    if old.slots[i].exists == 0 { continue }
+                    g_char_save.slots[i].exists = 1
+                    copy(g_char_save.slots[i].name[:], old.slots[i].name[:])
+                    g_char_save.slots[i].level      = old.slots[i].level
+                    g_char_save.slots[i].deaths     = old.slots[i].deaths
+                    g_char_save.slots[i].raids_done = old.slots[i].raids_done
+                    g_char_save.slots[i].player     = _migrate_player_v4(&old.slots[i].player)
+                }
+                chars_save_all()
+                return
+            }
+        }
+    }
+
+    g_char_save = {}
+    g_char_save.magic   = CHAR_SAVE_MAGIC
+    g_char_save.version = CHAR_SAVE_VER
+
+    legacy, lok := os.read_entire_file(SAVE_PATH)
+    if lok {
+        defer delete(legacy)
+        if len(legacy) >= size_of(PlayerSaveFile) {
+            psf := (^PlayerSaveFile)(raw_data(legacy))^
+            if psf.magic == SAVE_MAGIC && psf.version == SAVE_VERSION {
+                g_char_save.slots[0].exists = 1
+                copy(g_char_save.slots[0].name[:], "Wanderer")
+                g_char_save.slots[0].level      = psf.level
+                g_char_save.slots[0].deaths     = psf.lifetime.deaths
+                g_char_save.slots[0].raids_done = psf.lifetime.successful_raids
+                g_char_save.slots[0].player     = psf
+            }
+        } else if len(legacy) >= size_of(PlayerSaveFileV4) {
+            psf4 := (^PlayerSaveFileV4)(raw_data(legacy))^
+            if psf4.magic == SAVE_MAGIC && psf4.version == 4 {
+                g_char_save.slots[0].exists = 1
+                copy(g_char_save.slots[0].name[:], "Wanderer")
+                g_char_save.slots[0].level      = psf4.level
+                g_char_save.slots[0].deaths     = psf4.lifetime.deaths
+                g_char_save.slots[0].raids_done = psf4.lifetime.successful_raids
+                g_char_save.slots[0].player     = _migrate_player_v4(&psf4)
+            }
+        }
+    }
+
+    chars_save_all()
+}
+
+chars_save_all :: proc() {
+    os.make_directory("save")
+    data := (^[size_of(CharSaveFile)]u8)(&g_char_save)^
+    os.write_entire_file(CHAR_SAVE_PATH, data[:])
+}
+
+char_slot_create :: proc(idx: int, name: []u8) {
+    if idx < 0 || idx >= MAX_CHAR_SLOTS { return }
+    s := &g_char_save.slots[idx]
+    mem.zero(s, size_of(CharSlot))
+    s.exists = 1
+    n := min(len(name), PLAYER_NAME_MAX)
+    copy(s.name[:], name[:n])
+    chars_save_all()
+}
+
+char_slot_delete :: proc(idx: int) {
+    if idx < 0 || idx >= MAX_CHAR_SLOTS { return }
+    mem.zero(&g_char_save.slots[idx], size_of(CharSlot))
+    if g_active_slot == idx { g_active_slot = -1 }
+    chars_save_all()
+}
+
+@(private = "file")
+_migrate_player_v4 :: proc(old: ^PlayerSaveFileV4) -> PlayerSaveFile {
+    save: PlayerSaveFile
+    save.magic          = SAVE_MAGIC
+    save.version        = SAVE_VERSION
+    save.level          = old.level
+    save.xp             = old.xp
+    save.xp_next        = old.xp_next
+    save.stat_points    = old.stat_points
+    save.strength       = old.strength
+    save.dexterity      = old.dexterity
+    save.science        = old.science
+    save.base_hp        = old.base_hp
+    save.base_energy    = old.base_energy
+    save.base_speed     = old.base_speed
+    save.current_hp     = old.current_hp
+    save.current_energy = old.current_energy
+    save.current_shield = old.current_shield
+    save.wallet_gold    = old.wallet_gold
+    save.stash_gold     = old.stash_gold
+    save.stash_serums   = old.stash_serums
+    save.item_count     = old.item_count
+    save.lifetime       = old.lifetime
+    save.mut_serums     = old.mut_serums
+    save.mut_count      = old.mut_count
+    copy(save.mut_types[:], old.mut_types[:])
+    copy(save.items[:], old.items[:])
+    return save
 }
 
 strip_player_carried :: proc(w: ^cw.World, pid: int) {
@@ -136,12 +349,12 @@ compute_extract_value :: proc(w: ^cw.World, pid: int) -> int {
 }
 
 save_player :: proc(w: ^cw.World, pid: int) {
+    if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return }
+
     save: PlayerSaveFile
     save.magic    = SAVE_MAGIC
     save.version  = SAVE_VERSION
     save.lifetime = g_lifetime_stats
-    
-    os.make_directory("save")
 
     if cw.world_has_component(w, pid, .Stats) {
         st              := cw.world_get_stats(w, pid)
@@ -161,6 +374,7 @@ save_player :: proc(w: ^cw.World, pid: int) {
         h                   := cw.world_get_health(w, pid)
         save.current_hp      = h.current
         save.current_energy  = h.energy
+        save.current_shield  = h.shield
     }
 
     if cw.world_has_component(w, pid, .Wallet) {
@@ -169,6 +383,23 @@ save_player :: proc(w: ^cw.World, pid: int) {
 
     save.stash_gold   = i32(g_stash.gold)
     save.stash_serums = i32(g_stash.serums)
+    for i in 0..<g_stash.item_count {
+        eid := g_stash.item_ids[i]
+        if !cw.world_is_valid(w, eid)             { continue }
+        if !cw.world_has_component(w, eid, .Item) { continue }
+        if save.stash_item_count >= STASH_MAX_ITEMS { break }
+
+        rec := &save.stash_items[save.stash_item_count]
+        save.stash_item_count += 1
+        rec.is_equipped = 0
+        item := cw.world_get_item(w, eid)
+        rec.pack_x      = i16(item.pack_x)
+        rec.pack_y      = i16(item.pack_y)
+        _save_fill_item(rec, item)
+        if cw.world_has_component(w, eid, .RenderConfig) {
+            _save_fill_render(rec, cw.world_get_render_config(w, eid))
+        }
+    }
 
     if cw.world_has_component(w, pid, .MutationContainer) {
         mc := cw.world_get_mutation(w, pid)
@@ -223,18 +454,21 @@ save_player :: proc(w: ^cw.World, pid: int) {
         }
     }
 
-    data := (^[size_of(PlayerSaveFile)]u8)(&save)^
-    os.write_entire_file(SAVE_PATH, data[:])
+    s := &g_char_save.slots[g_active_slot]
+    s.player     = save
+    s.level      = save.level
+    s.deaths     = save.lifetime.deaths
+    s.raids_done = save.lifetime.successful_raids
+    chars_save_all()
 }
 
 load_player :: proc(w: ^cw.World, pid: int) -> bool {
-    raw, ok := os.read_entire_file(SAVE_PATH)
-    if !ok { return false }
-    defer delete(raw)
+    if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return false }
 
-    if len(raw) < size_of(PlayerSaveFile) { return false }
+    slot := &g_char_save.slots[g_active_slot]
+    if slot.exists == 0 { return false }
 
-    save := (^PlayerSaveFile)(raw_data(raw))^
+    save := slot.player
     if save.magic   != SAVE_MAGIC   { return false }
     if save.version != SAVE_VERSION { return false }
 
@@ -258,14 +492,30 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
         h        := cw.world_get_health(w, pid)
         h.current = save.current_hp
         h.energy  = save.current_energy
+        h.shield  = save.current_shield
     }
 
     if cw.world_has_component(w, pid, .Wallet) {
         cw.world_get_wallet(w, pid).gold = int(save.wallet_gold)
     }
 
+    g_stash = stash_make_empty()
     g_stash.gold   = int(save.stash_gold)
     g_stash.serums = int(save.stash_serums)
+    for i in 0..<int(save.stash_item_count) {
+        if g_stash.item_count >= STASH_MAX_ITEMS { break }
+        item_id := _load_spawn_saved_item(w, &save.stash_items[i])
+        if item_id == cw.INVALID_ENTITY { continue }
+        item := cw.world_get_item(w, item_id)
+        col := int(save.stash_items[i].pack_x)
+        row := int(save.stash_items[i].pack_y)
+        if !stash_can_place(item, col, row) {
+            col, row, _ = stash_find_free(item)
+        }
+        if !stash_place_item(w, item_id, col, row) {
+            cw.world_destroy_entity(w, item_id)
+        }
+    }
 
     if cw.world_has_component(w, pid, .MutationContainer) {
         mc         := cw.world_get_mutation(w, pid)
@@ -279,43 +529,9 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
 
     for i in 0..<int(save.item_count) {
         rec     := save.items[i]
-        item_id := cw.world_create_entity(w)
+        item_id := _load_spawn_saved_item(w, &save.items[i])
+        if item_id == cw.INVALID_ENTITY { continue }
         inv     := cw.world_get_inventory(w, pid)
-
-        item := cw.item_empty()
-        item.slot               = cw.EquipSlot(rec.slot)
-        item.rarity             = cw.ItemRarity(rec.rarity)
-        item.mutation_type      = cw.MutationType(rec.mutation_type)
-        item.ability_type       = cw.AbilityType(rec.ability_type)
-        item.serum_value        = int(rec.serum_value)
-        item.grid_w             = int(rec.grid_w)
-        item.grid_h             = int(rec.grid_h)
-        item.req_str            = rec.req_str
-        item.req_dex            = rec.req_dex
-        item.req_sci            = rec.req_sci
-        item.affix_count        = rec.affix_count
-        item.is_two_handed      = (rec.flags & 0x01) != 0
-        item.is_melee           = (rec.flags & 0x02) != 0
-        item.melee_damage       = rec.melee_damage
-        item.melee_range        = rec.melee_range
-        item.melee_spread       = rec.melee_spread
-        item.melee_cooldown_max = rec.melee_cooldown_max
-        for j in 0..<int(rec.affix_count) {
-            item.affixes[j] = cw.Affix{
-                type  = cw.AffixType(rec.affixes[j].affix_type),
-                value = rec.affixes[j].value,
-            }
-        }
-        cw.world_set_item(w, item_id, item)
-
-        rc: cw.RenderConfigComp
-        rc.name_len = rec.name_len
-        copy(rc.display_name[:], rec.name[:])
-        rc.icon_len = rec.icon_len
-        copy(rc.icon_name[:], rec.icon[:])
-        rc.desc_len = rec.desc_len
-        copy(rc.desc[:], rec.desc[:])
-        cw.world_set_render_config(w, item_id, rc)
 
         if rec.is_equipped == 1 {
             slot_idx := int(rec.equip_slot_idx)
@@ -329,6 +545,57 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
     }
 
     return true
+}
+
+@(private = "file")
+_load_spawn_saved_item :: proc(w: ^cw.World, rec: ^SavedItem) -> int {
+    item_id := cw.world_create_entity(w)
+    if item_id == cw.INVALID_ENTITY { return cw.INVALID_ENTITY }
+
+    item := cw.item_empty()
+    item.slot               = cw.EquipSlot(rec.slot)
+    item.rarity             = cw.ItemRarity(rec.rarity)
+    item.mutation_type      = cw.MutationType(rec.mutation_type)
+    item.ability_type       = cw.AbilityType(rec.ability_type)
+    item.serum_value        = int(rec.serum_value)
+    item.grid_w             = int(rec.grid_w)
+    item.grid_h             = int(rec.grid_h)
+    item.req_str            = rec.req_str
+    item.req_dex            = rec.req_dex
+    item.req_sci            = rec.req_sci
+    item.affix_count        = rec.affix_count
+    item.is_two_handed      = (rec.flags & 0x01) != 0
+    item.is_melee           = (rec.flags & 0x02) != 0
+    item.weapon_archetype   = cw.WeaponArchetype(rec.weapon_archetype)
+    item.melee_damage       = rec.melee_damage
+    item.melee_range        = rec.melee_range
+    item.melee_spread       = rec.melee_spread
+    item.melee_cooldown_max = rec.melee_cooldown_max
+    item.base_damage        = rec.base_damage
+    item.base_fire_rate     = rec.base_fire_rate
+    item.base_ammo_max      = rec.base_ammo_max
+    item.base_reload_time   = rec.base_reload_time
+    item.base_proj_speed    = rec.base_proj_speed
+    item.base_armor         = rec.base_armor
+    item.base_shield        = rec.base_shield
+    for j in 0..<int(rec.affix_count) {
+        item.affixes[j] = cw.Affix{
+            type  = cw.AffixType(rec.affixes[j].affix_type),
+            value = rec.affixes[j].value,
+        }
+    }
+    cw.world_set_item(w, item_id, item)
+
+    rc: cw.RenderConfigComp
+    rc.name_len = rec.name_len
+    copy(rc.display_name[:], rec.name[:])
+    rc.icon_len = rec.icon_len
+    copy(rc.icon_name[:], rec.icon[:])
+    rc.desc_len = rec.desc_len
+    copy(rc.desc[:], rec.desc[:])
+    cw.world_set_render_config(w, item_id, rc)
+
+    return item_id
 }
 
 @(private = "file")
@@ -348,10 +615,18 @@ _save_fill_item :: proc(rec: ^SavedItem, item: ^cw.ItemComp) {
     rec.melee_range        = item.melee_range
     rec.melee_spread       = item.melee_spread
     rec.melee_cooldown_max = item.melee_cooldown_max
+    rec.base_damage        = item.base_damage
+    rec.base_fire_rate     = item.base_fire_rate
+    rec.base_ammo_max      = item.base_ammo_max
+    rec.base_reload_time   = item.base_reload_time
+    rec.base_proj_speed    = item.base_proj_speed
+    rec.base_armor         = item.base_armor
+    rec.base_shield        = item.base_shield
     flags: u8
     if item.is_two_handed { flags |= 0x01 }
     if item.is_melee      { flags |= 0x02 }
-    rec.flags = flags
+    rec.flags            = flags
+    rec.weapon_archetype = u8(item.weapon_archetype)
     for i in 0..<int(item.affix_count) {
         rec.affixes[i] = SavedAffix{
             affix_type = u8(item.affixes[i].type),

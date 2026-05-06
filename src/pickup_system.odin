@@ -39,7 +39,7 @@ pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
     }
 
-    if g_playing_state == .Inventory || g_playing_state == .Shop { return }
+    if ui_has(.Inventory) || ui_has(.Shop) || ui_has(.Stash) { return }
 
     ground_ids := cw.world_query(w, cw.query_mask(.GroundItem, .Transform, .Item))
     defer delete(ground_ids)
@@ -88,6 +88,9 @@ pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if pid == w.player_id { play_sfx("pickup") }
                 continue
             }
+
+            // Skip auto-pickup if item rarity is below the current loot filter.
+            if item.rarity < g_loot_filter_rarity { continue }
 
             col, row, ok := backpack_find_free(inv, item)
             if !ok { continue }

@@ -137,7 +137,7 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
     .HeartCage = {
         name       = "Heart Cage",
         lore       = "A second heart grows outside the body. Feed it well.",
-        effect     = "An external heart (40% of your max HP) absorbs all incoming damage first. When destroyed, it regenerates after 15s.",
+        effect     = "An external heart (60% of your max HP) orbits you and absorbs all damage. Enemies target it instead of you. If the heart is destroyed, you die.",
         branch     = .Corpus,
         serum_cost = 6,
     },
@@ -283,17 +283,17 @@ mutation_can_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -
 mutation_init_components :: proc(w: ^cw.World, player_id: int, eid: int, mt: cw.MutationType) {
     switch mt {
     case .HeartCage:
-        heart_id := _spawn_heart_entity(w, player_id)
-        max_hp   := f32(50)
+        max_hp := f32(60)
         if cw.world_has_component(w, player_id, .Health) {
-            max_hp = cw.world_get_health(w, player_id).max * 0.4
+            max_hp = cw.world_get_health(w, player_id).max * 0.6
         }
+        heart_id := _spawn_heart_entity(w, player_id, max_hp)
+        // Stagger starting angle so each session feels different.
+        init_angle := f32(player_id % 7) * 0.9
         cw.world_set_mut_heart_cage(w, eid, cw.MutHeartCageComp{
-            heart_id      = heart_id,
-            heart_hp      = max_hp,
-            heart_max_hp  = max_hp,
-            respawn_timer = 0,
-            max_hp_pct    = 0.4,
+            heart_id    = heart_id,
+            max_hp_pct  = 0.6,
+            orbit_angle = init_angle,
         })
 
     case .ThornPact:
@@ -389,4 +389,66 @@ mutation_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bo
     mc.entities[mc.entity_count] = eid
     mc.entity_count += 1
     return true
+}
+
+// Cost in serums to wipe the slate clean.
+MUT_CLEAR_COST :: 3
+
+// mutation_clear_all destroys every active mutation entity, handles per-type
+// cleanup (HeartCage heart, CarrionCrown servants), and resets the container.
+// Returns true if cleared; false if the player can't afford it or has nothing.
+mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
+    if !cw.world_has_component(w, player_id, .MutationContainer) { return false }
+    mc := cw.world_get_mutation(w, player_id)
+    if mc.entity_count == 0       { return false }
+    if mc.serums < MUT_CLEAR_COST { return false }
+
+    mc.serums -= MUT_CLEAR_COST
+
+    // Snapshot IDs before any world mutations that could resize component arrays.
+    n    := mc.entity_count
+    eids : [cw.MAX_MUTATION_SLOTS]int
+    for i in 0..<n { eids[i] = mc.entities[i] }
+
+    for i in 0..<n {
+        eid := eids[i]
+        if !cw.world_is_valid(w, eid) { continue }
+
+        // HeartCage: remove the orbiting heart so it doesn't linger in the world.
+        if cw.world_has_component(w, eid, .MutHeartCage) {
+            hc := cw.world_get_mut_heart_cage(w, eid)
+            if cw.world_is_valid(w, hc.heart_id) {
+                cw.world_destroy_entity(w, hc.heart_id)
+            }
+        }
+
+        // CarrionCrown: destroy reanimated servants (they were enemy entities).
+        if cw.world_has_component(w, eid, .MutCarrionCrown) {
+            cc := cw.world_get_mut_carrion_crown(w, eid)
+            for si in 0..<cw.CARRION_MAX_SERVANTS {
+                sid := cc.servant_ids[si]
+                if sid == cw.INVALID_ENTITY         { continue }
+                if !cw.world_is_valid(w, sid)       { continue }
+                cw.world_destroy_entity(w, sid)
+            }
+        }
+
+        cw.world_destroy_entity(w, eid)
+    }
+
+    // Re-fetch pointer (prior destroys may have compacted arrays) and zero count.
+    mc = cw.world_get_mutation(w, player_id)
+    mc.entity_count = 0
+    return true
+}
+
+// mutation_name_to_type resolves a mutation template name (e.g. "mut_living_bomb")
+// to its MutationType enum value — used by spawn_from_def to apply mutations listed
+// in entity definitions.
+mutation_name_to_type :: proc(template_name: string) -> cw.MutationType {
+    for mt in cw.MutationType {
+        if mt == .None { continue }
+        if mutation_template_name(mt) == template_name { return mt }
+    }
+    return .None
 }

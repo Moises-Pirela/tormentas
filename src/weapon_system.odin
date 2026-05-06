@@ -7,23 +7,80 @@ package main
 //   1. Ticks down cooldowns and reload timers on all live weapon entities.
 //      When a reload timer expires the magazine is fully replenished.
 //   2. Ticks melee_cooldown on any melee weapon item in an equip slot.
-//   3. On R key: starts a reload if the weapon is not already reloading and
+//   3. Syncs the WeaponComp's base stats to the equipped item's archetype,
+//      so switching from a Pistol to a Rifle immediately changes fire rate,
+//      damage, ammo capacity, and projectile properties.
+//   4. On R key: starts a reload if the weapon is not already reloading and
 //      the magazine is not already full.
-//   4. On fire input:
+//   5. On fire input:
 //      a. If WeaponPrimary slot holds a melee item: spawn a MeleeArcComp
 //         centred on the shooter's facing angle; skip ranged fire.
 //      b. Otherwise: checks ammo, reloading state, and cooldown.
 //         - If ammo_max > 0 and ammo is empty: auto-starts reload instead.
-//         - If ranged + cooldown ready + not reloading: spawns a projectile,
-//           decrements ammo, resets cooldown, and auto-reloads if now empty.
+//         - If ranged + cooldown ready + not reloading: spawns projectiles.
+//           Shotgun archetype fires a pellet spread; Pistol and Rifle fire
+//           a single projectile.  Ammo decremented once per trigger pull.
 //
 // Pointer safety: all component data is snapshot-copied into locals before
 // world_create_entity is called, since that may resize the backing arrays.
-// The weapon pointer is re-fetched after the spawn for write-back.
+// The weapon pointer is re-fetched after all spawns for write-back.
 // =============================================================================
 
 import "core:math"
 import cw "clockwork"
+
+// ---------------------------------------------------------------------------
+// Per-archetype base weapon parameters.
+// Applied to the player's WeaponComp entity each frame so that equipping
+// a different weapon type takes effect immediately.
+// Melee archetypes get type=.Melee; their attack stats live on ItemComp.
+// ---------------------------------------------------------------------------
+
+@(private = "file")
+ArchetypeWeaponParams :: struct {
+    wep_type:         cw.WeaponType,
+    damage:           f32,
+    fire_rate:        f32,   // shots per second (cooldown = 1/fire_rate)
+    projectile_speed: f32,
+    projectile_life:  f32,
+    ammo_max:         int,   // 0 = unlimited
+    reload_time:      f32,
+}
+
+@(private = "file")
+ARCHETYPE_WEP_PARAMS := [cw.WeaponArchetype]ArchetypeWeaponParams{
+    // Ranged
+    .None    = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
+    .Pistol  = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
+    .Rifle   = { .Ranged, 50,  0.8, 720, 2.4,  5, 3.2 },
+    .Shotgun = { .Ranged, 22,  1.2, 380, 0.5,  6, 2.5 }, // per pellet
+    // Melee — ranged stats irrelevant; attack is driven by ItemComp fields
+    .Axe     = { .Melee,   0,  0,     0, 0,    0, 0   },
+    .Knife   = { .Melee,   0,  0,     0, 0,    0, 0   },
+    .Sword   = { .Melee,   0,  0,     0, 0,    0, 0   },
+}
+
+// archetype_pellets returns the projectile count and half-spread angle (rad)
+// for a single trigger pull.
+@(private = "file")
+archetype_pellets :: proc(a: cw.WeaponArchetype) -> (count: int, spread: f32) {
+    #partial switch a {
+    case .Shotgun: return 5, 0.30
+    }
+    return 1, 0
+}
+
+// equipped_primary_archetype returns the WeaponArchetype of the item currently
+// in the entity's WeaponPrimary equip slot, or .None if the slot is empty.
+@(private = "file")
+equipped_primary_archetype :: proc(w: ^cw.World, holder_id: int) -> cw.WeaponArchetype {
+    if !cw.world_has_component(w, holder_id, .Inventory) { return .None }
+    inv := cw.world_get_inventory(w, holder_id)
+    eid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
+    if eid == cw.INVALID_ENTITY                         { return .None }
+    if !cw.world_has_component(w, eid, .Item)           { return .None }
+    return cw.world_get_item(w, eid).weapon_archetype
+}
 
 weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if event != .Update { return }
@@ -73,7 +130,53 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         input := cw.world_get_input(w, shooter_id)^
 
         // ----------------------------------------------------------------
-        // 3a. Melee weapon override — if WeaponPrimary slot holds a melee
+        // 3a. Resolve equipped item archetype and sync WeaponComp base stats.
+        //     Only affects entities with Inventory (i.e. players, not AI).
+        //     AI weapon entities are set up by the spawn director and left alone.
+        // ----------------------------------------------------------------
+        archetype := equipped_primary_archetype(w, shooter_id)
+
+        equip_snap := cw.world_get_equipment(w, shooter_id)^
+        wid        := equip_snap.weapon_entity_id
+        if cw.world_is_valid(w, wid) && cw.world_has_component(w, wid, .Weapon) &&
+           cw.world_has_component(w, shooter_id, .Inventory) {
+            p  := ARCHETYPE_WEP_PARAMS[archetype]
+            // Override archetype defaults with per-item base stats when explicitly set.
+            {
+                inv  := cw.world_get_inventory(w, shooter_id)
+                peid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
+                if peid != cw.INVALID_ENTITY && cw.world_has_component(w, peid, .Item) {
+                    it := cw.world_get_item(w, peid)
+                    if it.base_damage > 0      { p.damage           = it.base_damage }
+                    if it.base_fire_rate > 0   { p.fire_rate        = it.base_fire_rate }
+                    if it.base_ammo_max > 0    { p.ammo_max         = int(it.base_ammo_max) }
+                    if it.base_reload_time > 0 { p.reload_time      = it.base_reload_time }
+                    if it.base_proj_speed > 0  { p.projectile_speed = it.base_proj_speed }
+                }
+            }
+            wp := cw.world_get_weapon_data(w, wid)
+            wp.type             = p.wep_type
+            wp.damage           = p.damage
+            wp.fire_rate        = p.fire_rate
+            wp.projectile_speed = p.projectile_speed
+            wp.projectile_life  = p.projectile_life
+            wp.reload_time      = p.reload_time
+            // Apply bonus ammo from equipped item affixes.
+            bonus_ammo_pct := f32(0)
+            if cw.world_has_component(w, shooter_id, .Stats) {
+                bonus_ammo_pct = cw.world_get_stats(w, shooter_id).bonus_ammo_pct
+            }
+            new_ammo_max := int(f32(p.ammo_max) * (1.0 + bonus_ammo_pct)) if p.ammo_max > 0 else 0
+            if new_ammo_max != wp.ammo_max {
+                wp.ammo_max = new_ammo_max
+                if new_ammo_max > 0 {
+                    wp.ammo_current = clamp(wp.ammo_current, 0, new_ammo_max)
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // 3b. Melee weapon override — if WeaponPrimary slot holds a melee
         //     item, LMB fires a melee arc and ranged fire is suppressed.
         // ----------------------------------------------------------------
         melee_handled := false
@@ -98,9 +201,16 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         if cw.world_has_component(w, shooter_id, .Collider) {
                             owner_faction = cw.world_get_collider(w, shooter_id).faction
                         }
-                        damage_mult: f32 = 1.0
+                        damage_mult:      f32 = 1.0
+                        melee_dmg_mult:   f32 = 1.0
+                        melee_range_mult: f32 = 1.0
+                        melee_speed_mult: f32 = 1.0
                         if cw.world_has_component(w, shooter_id, .Stats) {
-                            damage_mult = cw.world_get_stats(w, shooter_id).damage_mult
+                            st := cw.world_get_stats(w, shooter_id)
+                            damage_mult      = st.damage_mult
+                            melee_dmg_mult   = st.melee_damage_mult
+                            melee_range_mult = st.melee_range_mult
+                            melee_speed_mult = st.melee_speed_mult
                         }
 
                         play_sfx("melee_swing")
@@ -111,17 +221,18 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         cw.world_set_melee_arc(w, arc_id, cw.MeleeArcComp{
                             angle         = arc_angle,
                             arc_spread    = m_spread,
-                            radius        = m_range,
-                            damage        = m_dmg * damage_mult,
+                            radius        = m_range * melee_range_mult,
+                            damage        = m_dmg * damage_mult * melee_dmg_mult,
                             owner_id      = shooter_id,
                             owner_faction = owner_faction,
                             lifetime      = 0.18,
                         })
                         cw.world_set_self_destruct(w, arc_id, cw.SelfDestructComp{ timer = 0.18 })
 
-                        // Re-fetch item pointer after potential resize and reset cooldown
+                        // Re-fetch item pointer after potential resize and reset cooldown.
+                        // melee_speed_mult > 1 reduces effective cooldown.
                         mi_fresh := cw.world_get_item(w, melee_item_id)
-                        mi_fresh.melee_cooldown = m_cd_max
+                        mi_fresh.melee_cooldown = m_cd_max / melee_speed_mult
                     }
                 }
             }
@@ -129,10 +240,10 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if melee_handled { continue }
 
         // ----------------------------------------------------------------
-        // 3b. Ranged weapon fire
+        // 3c. Ranged weapon fire
         // ----------------------------------------------------------------
         equip := cw.world_get_equipment(w, shooter_id)^
-        wid   := equip.weapon_entity_id
+        wid    = equip.weapon_entity_id
         if !cw.world_is_valid(w, wid)               { continue }
         if !cw.world_has_component(w, wid, .Weapon) { continue }
 
@@ -175,6 +286,8 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             continue
         }
 
+        if ranged_blocked { continue }
+
         // Snapshot everything before world_create_entity may resize arrays
         wp_snap := wp^
         t_snap  := cw.world_get_transform(w, shooter_id)^
@@ -184,53 +297,70 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             owner_faction = cw.world_get_collider(w, shooter_id).faction
         }
 
-        pierce_rem:  i8  = 0
-        if ranged_blocked { continue }
+        pierce_rem := i8(0)
+        if cw.world_has_component(w, shooter_id, .Stats) {
+            pierce_rem = i8(clamp(cw.world_get_stats(w, shooter_id).bonus_pierce, 0, 10))
+        }
 
         // Timelock: root + projectile speed/damage mods
         if rof := player_get_root_on_fire(w, shooter_id); rof != nil {
             rof.timer = rof.duration
         }
 
-        dir := [3]f32{
-            math.cos(t_snap.rotation),
-            math.sin(t_snap.rotation),
-            0,
-        }
+        // Determine pellet count and angular spread from archetype.
+        pellet_count, pellet_spread := archetype_pellets(archetype)
 
         spawn_offset :: PLAYER_RADIUS + 6
-        origin := [3]f32{
-            t_snap.position[0] + dir[0] * spawn_offset,
-            t_snap.position[1] + dir[1] * spawn_offset,
-            0,
+
+        for p in 0..<pellet_count {
+            // Spread pellets evenly across the arc.  Single pellet → no offset.
+            angle_offset := f32(0)
+            if pellet_count > 1 {
+                t_ratio      := f32(p) / f32(pellet_count - 1)
+                angle_offset  = pellet_spread * (t_ratio - 0.5)
+            }
+            fire_angle := t_snap.rotation + angle_offset
+            dir := [3]f32{
+                math.cos(fire_angle),
+                math.sin(fire_angle),
+                0,
+            }
+            origin := [3]f32{
+                t_snap.position[0] + dir[0] * spawn_offset,
+                t_snap.position[1] + dir[1] * spawn_offset,
+                0,
+            }
+
+            proj_id := cw.world_create_entity(w)
+            cw.world_set_transform(w, proj_id, cw.TransformComp{
+                position = origin,
+                rotation = fire_angle,
+            })
+            cw.world_set_projectile(w, proj_id, cw.ProjectileComp{
+                direction        = dir,
+                speed            = wp_snap.projectile_speed * projectile_speed_mult,
+                lifetime         = wp_snap.projectile_life,
+                max_lifetime     = wp_snap.projectile_life,
+                damage           = wp_snap.damage * damage_mult,
+                owner_id         = shooter_id,
+                owner_faction    = owner_faction,
+                visual           = .Standard if damage_mult > 1.0 else .Smoke,
+                pierce_remaining = pierce_rem,
+            })
+            cw.world_set_self_destruct(w, proj_id, cw.SelfDestructComp{
+                timer = wp_snap.projectile_life,
+            })
+            cw.world_set_projectile_tag(w, proj_id)
         }
 
-        proj_id := cw.world_create_entity(w)
-        cw.world_set_transform(w, proj_id, cw.TransformComp{
-            position = origin,
-            rotation = t_snap.rotation,
-        })
-        cw.world_set_projectile(w, proj_id, cw.ProjectileComp{
-            direction        = dir,
-            speed            = wp_snap.projectile_speed * projectile_speed_mult,
-            lifetime         = wp_snap.projectile_life,
-            max_lifetime     = wp_snap.projectile_life,
-            damage           = wp_snap.damage * damage_mult,
-            owner_id         = shooter_id,
-            owner_faction    = owner_faction,
-            visual           = .Standard if damage_mult > 1.0 else .Smoke,
-            pierce_remaining = pierce_rem,
-        })
-        cw.world_set_self_destruct(w, proj_id, cw.SelfDestructComp{
-            timer = wp_snap.projectile_life,
-        })
-        cw.world_set_projectile_tag(w, proj_id)
         play_sfx("shoot")
 
+        // Re-fetch weapon after all spawns (backing arrays may have been resized).
         wfresh := cw.world_get_weapon_data(w, wid)
         if wp_snap.fire_rate > 0 {
             wfresh.cooldown = 1.0 / (wp_snap.fire_rate * fire_rate_mult)
         }
+        // Ammo decrements once per trigger pull regardless of pellet count.
         if wp_snap.ammo_max > 0 {
             wfresh.ammo_current -= 1
             if wfresh.ammo_current <= 0 {

@@ -36,6 +36,23 @@ DIRECTOR_ROSTER := [?]DirectorEnemy{
     { "enemy_sniper", 4 },
 }
 
+// Mutations the director can randomly assign to spawned enemies.
+// Only mutations whose runtime effects are faction-aware (work correctly for enemies).
+ENEMY_MUTATION_POOL :: [?]cw.MutationType{
+    .LivingBomb,   // on-death AoE explosion — damages nearby players
+    .ToxicFlesh,   // proximity poison aura  — targets players when owner is enemy
+    .ThornPact,    // reflects 40% of incoming damage back to the attacker
+    .BlackLung,    // pressure-buildup aura  — targets players when owner is enemy
+}
+
+// Probability that a newly spawned enemy receives a mutation, per raid level.
+ENEMY_MUTATION_CHANCE :: [MAX_RAID_LEVELS + 1]f32{
+    0 = 0.00,  // level 0 — unused
+    1 = 0.00,  // level 1 — clean intro, no random mutations
+    2 = 0.10,  // level 2 — 1-in-10 enemies is mutated
+    3 = 0.22,  // level 3 — ~1-in-4 enemies is mutated
+}
+
 SpawnDirector :: struct {
     budget:       f32,
     spawn_cd:     f32,
@@ -66,6 +83,43 @@ spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     _director_tick_spawns(w, cfg, dt)
 }
 
+// _director_mutate_enemy randomly assigns one mutation from ENEMY_MUTATION_POOL
+// to a freshly spawned enemy based on the current raid level.
+// The RNG is seeded by (tick XOR id) so all peers in a lockstep session agree.
+@(private = "file")
+_director_mutate_enemy :: proc(w: ^cw.World, id: int) {
+    if id == cw.INVALID_ENTITY { return }
+
+    idx     := clamp(g_current_raid_level, 0, MAX_RAID_LEVELS)
+    chances := ENEMY_MUTATION_CHANCE   // snapshot into addressable local
+    chance  := chances[idx]
+    if chance <= 0 { return }
+
+    rng_state := rand.create(u64(w.tick) ~ (u64(id) * 0x9e3779b97f4a7c15))
+    context.random_generator = rand.default_random_generator(&rng_state)
+
+    if rand.float32() > chance { return }
+
+    pool := ENEMY_MUTATION_POOL        // snapshot into addressable local
+    mt   := pool[rand.int_max(len(pool))]
+
+    // Skip if the entity already carries this mutation (e.g. boss has LivingBomb from JSON).
+    if cw.world_has_component(w, id, .MutationContainer) {
+        mc := cw.world_get_mutation(w, id)
+        for i in 0..<mc.entity_count {
+            meid := mc.entities[i]
+            if !cw.world_is_valid(w, meid)             { continue }
+            if !cw.world_has_component(w, meid, .Mut)  { continue }
+            if cw.world_get_mut(w, meid).type_id == mt { return }
+        }
+    }
+
+    if !cw.world_has_component(w, id, .MutationContainer) {
+        cw.world_set_mutation(w, id, cw.mutation_container_empty())
+    }
+    mutation_restore_direct(w, id, mt)
+}
+
 @(private = "file")
 _director_tick_boss :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
     if !cfg.has_boss || g_director.boss_spawned { return }
@@ -92,13 +146,7 @@ _director_tick_boss :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
 _director_tick_spawns :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
     if g_director.spawn_cd > 0 {
         g_director.spawn_cd -= dt
-        return
     }
-
-    alive_ids := cw.world_query(w, cw.query_mask(.AIAgent))
-    alive     := len(alive_ids)
-    delete(alive_ids)
-    if alive >= cfg.max_alive { return }
 
     elapsed_frac := 1.0 - clamp(g_raid_timer / RAID_TIME, 0, 1)
     pressure     := f32(1.0) + elapsed_frac * 2.5
@@ -106,6 +154,13 @@ _director_tick_spawns :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
         g_director.budget + cfg.budget_rate * pressure * dt,
         DIRECTOR_BUDGET_CAP,
     )
+
+    if g_director.spawn_cd > 0 { return }
+
+    alive_ids := cw.world_query(w, cw.query_mask(.AIAgent))
+    alive     := len(alive_ids)
+    delete(alive_ids)
+    if alive >= cfg.max_alive { return }
 
     rng_state := rand.create(u64(w.tick) ~ 0xdeadbeef12345678)
     context.random_generator = rand.default_random_generator(&rng_state)
@@ -135,8 +190,6 @@ _director_tick_spawns :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
 
 @(private = "file")
 _director_pick_anchor :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
-    if len(g_level_data.spawns) == 0 { return 0, 0, false }
-
     player_pos: [2]f32
     pid := w.player_id
     if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Transform) {
@@ -144,25 +197,57 @@ _director_pick_anchor :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
         player_pos = {p[0], p[1]}
     }
 
-    n       := len(g_level_data.spawns)
-    indices := make([]int, n, context.temp_allocator)
-    for i in 0..<n { indices[i] = i }
-    for i := n - 1; i > 0; i -= 1 {
-        j := rand.int_max(i + 1)
-        indices[i], indices[j] = indices[j], indices[i]
+    min_d2 := DIRECTOR_MIN_DIST * DIRECTOR_MIN_DIST
+
+    if len(g_level_data.spawns) > 0 {
+        n       := len(g_level_data.spawns)
+        indices := make([]int, n, context.temp_allocator)
+        for i in 0..<n { indices[i] = i }
+        for i := n - 1; i > 0; i -= 1 {
+            j := rand.int_max(i + 1)
+            indices[i], indices[j] = indices[j], indices[i]
+        }
+
+        best_x, best_y := f32(0), f32(0)
+        best_d2 := f32(-1)
+
+        for idx in indices {
+            sp  := g_level_data.spawns[idx]
+            spx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
+            spy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
+            ddx := spx - player_pos[0]
+            ddy := spy - player_pos[1]
+            d2  := ddx*ddx + ddy*ddy
+            if d2 >= min_d2 {
+                return spx, spy, true
+            }
+            if d2 > best_d2 {
+                best_d2 = d2
+                best_x  = spx
+                best_y  = spy
+            }
+        }
+
+        return best_x, best_y, best_d2 >= 0
     }
 
-    for idx in indices {
-        sp  := g_level_data.spawns[idx]
-        spx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
-        spy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ddx := spx - player_pos[0]
-        ddy := spy - player_pos[1]
-        if ddx*ddx + ddy*ddy >= DIRECTOR_MIN_DIST * DIRECTOR_MIN_DIST {
-            return spx, spy, true
+    candidates: [dynamic][2]int
+    defer delete(candidates)
+    for pos, tt in g_tilemap {
+        if tt != .Floor { continue }
+        cx  := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
+        cy  := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
+        ddx := cx - player_pos[0]
+        ddy := cy - player_pos[1]
+        if ddx*ddx + ddy*ddy >= min_d2 {
+            append(&candidates, pos)
         }
     }
-    return 0, 0, false
+    if len(candidates) == 0 { return 0, 0, false }
+    chosen := candidates[rand.int_max(len(candidates))]
+    return f32(chosen[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5,
+           f32(chosen[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5,
+           true
 }
 
 @(private = "file")
@@ -175,6 +260,7 @@ _director_spawn_boss :: proc(w: ^cw.World) {
 
     cw.world_get_transform(w, id).position = {wx, wy, 0}
     g_boss_id = id
+    _director_mutate_enemy(w, id)
 
     camera_shake(1.0)
     play_sfx("levelup")
@@ -247,5 +333,6 @@ _director_spawn_enemy :: proc(w: ^cw.World, name: string, wx, wy: f32) -> int {
     if id != cw.INVALID_ENTITY && cw.world_has_component(w, id, .Transform) {
         cw.world_get_transform(w, id).position = {wx, wy, 0}
     }
+    _director_mutate_enemy(w, id)
     return id
 }

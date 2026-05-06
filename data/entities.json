@@ -4,7 +4,7 @@
         "render":    { "name": "Wanderer", "sprite": "player_wanderer", "sprite_scale": 1.0, "layer": "sprite", "world_size": 70, "show_dir_tip": true },
         "transform": { "position": [0, 0, 0], "rotation": 0 },
         "velocity":  {},
-        "health":    { "current": 80, "max": 100, "corruption": 0, "energy": 60, "max_energy": 100 },
+        "health":    { "current": 100, "max": 100, "corruption": 0, "energy": 100, "max_energy": 100 },
         "input":     {},
         "collider":  { "radius": 16, "faction": 0 },
         "dodge":     { "duration": 0.18, "speed": 490, "cooldown": 0.72 }
@@ -149,6 +149,13 @@
         "npc":       { "npc_type": "mutation_workbench", "interact_radius": 84 }
     },
     {
+        "name": "npc_stash",
+        "render":    { "name": "Traveler's Stash", "sprite": "mutation_workbench", "sprite_scale": 0.95, "layer": "sprite", "world_size": 70 },
+        "transform": { "position": [120, 110, 0], "rotation": 0 },
+        "collider":  { "radius": 18, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "stash", "interact_radius": 84 }
+    },
+    {
         "name": "mut_glass_cannon",
         "mut_damage_mult": { "mult": 5.0 },
         "mut_lock_hp_to_one": {}
@@ -205,7 +212,12 @@
     },
     {
         "name": "mut_toxic_flesh",
-        "mut_proximity_damage": { "radius": 90, "dps": 20, "self_fraction": 0.5 }
+        "mut_proximity_damage": {
+            "radius": 90,
+            "effect_type": "poison", "effect_strength": 0.05, "effect_duration": 1.5,
+            "light_r": 100, "light_g": 200, "light_b": 80,
+            "light_radius": 90, "light_intensity": 0.55
+        }
     },
     {
         "name": "mut_parasite_king",
@@ -249,6 +261,7 @@
             "cooldown":     1.6,
             "speed":        68,
             "damage":       60
-        }
+        },
+        "mutations": ["mut_living_bomb"]
     }
 ]

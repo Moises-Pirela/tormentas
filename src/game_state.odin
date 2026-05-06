@@ -9,18 +9,14 @@ AppState :: enum {
     Playing,
 }
 
+// World-level substates only.  UI overlay panels are managed by UIManager
+// (g_ui) in ui_manager.odin — see UIPanel enum there.
 PlayingSubstate :: enum {
-    Gameplay,       
-    Inventory,      
-    Stats,          
-    MutationTree,   
-    Shop,           
-    PauseMenu,      
-    Editor,         
-    Hub,            
-    DeathScreen,    
-    ExtractScreen,  
-    LevelSelect,    
+    Gameplay,
+    Hub,
+    Editor,
+    DeathScreen,
+    ExtractScreen,
 }
 
 g_playing_state: PlayingSubstate
@@ -30,28 +26,46 @@ g_hub_active: bool
 g_current_raid_level: int
 
 
+STASH_MAX_ITEMS :: 64
+STASH_COLS :: 12
+STASH_ROWS :: 8
+
 Stash :: struct {
     gold:   int,
     serums: int,
-    // TODO: item list
+    item_count: int,
+    item_ids:   [STASH_MAX_ITEMS]int,
+    grid:       [STASH_COLS * STASH_ROWS]int,
 }
 
 g_stash: Stash
 
+stash_make_empty :: proc() -> Stash {
+    s := Stash{}
+    for &id in s.item_ids { id = cw.INVALID_ENTITY }
+    for &cell in s.grid { cell = cw.INVALID_ENTITY }
+    return s
+}
+
 raid_result_gold:   int
 raid_result_serums: int
+
+// g_raid_serums_start is set when a raid begins (after load_player restores mc.serums).
+// on_player_extract subtracts it to compute "serums earned this raid" for the extract screen.
+g_raid_serums_start: int
 
 g_paused: bool
 
 set_playing_state :: proc(next: PlayingSubstate) {
-    if next != .Shop { g_shop_npc_id = cw.INVALID_ENTITY }
     g_playing_state = next
     g_editor_mode   = (next == .Editor)
-    g_paused        = (next == .PauseMenu)
 }
 
+// Returns true when the local player's keyboard/gamepad input should be
+// forwarded to the sim.  False while any UI panel is visible (mode == .UI).
 playing_collects_input :: proc() -> bool {
-    return g_playing_state == .Gameplay || g_playing_state == .Hub
+    return (g_playing_state == .Gameplay || g_playing_state == .Hub) &&
+           input_is_gameplay()
 }
 
 g_app_state: AppState = .MainMenu
@@ -66,6 +80,12 @@ g_player_names: [4][PLAYER_NAME_MAX + 1]u8
 
 g_disconnect_msg_timer: f32
 DISCONNECT_MSG_DURATION :: f32(4.0)
+
+g_should_exit: bool
+
+// Loot filter — items below this rarity threshold are hidden and not auto-picked up.
+// Hold ALT to temporarily show all items regardless of the filter.
+g_loot_filter_rarity: cw.ItemRarity = .Normal
 
 
 FADE_SPEED :: f32(2.5)

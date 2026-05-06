@@ -57,15 +57,15 @@ g_dmgnums: [MAX_DMGNUM]DmgNum
 
 push_dmg_number :: proc(x, y, value: f32, is_enemy: bool, is_crit: bool = false) {
     if value <= 0 { return }
-    // Find an expired slot; fall back to the one closest to expiry.
     best := 0
     for i in 1..<MAX_DMGNUM {
         if g_dmgnums[i].lifetime <= 0 { best = i; break }
         if g_dmgnums[i].lifetime < g_dmgnums[best].lifetime { best = i }
     }
+    iso := world_to_iso_xy(x, y)
     g_dmgnums[best] = DmgNum{
-        x        = x,
-        y        = y,
+        x        = iso.x,
+        y        = iso.y,
         value    = value,
         lifetime = DMGNUM_LIFE,
         is_enemy = is_enemy,
@@ -202,6 +202,41 @@ draw_extraction_zones :: proc(w: ^cw.World) {
     }
 }
 
+// draw_loot_filter_hud shows the current loot filter level in the top-left corner.
+// Only visible when the filter is active (non-Normal). Hold ALT to see filtered items.
+draw_loot_filter_hud :: proc() {
+    if g_loot_filter_rarity == .Normal { return }
+
+    filter_labels := [cw.ItemRarity]cstring{
+        .Normal    = "ALL",
+        .Rare      = "RARE+",
+        .Epic      = "EPIC+",
+        .Legendary = "LEGENDARY+",
+        .Unique    = "UNIQUE",
+    }
+    lbl := filter_labels[g_loot_filter_rarity]
+
+    sw  := f32(rl.GetScreenWidth())
+    _   = sw
+    fs  := uis(9)
+    prefix    := cstring("LOOT FILTER  ")
+    psz       := rl.MeasureTextEx(g_font, prefix, fs, 0.5)
+    lsz       := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
+    total_w   := psz.x + lsz.x + uis(16)
+    total_h   := fs + uis(10)
+    bx        := i32(uis(12))
+    by        := i32(uis(12))
+
+    rl.DrawRectangle(bx, by, i32(total_w), i32(total_h), rl.Color{ 8, 6, 4, 210 })
+    rl.DrawRectangleLinesEx({ f32(bx), f32(by), total_w, total_h }, 1, COL_RULE)
+    rl.DrawTextEx(g_font, prefix,
+        { f32(bx) + uis(8), f32(by) + uis(5) }, fs, 0.5, COL_MUTED)
+    rc := rarity_color(g_loot_filter_rarity)
+    rl.DrawTextEx(g_font, lbl,
+        { f32(bx) + uis(8) + psz.x, f32(by) + uis(5) }, fs, 0.5,
+        rl.Color{ rc.r, rc.g, rc.b, 230 })
+}
+
 draw_raid_timer :: proc() {
     if g_raid_timer <= 0 { return }
 
@@ -273,25 +308,75 @@ draw_boss_warning :: proc() {
         cd_fs, 0.5, rl.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
 }
 
-draw_boss_hud :: proc(w: ^cw.World) {
-    if g_boss_id == cw.INVALID_ENTITY { return }
-    if !cw.world_is_valid(w, g_boss_id) {
-        g_boss_id = cw.INVALID_ENTITY
+// g_inspected_entity is set each frame by update_entity_hover to whichever
+// non-player entity the mouse is currently over (INVALID_ENTITY if none).
+g_inspected_entity: int = cw.INVALID_ENTITY
+
+// update_entity_hover hit-tests non-player entities in world space and stores
+// the nearest one under the cursor in g_inspected_entity.
+// Call once per rendered frame, before draw_entity_inspect_hud.
+update_entity_hover :: proc(w: ^cw.World) {
+    if g_playing_state != .Gameplay || ui_any() {
+        g_inspected_entity = cw.INVALID_ENTITY
         return
     }
-    if !cw.world_has_component(w, g_boss_id, .Health) { return }
 
-    h    := cw.world_get_health(w, g_boss_id)
+    mp         := screen_to_world_cartesian(rl.GetMousePosition())
+    best_dist2 := f32(1e30)
+    g_inspected_entity = cw.INVALID_ENTITY
+
+    ids := cw.world_query(w, cw.query_mask(.Transform, .Health), context.temp_allocator)
+    for id in ids {
+        if is_player_entity(w, id) { continue }
+        if is_fog_hidden(w, id)    { continue }
+
+        tr  := cw.world_get_transform(w, id)
+        dx  := tr.position[0] - mp.x
+        dy  := tr.position[1] - mp.y
+        d2  := dx*dx + dy*dy
+
+        hit_r := f32(28)
+        if cw.world_has_component(w, id, .Collider) {
+            hit_r = max(cw.world_get_collider(w, id).radius, 20)
+        }
+        if d2 < hit_r * hit_r && d2 < best_dist2 {
+            best_dist2         = d2
+            g_inspected_entity = id
+        }
+    }
+}
+
+// draw_entity_inspect_hud draws a centred top-of-screen panel for the hovered
+// entity (if any), falling back to the boss when nothing is hovered.
+// Replaces the old draw_boss_hud; call it in the same place.
+draw_entity_inspect_hud :: proc(w: ^cw.World) {
+    // Stale boss cleanup (mirrors old draw_boss_hud).
+    if g_boss_id != cw.INVALID_ENTITY && !cw.world_is_valid(w, g_boss_id) {
+        g_boss_id = cw.INVALID_ENTITY
+    }
+
+    // Priority: hovered entity → boss → nothing.
+    show_id := g_inspected_entity
+    if show_id == cw.INVALID_ENTITY || !cw.world_is_valid(w, show_id) {
+        show_id = g_boss_id
+    }
+    if show_id == cw.INVALID_ENTITY                  { return }
+    if !cw.world_is_valid(w, show_id)                { return }
+    if !cw.world_has_component(w, show_id, .Health)  { return }
+
+    h    := cw.world_get_health(w, show_id)
+    if h.max <= 0 { return }
     frac := clamp(h.current / h.max, 0, 1)
 
-    sw    := f32(rl.GetScreenWidth())
-    bw    := sw * 0.42
-    bh    := uis(14)
-    bx    := sw * 0.5 - bw * 0.5
-    by    := uis(14)
+    sw := f32(rl.GetScreenWidth())
+    bw := sw * 0.42
+    bh := uis(14)
+    bx := sw * 0.5 - bw * 0.5
+    by := uis(14)
 
-    rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, rl.Color{ 8, 4, 4, 220 })
-    rl.DrawRectangleRec({ bx, by, bw, bh }, rl.Color{ 45, 12, 12, 200 })
+    // ── Background + fill ─────────────────────────────────────────────────────
+    rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, rl.Color{  8,  4,  4, 220 })
+    rl.DrawRectangleRec({ bx, by, bw, bh },                  rl.Color{ 45, 12, 12, 200 })
     if frac > 0 {
         fill_col: rl.Color
         if frac > 0.5 {
@@ -306,12 +391,79 @@ draw_boss_hud :: proc(w: ^cw.World) {
     }
     rl.DrawRectangleLinesEx({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, rl.Color{ 140, 40, 40, 200 })
 
-    name_lbl := cstring("EL VERDUGO")
-    name_fs  := uis(9)
-    name_sz  := rl.MeasureTextEx(g_font, name_lbl, name_fs, 0.5)
+    // ── HP numbers (right-aligned inside bar) ─────────────────────────────────
+    hp_str := rl.TextFormat("%d / %d", i32(h.current), i32(h.max))
+    hp_fs  := uis(8)
+    hp_sz  := rl.MeasureTextEx(g_font, hp_str, hp_fs, 0.4)
+    rl.DrawTextEx(g_font, hp_str,
+        { bx + bw - hp_sz.x - uis(3), by + (bh - hp_fs) * 0.5 },
+        hp_fs, 0.4, rl.Color{ 220, 200, 200, 130 })
+
+    // ── Entity name ───────────────────────────────────────────────────────────
+    name_lbl := cstring("ENEMY")
+    if cw.world_has_component(w, show_id, .RenderConfig) {
+        rc := cw.world_get_render_config(w, show_id)
+        cs := cw.render_config_name_cstr(rc)
+        if cs != nil && len(cs) > 0 { name_lbl = cs }
+    }
+    name_fs := uis(9)
+    name_sz := rl.MeasureTextEx(g_font, name_lbl, name_fs, 0.5)
+    name_y  := by + bh + uis(3)
     rl.DrawTextEx(g_font, name_lbl,
-        { sw * 0.5 - name_sz.x * 0.5, by + bh + uis(3) },
+        { sw * 0.5 - name_sz.x * 0.5, name_y },
         name_fs, 0.5, rl.Color{ 200, 120, 120, 200 })
+
+    // ── Mutation badges (centered row below name) ─────────────────────────────
+    if cw.world_has_component(w, show_id, .MutationContainer) {
+        mc := cw.world_get_mutation(w, show_id)
+
+        // First pass — collect valid mutations and measure total row width.
+        badge_fs  := uis(8)
+        dot_r     := f32(3.5)
+        gap       := uis(12)
+        b_mt      : [cw.MAX_MUTATION_SLOTS]cw.MutationType
+        b_name    : [cw.MAX_MUTATION_SLOTS]cstring
+        b_sz      : [cw.MAX_MUTATION_SLOTS]rl.Vector2
+        n_b       := 0
+        total_w   := f32(0)
+
+        for i in 0..<mc.entity_count {
+            meid := mc.entities[i]
+            if !cw.world_is_valid(w, meid)            { continue }
+            if !cw.world_has_component(w, meid, .Mut) { continue }
+            mt   := cw.world_get_mut(w, meid).type_id
+            name := mutation_short_name(mt)
+            sz   := rl.MeasureTextEx(g_font, name, badge_fs, 0.4)
+            b_mt[n_b]   = mt
+            b_name[n_b] = name
+            b_sz[n_b]   = sz
+            item_w      := dot_r * 2 + uis(5) + sz.x
+            total_w     += item_w + (gap if n_b > 0 else 0)
+            n_b         += 1
+        }
+
+        if n_b > 0 {
+            badge_y  := name_y + name_fs + uis(4)
+            x        := sw * 0.5 - total_w * 0.5
+
+            for i in 0..<n_b {
+                col := mutation_visual_color(b_mt[i])
+                rl.DrawCircleV(
+                    { x + dot_r, badge_y + badge_fs * 0.5 },
+                    dot_r, rl.Color{ col.r, col.g, col.b, 230 })
+                rl.DrawTextEx(g_font, b_name[i],
+                    { x + dot_r * 2 + uis(5), badge_y },
+                    badge_fs, 0.4, rl.Color{ col.r, col.g, col.b, 195 })
+                item_w := dot_r * 2 + uis(5) + b_sz[i].x
+                x += item_w + gap
+            }
+        }
+    }
+}
+
+// draw_boss_hud kept as a thin wrapper so any call sites outside main.odin still compile.
+draw_boss_hud :: proc(w: ^cw.World) {
+    draw_entity_inspect_hud(w)
 }
 
 @(private = "file")
@@ -531,6 +683,7 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
             switch npc.npc_type {
             case .Shopkeeper:        info.world_size = 64
             case .MutationWorkbench: info.world_size = 78
+            case .Stash:             info.world_size = 70
             }
         }
     }
@@ -543,6 +696,7 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
             switch npc.npc_type {
             case .Shopkeeper:        info.sprite_key = cstring("npc_shopkeeper")
             case .MutationWorkbench: info.sprite_key = cstring("mutation_workbench")
+            case .Stash:             info.sprite_key = cstring("mutation_workbench")
             }
         } else if cw.world_has_component(w, id, .AIAgent) {
             ai := cw.world_get_ai(w, id)
@@ -618,13 +772,16 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
     pos := rl.Vector2{ tr.position[0], tr.position[1] }
 
     if cw.world_has_component(w, id, .GroundItem) && cw.world_has_component(w, id, .Item) {
-        t := f32(rl.GetTime())
-        pulse := (math.sin(t * 3.2) + 1) * 0.5
         item := cw.world_get_item(w, id)
-        rc := rarity_color(item.rarity)
+        // Hide circles for filtered-out items (ALT overrides).
+        alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
+        if !alt_held && item.rarity < g_loot_filter_rarity { return }
+        t     := f32(rl.GetTime())
+        pulse := (math.sin(t * 3.2) + 1) * 0.5
+        rc    := rarity_color(item.rarity)
         draw_world_circle(pos, 12, rl.Color{ rc.r, rc.g, rc.b, u8(70 + pulse * 90) })
-        draw_world_circle(pos, 6, rl.Color{ rc.r, rc.g, rc.b, u8(170 + pulse * 85) })
-        draw_world_circle(pos, 2, rl.Color{ 255, 255, 255, 200 })
+        draw_world_circle(pos, 6,  rl.Color{ rc.r, rc.g, rc.b, u8(170 + pulse * 85) })
+        draw_world_circle(pos, 2,  rl.Color{ 255, 255, 255, 200 })
         return
     }
 
@@ -652,6 +809,57 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
         draw_iso_arc(pos, arc.radius - 2, arc.angle, arc.arc_spread, 5, rl.Color{ 215, 90, 20, u8(clamp(fade, 0, 1) * 210) })
         draw_iso_arc(pos, arc.radius, arc.angle, arc.arc_spread, 2, rl.Color{ 255, 165, 60, u8(clamp(fade, 0, 1) * 255) })
         return
+    }
+}
+
+// draw_ground_item_labels draws floating item names above every visible ground item.
+// Must be called inside BeginMode2D so world_to_iso_v maps correctly.
+// Called in the final screen-space pass (after lighting composites) so labels are
+// unaffected by fog/shadow shaders.
+draw_ground_item_labels :: proc(w: ^cw.World) {
+    ids := cw.world_query(w, cw.query_mask(.GroundItem, .Item, .Transform),
+        context.temp_allocator)
+
+    alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
+    t        := f32(rl.GetTime())
+
+    for id in ids {
+        if is_fog_hidden(w, id)                             { continue }
+        if !cw.world_has_component(w, id, .RenderConfig)   { continue }
+
+        item := cw.world_get_item(w, id)
+
+        // Respect loot filter (ALT reveals everything).
+        if !alt_held && item.rarity < g_loot_filter_rarity { continue }
+
+        tr  := cw.world_get_transform(w, id)
+        pos := rl.Vector2{ tr.position[0], tr.position[1] }
+        iso := world_to_iso_v(pos)
+
+        rcc  := cw.world_get_render_config(w, id)
+        name := cw.render_config_name_cstr(rcc)
+        if len(name) == 0 { continue }
+
+        rc    := rarity_color(item.rarity)
+        pulse := (math.sin(t * 3.2 + f32(id) * 0.37) + 1) * 0.5
+
+        nfs  := uis(9)
+        nsz  := rl.MeasureTextEx(g_font, name, nfs, 0.4)
+        name_a := u8(160 + pulse * 95)
+        rl.DrawTextEx(g_font, name,
+            { iso.x - nsz.x * 0.5, iso.y - uis(20) - nsz.y },
+            nfs, 0.4, rl.Color{ rc.r, rc.g, rc.b, name_a })
+
+        // Ability items get an ACTIVE / PASSIVE tag above the name.
+        if item.ability_type != .None {
+            def := ABILITY_DEFS[item.ability_type]
+            tag := cstring("[PASSIVE]") if def.is_passive else cstring("[ACTIVE]")
+            tfs := uis(8)
+            tsz := rl.MeasureTextEx(g_font, tag, tfs, 0.4)
+            rl.DrawTextEx(g_font, tag,
+                { iso.x - tsz.x * 0.5, iso.y - uis(20) - nsz.y - tfs - uis(1) },
+                tfs, 0.4, rl.Color{ 200, 170, 100, u8(130 + pulse * 60) })
+        }
     }
 }
 
@@ -707,6 +915,47 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
         }
     }
 
+    // ── Enemy mutation overlay ─────────────────────────────────────────────────
+    // Badge dots below the HP bar + mutation name label above it.
+    // Only for non-player entities that carry at least one mutation.
+    if !is_player && cw.world_has_component(w, id, .MutationContainer) {
+        mc := cw.world_get_mutation(w, id)
+        if mc.entity_count > 0 {
+            iso   := world_to_iso_v(pos)
+            bar_w := base_size * 0.65
+
+            // Name label (first mutation only, centred above the HP bar).
+            label_fs := f32(9)
+            for i in 0..<mc.entity_count {
+                meid := mc.entities[i]
+                if !cw.world_is_valid(w, meid)            { continue }
+                if !cw.world_has_component(w, meid, .Mut) { continue }
+                mt   := cw.world_get_mut(w, meid).type_id
+                col  := mutation_visual_color(mt)
+                name := mutation_short_name(mt)
+                lsz  := rl.MeasureTextEx(g_font, name, label_fs, 0.4)
+                rl.DrawTextEx(g_font, name,
+                    { iso.x - lsz.x * 0.5, iso.y - sprite_top - 14 },
+                    label_fs, 0.4, rl.Color{ col.r, col.g, col.b, 175 })
+                break  // show first mutation name only; dots below cover the rest
+            }
+
+            // Coloured dot per mutation, left-aligned beneath the HP bar.
+            dot_x0 := iso.x - bar_w * 0.5 + 3
+            dot_y  := iso.y - sprite_top + 3
+            n      := 0
+            for i in 0..<mc.entity_count {
+                meid := mc.entities[i]
+                if !cw.world_is_valid(w, meid)            { continue }
+                if !cw.world_has_component(w, meid, .Mut) { continue }
+                mt  := cw.world_get_mut(w, meid).type_id
+                col := mutation_visual_color(mt)
+                rl.DrawCircleV({ dot_x0 + f32(n) * 7, dot_y }, 2.5, col)
+                n += 1
+            }
+        }
+    }
+
     if is_player {
         name_str: cstring
         if g_player_names[slot][0] != 0 {
@@ -732,37 +981,43 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
                 if !cw.world_has_component(w, hmeid, .MutHeartCage) { continue }
                 hc    := cw.world_get_mut_heart_cage(w, hmeid)
                 t_now := f32(rl.GetTime())
-                hrad  := f32(7.0)
+                hrad  := f32(12.0)   // larger, more visible heart
 
-                if hc.heart_hp > 0 {
-                    hworld: rl.Vector2
-                    if cw.world_is_valid(w, hc.heart_id) &&
-                       cw.world_has_component(w, hc.heart_id, .Transform) {
-                        ht     := cw.world_get_transform(w, hc.heart_id)
-                        hworld  = { ht.position[0], ht.position[1] }
-                    } else {
-                        hworld = { pos.x + 24, pos.y }
-                    }
+                // Authoritative world position is the orbit entity; fall back
+                // to analytic orbit if entity was somehow destroyed.
+                hworld: rl.Vector2
+                if cw.world_is_valid(w, hc.heart_id) &&
+                   cw.world_has_component(w, hc.heart_id, .Transform) {
+                    ht    := cw.world_get_transform(w, hc.heart_id)
+                    hworld = { ht.position[0], ht.position[1] }
+                } else {
+                    r      := cw.HEART_CAGE_ORBIT_RADIUS
+                    hworld  = { pos.x + math.cos(hc.orbit_angle) * r,
+                                 pos.y + math.sin(hc.orbit_angle) * r }
+                }
+
+                heart_alive := cw.world_is_valid(w, hc.heart_id) &&
+                               cw.world_has_component(w, hc.heart_id, .Health) &&
+                               cw.world_get_health(w, hc.heart_id).current > 0
+                if heart_alive {
+                    hh     := cw.world_get_health(w, hc.heart_id)
                     hiso   := world_to_iso_v(hworld)
-                    hp_pct := hc.heart_hp / hc.heart_max_hp
+                    hp_pct := hh.current / hh.max
                     pulse  := f32(0.8) + f32(0.2) * math.sin(t_now * 5.0)
-                    alpha  := u8(180 + int(40.0 * pulse))
-                    // Draw using world helpers so ellipse matches iso projection
-                    draw_world_circle(hworld, hrad + 4, rl.Color{200, 40, 60, 50})
-                    draw_world_circle(hworld, hrad, rl.Color{210, 50, 65, alpha})
-                    draw_world_circle_lines(hworld, hrad, rl.Color{255, 120, 140, 200})
-                    // HP bar in screen space above the heart ellipse
-                    bw  := f32(22);  bh := f32(3)
+                    alpha  := u8(160 + int(95.0 * pulse))
+                    // Outer glow layers → bright core → rim
+                    draw_world_circle(hworld, hrad + 8, rl.Color{200, 40, 60, 25})
+                    draw_world_circle(hworld, hrad + 4, rl.Color{200, 40, 60, 55})
+                    draw_world_circle(hworld, hrad,     rl.Color{220, 55, 70, alpha})
+                    draw_world_circle_lines(hworld, hrad, rl.Color{255, 130, 150, 220})
+                    // HP bar above the heart in screen space
+                    bw  := f32(30);  bh := f32(4)
                     bx  := hiso.x - bw * 0.5
-                    by  := hiso.y - hrad * 0.55 - 6
-                    rl.DrawRectangleRec({bx, by, bw, bh},          rl.Color{50, 10, 15, 180})
-                    rl.DrawRectangleRec({bx, by, bw * hp_pct, bh}, rl.Color{220, 60, 80, 240})
-                } else if hc.respawn_timer > 0 {
-                    hworld   := rl.Vector2{pos.x + 24, pos.y}
-                    time_pct := hc.respawn_timer / cw.HEART_CAGE_RESPAWN
-                    ring_a   := u8(20 + int(40.0 * (1.0 - time_pct)))
-                    draw_world_circle_lines(hworld, hrad,     rl.Color{160, 40, 60, ring_a})
-                    draw_world_circle_lines(hworld, hrad + 3, rl.Color{100, 20, 40, ring_a / 2})
+                    by  := hiso.y - hrad * 0.55 - 8
+                    rl.DrawRectangleRec({bx - 1, by - 1, bw + 2, bh + 2}, rl.Color{20, 8, 10, 200})
+                    rl.DrawRectangleRec({bx, by, bw, bh},                  rl.Color{50, 14, 18, 180})
+                    fill_c := rl.Color{ u8(80 + int((1-hp_pct)*140)), u8(int(hp_pct*180)), 30, 240 }
+                    rl.DrawRectangleRec({bx, by, bw * hp_pct, bh}, fill_c)
                 }
                 break
             }
@@ -863,243 +1118,42 @@ draw_ground_items :: proc(w: ^cw.World) {
     // Legacy entry point retired. Use draw_entities(w, .WorldFX).
 }
 
-COL_PARCH   :: rl.Color{ 222, 207, 162, 245 }
-COL_CRIMSON :: rl.Color{ 178,  40,  36, 255 }
-COL_BRASS   :: rl.Color{ 188, 150,  55, 235 }
-COL_MUTED   :: rl.Color{ 128, 118,  88, 195 }
-COL_PANEL   :: rl.Color{  10,   7,   5, 210 }
-COL_RULE    :: rl.Color{ 130, 100,  38, 150 }
-
 rarity_color :: proc(rarity: cw.ItemRarity) -> rl.Color {
     switch rarity {
-    case .Normal:    return rl.Color{ 160, 155, 148, 255 }   // weathered stone
-    case .Rare:      return rl.Color{  75, 135, 210, 255 }   // steel blue
-    case .Epic:      return rl.Color{ 148,  55, 198, 255 }   // deep violet
-    case .Legendary: return rl.Color{ 205,  90,  18, 255 }   // forge orange
-    case .Unique:    return rl.Color{ 215, 175,  28, 255 }   // ancient gold
+    case .Normal:    return rl.Color{ 160, 155, 148, 255 }
+    case .Rare:      return rl.Color{  75, 135, 210, 255 }
+    case .Epic:      return rl.Color{ 148,  55, 198, 255 }
+    case .Legendary: return rl.Color{ 205,  90,  18, 255 }
+    case .Unique:    return rl.Color{ 215, 175,  28, 255 }
     }
     return rl.Color{ 160, 155, 148, 255 }
 }
 
-draw_ammo_ring :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Equipment) { return }
-
-    equip := cw.world_get_equipment(w, w.player_id)
-    wid   := equip.weapon_entity_id
-    if !cw.world_is_valid(w, wid)               { return }
-    if !cw.world_has_component(w, wid, .Weapon) { return }
-
-    wp := cw.world_get_weapon_data(w, wid)
-    if wp.ammo_max <= 0 { return }   // infinite ammo — nothing to show
-
-    center := rl.Vector2{ uis(144), f32(rl.GetScreenHeight()) - uis(172) }
-    INNER  := uis(16)   // inner radius → 32 px hole, fits a 20 pt glyph
-    OUTER  := uis(28)   // outer radius → 12 px thick ring
-    SEGS   :: i32(48)
-    LBL_FS := uis(20)
-    NAME_FS:= uis(24)
-    SPC    := f32(1)
-
-    rl.DrawRing(center, INNER, OUTER, 0, 360, SEGS, { 18, 14, 10, 225 })
-
-    if wp.is_reloading {
-        reload_ratio: f32 = 1
-        if wp.reload_time > 0 {
-            reload_ratio = 1 - wp.reload_timer / wp.reload_time
-        }
-        end_angle := f32(-90) + 360 * reload_ratio
-        if reload_ratio > 0 {
-            rl.DrawRing(center, INNER, OUTER, -90, end_angle, SEGS,
-                rl.Color{ 100, 158, 210, 255 })  // aged silver-blue
-        }
-        lbl      := cstring("R")
-        lbl_sz   := rl.MeasureTextEx(g_font, lbl, LBL_FS, SPC)
-        lbl_pos  := rl.Vector2{ center.x - lbl_sz.x * 0.5, center.y - lbl_sz.y * 0.5 }
-        rl.DrawTextEx(g_font, lbl, lbl_pos, LBL_FS, SPC, COL_PARCH)
-    } else {
-        ammo_ratio := f32(wp.ammo_current) / f32(wp.ammo_max)
-        end_angle  := f32(-90) + 360 * ammo_ratio
-        arc_col    := rl.Color{ 192, 152, 44, 255 }      // antique brass
-        if ammo_ratio <= 0.334 {
-            arc_col = COL_CRIMSON                         // blood-red when critical
-        }
-        if ammo_ratio > 0 {
-            rl.DrawRing(center, INNER, OUTER, -90, end_angle, SEGS, arc_col)
-        }
-        lbl     := rl.TextFormat("%d", wp.ammo_current)
-        lbl_sz  := rl.MeasureTextEx(g_font, lbl, LBL_FS, SPC)
-        lbl_pos := rl.Vector2{ center.x - lbl_sz.x * 0.5, center.y - lbl_sz.y * 0.5 }
-        rl.DrawTextEx(g_font, lbl, lbl_pos, LBL_FS, SPC, COL_PARCH)
+// mutation_visual_color returns the canonical display colour for a mutation type.
+mutation_visual_color :: proc(mt: cw.MutationType) -> rl.Color {
+    #partial switch mt {
+    case .LivingBomb:  return rl.Color{ 255, 120,  30, 255 }  // ember orange
+    case .ToxicFlesh:  return rl.Color{  80, 200,  60, 255 }  // toxic green
+    case .ThornPact:   return rl.Color{ 180, 160, 255, 255 }  // silver-purple
+    case .BlackLung:   return rl.Color{  80, 160, 130, 255 }  // teal
     }
-
-    if cw.world_has_component(w, wid, .RenderConfig) {
-        rc       := cw.world_get_render_config(w, wid)
-        name_cs  := cw.render_config_name_cstr(rc)
-        name_sz  := rl.MeasureTextEx(g_font, name_cs, NAME_FS, SPC)
-        name_pos := rl.Vector2{
-            center.x - name_sz.x * 0.5,
-            center.y + OUTER + 6,
-        }
-        rl.DrawTextEx(g_font, name_cs, name_pos, NAME_FS, SPC, COL_BRASS)
-    }
+    return rl.Color{ 180, 180, 180, 255 }                     // grey fallback
 }
 
-draw_ability_hud :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id)                { return }
-    if !cw.world_has_component(w, w.player_id, .Ability) { return }
-
-    ab := cw.world_get_ability(w, w.player_id)
-    sw := rl.GetScreenWidth()
-
-    BOX := i32(uis(54))
-    GAP := i32(uis(6))
-
-    labels := [cw.ABILITY_SLOT_COUNT]cstring{ "Q", "E", "F", "G" }
-
-    total_w := BOX * cw.ABILITY_SLOT_COUNT + GAP * (cw.ABILITY_SLOT_COUNT - 1)
-    start_x := sw - 8 - total_w
-
-    for i in 0..<cw.ABILITY_SLOT_COUNT {
-        bx      := start_x + i32(i) * (BOX + GAP)
-        by      := i32(8)
-        st      := ab.slots[i]
-        ab_type := player_ability_in_slot(w, w.player_id, i)
-        has_ab  := ab_type != .None
-
-        cd  : f32 = 0
-        cdm : f32 = 0
-        name_str : string
-        if has_ab {
-            def      := &ABILITY_DEFS[ab_type]
-            cd        = st.cooldown
-            cdm       = def.cd_max
-            name_str  = def.name
-        }
-
-        ready        := has_ab && cd <= 0
-        charge_glow  := ab_type == .DeathShot  && st.charging
-        dance_glow   := ab_type == .DevilsDance && st.dance_ready
-
-        bg_col := rl.Color{ 10, 7, 5, 220 } if has_ab else rl.Color{ 8, 6, 4, 160 }
-        rl.DrawRectangle(bx, by, BOX, BOX, bg_col)
-
-        if cdm > 0 && cd > 0 {
-            ratio  := clamp(cd / cdm, 0, 1)
-            fill_h := i32(f32(BOX) * ratio)
-            rl.DrawRectangle(bx, by + BOX - fill_h, BOX, fill_h,
-                rl.Color{ 0, 0, 0, 160 })
-        }
-
-        // DeathShot red glow while charging; DevilsDance cyan glow when primed
-        if charge_glow {
-            rl.DrawRectangle(bx, by, BOX, BOX, rl.Color{ 200, 40, 20, 70 })
-            ready = true
-        }
-        if dance_glow {
-            rl.DrawRectangle(bx, by, BOX, BOX, rl.Color{ 20, 200, 200, 65 })
-            ready = true
-        }
-
-        border  := COL_BRASS if ready else COL_RULE
-        rl.DrawRectangleLinesEx({ f32(bx), f32(by), f32(BOX), f32(BOX) }, 1, border)
-
-        key_col := COL_PARCH if ready else (COL_MUTED if has_ab else rl.Color{ 55, 50, 40, 140 })
-        key_fs  := uis(16)
-        name_fs := uis(10)
-        rl.DrawTextEx(g_font, labels[i], { f32(bx) + uis(5), f32(by) + uis(4) }, key_fs, 1, key_col)
-
-        if has_ab {
-            ns := strings.clone_to_cstring(name_str, context.temp_allocator)
-            nsz := rl.MeasureTextEx(g_font, ns, name_fs, 0.5)
-            rl.DrawTextEx(g_font, ns,
-                { f32(bx) + f32(BOX)*0.5 - nsz.x*0.5, f32(by) + f32(BOX) - uis(15) },
-                name_fs, 0.5, key_col)
-        }
+// mutation_short_name returns a short uppercase display name for HUD labels.
+@(private = "file")
+mutation_short_name :: proc(mt: cw.MutationType) -> cstring {
+    #partial switch mt {
+    case .LivingBomb:  return "LIVING BOMB"
+    case .ToxicFlesh:  return "TOXIC FLESH"
+    case .ThornPact:   return "THORN PACT"
+    case .BlackLung:   return "BLACK LUNG"
     }
+    return "MUTANT"
 }
 
-draw_hud_clay :: proc(w: ^cw.World) {
-    clay.BeginLayout()
-
-    if cw.world_is_valid(w, w.player_id) {
-        h        := cw.world_get_health(w, w.player_id)
-        hp_ratio := clamp(h.current / h.max,        0, 1) if h.max        > 0 else f32(0)
-        en_ratio := clamp(h.energy  / h.max_energy, 0, 1) if h.max_energy > 0 else f32(0)
-
-        xp_ratio: f32 = 0
-        if cw.world_has_component(w, w.player_id, .Stats) {
-            st := cw.world_get_stats(w, w.player_id)
-            xp_ratio = clamp(st.xp / st.xp_next, 0, 1) if st.xp_next > 0 else 0
-        }
-
-        panel_w  := uis(256)
-        bar_h    := uis(14)
-        xp_bar_h := uis(8)
-        bar_off  := uis(38)
-        if clay.UI(clay.ID("HUDPanel"))({
-            layout = {
-                layoutDirection = .TopToBottom,
-                sizing          = { clay.SizingFixed(panel_w), clay.SizingFit() },
-                padding         = {
-                    left   = u16(uis(14)),
-                    right  = u16(uis(14)),
-                    top    = u16(uis(12)),
-                    bottom = u16(uis(12)),
-                },
-                childGap        = u16(uis(8)),
-            },
-            floating = {
-                offset     = { 16, -bar_off },
-                attachment = { element = .LeftBottom, parent = .LeftBottom },
-                attachTo   = .Root,
-            },
-            backgroundColor = { 10, 7, 5, 215 },
-            cornerRadius    = clay.CornerRadiusAll(6),
-            border          = { color = { 130, 100, 38, 140 }, width = { 1, 1, 1, 1, 0 } },
-        }) {
-            if clay.UI(clay.ID("HPTrack"))({
-                layout          = { sizing = { clay.SizingGrow(), clay.SizingFixed(bar_h) } },
-                backgroundColor = { 45, 10, 10, 255 },
-                cornerRadius    = clay.CornerRadiusAll(3),
-            }) {
-                if clay.UI(clay.ID("HPFill"))({
-                    layout          = { sizing = { clay.SizingPercent(hp_ratio), clay.SizingGrow() } },
-                    backgroundColor = { 172, 36, 36, 255 },
-                    cornerRadius    = clay.CornerRadiusAll(3),
-                }) {}
-            }
-
-            if clay.UI(clay.ID("ENTrack"))({
-                layout          = { sizing = { clay.SizingGrow(), clay.SizingFixed(bar_h) } },
-                backgroundColor = { 10, 16, 44, 255 },
-                cornerRadius    = clay.CornerRadiusAll(3),
-            }) {
-                if clay.UI(clay.ID("ENFill"))({
-                    layout          = { sizing = { clay.SizingPercent(en_ratio), clay.SizingGrow() } },
-                    backgroundColor = { 38, 78, 158, 255 },
-                    cornerRadius    = clay.CornerRadiusAll(3),
-                }) {}
-            }
-
-            if clay.UI(clay.ID("XPTrack"))({
-                layout          = { sizing = { clay.SizingGrow(), clay.SizingFixed(xp_bar_h) } },
-                backgroundColor = { 30, 24, 10, 255 },
-                cornerRadius    = clay.CornerRadiusAll(2),
-            }) {
-                if clay.UI(clay.ID("XPFill"))({
-                    layout          = { sizing = { clay.SizingPercent(xp_ratio), clay.SizingGrow() } },
-                    backgroundColor = { 180, 148, 36, 255 },
-                    cornerRadius    = clay.CornerRadiusAll(2),
-                }) {}
-            }
-
-        }
-    }
-
-    cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
-}
+// draw_hud, draw_ammo_ring, draw_ability_hud, and draw_hud_clay have been
+// consolidated into draw_hud() — see ui_hud.odin.
 
 @(private = "file")
 InvLayout :: struct {
@@ -1159,8 +1213,7 @@ pause_vol_row_h  :: proc() -> i32 { return i32(uis(PAUSE_VOL_ROW_H_BASE))   }
 pause_y_keybinds :: proc() -> i32 { return i32(uis(PAUSE_Y_KEYBINDS_BASE))  }
 pause_y_quit     :: proc() -> i32 { return i32(uis(PAUSE_Y_QUIT_BASE))      }
 
-g_keybinds_open: bool
-g_rebind_idx:    int = -1
+g_rebind_idx: int = -1
 
 init_pause_menu :: proc() {
     sw := rl.GetScreenWidth()
@@ -1307,7 +1360,7 @@ update_pause_menu :: proc() -> (quit: bool) {
     if rl.CheckCollisionPointRec(mp,
         { bx, f32(py + pause_y_resume()), f32(pBW), f32(pBH) }) &&
        rl.IsMouseButtonPressed(.LEFT) {
-        g_paused = false
+        ui_close_top()  // _ui_on_close(.PauseMenu) clears g_paused
         return false
     }
 
@@ -1360,8 +1413,7 @@ update_pause_menu :: proc() -> (quit: bool) {
     if rl.CheckCollisionPointRec(mp,
         { bx, f32(py + pause_y_keybinds()), f32(pBW), f32(pBH) }) &&
        rl.IsMouseButtonPressed(.LEFT) {
-        g_keybinds_open = true
-        g_rebind_idx    = -1
+        ui_open(.Keybinds)
     }
 
     if rl.CheckCollisionPointRec(mp,
@@ -1448,39 +1500,75 @@ draw_pause_menu :: proc() {
 }
 
 
-@(private = "file") BIND_ROW_H :: f32(36)
+// ── Keybinds screen ──────────────────────────────────────────────────────────
+//
+// Rows are grouped by InputMode with a visual section header between them.
+// Adding a new mode: add its xxx_bind_rows() call to all_bind_rows() (config.odin)
+// and add a header at the section boundary below.
+//
+// Row index layout inside all_bind_rows():
+//   [0 .. GAMEPLAY_BIND_COUNT)   → Gameplay section
+//   [GAMEPLAY_BIND_COUNT .. TOTAL_BIND_COUNT) → UI section
+//   … future modes continue after UI_BIND_COUNT …
+
+@(private = "file") BIND_ROW_H :: f32(30)   // compact enough to fit 17 rows at 720 p
+@(private = "file") BIND_HDR_H :: f32(22)   // section label row height
+
+// Returns the Y offset (from the top of the bind content area) for flat
+// row index i, accounting for section-header rows inserted between groups.
+@(private = "file")
+_bind_row_y :: proc(i: int) -> f32 {
+    // Section 0: Gameplay  (rows 0 .. GAMEPLAY_BIND_COUNT-1)
+    //   → preceded by one header
+    // Section 1: UI        (rows GAMEPLAY_BIND_COUNT .. TOTAL_BIND_COUNT-1)
+    //   → preceded by one header after the gameplay rows
+    if i < GAMEPLAY_BIND_COUNT {
+        return BIND_HDR_H + f32(i) * BIND_ROW_H
+    }
+    j := i - GAMEPLAY_BIND_COUNT
+    return BIND_HDR_H + f32(GAMEPLAY_BIND_COUNT) * BIND_ROW_H +
+           BIND_HDR_H + f32(j) * BIND_ROW_H
+}
+
+// Total height of the scrollable bind content.
+@(private = "file")
+_bind_content_h :: proc() -> f32 {
+    return _bind_row_y(TOTAL_BIND_COUNT - 1) + BIND_ROW_H
+}
 
 update_keybinds_screen :: proc() {
-    if !g_keybinds_open { return }
+    if !ui_has(.Keybinds) { return }
 
-    rows := bind_rows()
-    N    :: BIND_ROW_COUNT
+    rows := all_bind_rows()
 
-    PW    :: f32(480)
-    PH    := f32(56) + f32(N) * BIND_ROW_H + f32(80)   
-    sw    := rl.GetScreenWidth()
-    sh    := rl.GetScreenHeight()
-    px    := f32(sw) * 0.5 - uis(PW) * 0.5
-    py    := f32(sh) * 0.5 - uis(PH) * 0.5
-    mp    := rl.GetMousePosition()
+    PW :: f32(480)
+    PH := f32(56) + _bind_content_h() + f32(80)
+    sw := rl.GetScreenWidth()
+    sh := rl.GetScreenHeight()
+    px := f32(sw) * 0.5 - uis(PW) * 0.5
+    py := f32(sh) * 0.5 - uis(PH) * 0.5
+    mp := rl.GetMousePosition()
 
+    // While waiting for a key press, eat the next key.
+    // ESC cancels the rebind and is consumed so the universal close handler
+    // does not also close the whole Keybinds panel on the same frame.
     if g_rebind_idx >= 0 {
         k := rl.GetKeyPressed()
-        if k != .KEY_NULL {
-            if k == .ESCAPE {
-                g_rebind_idx = -1
-            } else {
-                rows[g_rebind_idx].ptr^ = i32(k)
-                g_rebind_idx = -1
-                save_config()
-            }
+        if k == .ESCAPE {
+            g_rebind_idx = -1
+            input_consume_key(.ESCAPE)
+        } else if k != .KEY_NULL {
+            rows[g_rebind_idx].ptr^ = i32(k)
+            g_rebind_idx = -1
+            save_config()
         }
-        return   
+        return
     }
 
     if rl.IsMouseButtonPressed(.LEFT) {
-        for i in 0..<N {
-            ry := py + uis(f32(56) + f32(i) * BIND_ROW_H)
+        content_y := py + uis(56)
+        for i in 0..<TOTAL_BIND_COUNT {
+            ry := content_y + uis(_bind_row_y(i))
             r  := rl.Rectangle{ px + uis(8), ry, uis(PW - 16), uis(BIND_ROW_H - 4) }
             if rl.CheckCollisionPointRec(mp, r) {
                 g_rebind_idx = i
@@ -1488,7 +1576,7 @@ update_keybinds_screen :: proc() {
             }
         }
 
-        footer_y := py + uis(f32(56) + f32(N) * BIND_ROW_H + f32(16))
+        footer_y := py + uis(56) + uis(_bind_content_h()) + uis(16)
         reset_r  := rl.Rectangle{ px + uis(8), footer_y, uis(PW * 0.5 - 16), uis(36) }
         if rl.CheckCollisionPointRec(mp, reset_r) {
             g_binds = default_binds()
@@ -1498,26 +1586,24 @@ update_keybinds_screen :: proc() {
 
         close_r := rl.Rectangle{ px + uis(PW * 0.5 + 8), footer_y, uis(PW * 0.5 - 16), uis(36) }
         if rl.CheckCollisionPointRec(mp, close_r) {
-            g_keybinds_open = false
-            g_rebind_idx    = -1
+            ui_close_top()
             return
         }
     }
 }
 
 draw_keybinds_screen :: proc() {
-    if !g_keybinds_open { return }
+    if !ui_has(.Keybinds) { return }
 
-    rows := bind_rows()
-    N    :: 13
+    rows := all_bind_rows()
 
-    PW   :: f32(480)
-    PH   := f32(56) + f32(N) * BIND_ROW_H + f32(80)
-    sw   := rl.GetScreenWidth()
-    sh   := rl.GetScreenHeight()
-    px   := f32(sw) * 0.5 - uis(PW) * 0.5
-    py   := f32(sh) * 0.5 - uis(PH) * 0.5
-    mp   := rl.GetMousePosition()
+    PW :: f32(480)
+    PH := f32(56) + _bind_content_h() + f32(80)
+    sw := rl.GetScreenWidth()
+    sh := rl.GetScreenHeight()
+    px := f32(sw) * 0.5 - uis(PW) * 0.5
+    py := f32(sh) * 0.5 - uis(PH) * 0.5
+    mp := rl.GetMousePosition()
 
     rl.DrawRectangle(i32(px), i32(py), i32(uis(PW)), i32(uis(PH)), rl.Color{ 8, 6, 4, 252 })
     rl.DrawRectangle(i32(px), i32(py), i32(uis(PW)), i32(uis(3)), COL_BRASS)
@@ -1532,23 +1618,34 @@ draw_keybinds_screen :: proc() {
         { px + uis(16), py + uis(34) },
         { px + uis(PW) - uis(16), py + uis(34) }, 1, COL_RULE)
 
-    name_buf: [16]u8
-    for i in 0..<N {
-        ry      := py + uis(f32(56) + f32(i) * BIND_ROW_H)
-        row_r   := rl.Rectangle{ px + uis(8), ry, uis(PW - 16), uis(BIND_ROW_H - 4) }
-        is_hot  := rl.CheckCollisionPointRec(mp, row_r) && g_rebind_idx < 0
+    content_y := py + uis(56)
+    hdr_fs    := uis(10)
+    name_buf  : [16]u8
+
+    // ── Section headers ──────────────────────────────────────────────────────
+    // Gameplay header (before row 0)
+    _draw_bind_section_header(px, content_y, uis(PW), hdr_fs, "GAMEPLAY")
+
+    // UI header (before row GAMEPLAY_BIND_COUNT)
+    ui_hdr_y := content_y + uis(BIND_HDR_H + f32(GAMEPLAY_BIND_COUNT) * BIND_ROW_H)
+    _draw_bind_section_header(px, ui_hdr_y, uis(PW), hdr_fs, "UI")
+
+    // ── Bind rows ────────────────────────────────────────────────────────────
+    lfs := uis(13)
+    for i in 0..<TOTAL_BIND_COUNT {
+        ry           := content_y + uis(_bind_row_y(i))
+        row_r        := rl.Rectangle{ px + uis(8), ry, uis(PW - 16), uis(BIND_ROW_H - 4) }
+        is_hot       := rl.CheckCollisionPointRec(mp, row_r) && g_rebind_idx < 0
         is_listening := g_rebind_idx == i
 
         row_bg: rl.Color
-        if is_listening     { row_bg = rl.Color{ 50, 38, 14, 230 }
-        } else if is_hot    { row_bg = rl.Color{ 30, 24, 14, 220 }
-        } else              { row_bg = rl.Color{ 18, 14, 10, 200 } }
-
+        if is_listening  { row_bg = rl.Color{ 50, 38, 14, 230 }
+        } else if is_hot { row_bg = rl.Color{ 30, 24, 14, 220 }
+        } else           { row_bg = rl.Color{ 18, 14, 10, 200 } }
         rl.DrawRectangleRec(row_r, row_bg)
         rl.DrawRectangleLinesEx(row_r, 1,
             COL_BRASS if is_listening else (COL_RULE if is_hot else rl.Color{ 55, 48, 34, 80 }))
 
-        lfs := uis(13)
         rl.DrawTextEx(g_font, rows[i].label,
             { px + uis(20), ry + uis(BIND_ROW_H)*0.5 - lfs*0.5 },
             lfs, 0.5, COL_PARCH if !is_listening else COL_BRASS)
@@ -1566,21 +1663,22 @@ draw_keybinds_screen :: proc() {
             lfs, 0.5, kcol)
     }
 
-    footer_y := py + uis(f32(56) + f32(N) * BIND_ROW_H + f32(16))
+    // ── Footer buttons ───────────────────────────────────────────────────────
+    footer_y  := content_y + uis(_bind_content_h()) + uis(16)
+    rlbl_fs   := uis(13)
 
-    reset_r := rl.Rectangle{ px + uis(8), footer_y, uis(PW * 0.5 - 16), uis(36) }
+    reset_r   := rl.Rectangle{ px + uis(8), footer_y, uis(PW * 0.5 - 16), uis(36) }
     reset_hot := rl.CheckCollisionPointRec(mp, reset_r) && g_rebind_idx < 0
     rl.DrawRectangleRec(reset_r, rl.Color{ 28, 14, 10, 240 } if reset_hot else rl.Color{ 18, 10, 8, 220 })
     rl.DrawRectangleLinesEx(reset_r, 1, COL_RULE)
     reset_lbl := cstring("Reset Defaults")
-    rlbl_fs   := uis(13)
     rlbl_sz   := rl.MeasureTextEx(g_font, reset_lbl, rlbl_fs, 0.5)
     rl.DrawTextEx(g_font, reset_lbl,
         { reset_r.x + reset_r.width*0.5 - rlbl_sz.x*0.5,
           reset_r.y + reset_r.height*0.5 - rlbl_fs*0.5 },
         rlbl_fs, 0.5, rl.Color{ 200, 120, 80, 220 } if reset_hot else COL_MUTED)
 
-    close_r := rl.Rectangle{ px + uis(PW * 0.5 + 8), footer_y, uis(PW * 0.5 - 16), uis(36) }
+    close_r   := rl.Rectangle{ px + uis(PW * 0.5 + 8), footer_y, uis(PW * 0.5 - 16), uis(36) }
     close_hot := rl.CheckCollisionPointRec(mp, close_r) && g_rebind_idx < 0
     rl.DrawRectangleRec(close_r, rl.Color{ 28, 22, 16, 240 } if close_hot else rl.Color{ 18, 14, 10, 220 })
     rl.DrawRectangleLinesEx(close_r, 1, COL_RULE if !close_hot else COL_BRASS)
@@ -1600,13 +1698,27 @@ draw_keybinds_screen :: proc() {
             hint_fs, 0.5, COL_MUTED)
     }
 }
-SETTINGS_H_BASE          :: f32(510)
+
+@(private = "file")
+_draw_bind_section_header :: proc(px, ry, pw, fs: f32, label: cstring) {
+    rl.DrawLineEx(
+        { px + uis(8),      ry + fs * 0.5 },
+        { px + uis(48),     ry + fs * 0.5 }, 1, COL_RULE)
+    lsz := rl.MeasureTextEx(g_font, label, fs, 0.5)
+    rl.DrawTextEx(g_font, label,
+        { px + uis(54), ry }, fs, 0.5, COL_MUTED)
+    rl.DrawLineEx(
+        { px + uis(60) + lsz.x, ry + fs * 0.5 },
+        { px + pw - uis(8),     ry + fs * 0.5 }, 1, COL_RULE)
+}
+SETTINGS_H_BASE          :: f32(566)
 SETTINGS_Y_RES_BASE       :: f32(80)
 SETTINGS_Y_MODE_BASE      :: f32(162)
 SETTINGS_Y_VOL_BASE       :: f32(256)   // first slider row_y
 SETTINGS_VOL_ROW_H_BASE   :: f32(34)
 SETTINGS_Y_KEYBINDS_BASE  :: f32(408)
 SETTINGS_Y_CLOSE_BASE     :: f32(460)
+SETTINGS_Y_EXIT_BASE      :: f32(514)
 
 settings_H          :: proc() -> i32 { return i32(uis(SETTINGS_H_BASE))         }
 settings_y_res      :: proc() -> i32 { return i32(uis(SETTINGS_Y_RES_BASE))     }
@@ -1615,8 +1727,9 @@ settings_y_vol      :: proc() -> i32 { return i32(uis(SETTINGS_Y_VOL_BASE))     
 settings_vol_row_h  :: proc() -> i32 { return i32(uis(SETTINGS_VOL_ROW_H_BASE)) }
 settings_y_keybinds :: proc() -> i32 { return i32(uis(SETTINGS_Y_KEYBINDS_BASE))}
 settings_y_close    :: proc() -> i32 { return i32(uis(SETTINGS_Y_CLOSE_BASE))   }
+settings_y_exit     :: proc() -> i32 { return i32(uis(SETTINGS_Y_EXIT_BASE))    }
 
-update_settings_overlay :: proc() -> (closed: bool) {
+update_settings_overlay :: proc() {
     sw  := rl.GetScreenWidth()
     sh  := rl.GetScreenHeight()
     pW  := pause_W()   // same width as pause panel
@@ -1678,17 +1791,22 @@ update_settings_overlay :: proc() -> (closed: bool) {
     if rl.CheckCollisionPointRec(mp,
         { bx, f32(py + settings_y_keybinds()), f32(pBW), f32(pBH) }) &&
        rl.IsMouseButtonPressed(.LEFT) {
-        g_keybinds_open = true
-        g_rebind_idx    = -1
+        ui_open(.Keybinds)
     }
 
     if rl.CheckCollisionPointRec(mp,
         { bx, f32(py + settings_y_close()), f32(pBW), f32(pBH) }) &&
        rl.IsMouseButtonPressed(.LEFT) {
-        return true
+        ui_close_top()
+        return
     }
 
-    return false
+    if rl.CheckCollisionPointRec(mp,
+        { bx, f32(py + settings_y_exit()), f32(pBW), f32(pBH) }) &&
+       rl.IsMouseButtonPressed(.LEFT) {
+        g_should_exit = true
+        return
+    }
 }
 
 draw_settings_overlay :: proc() {
@@ -1758,6 +1876,26 @@ draw_settings_overlay :: proc() {
     draw_pause_btn(
         { bx, f32(py + settings_y_close()), f32(pBW), f32(pBH) },
         "Close", mp)
+
+    rl.DrawLineEx(
+        { f32(px) + 16, f32(py + settings_y_exit()) - 10 },
+        { f32(px + pW) - 16, f32(py + settings_y_exit()) - 10 }, 1, COL_RULE)
+    {
+        exit_r   := rl.Rectangle{ bx, f32(py + settings_y_exit()), f32(pBW), f32(pBH) }
+        exit_hot := rl.CheckCollisionPointRec(mp, exit_r)
+        exit_bg  := rl.Color{ 48, 16, 12, 240 } if exit_hot else rl.Color{ 28, 10, 8, 240 }
+        exit_bdr := rl.Color{ 200, 70, 50, 220 } if exit_hot else rl.Color{ 100, 35, 25, 180 }
+        exit_txt := rl.Color{ 235, 100, 75, 255 } if exit_hot else rl.Color{ 160, 60, 45, 220 }
+        rl.DrawRectangleRec(exit_r, exit_bg)
+        rl.DrawRectangleLinesEx(exit_r, 1, exit_bdr)
+        exit_lbl := cstring("Exit Game")
+        exit_fs  := uis(18)
+        exit_sz  := rl.MeasureTextEx(g_font, exit_lbl, exit_fs, 1)
+        rl.DrawTextEx(g_font, exit_lbl,
+            { exit_r.x + exit_r.width * 0.5 - exit_sz.x * 0.5,
+              exit_r.y + exit_r.height * 0.5 - exit_fs * 0.5 },
+            exit_fs, 1, exit_txt)
+    }
 }
 
 @(private = "file")
@@ -1797,7 +1935,6 @@ shutdown_icon_cache :: proc() {
     delete(g_entity_sprite_cache)
 }
 
-@(private = "file")
 get_or_load_icon :: proc(stem: cstring) -> (tex: rl.Texture2D, ok: bool) {
     key := string(stem)
     if cached, found := g_icon_cache[key]; found {
@@ -1942,139 +2079,19 @@ draw_entity_sprite_quad :: proc(entry: EntitySpriteEntry, pos: rl.Vector2, world
 ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W   // = 0.5
 
 draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color) {
-    iso    := world_to_iso_v(pos)
-    iso_h  := world_size * ISO_SPRITE_Y
-    dst    := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
-    origin := rl.Vector2{ world_size * 0.5, iso_h * 0.5 }
-    rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(rotation_rad) + 90.0, tint)
+    iso     := world_to_iso_v(pos)
+    iso_h   := world_size * ISO_SPRITE_Y
+    dst     := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
+    origin  := rl.Vector2{ world_size * 0.5, iso_h * 0.5 }
+    iso_rot := world_rot_to_iso(rotation_rad)
+    rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
 }
 
-@(private = "file") g_drag_item_id:      int          = -1                  
-@(private = "file") g_drag_origin_x:     int          = -1                  
-@(private = "file") g_drag_origin_y:     int          = -1                  
-@(private = "file") g_drag_from_equip:   bool         = false               
-@(private = "file") g_drag_origin_equip: cw.EquipSlot = cw.EquipSlot(0)     
-@(private = "file") g_hover_item_id:     int          = cw.INVALID_ENTITY   
 
-@(private = "file")
-equip_slot_rect :: proc(px, py: i32, slot: cw.EquipSlot) -> (rect: rl.Rectangle, ok: bool) {
-    x  := f32(px + g_inv.pad)
-    x2 := f32(px + g_inv.pad + g_inv.wep_w  + g_inv.col_gap)  // right column for weapons
-    sw := f32(g_inv.slot_w)
-    sh := f32(g_inv.slot_h)
-    wh := f32(g_inv.wep_h)
-    ww := f32(g_inv.wep_w)
-    aw := f32(g_inv.ability_w)
-    ah := f32(g_inv.ability_h)
-    ab_step := f32(g_inv.ability_w + g_inv.col_gap)
 
-    #partial switch slot {
-    case .Head:
-        return { x, f32(py + g_inv.slots_y), sw, sh }, true
-    case .Chest:
-        return { x, f32(py + g_inv.slots_y + g_inv.slot_h + g_inv.slot_gap), sw, sh }, true
-    case .Boots:
-        return { x, f32(py + g_inv.slots_y + (g_inv.slot_h + g_inv.slot_gap) * 2), sw, sh }, true
-    case .WeaponPrimary:
-        return { x,  f32(py + g_inv.wep_y), ww, wh }, true
-    case .WeaponOffhand:
-        return { x2, f32(py + g_inv.wep_y), ww, wh }, true
-    case .Ability1:
-        return { x + 0 * ab_step, f32(py + g_inv.ability_y), aw, ah }, true
-    case .Ability2:
-        return { x + 1 * ab_step, f32(py + g_inv.ability_y), aw, ah }, true
-    case .Ability3:
-        return { x + 2 * ab_step, f32(py + g_inv.ability_y), aw, ah }, true
-    case .Ability4:
-        return { x + 3 * ab_step, f32(py + g_inv.ability_y), aw, ah }, true
-    }
-    return {}, false
-}
 
-@(private = "file")
-item_fits_slot :: proc(item_slot: cw.EquipSlot, target: cw.EquipSlot) -> bool {
-    is_wep_item   := item_slot == .WeaponPrimary || item_slot == .WeaponOffhand
-    is_wep_target := target   == .WeaponPrimary || target   == .WeaponOffhand
-    if is_wep_item { return is_wep_target }
 
-    is_ab_item   := item_slot == .Ability1 || item_slot == .Ability2 ||
-                    item_slot == .Ability3 || item_slot == .Ability4
-    is_ab_target := target   == .Ability1 || target   == .Ability2 ||
-                    target   == .Ability3 || target   == .Ability4
-    if is_ab_item { return is_ab_target }
 
-    return item_slot == target
-}
-
-@(private = "file")
-inv_slot_name :: proc(w: ^cw.World, inv: ^cw.InventoryComp, slot: cw.EquipSlot) -> (cstring, bool) {
-    if inv == nil { return "unequipped", false }
-    eid := inv.equipped[int(slot)]
-    if !cw.world_is_valid(w, eid) { return "unequipped", false }
-    if cw.world_has_component(w, eid, .RenderConfig) {
-        return cw.render_config_name_cstr(cw.world_get_render_config(w, eid)), true
-    }
-    return "???", true
-}
-
-@(private = "file")
-draw_equip_slot_h :: proc(x, y, w, h: i32, label: cstring, item_name: cstring, has_item: bool) {
-    rl.DrawRectangle(x, y, w, h, rl.Color{ 20, 16, 12, 240 })
-    rl.DrawRectangleLinesEx({ f32(x), f32(y), f32(w), f32(h) }, 1, COL_RULE)
-
-    fs      := uis(18)
-    label_y := f32(y) + f32(h) * 0.5 - fs * 0.5
-    rl.DrawTextEx(g_font, label, { f32(x) + uis(14), label_y }, fs, 1, COL_BRASS)
-
-    div_x := f32(x) + uis(122)
-    rl.DrawLineEx({ div_x, f32(y) + uis(8) }, { div_x, f32(y) + f32(h) - uis(8) }, 1, COL_RULE)
-
-    item_col := COL_PARCH if has_item else rl.Color{ 95, 88, 68, 155 }
-    rl.DrawTextEx(g_font, item_name, { div_x + uis(14), label_y }, fs, 1, item_col)
-}
-
-@(private = "file")
-draw_weapon_slot_box :: proc(x, y, w, h: i32, label: cstring, item_name: cstring, has_item: bool, blocked: bool = false) {
-    bg_col     := rl.Color{ 20, 16, 12, 240 } if !blocked else rl.Color{ 14, 8, 8, 245 }
-    border_col := COL_RULE                    if !blocked else rl.Color{ 70, 28, 28, 200 }
-    lbl_col    := COL_BRASS                   if !blocked else rl.Color{ 72, 52, 38, 180 }
-
-    rl.DrawRectangle(x, y, w, h, bg_col)
-    rl.DrawRectangleLinesEx({ f32(x), f32(y), f32(w), f32(h) }, 1, border_col)
-
-    lbl_fs := uis(16)
-    lsz    := rl.MeasureTextEx(g_font, label, lbl_fs, 1)
-    rl.DrawTextEx(g_font, label,
-        { f32(x) + f32(w) * 0.5 - lsz.x * 0.5, f32(y) + uis(7) }, lbl_fs, 1, lbl_col)
-
-    rl.DrawLineEx(
-        { f32(x) + uis(10), f32(y) + uis(27) },
-        { f32(x) + f32(w) - uis(10), f32(y) + uis(27) }, 1, border_col)
-
-    name_fs := uis(18)
-    if blocked {
-        // Red overlay + "2H" lock indicator
-        rl.DrawRectangle(x, y, w, h, rl.Color{ 60, 0, 0, 55 })
-        lock_lbl := cstring("— 2H —")
-        lksz := rl.MeasureTextEx(g_font, lock_lbl, name_fs, 1)
-        rl.DrawTextEx(g_font, lock_lbl,
-            { f32(x) + f32(w) * 0.5 - lksz.x * 0.5, f32(y) + uis(34) },
-            name_fs, 1, rl.Color{ 150, 50, 50, 210 })
-    } else {
-        item_col := COL_PARCH if has_item else rl.Color{ 95, 88, 68, 155 }
-        nsz      := rl.MeasureTextEx(g_font, item_name, name_fs, 1)
-        rl.DrawTextEx(g_font, item_name,
-            { f32(x) + f32(w) * 0.5 - nsz.x * 0.5, f32(y) + uis(34) }, name_fs, 1, item_col)
-    }
-}
-
-@(private = "file")
-_INV_SHOP_GAP :: f32(16)
-
-@(private = "file")
-inv_panel_origin :: proc() -> (px, py: i32) {
-    return rl.GetScreenWidth() - g_inv.panel_w, 0
-}
 
 shop_panel_origin :: proc() -> (px, py: i32) {
     shop_w   := i32(uis(480))
@@ -2085,83 +2102,7 @@ shop_panel_origin :: proc() -> (px, py: i32) {
     return left_x, top_y
 }
 
-@(private = "file")
-inv_mouse_to_cell :: proc(px, py: i32, mx, my: f32) -> (col, row: int, ok: bool) {
-    gx := int(px) + int(g_inv.pad)
-    gy := int(py) + int(g_inv.pack_y)
-    c  := (int(mx) - gx) / int(g_inv.cell_sz)
-    r  := (int(my) - gy) / int(g_inv.cell_sz)
-    if c < 0 || c >= cw.BACKPACK_COLS { return 0, 0, false }
-    if r < 0 || r >= cw.BACKPACK_ROWS { return 0, 0, false }
-    return c, r, true
-}
 
-@(private = "file")
-draw_item_glyph :: proc(slot: cw.EquipSlot, x, y, sz: i32, tint: rl.Color) {
-    cx  := f32(x) + f32(sz) * 0.5
-    cy  := f32(y) + f32(sz) * 0.5
-    col := rl.Color{ tint.r, tint.g, tint.b, 200 }
-    dim := rl.Color{ tint.r / 2, tint.g / 2, tint.b / 2, 180 }
-    r   := f32(sz) * 0.5
-
-    switch slot {
-    case .Head:
-        rl.DrawCircleV({ cx, cy - r * 0.1 }, r * 0.42, dim)
-        rl.DrawCircleV({ cx, cy - r * 0.1 }, r * 0.28, col)
-        rl.DrawRectangle(x + sz/4, y + sz*3/4 - 2, sz/2, sz/8 + 1, col)
-
-    case .Chest:
-        bw := i32(r * 0.9)
-        bh := i32(r * 1.1)
-        bx := x + (sz - bw) / 2
-        by := y + (sz - bh) / 2 + 2
-        rl.DrawRectangle(bx, by, bw, bh, dim)
-        rl.DrawRectangle(bx + 2, by + 2, bw - 4, bh - 4, col)
-        nub := i32(r * 0.25)
-        rl.DrawRectangle(bx - nub, by, nub, nub * 2, col)
-        rl.DrawRectangle(bx + bw, by, nub, nub * 2, col)
-
-    case .Boots:
-        bw := i32(r * 0.38)
-        bh := i32(r * 0.7)
-        gap := i32(r * 0.1)
-        total := bw * 2 + gap
-        lx  := x + (sz - total) / 2
-        by  := y + (sz - bh) / 2 + i32(r * 0.15)
-        rl.DrawRectangle(lx,        by, bw, bh, col)
-        rl.DrawRectangle(lx + bw + gap, by, bw, bh, col)
-        rl.DrawRectangle(lx,        by, bw, bh / 4, dim)
-        rl.DrawRectangle(lx + bw + gap, by, bw, bh / 4, dim)
-
-    case .WeaponPrimary:
-        blen := i32(r * 0.9)
-        bx   := x + (sz - blen) / 2
-        by   := y + sz / 2 - 3
-        rl.DrawRectangle(bx, by, blen, 5, col)          // barrel
-        grip_x := bx + blen / 2
-        rl.DrawRectangle(grip_x, by + 5, 6, i32(r * 0.5), dim)  // grip
-
-    case .WeaponOffhand:
-        sw := i32(r * 0.7)
-        sh := i32(r * 0.9)
-        sx := x + (sz - sw) / 2
-        sy := y + (sz - sh) / 2
-        rl.DrawRectangle(sx, sy, sw, sh, dim)
-        rl.DrawRectangle(sx + 2, sy + 2, sw - 4, sh - 4, col)
-        rl.DrawRectangle(sx + sw/2 - 1, sy + 4, 2, sh - 8, dim)
-        rl.DrawRectangle(sx + 4, sy + sh/3, sw - 8, 2, dim)
-
-    case .Consumable:
-        rl.DrawCircleV({ cx, cy }, r * 0.38, dim)
-        rl.DrawCircleV({ cx, cy }, r * 0.26, col)
-
-    case .Ability1, .Ability2, .Ability3, .Ability4:
-        hw := i32(r * 0.28)
-        rl.DrawRectangle(x + sz/2 - hw/2, y + sz/4,     hw, i32(r * 0.6), col)
-        rl.DrawRectangle(x + sz/2,        y + sz/2 - 2,  hw, i32(r * 0.6), dim)
-
-    }
-}
 
 @(private = "file")
 draw_text_wrapped :: proc(
@@ -2198,7 +2139,6 @@ draw_text_wrapped :: proc(
     return cur_y - y
 }
 
-@(private = "file")
 draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     if !cw.world_is_valid(w, item_id)             { return }
     if !cw.world_has_component(w, item_id, .Item) { return }
@@ -2221,8 +2161,27 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
                    (1 if item.req_dex > 0 else 0) +
                    (1 if item.req_sci > 0 else 0)
 
+    // Count stat display lines for tooltip height.
+    stat_line_count := 0
+    if item.weapon_archetype != .None && !item.is_melee {
+        if item.base_damage > 0      { stat_line_count += 1 }
+        if item.base_fire_rate > 0   { stat_line_count += 1 }
+        if item.base_ammo_max > 0    { stat_line_count += 1 }
+        if item.base_reload_time > 0 { stat_line_count += 1 }
+    } else if item.is_melee {
+        if item.melee_damage > 0       { stat_line_count += 1 }
+        if item.melee_cooldown_max > 0 { stat_line_count += 1 }
+    }
+    if item.base_armor > 0  { stat_line_count += 1 }
+    if item.base_shield > 0 { stat_line_count += 1 }
+    stat_extra_h := i32(0)
+    if stat_line_count > 0 {
+        stat_extra_h = i32(uis(17)) * i32(stat_line_count) + i32(uis(6))
+    }
+
     TW := i32(uis(238))
     TH := i32(uis(108)) +
+          stat_extra_h +
           i32(uis(17)) * i32(req_count)   +
           i32(uis(17)) * i32(affix_count) +
           (i32(uis(30)) if has_desc else 0)
@@ -2295,24 +2254,113 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     rl.DrawTextEx(g_font, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
         rl.Color{ rc.r, rc.g, rc.b, 195 })
 
-    slot_labels := [cw.EquipSlot]cstring{
-        .Head          = "Slot: Head",
-        .Chest         = "Slot: Chest",
-        .Boots         = "Slot: Boots",
-        .WeaponPrimary = "Slot: Weapon I",
-        .WeaponOffhand = "Slot: Weapon II",
-        .Consumable    = "Consumable",
-        .Ability1      = "Ability: Q",
-        .Ability2      = "Ability: E",
-        .Ability3      = "Ability: F",
-        .Ability4      = "Ability: G",
-    }
-    rl.DrawTextEx(g_font, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
+    if item.ability_type != .None {
+        // Ability item: show type and cooldown instead of slot/size.
+        def := ABILITY_DEFS[item.ability_type]
+        type_lbl: cstring = "Passive Ability" if def.is_passive else "Active Ability"
+        rl.DrawTextEx(g_font, type_lbl, { tx2, ty2 + uis(42) }, fs13, 0.5,
+            rl.Color{ 200, 170, 100, 210 })
+        cd_buf: [32]u8
+        if def.is_passive {
+            rl.DrawTextEx(g_font, "Passive", { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        } else {
+            cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
+            cd_buf[len(cd_s)] = 0
+            rl.DrawTextEx(g_font, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        }
+    } else {
+        slot_labels := [cw.EquipSlot]cstring{
+            .Head          = "Slot: Head",
+            .Chest         = "Slot: Chest",
+            .Boots         = "Slot: Boots",
+            .WeaponPrimary = "Slot: Weapon I",
+            .WeaponOffhand = "Slot: Weapon II",
+            .Consumable    = "Consumable",
+            .Ability1      = "Ability Skill",
+            .Ability2      = "Ability Skill",
+            .Ability3      = "Ability Skill",
+            .Ability4      = "Ability Skill",
+        }
+        rl.DrawTextEx(g_font, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
-    size_buf: [32]u8
-    size_str := fmt.bprintf(size_buf[:31], "%d x %d", item.grid_w, item.grid_h)
-    size_buf[len(size_str)] = 0
-    rl.DrawTextEx(g_font, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        archetype_labels := [cw.WeaponArchetype]cstring{
+            .None    = "",
+            .Pistol  = "Pistol",
+            .Rifle   = "Rifle",
+            .Shotgun = "Shotgun",
+            .Axe     = "Axe",
+            .Knife   = "Knife",
+            .Sword   = "Sword",
+        }
+        if item.weapon_archetype != .None {
+            rl.DrawTextEx(g_font, archetype_labels[item.weapon_archetype],
+                { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        } else {
+            size_buf: [32]u8
+            size_str := fmt.bprintf(size_buf[:31], "%d x %d", item.grid_w, item.grid_h)
+            size_buf[len(size_str)] = 0
+            rl.DrawTextEx(g_font, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        }
+    }
+
+    // ── Base stat block ───────────────────────────────────────────────────────
+    // COL_STAT is the package-level constant defined in ui.odin
+    stat_y := ty2 + uis(78)
+    {
+        sbuf: [48]u8
+        if item.weapon_archetype != .None && !item.is_melee {
+            if item.base_damage > 0 {
+                s := fmt.bprintf(sbuf[:47], "DMG  %.0f", item.base_damage)
+                sbuf[len(s)] = 0
+                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                stat_y += uis(17)
+            }
+            if item.base_fire_rate > 0 {
+                s := fmt.bprintf(sbuf[:47], "RATE  %.1f/s", item.base_fire_rate)
+                sbuf[len(s)] = 0
+                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                stat_y += uis(17)
+            }
+            if item.base_ammo_max > 0 {
+                s := fmt.bprintf(sbuf[:47], "MAG  %d", int(item.base_ammo_max))
+                sbuf[len(s)] = 0
+                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                stat_y += uis(17)
+            }
+            if item.base_reload_time > 0 {
+                s := fmt.bprintf(sbuf[:47], "RELOAD  %.1fs", item.base_reload_time)
+                sbuf[len(s)] = 0
+                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                stat_y += uis(17)
+            }
+        } else if item.is_melee {
+            if item.melee_damage > 0 {
+                s := fmt.bprintf(sbuf[:47], "DMG  %.0f", item.melee_damage)
+                sbuf[len(s)] = 0
+                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                stat_y += uis(17)
+            }
+            if item.melee_cooldown_max > 0 {
+                s := fmt.bprintf(sbuf[:47], "ATK SPD  %.1f/s", 1.0 / item.melee_cooldown_max)
+                sbuf[len(s)] = 0
+                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                stat_y += uis(17)
+            }
+        }
+        if item.base_armor > 0 {
+            s := fmt.bprintf(sbuf[:47], "ARMOR  %.0f%%", item.base_armor * 100)
+            sbuf[len(s)] = 0
+            rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+            stat_y += uis(17)
+        }
+        if item.base_shield > 0 {
+            s := fmt.bprintf(sbuf[:47], "SHIELD  +%.0f", item.base_shield)
+            sbuf[len(s)] = 0
+            rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+            stat_y += uis(17)
+        }
+        if stat_line_count > 0 { stat_y += uis(6) }
+    }
 
     if req_count > 0 {
         player_str, player_dex, player_sci: int
@@ -2326,7 +2374,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         COL_REQ_MET   :: rl.Color{ 100, 210, 100, 220 }
         COL_REQ_UNMET :: rl.Color{ 220,  60,  60, 240 }
         req_row: int
-        req_y_base := ty2 + uis(78)
+        req_y_base := stat_y
         if item.req_str > 0 {
             col := COL_REQ_MET if player_str >= int(item.req_str) else COL_REQ_UNMET
             rbuf: [32]u8
@@ -2356,22 +2404,35 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     }
 
     affix_type_labels := [cw.AffixType]string{
-        .None            = "",
-        .BonusHP         = "Max HP",
-        .Armor           = "Armor",
-        .BonusMoveSpeed  = "Move Speed",
-        .BonusEnergy     = "Max Energy",
-        .BonusDamage     = "Damage",
-        .BonusFireRate   = "Fire Rate",
+        .None             = "",
+        .BonusHP          = "Max HP",
+        .Armor            = "Armor",
+        .BonusMoveSpeed   = "Move Speed",
+        .BonusEnergy      = "Max Energy",
+        .BonusDamage      = "Damage",
+        .BonusFireRate    = "Fire Rate",
         .BonusReloadSpeed = "Reload Speed",
+        .HealthRegen      = "HP Regen/s",
+        .BonusProjSpeed   = "Proj Speed",
+        .BonusPierce      = "Pierce",
+        .BonusAmmo        = "Ammo",
+        .BonusMeleeDamage = "Melee Damage",
+        .BonusMeleeRange  = "Melee Range",
+        .BonusMeleeSpeed  = "Attack Speed",
     }
-    COL_AFFIX :: rl.Color{ 195, 168, 72, 235 }
-    affix_base_y := ty2 + uis(78) + uis(17) * f32(req_count)
+    // COL_AFFIX is the package-level constant defined in ui.odin
+    affix_base_y := stat_y + uis(17) * f32(req_count)
     for i in 0..<affix_count {
         a   := item.affixes[i]
         ay  := affix_base_y + uis(17) * f32(i)
         abuf: [32]u8
-        as  := fmt.bprintf(abuf[:31], "+%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
+        as: string
+        // BonusPierce is a flat count (1, 2, …) not a percentage.
+        if a.type == .BonusPierce {
+            as = fmt.bprintf(abuf[:31], "+%.0f  %s", a.value, affix_type_labels[a.type])
+        } else {
+            as = fmt.bprintf(abuf[:31], "+%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
+        }
         abuf[len(as)] = 0
         rl.DrawTextEx(g_font, cstring(&abuf[0]), { tx2, ay }, fs13, 0.5, COL_AFFIX)
     }
@@ -2386,649 +2447,6 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             fs13, text_w + (tx2 - f32(tx) - uis(10)), 0.5,
             rl.Color{ 200, 190, 160, 200 })
     }
-}
-
-@(private = "file")
-draw_section_header :: proc(px, py, sec_y_off, panel_w: i32, label: cstring, fs: f32) {
-    lbl_sz := rl.MeasureTextEx(g_font, label, fs, 1)
-    lbl_x  := f32(px) + f32(panel_w) * 0.5 - lbl_sz.x * 0.5
-    mid_y  := f32(py + sec_y_off) + uis(9)
-    rl.DrawLineEx({ f32(px) + uis(12), mid_y }, { lbl_x - uis(8), mid_y }, 1, COL_RULE)
-    rl.DrawLineEx({ lbl_x + lbl_sz.x + uis(8), mid_y },
-        { f32(px + panel_w) - uis(12), mid_y }, 1, COL_RULE)
-    rl.DrawTextEx(g_font, label, { lbl_x, f32(py + sec_y_off) }, fs, 1, COL_MUTED)
-}
-
-update_inventory :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Inventory) { return }
-
-    inv := cw.world_get_inventory(w, w.player_id)
-    mp  := rl.GetMousePosition()
-    px, py := inv_panel_origin()
-
-    if g_playing_state == .Shop && rl.IsMouseButtonPressed(.RIGHT) && g_drag_item_id == -1 {
-        col, row, in_grid := inv_mouse_to_cell(px, py, mp.x, mp.y)
-        if in_grid {
-            cell_id := inv.backpack[row * cw.BACKPACK_COLS + col]
-            if cell_id != cw.INVALID_ENTITY {
-                g_sell_item_id = cell_id
-            }
-        }
-    }
-
-    if rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
-        col, row, in_grid := inv_mouse_to_cell(px, py, mp.x, mp.y)
-        if in_grid {
-            cell_id := inv.backpack[row * cw.BACKPACK_COLS + col]
-            if cell_id != cw.INVALID_ENTITY {
-                item             := cw.world_get_item(w, cell_id)
-                g_drag_origin_x   = item.pack_x
-                g_drag_origin_y   = item.pack_y
-                g_drag_from_equip = false
-                backpack_remove(inv, item)
-                g_drag_item_id    = cell_id
-            }
-        }
-        if g_drag_item_id == -1 {
-            for i in 0..<cw.EQUIP_SLOT_COUNT {
-                slot := cw.EquipSlot(i)
-                eid  := inv.equipped[i]
-                if eid == cw.INVALID_ENTITY                         { continue }
-                if !cw.world_has_component(w, eid, .Item)           { continue }
-                rect, ok := equip_slot_rect(px, py, slot)
-                if !ok { continue }
-                if !rl.CheckCollisionPointRec(mp, rect) { continue }
-                inv.equipped[i]     = cw.INVALID_ENTITY
-                g_drag_item_id      = eid
-                g_drag_from_equip   = true
-                g_drag_origin_equip = slot
-                break
-            }
-        }
-    }
-
-    if rl.IsMouseButtonReleased(.LEFT) && g_drag_item_id != -1 {
-        item    := cw.world_get_item(w, g_drag_item_id)
-        placed  := false
-
-        for i in 0..<cw.EQUIP_SLOT_COUNT {
-            slot := cw.EquipSlot(i)
-            if !item_fits_slot(item.slot, slot)     { continue }
-            if inv.equipped[i] != cw.INVALID_ENTITY { continue }  // slot occupied
-            rect, ok := equip_slot_rect(px, py, slot)
-            if !ok { continue }
-            if !rl.CheckCollisionPointRec(mp, rect) { continue }
-            // Stat requirement check — block equip if player lacks required stats
-            if cw.world_has_component(w, w.player_id, .Stats) {
-                st := cw.world_get_stats(w, w.player_id)
-                if item.req_str > 0 && st.strength  < int(item.req_str) { break }
-                if item.req_dex > 0 && st.dexterity < int(item.req_dex) { break }
-                if item.req_sci > 0 && st.science   < int(item.req_sci) { break }
-            }
-            // Two-handed blocking:
-            //   • Can't equip a 2H weapon in WeaponPrimary while offhand is occupied.
-            //   • Can't equip anything in WeaponOffhand while a 2H weapon is in primary.
-            if slot == .WeaponPrimary && item.is_two_handed {
-                offhand_id := inv.equipped[int(cw.EquipSlot.WeaponOffhand)]
-                if offhand_id != cw.INVALID_ENTITY { break }
-            }
-            if slot == .WeaponOffhand {
-                prim_id := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-                if prim_id != cw.INVALID_ENTITY &&
-                   cw.world_has_component(w, prim_id, .Item) &&
-                   cw.world_get_item(w, prim_id).is_two_handed { break }
-            }
-            inv.equipped[i] = g_drag_item_id
-            item.pack_x     = -1
-            item.pack_y     = -1
-            placed = true
-            play_sfx("equip")
-            break
-        }
-
-        if !placed {
-            col, row, in_grid := inv_mouse_to_cell(px, py, mp.x, mp.y)
-            if in_grid && backpack_can_place(inv, item, col, row) {
-                backpack_place(inv, item, g_drag_item_id, col, row)
-                placed = true
-            }
-        }
-
-        if !placed {
-            if g_drag_from_equip && inv.equipped[int(g_drag_origin_equip)] == cw.INVALID_ENTITY {
-                inv.equipped[int(g_drag_origin_equip)] = g_drag_item_id
-                item.pack_x = -1
-                item.pack_y = -1
-                placed = true
-            } else if backpack_can_place(inv, item, g_drag_origin_x, g_drag_origin_y) {
-                backpack_place(inv, item, g_drag_item_id, g_drag_origin_x, g_drag_origin_y)
-                placed = true
-            }
-        }
-        if !placed {
-            c, r, ok := backpack_find_free(inv, item)
-            if ok { backpack_place(inv, item, g_drag_item_id, c, r) }
-        }
-
-        g_drag_item_id      = -1
-        g_drag_origin_x     = -1
-        g_drag_origin_y     = -1
-        g_drag_from_equip   = false
-    }
-
-    if g_drag_item_id == -1 {
-        col, row, in_grid := inv_mouse_to_cell(px, py, mp.x, mp.y)
-        if in_grid {
-            g_hover_item_id = inv.backpack[row * cw.BACKPACK_COLS + col]
-        } else {
-            g_hover_item_id = cw.INVALID_ENTITY
-            for i in 0..<cw.EQUIP_SLOT_COUNT {
-                eid := inv.equipped[i]
-                if eid == cw.INVALID_ENTITY { continue }
-                rect, ok := equip_slot_rect(px, py, cw.EquipSlot(i))
-                if !ok { continue }
-                if rl.CheckCollisionPointRec(mp, rect) {
-                    g_hover_item_id = eid
-                    break
-                }
-            }
-        }
-    } else {
-        g_hover_item_id = cw.INVALID_ENTITY
-    }
-}
-
-draw_inventory :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-
-    px, py := inv_panel_origin()
-    sec_fs := uis(15)
-
-    clay.BeginLayout()
-    panel_wf := f32(g_inv.panel_w)
-    panel_hf := f32(rl.GetScreenHeight())
-    if clay.UI(clay.ID("InvPanel"))({
-        layout = {
-            sizing = { clay.SizingFixed(panel_wf), clay.SizingFixed(panel_hf) },
-        },
-        floating = {
-            offset     = { f32(px), 0 },
-            attachment = { element = .LeftTop, parent = .LeftTop },
-            attachTo   = .Root,
-        },
-        backgroundColor = { 10, 7, 5, 252 },
-        border          = { color = { 90, 68, 28, 210 }, width = { 0, 0, 0, 2, 0 } },
-    }) {}
-    cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
-
-    rl.DrawRectangle(px, 0, g_inv.panel_w, i32(uis(2)), COL_BRASS)
-
-    title    := cstring("E Q U I P M E N T")
-    title_fs := uis(20)
-    title_sz := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title, {
-        f32(px) + f32(g_inv.panel_w) * 0.5 - title_sz.x * 0.5,
-        f32(py + g_inv.title_y),
-    }, title_fs, 1, COL_PARCH)
-    rl.DrawLineEx(
-        { f32(px) + uis(12), f32(py + g_inv.rule1_y) },
-        { f32(px + g_inv.panel_w) - uis(12), f32(py + g_inv.rule1_y) }, 1, COL_RULE)
-
-    var_inv: ^cw.InventoryComp
-    if cw.world_has_component(w, w.player_id, .Inventory) {
-        var_inv = cw.world_get_inventory(w, w.player_id)
-    }
-
-    drag_item_slot: cw.EquipSlot
-    has_drag := g_drag_item_id != -1 && cw.world_is_valid(w, g_drag_item_id)
-    if has_drag && cw.world_has_component(w, g_drag_item_id, .Item) {
-        drag_item_slot = cw.world_get_item(w, g_drag_item_id).slot
-    }
-    slot_is_target :: proc(
-        inv: ^cw.InventoryComp, has_drag: bool,
-        drag_item_slot: cw.EquipSlot, slot: cw.EquipSlot,
-    ) -> bool {
-        if !has_drag { return false }
-        if !item_fits_slot(drag_item_slot, slot) { return false }
-        if inv == nil { return false }
-        return inv.equipped[int(slot)] == cw.INVALID_ENTITY
-    }
-
-    armor_labels := [3]cstring{ "HEAD", "CHEST", "BOOTS" }
-    armor_slots  := [3]cw.EquipSlot{ .Head, .Chest, .Boots }
-    for i in 0..<3 {
-        sy  := py + g_inv.slots_y + i32(i) * (g_inv.slot_h + g_inv.slot_gap)
-        n, has := inv_slot_name(w, var_inv, armor_slots[i])
-        draw_equip_slot_h(px + g_inv.pad, sy, g_inv.slot_w, g_inv.slot_h, armor_labels[i], n, has)
-        if slot_is_target(var_inv, has_drag, drag_item_slot, armor_slots[i]) {
-            rl.DrawRectangleLinesEx(
-                { f32(px + g_inv.pad), f32(sy), f32(g_inv.slot_w), f32(g_inv.slot_h) },
-                2, rl.Color{ 215, 175, 28, 200 })
-        }
-    }
-
-    draw_section_header(px, py, g_inv.sec_y, g_inv.panel_w, "WEAPONS", sec_fs)
-
-    wy := py + g_inv.wep_y
-
-    wep_label1: cstring = "WEAPON I"
-    if cw.world_has_component(w, w.player_id, .Equipment) {
-        eq := cw.world_get_equipment(w, w.player_id)
-        if cw.world_is_valid(w, eq.weapon_entity_id) &&
-           cw.world_has_component(w, eq.weapon_entity_id, .RenderConfig) {
-            wep_label1 = cw.render_config_name_cstr(
-                cw.world_get_render_config(w, eq.weapon_entity_id))
-        }
-    }
-
-    offhand_blocked := false
-    if var_inv != nil {
-        prim_id := var_inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-        if prim_id != cw.INVALID_ENTITY && cw.world_has_component(w, prim_id, .Item) {
-            offhand_blocked = cw.world_get_item(w, prim_id).is_two_handed
-        }
-    }
-
-    wn1, whas1 := inv_slot_name(w, var_inv, .WeaponPrimary)
-    wn2, whas2 := inv_slot_name(w, var_inv, .WeaponOffhand)
-    draw_weapon_slot_box(px + g_inv.pad,
-        wy, g_inv.wep_w, g_inv.wep_h, wep_label1, wn1, whas1)
-    draw_weapon_slot_box(px + g_inv.pad + g_inv.wep_w + g_inv.col_gap,
-        wy, g_inv.wep_w, g_inv.wep_h, "OFFHAND MOD", wn2, whas2, offhand_blocked)
-    for wslot in ([]cw.EquipSlot{ .WeaponPrimary, .WeaponOffhand }) {
-        if wslot == .WeaponOffhand && offhand_blocked { continue }
-        if slot_is_target(var_inv, has_drag, drag_item_slot, wslot) {
-            r, _ := equip_slot_rect(px, py, wslot)
-            rl.DrawRectangleLinesEx(r, 2, rl.Color{ 215, 175, 28, 200 })
-        }
-    }
-
-    draw_section_header(px, py, g_inv.ability_sec_y, g_inv.panel_w, "ABILITIES", sec_fs)
-
-    ab_labels := [4]cstring{ "Q", "E", "F", "G" }
-    ab_slots  := [4]cw.EquipSlot{ .Ability1, .Ability2, .Ability3, .Ability4 }
-    for i in 0..<4 {
-        ar, _ := equip_slot_rect(px, py, ab_slots[i])
-        n, has := inv_slot_name(w, var_inv, ab_slots[i])
-        rl.DrawRectangle(i32(ar.x), i32(ar.y), i32(ar.width), i32(ar.height),
-            rl.Color{ 20, 16, 12, 240 })
-        rl.DrawRectangleLinesEx(ar, 1, COL_RULE)
-        rl.DrawTextEx(g_font, ab_labels[i],
-            { ar.x + uis(5), ar.y + uis(4) }, uis(13), 1, COL_BRASS)
-        name_col := COL_PARCH if has else rl.Color{ 80, 74, 58, 130 }
-        ab_name_str := n if has else cstring("empty")
-        rl.DrawTextEx(g_font, ab_name_str,
-            { ar.x + uis(5), ar.y + uis(22) }, uis(11), 0.5, name_col)
-        if slot_is_target(var_inv, has_drag, drag_item_slot, ab_slots[i]) {
-            rl.DrawRectangleLinesEx(ar, 2, rl.Color{ 215, 175, 28, 200 })
-        }
-    }
-
-    draw_section_header(px, py, g_inv.pack_sec_y, g_inv.panel_w, "B A C K P A C K", sec_fs)
-
-    gx := px + g_inv.pad
-    gy := py + g_inv.pack_y
-
-    grid_w := i32(cw.BACKPACK_COLS) * g_inv.cell_sz
-    grid_h := i32(cw.BACKPACK_ROWS) * g_inv.cell_sz
-
-    for r in 0..<i32(cw.BACKPACK_ROWS) {
-        for c in 0..<i32(cw.BACKPACK_COLS) {
-            cx := gx + c * g_inv.cell_sz
-            cy := gy + r * g_inv.cell_sz
-            cs := g_inv.cell_sz
-            rl.DrawRectangle(cx, cy, cs, cs, rl.Color{ 8, 6, 4, 255 })
-            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, rl.Color{ 18, 14, 10, 255 })
-            rl.DrawLineEx({ f32(cx + 1), f32(cy + 1) }, { f32(cx + cs - 1), f32(cy + 1) },
-                1, rl.Color{ 0, 0, 0, 80 })
-            rl.DrawLineEx({ f32(cx + 1), f32(cy + 1) }, { f32(cx + 1), f32(cy + cs - 1) },
-                1, rl.Color{ 0, 0, 0, 80 })
-        }
-    }
-
-    if var_inv != nil {
-        for row in 0..<cw.BACKPACK_ROWS {
-            for col in 0..<cw.BACKPACK_COLS {
-                cell_id := var_inv.backpack[row * cw.BACKPACK_COLS + col]
-                if cell_id == cw.INVALID_ENTITY  { continue }
-                if cell_id == g_drag_item_id      { continue }
-                if !cw.world_is_valid(w, cell_id) { continue }
-                item := cw.world_get_item(w, cell_id)
-                if item.pack_x != col || item.pack_y != row { continue }
-
-                rc := rarity_color(item.rarity)
-                ix := gx + i32(col) * g_inv.cell_sz + 2
-                iy := gy + i32(row) * g_inv.cell_sz + 2
-                iw := i32(item.grid_w) * g_inv.cell_sz - 4
-                ih := i32(item.grid_h) * g_inv.cell_sz - 4
-
-                rl.DrawRectangle(ix, iy, iw, ih,
-                    rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
-                rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1,
-                    rl.Color{ rc.r, rc.g, rc.b, 220 })
-
-                icon_margin :: i32(3)
-                icon_sz     := min(iw, ih) - icon_margin * 2
-                icon_drawn  := false
-
-                if cw.world_has_component(w, cell_id, .RenderConfig) {
-                    rcc := cw.world_get_render_config(w, cell_id)
-                    if rcc.icon_len > 0 {
-                        tex, ok := get_or_load_icon(cw.render_config_icon_cstr(rcc))
-                        if ok {
-                            iicon_x := ix + (iw - icon_sz) / 2
-                            iicon_y := iy + icon_margin
-                            src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
-                            dst := rl.Rectangle{ f32(iicon_x), f32(iicon_y), f32(icon_sz), f32(icon_sz) }
-                            rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
-                                rl.Color{ rc.r, rc.g, rc.b, 210 })
-                            icon_drawn = true
-                        }
-                    }
-                }
-                if !icon_drawn {
-                    draw_item_glyph(item.slot,
-                        ix + (iw - icon_sz) / 2, iy + icon_margin, icon_sz, rc)
-                }
-                if cw.world_has_component(w, cell_id, .RenderConfig) {
-                    rcc  := cw.world_get_render_config(w, cell_id)
-                    name := cw.render_config_name_cstr(rcc)
-                    rl.DrawTextEx(g_font, name,
-                        { f32(ix) + uis(3), f32(iy + icon_margin + icon_sz + 2) },
-                        uis(11), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
-                }
-            }
-        }
-    }
-
-    for c in 0..=i32(cw.BACKPACK_COLS) {
-        lx := f32(gx + c * g_inv.cell_sz)
-        rl.DrawLineEx({ lx, f32(gy) }, { lx, f32(gy + grid_h) }, 1, COL_RULE)
-    }
-    for r in 0..=i32(cw.BACKPACK_ROWS) {
-        ly := f32(gy + r * g_inv.cell_sz)
-        rl.DrawLineEx({ f32(gx), ly }, { f32(gx + grid_w), ly }, 1, COL_RULE)
-    }
-
-    if g_drag_item_id != -1 && cw.world_is_valid(w, g_drag_item_id) {
-        mp   := rl.GetMousePosition()
-        item := cw.world_get_item(w, g_drag_item_id)
-
-        col, row, in_grid := inv_mouse_to_cell(px, py, mp.x, mp.y)
-        if in_grid {
-            can    := backpack_can_place(var_inv, item, col, row)
-            hi_col := rl.Color{ 60, 180, 60, 80 } if can else rl.Color{ 180, 40, 40, 80 }
-            for dy in 0..<item.grid_h {
-                for dx in 0..<item.grid_w {
-                    if col+dx < cw.BACKPACK_COLS && row+dy < cw.BACKPACK_ROWS {
-                        rl.DrawRectangle(
-                            gx + i32(col+dx) * g_inv.cell_sz,
-                            gy + i32(row+dy) * g_inv.cell_sz,
-                            g_inv.cell_sz, g_inv.cell_sz, hi_col)
-                    }
-                }
-            }
-        }
-
-        iw := i32(item.grid_w) * g_inv.cell_sz - 4
-        ih := i32(item.grid_h) * g_inv.cell_sz - 4
-        fx := i32(mp.x) - iw / 2
-        fy := i32(mp.y) - ih / 2
-        drag_rc := rarity_color(item.rarity)
-        rl.DrawRectangle(fx, fy, iw, ih,
-            rl.Color{ drag_rc.r / 5, drag_rc.g / 5, drag_rc.b / 5, 230 })
-        rl.DrawRectangleLinesEx({ f32(fx), f32(fy), f32(iw), f32(ih) }, 1,
-            rl.Color{ drag_rc.r, drag_rc.g, drag_rc.b, 240 })
-
-        drag_icon_sz    := min(iw, ih) - 6
-        drag_icon_x     := fx + (iw - drag_icon_sz) / 2
-        drag_icon_y     := fy + (ih - drag_icon_sz) / 2
-        drag_icon_drawn := false
-        if cw.world_has_component(w, g_drag_item_id, .RenderConfig) {
-            rcc := cw.world_get_render_config(w, g_drag_item_id)
-            if rcc.icon_len > 0 {
-                tex, ok := get_or_load_icon(cw.render_config_icon_cstr(rcc))
-                if ok {
-                    src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
-                    dst := rl.Rectangle{
-                        f32(drag_icon_x), f32(drag_icon_y),
-                        f32(drag_icon_sz), f32(drag_icon_sz) }
-                    rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
-                        rl.Color{ drag_rc.r, drag_rc.g, drag_rc.b, 210 })
-                    drag_icon_drawn = true
-                }
-            }
-        }
-        if !drag_icon_drawn {
-            draw_item_glyph(item.slot, drag_icon_x, drag_icon_y, drag_icon_sz, drag_rc)
-        }
-    }
-
-    // ── Tooltip ───────────────────────────────────────────────────────────
-    if g_hover_item_id != cw.INVALID_ENTITY && g_drag_item_id == -1 {
-        mp2 := rl.GetMousePosition()
-        draw_item_tooltip(w, g_hover_item_id, mp2.x, mp2.y)
-    }
-
-    // ── Close hint ────────────────────────────────────────────────────────
-    hint    := cstring("[I]  Close")
-    hint_sz := rl.MeasureTextEx(g_font, hint, sec_fs, 1)
-    rl.DrawTextEx(g_font, hint, {
-        f32(px) + f32(g_inv.panel_w) * 0.5 - hint_sz.x * 0.5,
-        f32(py + g_inv.hint_y),
-    }, sec_fs, 1, COL_MUTED)
-}
-
-
-@(private = "file")
-STATS_W_BASE :: f32(360)
-@(private = "file")
-STATS_H_BASE :: f32(582)
-
-update_stats_screen :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Stats) { return }
-    if !rl.IsMouseButtonPressed(.LEFT) { return }
-
-    st := cw.world_get_stats(w, w.player_id)
-    if st.stat_points <= 0 { return }
-
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-    PW := i32(uis(STATS_W_BASE))
-    PH := i32(uis(STATS_H_BASE))
-    px := i32(sw * 0.5) - PW / 2
-    py := i32(sh * 0.5) - PH / 2
-
-    mp    := rl.GetMousePosition()
-    btn_w := i32(uis(28))
-    btn_h := i32(uis(24))
-
-    for i in 0..<3 {
-        row_y := i32(uis(144)) + i32(uis(72)) * i32(i)
-        rh    := i32(uis(60))
-        rw    := PW - i32(uis(48))
-        rx    := px + i32(uis(24))
-        ry    := py + row_y
-        btn_x := rx + rw - btn_w - i32(uis(8))
-        btn_y := ry + (rh - btn_h) / 2
-        btn_r := rl.Rectangle{ f32(btn_x), f32(btn_y), f32(btn_w), f32(btn_h) }
-        if rl.CheckCollisionPointRec(mp, btn_r) {
-            switch i {
-            case 0: st.strength   += 1
-            case 1: st.dexterity  += 1
-            case 2: st.science    += 1
-            }
-            st.stat_points -= 1
-            play_sfx("stat_up")
-            if cw.world_is_valid(w, w.player_id) {
-                save_player(w, w.player_id)
-            }
-            return
-        }
-    }
-}
-
-draw_stats_screen :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Stats) { return }
-
-    st := cw.world_get_stats(w, w.player_id)
-
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-    PW := i32(uis(STATS_W_BASE))
-    PH := i32(uis(STATS_H_BASE))
-    px := i32(sw * 0.5) - PW / 2
-    py := i32(sh * 0.5) - PH / 2
-
-    rl.DrawRectangle(px, py, PW, PH, COL_PANEL)
-    rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 1, COL_RULE)
-
-    title    := cstring("C H A R A C T E R")
-    title_fs := uis(22)
-    tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
-        { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(14) },
-        title_fs, 1, COL_PARCH)
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(py) + uis(48) },
-        { f32(px) + f32(PW) - uis(16), f32(py) + uis(48) },
-        1, COL_RULE)
-
-    lfs   := uis(18)
-    lvbuf : [32]u8
-    lvs   := fmt.bprintf(lvbuf[:31], "Level  %d", st.level)
-    lvbuf[len(lvs)] = 0
-    rl.DrawTextEx(g_font, cstring(&lvbuf[0]),
-        { f32(px) + uis(24), f32(py) + uis(58) }, lfs, 1, COL_PARCH)
-
-    xp_ratio := clamp(st.xp / st.xp_next, 0, 1) if st.xp_next > 0 else f32(0)
-    bar_x := px + i32(uis(24))
-    bar_y := py + i32(uis(82))
-    bar_w := PW - i32(uis(48))
-    bar_h := i32(uis(12))
-    rl.DrawRectangle(bar_x, bar_y, bar_w, bar_h, { 30, 24, 10, 255 })
-    rl.DrawRectangle(bar_x, bar_y, i32(f32(bar_w) * xp_ratio), bar_h, { 180, 148, 36, 255 })
-    rl.DrawRectangleLinesEx({ f32(bar_x), f32(bar_y), f32(bar_w), f32(bar_h) }, 1, COL_RULE)
-
-    xpbuf : [48]u8
-    xps   := fmt.bprintf(xpbuf[:47], "%.0f / %.0f xp", st.xp, st.xp_next)
-    xpbuf[len(xps)] = 0
-    xpsz := rl.MeasureTextEx(g_font, cstring(&xpbuf[0]), uis(12), 0.5)
-    rl.DrawTextEx(g_font, cstring(&xpbuf[0]),
-        { f32(bar_x) + f32(bar_w)*0.5 - xpsz.x*0.5, f32(bar_y) + uis(15) },
-        uis(12), 0.5, COL_MUTED)
-
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(py) + uis(110) },
-        { f32(px) + f32(PW) - uis(16), f32(py) + uis(110) },
-        1, COL_RULE)
-
-    sfs := uis(14)
-    rl.DrawTextEx(g_font, "STATS",
-        { f32(px) + uis(24), f32(py) + uis(118) }, sfs, 1, COL_MUTED)
-
-    if st.stat_points > 0 {
-        ptbuf : [32]u8
-        pts   := fmt.bprintf(ptbuf[:31], "%d  point%s  available",
-            st.stat_points, "s" if st.stat_points != 1 else "")
-        ptbuf[len(pts)] = 0
-        ptsz := rl.MeasureTextEx(g_font, cstring(&ptbuf[0]), sfs, 0.5)
-        rl.DrawTextEx(g_font, cstring(&ptbuf[0]),
-            { f32(px) + f32(PW) - uis(24) - ptsz.x, f32(py) + uis(118) },
-            sfs, 0.5, { 200, 175, 60, 230 })
-    }
-
-    stat_names  := [3]cstring{ "Strength", "Dexterity", "Science" }
-    stat_values := [3]int{ st.strength, st.dexterity, st.science }
-
-    for i in 0..<3 {
-        row_y := i32(uis(144)) + i32(uis(72)) * i32(i)
-        rh    := i32(uis(60))
-        rw    := PW - i32(uis(48))
-        rx    := px + i32(uis(24))
-        ry    := py + row_y
-
-        rl.DrawRectangle(rx, ry, rw, rh, { 18, 14, 10, 200 })
-        rl.DrawRectangleLinesEx({ f32(rx), f32(ry), f32(rw), f32(rh) }, 1,
-            { 80, 65, 42, 130 })
-
-        nfs := uis(18)
-        rl.DrawTextEx(g_font, stat_names[i],
-            { f32(rx) + uis(12), f32(ry) + uis(10) }, nfs, 1, COL_PARCH)
-
-        vbuf : [8]u8
-        vs   := fmt.bprintf(vbuf[:7], "%d", stat_values[i])
-        vbuf[len(vs)] = 0
-        rl.DrawTextEx(g_font, cstring(&vbuf[0]),
-            { f32(rx) + uis(12), f32(ry) + uis(33) }, nfs, 1, COL_BRASS)
-
-        dfs  := uis(13)
-        dbuf : [32]u8
-        ds   : string
-        switch i {
-        case 0: ds = fmt.bprintf(dbuf[:31], "+%.0f%%  HP", f32(stat_values[i]-1)*15)
-        case 1: ds = fmt.bprintf(dbuf[:31], "+%.0f%%  Speed", f32(stat_values[i]-1)*8)
-        case 2: ds = fmt.bprintf(dbuf[:31], "+%.0f%%  Energy", f32(stat_values[i]-1)*12)
-        }
-        dbuf[len(ds)] = 0
-        dsz := rl.MeasureTextEx(g_font, cstring(&dbuf[0]), dfs, 0.5)
-
-        btn_w := i32(uis(28))
-        btn_h := i32(uis(24))
-        btn_x := rx + rw - btn_w - i32(uis(8))
-        btn_y := ry + (rh - btn_h) / 2
-
-        rl.DrawTextEx(g_font, cstring(&dbuf[0]),
-            { f32(btn_x) - dsz.x - uis(10), f32(ry) + uis(35) },
-            dfs, 0.5, COL_MUTED)
-
-        btn_active := st.stat_points > 0
-        btn_bg  := rl.Color{ 55, 44, 18, 200 } if btn_active else rl.Color{ 28, 22, 12, 140 }
-        btn_brd := COL_RULE                     if btn_active else rl.Color{ 55, 48, 32, 80  }
-        btn_tc  := COL_PARCH                    if btn_active else rl.Color{ 80, 70, 45, 100 }
-        rl.DrawRectangle(btn_x, btn_y, btn_w, btn_h, btn_bg)
-        rl.DrawRectangleLinesEx({ f32(btn_x), f32(btn_y), f32(btn_w), f32(btn_h) }, 1, btn_brd)
-        plus_fs := uis(16)
-        plsz := rl.MeasureTextEx(g_font, "+", plus_fs, 1)
-        rl.DrawTextEx(g_font, "+",
-            { f32(btn_x) + f32(btn_w)*0.5 - plsz.x*0.5,
-              f32(btn_y) + f32(btn_h)*0.5 - plsz.y*0.5 },
-            plus_fs, 1, btn_tc)
-    }
-
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(py) + uis(358) },
-        { f32(px) + f32(PW) - uis(16), f32(py) + uis(358) },
-        1, COL_RULE)
-    rl.DrawTextEx(g_font, "HISTORY",
-        { f32(px) + uis(24), f32(py) + uis(366) }, sfs, 1, COL_MUTED)
-
-    hist_rows := [4][2]string{
-        { "Raids completed",  fmt.tprintf("%d",  g_lifetime_stats.successful_raids) },
-        { "Enemies killed",   fmt.tprintf("%d",  g_lifetime_stats.enemies_killed)   },
-        { "Deaths",           fmt.tprintf("%d",  g_lifetime_stats.deaths)           },
-        { "Best extract",     fmt.tprintf("%d g",int(g_lifetime_stats.max_extract_gold)) },
-    }
-    hfs := uis(14)
-    for row, ri in hist_rows {
-        hy := f32(py) + uis(390) + f32(ri) * uis(34)
-        rl.DrawTextEx(g_font, strings.clone_to_cstring(row[0], context.temp_allocator),
-            { f32(px) + uis(24), hy }, hfs, 0.5, COL_MUTED)
-        vsz := rl.MeasureTextEx(g_font, strings.clone_to_cstring(row[1], context.temp_allocator), hfs, 0.5)
-        rl.DrawTextEx(g_font, strings.clone_to_cstring(row[1], context.temp_allocator),
-            { f32(px) + f32(PW) - uis(24) - vsz.x, hy }, hfs, 0.5, COL_PARCH)
-    }
-
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(py) + f32(PH) - uis(32) },
-        { f32(px) + f32(PW) - uis(16), f32(py) + f32(PH) - uis(32) },
-        1, COL_RULE)
-    rl.DrawTextEx(g_font, "[C]  Close",
-        { f32(px) + uis(24), f32(py) + f32(PH) - uis(22) }, uis(13), 0.5, COL_MUTED)
 }
 
 draw_levelup_flash :: proc() {
@@ -3054,3 +2472,70 @@ draw_levelup_flash :: proc() {
         sfs, 1, { 200, 180, 120, salp })
 }
 
+// ── Enemy mutation auras ───────────────────────────────────────────────────────
+//
+// Draws world-space rings around non-player entities that carry mutations.
+// Must be called inside BeginMode2D so draw_world_circle_lines applies the
+// iso projection correctly.
+//
+// Visual language per mutation:
+//   LivingBomb  — two concentric pulsing orange rings (breathing, ~1.4 Hz)
+//   ToxicFlesh  — single slow-pulsing green ring at the proximity radius
+//   ThornPact   — tight constant silver-purple double ring
+//   BlackLung   — pressure-scaled teal ring; invisible at zero pressure
+draw_enemy_mutation_auras :: proc(w: ^cw.World) {
+    t   := f32(rl.GetTime())
+    ids := cw.world_query(w, cw.query_mask(.MutationContainer, .Transform, .AIAgent),
+                          context.temp_allocator)
+    for id in ids {
+        if is_player_entity(w, id) { continue }
+        if is_fog_hidden(w, id)    { continue }
+
+        tr  := cw.world_get_transform(w, id)
+        pos := rl.Vector2{ tr.position[0], tr.position[1] }
+
+        mc := cw.world_get_mutation(w, id)
+        for i in 0..<mc.entity_count {
+            meid := mc.entities[i]
+            if !cw.world_is_valid(w, meid) { continue }
+
+            // ── LivingBomb — pulsing orange rings ──
+            if cw.world_has_component(w, meid, .MutOnDeathExplode) {
+                pulse := f32(0.87) + f32(0.13) * math.sin(t * 1.4 * math.PI * 2)
+                r     := f32(38) * pulse
+                col   := mutation_visual_color(.LivingBomb)
+                draw_world_circle_lines(pos, r,         rl.Color{ col.r, col.g, col.b, 130 })
+                draw_world_circle_lines(pos, r * 0.58,  rl.Color{ col.r, col.g, col.b,  60 })
+            }
+
+            // ── ToxicFlesh — slow pulsing green ring at proximity radius ──
+            if cw.world_has_component(w, meid, .MutProximityDamage) {
+                pd    := cw.world_get_mut_proximity_damage(w, meid)
+                pulse := f32(0.45) + f32(0.45) * math.sin(t * math.PI * 0.7)
+                alpha := u8(clamp(pulse * 120, 0, 255))
+                col   := mutation_visual_color(.ToxicFlesh)
+                draw_world_circle_lines(pos, pd.radius, rl.Color{ col.r, col.g, col.b, alpha })
+            }
+
+            // ── ThornPact — tight constant double ring ──
+            if cw.world_has_component(w, meid, .MutThornPact) {
+                col := mutation_visual_color(.ThornPact)
+                draw_world_circle_lines(pos, 40, rl.Color{ col.r, col.g, col.b, 115 })
+                draw_world_circle_lines(pos, 47, rl.Color{ col.r, col.g, col.b,  42 })
+            }
+
+            // ── BlackLung — pressure-scaled teal ring ──
+            if cw.world_has_component(w, meid, .MutBlackLung) {
+                bl := cw.world_get_mut_black_lung(w, meid)
+                if bl.pressure > 5 {
+                    frac  := bl.pressure / 100.0
+                    r     := bl.radius * frac
+                    alpha := u8(clamp(frac * 155, 0, 155))
+                    col   := mutation_visual_color(.BlackLung)
+                    draw_world_circle_lines(pos, r,        rl.Color{ col.r, col.g, col.b, alpha })
+                    draw_world_circle_lines(pos, r * 0.65, rl.Color{ col.r, col.g, col.b, alpha / 2 })
+                }
+            }
+        }
+    }
+}

@@ -25,9 +25,26 @@ melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if cw.world_get_respawn(w, pid).timer > 0 { continue }
             }
 
-            player_t := cw.world_get_transform(w, pid)
-            dx   := player_t.position[0] - at.position[0]
-            dy   := player_t.position[1] - at.position[1]
+            check_pos := cw.world_get_transform(w, pid).position
+            if cw.world_has_component(w, pid, .MutationContainer) {
+                mc := cw.world_get_mutation(w, pid)
+                for mi in 0..<mc.entity_count {
+                    meid := mc.entities[mi]
+                    if !cw.world_is_valid(w, meid)                     { continue }
+                    if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
+                    hc := cw.world_get_mut_heart_cage(w, meid)
+                    if cw.world_is_valid(w, hc.heart_id) &&
+                       cw.world_has_component(w, hc.heart_id, .Health) &&
+                       cw.world_has_component(w, hc.heart_id, .Transform) &&
+                       cw.world_get_health(w, hc.heart_id).current > 0 {
+                        check_pos = cw.world_get_transform(w, hc.heart_id).position
+                    }
+                    break
+                }
+            }
+
+            dx   := check_pos[0] - at.position[0]
+            dy   := check_pos[1] - at.position[1]
             dist := math.sqrt(dx*dx + dy*dy)
 
             if dist > arc.radius { continue }

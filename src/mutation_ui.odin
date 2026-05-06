@@ -48,11 +48,6 @@ mutation_branch_name :: proc(branch: MutationBranch) -> string {
 }
 
 @(private="file")
-mutation_close_state :: proc() -> PlayingSubstate {
-    return .Hub if g_hub_active else .Gameplay
-}
-
-@(private="file")
 mut_count_in_branch :: proc(branch: MutationBranch) -> int {
     n := 0
     for mt in cw.MutationType {
@@ -116,15 +111,15 @@ find_nearby_mutation_workbench :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, o
 
 update_mutation_workbench :: proc(w: ^cw.World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
-    if _, _, ok := find_nearby_mutation_workbench(w); ok && rl.IsKeyPressed(INTERACT_KEY) {
+    if _, _, ok := find_nearby_mutation_workbench(w); ok && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
         g_mut_tab    = .Corpus
         g_mut_scroll = 0
-        set_playing_state(.MutationTree)
+        ui_open(.MutationTree)
     }
 }
 
 draw_mutation_workbench_world :: proc(w: ^cw.World) {
-    if g_playing_state == .MutationTree { return }
+    if ui_has(.MutationTree) { return }
     _, pos, ok := find_nearby_mutation_workbench(w)
     if !ok { return }
 
@@ -144,8 +139,8 @@ update_mutation_tree :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
     if !cw.world_has_component(w, w.player_id, .MutationContainer) { return }
 
-    if rl.IsKeyPressed(.ESCAPE) {
-        set_playing_state(mutation_close_state())
+    if input_pressed(.ESCAPE) {
+        ui_close_top()
         return
     }
 
@@ -201,6 +196,21 @@ update_mutation_tree :: proc(w: ^cw.World) {
                 break
             }
             row += 1
+        }
+    }
+
+    // ── Reset-all button click ──────────────────────────────────────────────
+    if rl.IsMouseButtonPressed(.LEFT) {
+        footer_y    := py + ph - uis(24)
+        footer_fs   := uis(8)
+        reset_label := fmt.ctprintf("RESET ALL  [%d serums]", MUT_CLEAR_COST)
+        reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
+        reset_x     := px + pw - reset_sz.x - uis(14)
+        reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
+        if rl.CheckCollisionPointRec(mp, reset_rec) {
+            if mutation_clear_all(w, w.player_id) {
+                play_sfx("stat_up")
+            }
         }
     }
 }
@@ -370,4 +380,20 @@ draw_mutation_tree :: proc(w: ^cw.World) {
     rl.DrawTextEx(g_font, hint,
         {px + pw*0.5 - hint_sz.x*0.5, footer_y + uis(5)},
         footer_fs, 0.4, rl.Color{90, 70, 110, 180})
+
+    // ── Reset-all button ───────────────────────────────────────────────────
+    reset_label := fmt.ctprintf("RESET ALL  [%d serums]", MUT_CLEAR_COST)
+    reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
+    reset_x     := px + pw - reset_sz.x - uis(14)
+    reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
+
+    mc2       := cw.world_get_mutation(w, w.player_id)
+    can_clear := mc2.entity_count > 0 && mc2.serums >= MUT_CLEAR_COST
+    reset_col := rl.Color{220, 60, 60, 200} if can_clear else rl.Color{80, 50, 50, 120}
+
+    if can_clear && rl.CheckCollisionPointRec(mp, reset_rec) {
+        rl.DrawRectangleRounded(reset_rec, 0.3, 4, rl.Color{80, 15, 15, 200})
+        rl.DrawRectangleLinesEx(reset_rec, uis(1), rl.Color{200, 50, 50, 200})
+    }
+    rl.DrawTextEx(g_font, reset_label, {reset_x, footer_y + uis(5)}, footer_fs, 0.4, reset_col)
 }

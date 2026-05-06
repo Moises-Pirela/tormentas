@@ -127,8 +127,14 @@ void main() {
     rgb += u_sun_color * rim * 0.35;
 
     // ── Point lights (direct tint on sprites) ────────────────────────────
+    // Reconstruct world-space position from screen pixel.
+    // The camera operates in iso-space (all draw calls use world_to_iso_xy), so the
+    // raw camera inverse gives iso coords (ix, iy).  Invert the iso transform to get
+    // true game-world coords that match the world-space light positions / wall mask.
+    //   wx = ix * 0.5 + iy,   wy = iy - ix * 0.5
     vec2 screen_px = vec2(gl_FragCoord.x, u_screen_size.y - gl_FragCoord.y);
-    vec2 world_pos = u_camera_target + (screen_px - u_camera_offset) / u_camera_zoom;
+    vec2 iso_pos   = u_camera_target + (screen_px - u_camera_offset) / u_camera_zoom;
+    vec2 world_pos = vec2(iso_pos.x * 0.5 + iso_pos.y, iso_pos.y - iso_pos.x * 0.5);
 
     vec3 light_accum = vec3(0.0);
     for (int i = 0; i < MAX_LIGHTS; i++) {
