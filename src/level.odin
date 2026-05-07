@@ -69,11 +69,19 @@ LevelNPC :: struct {
     npc_type: cw.NPCType,
 }
 
+// LevelBarrel stores an editor-placed barrel hazard.
+// btype 0 = Fire barrel, 1 = Water barrel (mirrors BarrelType enum in fire_system.odin).
+LevelBarrel :: struct {
+    tx, ty: i16,
+    btype:  u8,
+}
+
 LevelData :: struct {
     spawns:       [dynamic]SpawnPoint,
     exits:        [dynamic]LevelExit,
     lights:       [dynamic]LevelLight,
     npcs:         [dynamic]LevelNPC,
+    barrels:      [dynamic]LevelBarrel,
     player_start: [2]f32,
     lighting:     LevelLightingConfig,
 }
@@ -107,6 +115,7 @@ level_data_init :: proc() {
     g_level_data.exits    = make([dynamic]LevelExit)
     g_level_data.lights   = make([dynamic]LevelLight)
     g_level_data.npcs     = make([dynamic]LevelNPC)
+    g_level_data.barrels  = make([dynamic]LevelBarrel)
     g_level_data.lighting = LIGHTING_CONFIG_DEFAULT
 }
 
@@ -115,6 +124,7 @@ level_data_destroy :: proc() {
     delete(g_level_data.exits)
     delete(g_level_data.lights)
     delete(g_level_data.npcs)
+    delete(g_level_data.barrels)
 }
 
 // ─── File path ────────────────────────────────────────────────────────────────
@@ -177,7 +187,7 @@ lv_rbf32 :: proc(raw: []u8, cur: int) -> (val: f32, next: int, ok: bool) {
 // ─── Persistence ─────────────────────────────────────────────────────────────
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
-LEVEL_VERSION :: u16(4)
+LEVEL_VERSION :: u16(6)
 
 // level_save writes g_tilemap and g_level_data to data/levels/levelNN.bin.
 level_save :: proc(n: int) {
@@ -275,6 +285,22 @@ level_save :: proc(n: int) {
     lv_wbf32(&buf, cfg.fog_density)
     lv_wbf32(&buf, cfg.fog_scatter)
 
+    // Barrels (v5+)
+    lv_wb4(&buf, u32(len(g_level_data.barrels)))
+    for b in g_level_data.barrels {
+        lv_wbi16(&buf, b.tx)
+        lv_wbi16(&buf, b.ty)
+        lv_wb1 (&buf, b.btype)
+    }
+
+    // Overlays (v6+)
+    lv_wb4(&buf, u32(len(g_overlay_map)))
+    for k, v in g_overlay_map {
+        lv_wbi16(&buf, i16(k[0]))
+        lv_wbi16(&buf, i16(k[1]))
+        lv_wb1 (&buf, u8(v))
+    }
+
     os.write_entire_file(level_path(n), buf[:])
 }
 
@@ -292,6 +318,7 @@ level_load :: proc(n: int) {
         clear(&g_level_data.exits)
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
+        clear(&g_level_data.barrels)
         g_level_data.player_start = {}
         return
     }
@@ -300,22 +327,28 @@ level_load :: proc(n: int) {
 
     // Magic
     if raw[0] != 'T' || raw[1] != 'R' || raw[2] != 'M' || raw[3] != 'T' {
+        clear(&g_tilemap)
+        clear(&g_overlay_map)
         clear(&g_level_data.spawns)
         clear(&g_level_data.exits)
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
+        clear(&g_level_data.barrels)
         g_level_data.player_start = {}
         return
     }
     cur = 4
 
-    // Version — accept 1 (no lights), 2 (with lights), 3 (+ lighting config)
+    // Version — accept 1..6
     ver, ver_c, ver_ok := lv_rb2(raw, cur)
-    if !ver_ok || (ver != 1 && ver != 2 && ver != 3 && ver != 4) {
+    if !ver_ok || ver < 1 || ver > 6 {
+        clear(&g_tilemap)
+        clear(&g_overlay_map)
         clear(&g_level_data.spawns)
         clear(&g_level_data.exits)
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
+        clear(&g_level_data.barrels)
         g_level_data.player_start = {}
         return
     }
@@ -323,6 +356,7 @@ level_load :: proc(n: int) {
 
     // Tiles
     clear(&g_tilemap)
+    clear(&g_overlay_map)
     tc, tc_c, tc_ok := lv_rb4(raw, cur)
     if !tc_ok { return }
     cur = tc_c
@@ -330,8 +364,20 @@ level_load :: proc(n: int) {
         x,  xc,  xok  := lv_rbi16(raw, cur);  if !xok  { return };  cur = xc
         y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
         t,  tc2, tok  := lv_rb1  (raw, cur);  if !tok  { return };  cur = tc2
-        tt := clamp(int(t), int(TileType.Floor), int(TileType.Water))
-        g_tilemap[[2]int{int(x), int(y)}] = TileType(tt)
+        // Migration: old format had Oil=4, Fire=5 as tile types (v1-v5).
+        // In v6+ these are overlays on Floor tiles.
+        key := [2]int{int(x), int(y)}
+        switch t {
+        case 4:  // old TileType.Oil
+            g_tilemap[key]     = .Floor
+            g_overlay_map[key] = .Oil
+        case 5:  // old TileType.Fire
+            g_tilemap[key]     = .Floor
+            g_overlay_map[key] = .Fire
+        case:
+            tt := clamp(int(t), int(TileType.Floor), int(TileType.Water))
+            g_tilemap[key] = TileType(tt)
+        }
     }
 
     // Spawn points
@@ -459,8 +505,43 @@ level_load :: proc(n: int) {
         cur, ok1 = lf(raw, cur, &c.fog_color_b);            if !ok1 { return }
         cur, ok1 = lf(raw, cur, &c.fog_density);            if !ok1 { return }
         cur, ok1 = lf(raw, cur, &c.fog_scatter);            if !ok1 { return }
-        _ = cur
     }
+
+    // Barrels (v5+)
+    clear(&g_level_data.barrels)
+    if ver >= 5 {
+        bc, bc_c, bc_ok := lv_rb4(raw, cur)
+        if bc_ok {
+            cur = bc_c
+            for _ in 0..<bc {
+                bx, bxc, bxok := lv_rbi16(raw, cur); if !bxok { break }; cur = bxc
+                by, byc, byok := lv_rbi16(raw, cur); if !byok { break }; cur = byc
+                bt, btc, btok := lv_rb1  (raw, cur); if !btok { break }; cur = btc
+                append(&g_level_data.barrels, LevelBarrel{
+                    tx = bx, ty = by, btype = bt,
+                })
+            }
+        }
+    }
+
+    // Overlays (v6+)
+    // (already cleared alongside g_tilemap above)
+    if ver >= 6 {
+        oc, oc_c, oc_ok := lv_rb4(raw, cur)
+        if oc_ok {
+            cur = oc_c
+            for _ in 0..<oc {
+                ox, oxc, oxok := lv_rbi16(raw, cur); if !oxok { break }; cur = oxc
+                oy, oyc, oyok := lv_rbi16(raw, cur); if !oyok { break }; cur = oyc
+                ov, ovc, ovok := lv_rb1  (raw, cur); if !ovok { break }; cur = ovc
+                ov_clamped := clamp(int(ov), int(TileOverlay.None), int(TileOverlay.Fire))
+                if ov_clamped != 0 {
+                    g_overlay_map[[2]int{int(ox), int(oy)}] = TileOverlay(ov_clamped)
+                }
+            }
+        }
+    }
+    _ = cur
 
     g_wall_mask_dirty = true
 }
@@ -543,6 +624,13 @@ level_apply :: proc(w: ^cw.World) {
             radius    = lt.radius,
             intensity = lt.intensity,
         })
+    }
+
+    // Spawn editor-placed barrels (BarrelType mirrors LevelBarrel.btype: 0=Fire, 1=Water)
+    for b in g_level_data.barrels {
+        wx := f32(int(b.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
+        spawn_barrel(w, wx, wy, BarrelType(b.btype))
     }
 }
 
@@ -676,10 +764,13 @@ spawn_extraction_point :: proc(w: ^cw.World) {
 }
 
 level_do_switch :: proc(w: ^cw.World, n: int) {
+    // Reset fire/water/barrel state before level_clear destroys entities —
+    // stale barrel IDs in g_barrel_registry would otherwise dangle.
+    fire_system_reset()
     level_clear(w)        // destroys everything including players; resets pending flag
     director_init()
     level_load(n)
-    level_apply(w)
+    level_apply(w)        // spawns editor-placed barrels + all other entities
     spawn_extraction_point(w)
     spawn_players(w)
 }

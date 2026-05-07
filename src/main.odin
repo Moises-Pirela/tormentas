@@ -75,7 +75,9 @@ init_game :: proc() {
     cw.sim_register_system(&g_sim, { .Update      }, projectile_collision_system)
     cw.sim_register_system(&g_sim, { .Update      }, pickup_system)
     cw.sim_register_system(&g_sim, { .Update      }, status_effect_system)
+    cw.sim_register_system(&g_sim, { .Update      }, fire_patch_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, damage_system)
+    cw.sim_register_system(&g_sim, { .LateUpdate  }, barrel_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
@@ -86,6 +88,8 @@ init_game :: proc() {
     g_sim.state = .Running
 
     w.local_player_slot = g_session.local_slot
+
+    fire_system_init()
 
     level_load(0)
     level_apply(w)
@@ -119,6 +123,7 @@ shutdown_game :: proc() {
     stop_ambience()
 
     if g_sim_alive {
+        fire_system_destroy()
         cw.destroy_simulation(&g_sim)
         g_sim_alive = false
     }
@@ -170,12 +175,9 @@ update_playing :: proc(dt: f32) {
         set_audio_listener(cw.world_get_transform(w, w.player_id).position)
     }
 
-    if input_pressed(.F1) && g_is_host && !g_console_open {
-        if g_playing_state == .Editor {
-            set_playing_state(.Hub if g_hub_active else .Gameplay)
-        } else if g_playing_state == .Gameplay || g_playing_state == .Hub {
-            set_playing_state(.Editor)
-        }
+    if input_pressed(.F1) && g_is_host && !g_console_open &&
+       (g_playing_state == .Editor || g_playing_state == .Gameplay || g_playing_state == .Hub) {
+        editor_toggle()
     }
     update_lighting_widget()
 
@@ -339,6 +341,10 @@ draw_playing :: proc() {
     draw_mutation_workbench_world(w)
     draw_stash_world(w)
     draw_enemy_mutation_auras(w)
+    draw_water_puddles()
+    draw_fire_patches()
+    draw_barrels()
+    draw_status_effects(w)
     draw_ground_item_labels(w)
     draw_explosions()
     update_draw_dmg_numbers(rl.GetFrameTime())

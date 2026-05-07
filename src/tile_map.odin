@@ -9,11 +9,20 @@ TileType :: enum u8 {
     Water = 3,
 }
 
+// TileOverlay sits on top of a walkable (Floor) tile and adds a hazard layer.
+// Overlays do not replace the tile — they stack.
+TileOverlay :: enum u8 {
+    None  = 0,
+    Oil   = 1,   // flammable slick; Oiled status on contact; BFS-ignites on fire
+    Fire  = 2,   // permanent fire-pit; fire_patch_system auto-spawns a patch here
+}
+
 DEFAULT_LEVEL_COLS :: 32
 DEFAULT_LEVEL_ROWS :: 20
 
 tilemap_fill_default :: proc() {
     clear(&g_tilemap)
+    clear(&g_overlay_map)
     half_c := DEFAULT_LEVEL_COLS / 2   // 16
     half_r := DEFAULT_LEVEL_ROWS / 2   // 10
     for y in -half_r..<half_r {
@@ -26,7 +35,8 @@ tilemap_fill_default :: proc() {
     }
 }
 
-g_tilemap: map[[2]int]TileType
+g_tilemap:    map[[2]int]TileType
+g_overlay_map: map[[2]int]TileOverlay
 
 TileSpriteEntry :: struct {
     tex:     rl.Texture2D,
@@ -35,7 +45,7 @@ TileSpriteEntry :: struct {
     from_rt: bool,
 }
 
-g_tile_sprites: [4]TileSpriteEntry
+g_tile_sprites: [4]TileSpriteEntry   // indices 1=Floor, 2=Wall, 3=Water
 
 @(private = "file")
 build_tile_sprite :: proc(tt: TileType) -> TileSpriteEntry {
@@ -101,9 +111,10 @@ load_tile_sprite :: proc(stem: string, tt: TileType) -> TileSpriteEntry {
 }
 
 tilemap_init :: proc() {
-    g_tilemap = make(map[[2]int]TileType)
+    g_tilemap     = make(map[[2]int]TileType)
+    g_overlay_map = make(map[[2]int]TileOverlay)
     g_tile_sprites[int(TileType.Floor)] = load_tile_sprite("floor", .Floor)
-    g_tile_sprites[int(TileType.Wall)]  = load_tile_sprite("wall", .Wall)
+    g_tile_sprites[int(TileType.Wall)]  = load_tile_sprite("wall",  .Wall)
     g_tile_sprites[int(TileType.Water)] = load_tile_sprite("water", .Water)
 }
 
@@ -117,6 +128,7 @@ tilemap_destroy :: proc() {
         }
     }
     delete(g_tilemap)
+    delete(g_overlay_map)
 }
 
 world_to_tile :: proc(wx, wy: f32) -> (tx, ty: int) {
@@ -130,7 +142,13 @@ tile_at :: proc(tx, ty: int) -> TileType {
     return v
 }
 
+overlay_at :: proc(tx, ty: int) -> TileOverlay {
+    v, _ := g_overlay_map[[2]int{tx, ty}]
+    return v
+}
+
 tile_is_walkable :: proc(tx, ty: int) -> bool {
+    // Overlays (Oil, Fire) sit on Floor tiles — Floor check covers them.
     return tile_at(tx, ty) == .Floor
 }
 
@@ -153,6 +171,8 @@ wall_has_floor_neighbor :: proc(tx, ty: int) -> bool {
 }
 
 draw_tilemap :: proc() {
+    t_anim := f32(rl.GetTime())
+
     for k, v in g_tilemap {
         center, top, right, bottom, left := iso_tile_bounds(k[0], k[1])
         entry := g_tile_sprites[int(v)]
@@ -175,6 +195,51 @@ draw_tilemap :: proc() {
             rl.DrawLineV(right, bottom, border)
             rl.DrawLineV(bottom, left, border)
             rl.DrawLineV(left, top, border)
+
+            // ── Draw overlay on top of floor ────────────────────────────
+            switch overlay_at(k[0], k[1]) {
+            case .Oil:
+                sheen := math.sin(t_anim * 1.4 + (center.x + center.y) * 0.018) * 0.5 + 0.5
+                oil_tint := rl.Color{
+                    u8(18 + int(sheen * 14)),
+                    u8(14 + int(sheen * 10)),
+                    u8(10 + int(sheen * 28)),
+                    200,
+                }
+                rl.DrawRectangle(0, 0, 0, 0, rl.BLANK) // flush
+                // Dark oil slick — drawn as tinted diamond fill
+                rl.DrawTriangle(top, right, center, rl.Color{ 8,  10, 18, 210 })
+                rl.DrawTriangle(top, left,  center, rl.Color{ 8,  10, 18, 210 })
+                rl.DrawTriangle(bottom, right, center, rl.Color{ 4,  6, 12, 210 })
+                rl.DrawTriangle(bottom, left,  center, rl.Color{ 4,  6, 12, 210 })
+                // Iridescent highlight triangles
+                rl.DrawTriangle(top, right, center, rl.Color{ 60, 90,  50, u8(sheen * 45) })
+                rl.DrawTriangle(top, left,  center, rl.Color{ 50, 60,  90, u8(sheen * 35) })
+                rl.DrawLineV(top,    right,  rl.Color{ 60, 80,  50, oil_tint.a })
+                rl.DrawLineV(right,  bottom, rl.Color{ 30, 40,  70, oil_tint.a })
+                rl.DrawLineV(bottom, left,   rl.Color{ 60, 40,  80, oil_tint.a })
+                rl.DrawLineV(left,   top,    rl.Color{ 60, 80,  50, oil_tint.a })
+            case .Fire:
+                flicker := math.sin(t_anim * 4.5 + (center.x + center.y) * 0.016) * 0.5 + 0.5
+                // Scorched overlay — dark + ember glow
+                rl.DrawTriangle(top, right, center, rl.Color{ 70, 20, 5, 190 })
+                rl.DrawTriangle(top, left,  center, rl.Color{ 55, 16, 4, 190 })
+                rl.DrawTriangle(bottom, right, center, rl.Color{ 30, 10, 2, 200 })
+                rl.DrawTriangle(bottom, left,  center, rl.Color{ 30, 10, 2, 200 })
+                // Glowing crack lines
+                rl.DrawLineV(top,    right,  rl.Color{ 220, 100, 20, 140 })
+                rl.DrawLineV(right,  bottom, rl.Color{  60,  18,  6,  90 })
+                rl.DrawLineV(bottom, left,   rl.Color{  60,  18,  6,  90 })
+                rl.DrawLineV(left,   top,    rl.Color{ 160,  60, 12, 120 })
+                // Ember pulse
+                rl.DrawTriangle(top, right, center,
+                    rl.Color{ 255, 120, 20, u8(flicker * 45) })
+                rl.DrawTriangle(top, left, center,
+                    rl.Color{ 200,  70,  8, u8(flicker * 32) })
+            case .None:
+                // no overlay
+            }
+
         case .Wall:
             wall_depth := ISO_TILE_H * 1.15
             wall_top := rl.Rectangle{
@@ -207,7 +272,6 @@ draw_tilemap :: proc() {
             rl.DrawLineV(bottom, bottom_d, rl.Color{ 18, 14, 12, 160 })
             rl.DrawLineV(right, bottom_r, rl.Color{ 30, 24, 18, 150 })
         case .Water:
-            t_anim  := f32(rl.GetTime())
             wave    := math.sin(t_anim * 1.8 + (center.x + center.y) * 0.02) * 0.5 + 0.5
             tint := rl.Color{
                 u8(42 + int(wave * 20)),

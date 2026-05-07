@@ -7,7 +7,8 @@
         "health":    { "current": 100, "max": 100, "corruption": 0, "energy": 100, "max_energy": 100 },
         "input":     {},
         "collider":  { "radius": 16, "faction": 0 },
-        "dodge":     { "duration": 0.18, "speed": 490, "cooldown": 0.72 }
+        "dodge":     { "duration": 0.18, "speed": 490, "cooldown": 0.72 },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "weapon_pistol",
@@ -64,7 +65,8 @@
             "cooldown":     1.5,
             "speed":        72,
             "damage":       12
-        }
+        },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "enemy_brute",
@@ -80,7 +82,8 @@
             "cooldown":     2.2,
             "speed":        42,
             "damage":       32
-        }
+        },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "enemy_hunter",
@@ -96,7 +99,8 @@
             "cooldown":     0.75,
             "speed":        145,
             "damage":       8
-        }
+        },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "enemy_ranged",
@@ -114,7 +118,8 @@
             "damage":       18,
             "pellet_count": 5,
             "spread_angle": 0.45
-        }
+        },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "enemy_sniper",
@@ -132,14 +137,16 @@
             "damage":       46,
             "pellet_count": 1,
             "spread_angle": 0.04
-        }
+        },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "npc_shopkeeper",
         "render":    { "name": "El Mercader", "sprite": "npc_shopkeeper", "sprite_scale": 1.0, "layer": "sprite", "world_size": 64 },
         "transform": { "position": [160, 160, 0], "rotation": 0 },
         "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
-        "npc":       { "npc_type": "shopkeeper", "interact_radius": 80 }
+        "npc":       { "npc_type": "shopkeeper", "interact_radius": 80 },
+        "flammable": { "is_immune": false }
     },
     {
         "name": "npc_mutation_workbench",
@@ -262,6 +269,7 @@
             "speed":        68,
             "damage":       60
         },
-        "mutations": ["mut_living_bomb"]
+        "mutations": ["mut_living_bomb"],
+        "flammable": { "is_immune": false }
     }
 ]

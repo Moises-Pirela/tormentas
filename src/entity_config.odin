@@ -177,6 +177,10 @@ MutUnseenDamageMultDef :: struct {
     vision_radius: f32,
 }
 
+FlammableDef :: struct {
+    is_immune: bool
+}
+
 EntityDef :: struct {
     name:         string,            
 
@@ -207,6 +211,7 @@ EntityDef :: struct {
     mut_body_melee:           Maybe(MutBodyMeleeDef),
     mut_corpse_trigger:       Maybe(MutCorpseTriggerDef),
     mut_unseen_damage_mult:   Maybe(MutUnseenDamageMultDef),
+    flammbles:                Maybe(FlammableDef),
 
     has_velocity:    bool,
     has_input:       bool,
@@ -221,7 +226,6 @@ EntityDef :: struct {
     has_mut_wall_phase:       bool,
     has_mut_hide_enemy_sprites: bool,
 
-    // Mutations to apply at spawn time (owned MutationContainer is auto-created).
     mutations: [dynamic]string,
 }
 
@@ -541,6 +545,12 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
                 }
             }
         }
+
+        if f_obj, f_ok := obj["flammable"].(json.Object); f_ok {
+            f: FlammableDef
+            if v, ok2 := f_obj["is_immune"].(bool); ok2 { f.is_immune = v }
+            def.flammbles = f
+        }
     }
 
     return result, true
@@ -800,6 +810,12 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
                 mutation_restore_direct(w, id, mt)
             }
         }
+    }
+
+    if fc, ok := def.flammbles.?; ok {
+        cw.world_set_flammable(w, id, cw.FlammableComp{
+            isImmune = fc.is_immune
+        })
     }
 
     return id

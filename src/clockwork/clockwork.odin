@@ -73,6 +73,7 @@ ComponentType :: enum u8 {
     MutBlackLung,
     Reanimated,
     StatusEffect,
+    Flammable,
 }
 
 COMPONENT_COUNT :: len(ComponentType)
@@ -113,7 +114,7 @@ entity_empty :: proc() -> Entity {
     return Entity{ id = INVALID_ENTITY }
 }
 
-StatusEffectType :: enum { Slow, Poison, Burn, Stun, Root }
+StatusEffectType :: enum { Slow, Poison, Burn, Stun, Root, Oiled, Wet }
 EffectApplicationPolicy :: enum {Flat, Base, Percent}
 EffectStackPolicy  :: enum {Stack, Refresh, Extend}
 
@@ -127,6 +128,10 @@ StatusEffect :: struct {
 }
 
 MAX_STATUS_EFFECTS :: 8   
+
+FlammableComp :: struct {
+    isImmune : bool
+}
 
 StatusEffectComp :: struct {
     effects: [len(StatusEffectType)]StatusEffect,
@@ -842,6 +847,7 @@ World :: struct {
     mut_black_lung:         [dynamic]MutBlackLungComp,
     reanimateds:            [dynamic]ReanimatedComp,
     status_effects:         [dynamic]StatusEffectComp,
+    flammbles:              [dynamic]FlammableComp,
 
     damage_events:   [dynamic]DamageEvent,
 
@@ -923,7 +929,7 @@ make_world :: proc() -> World {
     resize(&w.mut_black_lung,         CHUNK_SIZE)
     resize(&w.reanimateds,            CHUNK_SIZE)
     resize(&w.status_effects,         CHUNK_SIZE)
-
+    resize(&w.flammbles,              CHUNK_SIZE)
     for i in 0..<CHUNK_SIZE {
         w.entities[i] = entity_empty()
     }
@@ -1001,6 +1007,7 @@ destroy_world :: proc(w: ^World) {
     delete(w.damage_events)
     delete(w.recycled_ids)
     delete(w.status_effects)
+    delete(w.flammbles)
 }
 
 world_create_entity :: proc(w: ^World) -> int {
@@ -1098,6 +1105,7 @@ world_destroy_entity :: proc(w: ^World, id: int) {
     w.mut_black_lung[id]         = {}
     w.reanimateds[id]            = {}
     w.status_effects[id]           = {}
+    w.flammbles[id]                = {}
     append(&w.recycled_ids, id)
 }
 
@@ -1195,6 +1203,7 @@ world_ensure_capacity :: proc(w: ^World, id: int) {
     resize(&w.mut_black_lung,         target)
     resize(&w.reanimateds,            target)
     resize(&w.status_effects,         target)
+    resize(&w.flammbles,              target)
 }
 
 world_set_transform :: proc(w: ^World, id: int, c: TransformComp) {
@@ -1243,6 +1252,15 @@ world_set_mutation :: proc(w: ^World, id: int, c: MutationContainerComp) {
 }
 world_get_mutation :: proc(w: ^World, id: int) -> ^MutationContainerComp {
     return &w.mutations[id]
+}
+
+world_set_flammable :: proc(w: ^World, id: int, c: FlammableComp) {
+    w.flammbles[id] = c
+    entity_sig_set(&w.entities[id].signature, .Flammable)
+}
+
+world_get_flammable :: proc(w: ^World, id: int) -> ^FlammableComp {
+    return &w.flammbles[id]
 }
 
 world_set_extraction :: proc(w: ^World, id: int, c: ExtractionComp) {
@@ -1697,10 +1715,18 @@ world_get_status_effects :: proc(w: ^World, id: int) -> ^StatusEffectComp {
 }
 
 status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
+    // Wet blocks Burn and Oiled from being applied.
+    if effect.type == .Burn || effect.type == .Oiled {
+        if world_has_component(w, id, .StatusEffect) {
+            sec_chk := world_get_status_effects(w, id)
+            if status_effect_is_active(sec_chk, .Wet) { return }
+        }
+    }
+
     if !world_has_component(w, id, .StatusEffect) {
         world_set_status_effect(w, id, StatusEffectComp{})
     }
-    
+
     sec := world_get_status_effects(w, id)
     et := int(effect.type)
     current := &sec.effects[et]

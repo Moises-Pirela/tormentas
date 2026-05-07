@@ -32,6 +32,12 @@ EditorBrush :: enum u8 {
     PlayerStart = 11,
     Light       = 12,
     Erase       = 13,
+    // Hazard tiles (Environment)
+    Oil         = 14,   // TileOverlay.Oil — flammable floor overlay
+    Fire        = 15,   // TileOverlay.Fire — permanent fire-pit overlay
+    // Hazard entities (Entities)
+    FireBarrel  = 16,   // exploding fire barrel
+    WaterBarrel = 17,   // water-splash barrel
 }
 
 EditorCategory :: enum u8 { Environment, Entities }
@@ -45,12 +51,12 @@ PaletteEntry :: struct {
     bg:       rl.Color,
 }
 
-ED_PAL_W      :: f32(130)   
-ED_PAL_ITEM_H :: f32(36)    
-ED_PAL_PAD    :: f32(6)     
+ED_PAL_W      :: f32(130)
+ED_PAL_ITEM_H :: f32(36)
+ED_PAL_PAD    :: f32(6)
 ED_PAL_HOTKEYS :: [14]cstring{"1","2","3","4","5","6","7","8","9","0","","","",""}
 
-@(private = "file") g_ed_palette:        [32]PaletteEntry
+@(private = "file") g_ed_palette:        [40]PaletteEntry
 @(private = "file") g_ed_palette_n:      int
 @(private = "file") g_ed_pal_scroll:     f32      
 @(private = "file") g_ed_cat_collapsed:  [2]bool  
@@ -96,12 +102,15 @@ ed_build_palette :: proc() {
     }
 
     for tt in TileType {
-        switch tt {
+        #partial switch tt {
         case .Floor: add(.Floor, .Environment, "Floor", {26, 24, 20, 255}, &ki)
         case .Wall:  add(.Wall,  .Environment, "Wall",  {52, 46, 38, 255}, &ki)
         case .Water: add(.Water, .Environment, "Water", {18, 42, 80,  255}, &ki)
         }
     }
+    // Oil and Fire are TileOverlay values that stack on top of Floor tiles
+    add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
+    add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
 
     entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, ok: bool) {
         switch name {
@@ -118,12 +127,14 @@ ed_build_palette :: proc() {
         if !ok { continue }
         add(b, .Entities, lbl, bg, &ki)
     }
-    add(.Shopkeeper, .Entities, "Shop", {84, 64, 28, 255}, &ki)
-    add(.MutationWorkbench, .Entities, "Mutator", {76, 34, 84, 255}, &ki)
-    add(.ExitTile,    .Entities, "Exit",  {16, 56, 24, 255}, &ki)
-    add(.PlayerStart, .Entities, "Start", {80, 64, 12, 255}, &ki)
-    add(.Light,       .Entities, "Light", {80, 70, 20, 255}, &ki)
-    add(.Erase,       .Entities, "Erase", {55, 18, 18, 255}, &ki)
+    add(.Shopkeeper,       .Entities, "Shop",    {84, 64, 28, 255}, &ki)
+    add(.MutationWorkbench,.Entities, "Mutator", {76, 34, 84, 255}, &ki)
+    add(.ExitTile,         .Entities, "Exit",    {16, 56, 24, 255}, &ki)
+    add(.PlayerStart,      .Entities, "Start",   {80, 64, 12, 255}, &ki)
+    add(.Light,            .Entities, "Light",   {80, 70, 20, 255}, &ki)
+    add(.FireBarrel,       .Entities, "FireBar", {90, 36, 10, 255}, &ki)
+    add(.WaterBarrel,      .Entities, "WtrBar",  {12, 52, 90, 255}, &ki)
+    add(.Erase,            .Entities, "Erase",   {55, 18, 18, 255}, &ki)
 }
 
 @(private = "file")
@@ -201,6 +212,17 @@ ed_meta_load :: proc() {
 editor_toggle :: proc() {
     if !g_is_host { return }
     if g_playing_state == .Editor {
+        // Reload the level that was active before the editor was opened so that
+        // any level navigation done inside the editor (which calls level_load for
+        // arbitrary levels) does not leave a foreign tilemap / overlay_map behind.
+        // fire_system_reset must come first: it clears the live fire-patch array
+        // (g_fire[]) so that patches spawned from Fire overlays during the editor
+        // session do not persist into gameplay.  level_load then repopulates
+        // g_overlay_map from disk, and fire_patch_system will re-spawn patches for
+        // any Fire-overlay tiles on the next tick.
+        restore_n := 0 if g_hub_active else max(g_current_raid_level, 1)
+        fire_system_reset()
+        level_load(restore_n)
         set_playing_state(.Hub if g_hub_active else .Gameplay)
     } else {
         g_ed_level = 0 if g_hub_active else max(g_current_raid_level, 1)
@@ -510,6 +532,23 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
             g_tilemap[[2]int{tx, ty}] = .Wall
         case .Water:
             g_tilemap[[2]int{tx, ty}] = .Water
+        case .Oil:
+            g_tilemap[[2]int{tx, ty}] = .Floor
+            g_overlay_map[[2]int{tx, ty}] = .Oil
+        case .Fire:
+            g_tilemap[[2]int{tx, ty}] = .Floor
+            g_overlay_map[[2]int{tx, ty}] = .Fire
+        case .FireBarrel, .WaterBarrel:
+            btype := u8(0) if EditorBrush(op.brush) == .FireBarrel else u8(1)
+            for i := len(g_level_data.barrels) - 1; i >= 0; i -= 1 {
+                b := g_level_data.barrels[i]
+                if int(b.tx) == tx && int(b.ty) == ty {
+                    unordered_remove(&g_level_data.barrels, i)
+                }
+            }
+            append(&g_level_data.barrels, LevelBarrel{
+                tx = i16(tx), ty = i16(ty), btype = btype,
+            })
         case .SpawnMelee, .SpawnBrute, .SpawnHunter, .SpawnRanged, .SpawnSniper:
             et := brush_to_spawn_type(EditorBrush(op.brush))
             for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
@@ -576,6 +615,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         clear(&g_level_data.exits)
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
+        clear(&g_level_data.barrels)
         g_level_data.player_start = {}
     }
 
@@ -585,6 +625,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
 @(private = "file")
 ed_apply_erase :: proc(tx, ty: int) {
     delete_key(&g_tilemap, [2]int{tx, ty})
+    delete_key(&g_overlay_map, [2]int{tx, ty})
     for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
         sp := g_level_data.spawns[i]
         if int(sp.tx) == tx && int(sp.ty) == ty {
@@ -607,6 +648,12 @@ ed_apply_erase :: proc(tx, ty: int) {
         lt := g_level_data.lights[i]
         if int(lt.tx) == tx && int(lt.ty) == ty {
             unordered_remove(&g_level_data.lights, i)
+        }
+    }
+    for i := len(g_level_data.barrels) - 1; i >= 0; i -= 1 {
+        b := g_level_data.barrels[i]
+        if int(b.tx) == tx && int(b.ty) == ty {
+            unordered_remove(&g_level_data.barrels, i)
         }
     }
 }
@@ -717,6 +764,41 @@ draw_editor_world :: proc() {
             fs * 1.1, 0.5, rl.Color{40, 30, 0, 240})
     }
 
+    for b in g_level_data.barrels {
+        wx := f32(int(b.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        is_fire := b.btype == 0
+        body_col  := rl.Color{200,  72,  18, 220} if is_fire else rl.Color{ 28, 100, 210, 220}
+        ring_col  := rl.Color{240, 120,  30, 200} if is_fire else rl.Color{ 70, 160, 255, 200}
+        label_cs  := cstring("FB")           if is_fire else cstring("WB")
+
+        // Barrel silhouette: two stacked ellipses (top cap + body)
+        body_h := ts * 0.24
+        body_w := ts * 0.22
+        // Body rectangle
+        rl.DrawRectangle(
+            i32(ip.x - body_w * 0.5), i32(ip.y - body_h * 0.75),
+            i32(body_w), i32(body_h),
+            rl.Color{body_col.r, body_col.g, body_col.b, 60})
+        rl.DrawRectangleLinesEx(
+            {ip.x - body_w * 0.5, ip.y - body_h * 0.75, body_w, body_h},
+            lw * 2.0, body_col)
+        // Top cap ellipse
+        rl.DrawEllipse(i32(ip.x), i32(ip.y - body_h * 0.75),
+            body_w * 0.5, body_h * 0.22, rl.Color{ring_col.r, ring_col.g, ring_col.b, 90})
+        rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.75),
+            body_w * 0.5, body_h * 0.22, ring_col)
+        // Band ring at mid-height
+        rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.20),
+            body_w * 0.5, body_h * 0.12, ring_col)
+
+        lsz := rl.MeasureTextEx(g_font, label_cs, fs * 0.85, 0.5)
+        rl.DrawTextEx(g_font, label_cs,
+            {ip.x - lsz.x * 0.5, ip.y - body_h * 0.45 - lsz.y * 0.5},
+            fs * 0.85, 0.5, rl.Color{255, 240, 220, 240})
+    }
+
     ps := g_level_data.player_start
     if ps[0] != 0 || ps[1] != 0 {
         ptx, pty := world_to_tile(ps[0], ps[1])
@@ -785,6 +867,10 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     case .ExitTile:    return { 30, 140,  60,  70}, { 50, 210,  90, 210}
     case .PlayerStart: return {200, 160,  30,  70}, {255, 200,  50, 210}
     case .Light:       return {200, 180,  50,  70}, {255, 220,  80, 210}
+    case .Oil:         return { 18,  14,  10,  90}, { 60,  80,  50, 200}
+    case .Fire:        return { 90,  22,   6,  90}, {240,  80,  15, 210}
+    case .FireBarrel:  return {120,  40,   8,  80}, {230,  90,  20, 210}
+    case .WaterBarrel: return {  8,  42,  90,  80}, { 60, 150, 230, 210}
     case .Erase:       return {170,  45,  45,  85}, {220,  70,  70, 200}
     }
     return {128, 128, 128, 85}, {200, 200, 200, 200}
