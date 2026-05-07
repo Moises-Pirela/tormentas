@@ -1,0 +1,175 @@
+key,en,es,pt
+# ── Main Menu ─────────────────────────────────────────────────────────────────
+MENU_TITLE,LAS TORMENTAS,LAS TORMENTAS,LAS TORMENTAS
+MENU_SUBTITLE,prototype,prototipo,protótipo
+MENU_DISCONNECTED,Connection to peer was lost.,Conexión perdida.,Conexão perdida.
+MENU_SELECT_CHARACTER,SELECT CHARACTER,SELECCIONAR PERSONAJE,SELECIONAR PERSONAGEM
+MENU_NAME_CHARACTER,NAME YOUR CHARACTER,NOMBRE TU PERSONAJE,NOMEIE SEU PERSONAGEM
+MENU_SLOT_NEW,NEW,NUEVO,NOVO
+MENU_SLOT_EMPTY,— NEW —,— NUEVO —,— NOVO —
+MENU_BTN_CREATE,CREATE,CREAR,CRIAR
+MENU_BTN_CANCEL,CANCEL,CANCELAR,CANCELAR
+MENU_BTN_PLAY,PLAY,JUGAR,JOGAR
+MENU_BTN_CONFIRM,CONFIRM?,¿CONFIRMAR?,CONFIRMAR?
+MENU_BTN_DELETE,DELETE,ELIMINAR,EXCLUIR
+MENU_BTN_SINGLEPLAYER,SINGLEPLAYER,UN JUGADOR,SOLO
+MENU_BTN_HOST,HOST GAME,CREAR PARTIDA,HOSPEDAR
+MENU_BTN_JOIN,JOIN GAME,UNIRSE,ENTRAR
+MENU_HOST_IP_LABEL,HOST IP  (port 7777),IP DEL SERVIDOR  (puerto 7777),IP DO SERVIDOR  (porta 7777)
+MENU_BTN_CONNECT,CONNECT,CONECTAR,CONECTAR
+MENU_BTN_BACK,← BACK,← VOLVER,← VOLTAR
+MENU_WAITING,Waiting for player...,Esperando jugador...,Aguardando jogador...
+MENU_CONNECTING,Connecting to %s:7777...,Conectando a %s:7777...,Conectando a %s:7777...
+MENU_ESC_CANCEL,ESC — cancel,ESC — cancelar,ESC — cancelar
+MENU_CHAR_DEFAULT,Wanderer,Vagabundo,Errante
+MENU_BTN_SETTINGS,SETTINGS,AJUSTES,CONFIG.
+MENU_BTN_EXIT,EXIT,SALIR,SAIR
+# ── HUD ───────────────────────────────────────────────────────────────────────
+HUD_EXTRACT,EXTRACT,EXTRAER,EXTRAIR
+HUD_LOOT_FILTER,LOOT FILTER  ,FILTRO BOTÍN  ,FILTRO LOOT
+HUD_FILTER_ALL,ALL,TODO,TUDO
+HUD_FILTER_RARE,RARE+,RARO+,RARO+
+HUD_FILTER_EPIC,EPIC+,ÉPICO+,ÉPICO+
+HUD_FILTER_LEGENDARY,LEGENDARY+,LEGENDARIO+,LENDÁRIO+
+HUD_FILTER_UNIQUE,UNIQUE,ÚNICO,ÚNICO
+HUD_RAID_TIMER,RAID TIMER,TEMPORIZADOR,TEMPORIZADOR
+HUD_WARNING,WARNING,ADVERTENCIA,AVISO
+HUD_BOSS_APPROACHES,EL VERDUGO APPROACHES,EL VERDUGO SE APROXIMA,EL VERDUGO SE APROXIMA
+HUD_ITEM_ACTIVE,[ACTIVE],[ACTIVO],[ATIVO]
+HUD_ITEM_PASSIVE,[PASSIVE],[PASIVO],[PASSIVO]
+HUD_LEVELUP,LEVEL  UP!,¡SUBIDA DE NIVEL!,SUBIU DE NÍVEL!
+HUD_STATPOINT,Stat point earned!,¡Punto de estadística!,Ponto de atributo ganho!
+# ── Pause Menu ────────────────────────────────────────────────────────────────
+PAUSE_TITLE,P A U S E D,P A U S A D O,P A U S A D O
+PAUSE_BTN_RESUME,Resume,Continuar,Continuar
+PAUSE_BTN_KEYBINDS,Keybinds,Teclas,Teclas
+PAUSE_BTN_QUIT,Quit,Salir,Sair
+# ── Settings ──────────────────────────────────────────────────────────────────
+SETTINGS_TITLE,S E T T I N G S,A J U S T E S,C O N F I G
+SETTINGS_RESOLUTION,RESOLUTION,RESOLUCIÓN,RESOLUÇÃO
+SETTINGS_WINDOW_MODE,WINDOW MODE,MODO PANTALLA,MODO DE JANELA
+SETTINGS_LANGUAGE,LANGUAGE,IDIOMA,IDIOMA
+SETTINGS_BORDERLESS,Borderless,Sin bordes,Sem borda
+SETTINGS_WINDOWED,Windowed,Ventana,Janela
+SETTINGS_VOLUME,VOLUME,VOLUMEN,VOLUME
+SETTINGS_SFX,SFX,EFECTOS,EFEITOS
+SETTINGS_MUSIC,MUSIC,MÚSICA,MÚSICA
+SETTINGS_AMBIENCE,AMBIENCE,AMBIENTE,AMBIENTE
+SETTINGS_VOICE,VOICE,VOZ,VOZ
+SETTINGS_BTN_KEYBINDS,Keybinds,Teclas,Teclas
+SETTINGS_BTN_CLOSE,Close,Cerrar,Fechar
+SETTINGS_BTN_EXIT,Exit Game,Salir del juego,Sair do jogo
+# ── Language names (native) ────────────────────────────────────────────────────
+LANG_EN,English,English,English
+LANG_ES,Español,Español,Español
+LANG_PT,Português,Português,Português
+# ── Keybinds ──────────────────────────────────────────────────────────────────
+KEYBINDS_TITLE,K E Y B I N D S,T E C L A S,T E C L A S
+KEYBINDS_SECTION_GAMEPLAY,GAMEPLAY,JUEGO,JOGO
+KEYBINDS_SECTION_UI,UI,INTERFAZ,INTERFACE
+KEYBINDS_PRESS_KEY,[ press a key ],[ pulsa una tecla ],[ pressione uma tecla ]
+KEYBINDS_BTN_RESET,Reset Defaults,Restablecer,Redefinir
+KEYBINDS_BTN_CLOSE,Close,Cerrar,Fechar
+KEYBINDS_ESC_CANCEL,Esc to cancel,Esc para cancelar,Esc para cancelar
+# ── Inventory ─────────────────────────────────────────────────────────────────
+INV_TITLE,E Q U I P M E N T,E Q U I P O,E Q U I P A M E N T O
+INV_ARMOR,ARMOR,ARMADURA,ARMADURA
+INV_SLOT_HEAD,HEAD,CABEZA,CABEÇA
+INV_SLOT_CHEST,CHEST,PECHO,PEITO
+INV_SLOT_BOOTS,BOOTS,BOTAS,BOTAS
+INV_WEAPONS,WEAPONS,ARMAS,ARMAS
+INV_SLOT_WEAPON,WEAPON I,ARMA I,ARMA I
+INV_SLOT_OFFHAND,OFFHAND MOD,SECUNDARIO,SECUNDÁRIO
+INV_ABILITIES,ABILITIES,HABILIDADES,HABILIDADES
+INV_BACKPACK,B A C K P A C K,M O C H I L A,M O C H I L A
+INV_BTN_CLOSE,[I]  Close,[I]  Cerrar,[I]  Fechar
+INV_UNEQUIPPED,unequipped,sin equipar,sem equipar
+# ── Character / Stats ─────────────────────────────────────────────────────────
+STATS_TITLE,C H A R A C T E R,P E R S O N A J E,P E R S O N A G E M
+STATS_STRENGTH,Strength,Fuerza,Força
+STATS_DEXTERITY,Dexterity,Destreza,Destreza
+STATS_SCIENCE,Science,Ciencia,Ciência
+STATS_HP_BONUS,+%.0f%%  HP,+%.0f%%  VIDA,+%.0f%%  HP
+STATS_SPEED_BONUS,+%.0f%%  Speed,+%.0f%%  Velocidad,+%.0f%%  Velocidade
+STATS_ENERGY_BONUS,+%.0f%%  Energy,+%.0f%%  Energía,+%.0f%%  Energia
+STATS_SECTION,STATS,ESTADÍSTICAS,ATRIBUTOS
+STATS_HISTORY,HISTORY,HISTORIAL,HISTÓRICO
+STATS_RAIDS,Raids completed,Incursiones completadas,Incursões concluídas
+STATS_KILLS,Enemies killed,Enemigos eliminados,Inimigos eliminados
+STATS_DEATHS,Deaths,Muertes,Mortes
+STATS_BEST_EXTRACT,Best extract,Mejor extracción,Melhor extração
+STATS_BTN_CLOSE,[C]  Close,[C]  Cerrar,[C]  Fechar
+# ── Mutations ─────────────────────────────────────────────────────────────────
+MUT_INTERACT,[E] Craft Mutation,[E] Crear Mutación,[E] Criar Mutação
+MUT_BRANCH_CORPUS,CORPUS,CORPUS,CORPUS
+MUT_BRANCH_SHADOW,SHADOW,SOMBRA,SOMBRA
+MUT_BRANCH_VENOM,VENOM,VENENO,VENENO
+MUT_TITLE,MUTATION WORKBENCH,LAB. DE MUTACIONES,LAB. DE MUTAÇÕES
+MUT_SERUMS,SERUMS: %d,SUEROS: %d,SOROS: %d
+MUT_COST,%d serums,%d sueros,%d soros
+MUT_ACQUIRED,ACQUIRED,ADQUIRIDO,ADQUIRIDO
+MUT_CONFLICT,CONFLICT,CONFLICTO,CONFLITO
+MUT_CRAFT_HINT,CLICK TO CRAFT,CLIC PARA CREAR,CLIQUE PARA CRIAR
+MUT_FOOTER,[ESC] Close   |   Scroll to browse,[ESC] Cerrar   |   Desplazar,[ESC] Fechar   |   Role para ver
+MUT_RESET,RESET ALL  [%d serums],REINICIAR  [%d sueros],REDEFINIR  [%d soros]
+# ── Hub ───────────────────────────────────────────────────────────────────────
+HUB_INTERACT,[E] Select Level,[E] Seleccionar Nivel,[E] Selecionar Nível
+HUB_LABEL,H U B,H U B,H U B
+HUB_STASH,Stash:  %d Gold   %d Serums,Reserva:  %d Oro   %d Sueros,Baú:  %d Ouro   %d Soros
+HUB_LEVEL_SELECT,S E L E C T   L E V E L,S E L E C C I O N A R,S E L E C I O N A R
+HUB_LEVEL_N,LEVEL %d,NIVEL %d,NÍVEL %d
+HUB_ESC_CANCEL,ESC — cancel,ESC — cancelar,ESC — cancelar
+HUB_BTN_RETURN,RETURN TO HUB,VOLVER AL HUB,VOLTAR AO HUB
+HUB_BTN_RETRY,RETRY RAID,REINTENTAR RAID,TENTAR NOVAMENTE
+# ── Extract Screen ────────────────────────────────────────────────────────────
+EXTRACT_TITLE,E X T R A C T I O N,E X T R A C C I Ó N,E X T R A Ç Ã O
+EXTRACT_SUBTITLE,S U C C E S S F U L,E X I T O S A,S U C E D I D A
+EXTRACT_GOLD,Gold earned,Oro ganado,Ouro ganho
+EXTRACT_SERUMS,Serums found,Sueros encontrados,Soros encontrados
+EXTRACT_STASH_TOTAL,Stash total,Total en reserva,Total no baú
+# ── Death Screen ──────────────────────────────────────────────────────────────
+DEATH_TITLE,Y O U   D I E D,H A S   M U E R T O,V O C Ê   M O R R E U
+DEATH_MSG,Everything you carried was lost to the wastes.,Todo lo que llevabas fue perdido.,Tudo que você carregava foi perdido.
+DEATH_STASH,Stash preserved,Reserva conservada,Baú preservado
+# ── Shop ──────────────────────────────────────────────────────────────────────
+SHOP_INTERACT,[E] Shop,[E] Tienda,[E] Loja
+SHOP_TITLE,SHOP,TIENDA,LOJA
+SHOP_GOLD,Gold: %d,Oro: %d,Ouro: %d
+SHOP_SOLD_OUT,Sold out,Agotado,Esgotado
+SHOP_SELL,SELL  (click an item in your backpack),VENDER  (selecciona un ítem),VENDER  (clique num item)
+SHOP_ESC_CLOSE,ESC — close,ESC — cerrar,ESC — fechar
+# ── Stash UI ──────────────────────────────────────────────────────────────────
+STASH_INTERACT,[E] Stash,[E] Reserva,[E] Baú
+STASH_TITLE,T R A V E L E R ' S   S T A S H,R E S E R V A,B A Ú
+STASH_DEPOSIT_ALL,DEPOSIT ALL CARRIED ITEMS,DEPOSITAR TODO,DEPOSITAR TUDO
+# ── Items ─────────────────────────────────────────────────────────────────────
+ITEM_CORRUPTED_RELIQUARY_NAME,Corrupted Reliquary,Relicario Corrupto,Relicário Corrompido
+ITEM_CORRUPTED_RELIQUARY_DESC,A defiled medallion humming with forgotten prayers. Its bearer hears voices that do not belong to the living.,Un medallón profanado que zumba con oraciones olvidadas. Su portador escucha voces ajenas a los vivos.,Um medalhão profanado que ressoa com orações esquecidas. Seu portador ouve vozes alheias aos vivos.
+ITEM_LEATHER_CARAPACE_NAME,Leather Carapace,Caparazón de Cuero,Carapaça de Couro
+ITEM_LEATHER_CARAPACE_DESC,Layered hardened leather built to endure beatings that would shatter bone.,Cuero endurecido en capas para soportar golpes que romperían huesos.,Couro endurecido em camadas para suportar golpes que quebrariam ossos.
+ITEM_IRON_BULWARK_NAME,Iron Bulwark,Baluarte de Hierro,Baluarte de Ferro
+ITEM_IRON_BULWARK_DESC,A forged iron breastplate. Deflects blades and shrapnel.,Pechera de hierro forjado. Desvía hojas y metralla.,Couraça de ferro forjado. Desvia lâminas e estilhaços.
+ITEM_BANDOLIER_RIG_NAME,Bandolier Rig,Arnés de Bandolera,Arnês de Bandoleira
+ITEM_BANDOLIER_RIG_DESC,Reinforced ammunition harness. Reloads become instinct.,Arnés de munición reforzado. Las recargas se vuelven instinto.,Arreio de munição reforçado. Recargas se tornam instinto.
+ITEM_ETHEREAL_SHARD_NAME,Ethereal Shard,Fragmento Etéreo,Fragmento Etéreo
+ITEM_ETHEREAL_SHARD_DESC,A crystallized fragment of raw ether. Movement feels unnaturally precise.,Fragmento cristalizado de éter puro. El movimiento se torna sobrenaturalmente preciso.,Fragmento cristalizado de éter bruto. O movimento se torna sobrenaturalmente preciso.
+ITEM_COYOTE_STRIDERS_NAME,Coyote Striders,Zancadas Coyote,Passos Coyote
+ITEM_COYOTE_STRIDERS_DESC,Crafted from desert predator hide. Silent steps and sudden speed.,Fabricadas con piel de depredador del desierto. Pasos silenciosos y velocidad repentina.,Feitas com couro de predador do deserto. Passos silenciosos e velocidade súbita.
+ITEM_BONE_FETISH_NAME,Bone Fetish,Fetiche de Hueso,Feitiço de Osso
+ITEM_BONE_FETISH_DESC,A ritual bone charm radiating unease. Enemies falter before striking.,Amuleto ritual de hueso que irradia inquietud. Los enemigos vacilan antes de atacar.,Amuleto ritual de osso que irradia inquietação. Os inimigos hesitam antes de atacar.
+ITEM_HAMMERLOCK_PISTOL_NAME,Hammerlock Pistol,Pistola Hammerlock,Pistola Hammerlock
+ITEM_HAMMERLOCK_PISTOL_DESC,A heavy-frame handgun built for impact force. Every shot lands with authority.,Pistola de armazón pesado para fuerza de impacto. Cada disparo impacta con autoridad.,Pistola de estrutura pesada para força de impacto. Cada tiro pousa com autoridade.
+ITEM_LIGHTCOIL_REPEATER_NAME,Lightcoil Repeater,Repetidora Lightcoil,Repetidor Lightcoil
+ITEM_LIGHTCOIL_REPEATER_DESC,A spring-driven rapid firearm engineered for relentless firing rhythm.,Arma rápida impulsada por resorte con ritmo de disparo implacable.,Arma rápida movida a mola com ritmo de disparo implacável.
+ITEM_DRUMFEED_CARBINE_NAME,Drumfeed Carbine,Carabina Drumfeed,Carabina Drumfeed
+ITEM_DRUMFEED_CARBINE_DESC,A bulky drum-fed rifle for sustained combat. Heavy and dependable.,Rifle de cargador tambor para combate sostenido. Pesado y confiable.,Rifle de carregador cilíndrico para combate sustentado. Pesado e confiável.
+ITEM_DESERT_MACHETE_NAME,Desert Machete,Machete del Desierto,Facão do Deserto
+ITEM_DESERT_MACHETE_DESC,A long dust-worn blade built for close and quiet executions.,Hoja larga desgastada por el polvo para ejecuciones cercanas y silenciosas.,Lâmina longa desgastada pela poeira para execuções próximas e silenciosas.
+ITEM_WAR_CLEAVER_NAME,War Cleaver,Cuchilla de Guerra,Cutelo de Guerra
+ITEM_WAR_CLEAVER_DESC,A brutal two-handed axe. Devastating impact and mercilessly slow.,Hacha brutal de dos manos. Impacto devastador e implacablemente lenta.,Machado brutal de duas mãos. Impacto devastador e impiedosamente lento.
+ITEM_QUICKFANG_KNIFE_NAME,Quickfang Knife,Cuchillo Quickfang,Faca Quickfang
+ITEM_QUICKFANG_KNIFE_DESC,A compact folding blade striking faster than thought.,Hoja plegable compacta que golpea más rápido que el pensamiento.,Lâmina dobrável compacta que atinge mais rápido que o pensamento.
+ITEM_NECROTIC_SERUM_NAME,Necrotic Serum,Suero Necrótico,Soro Necrótico
+ITEM_NECROTIC_SERUM_DESC,A volatile vial of corrupted biomatter. Inject to graft unstable mutations.,Vial volátil de biomateria corrompida. Inyectar para injertar mutaciones inestables.,Frasco volátil de biomatéria corrompida. Injete para enxertar mutações instáveis.
+ITEM_NECROTIC_SERUM3_NAME,Necrotic Serum (x3),Suero Necrótico (x3),Soro Necrótico (x3)
+ITEM_NECROTIC_SERUM3_DESC,Three doses of necrotic essence. Sufficient for a major mutation graft.,Tres dosis de esencia necrótica. Suficiente para un injerto de mutación mayor.,Três doses de essência necrótica. Suficiente para um enxerto de mutação maior.

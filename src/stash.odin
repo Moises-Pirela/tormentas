@@ -231,7 +231,7 @@ draw_stash_world :: proc(w: ^cw.World) {
     _, pos, ok := find_nearby_stash(w)
     if !ok { return }
 
-    prompt := cstring("[E] Stash")
+    prompt := t(.STASH_INTERACT)
     fs := f32(10)
     sz := rl.MeasureTextEx(g_font, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
@@ -299,7 +299,7 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
             icon_sz := min(iw, ih) - 6
             draw_item_glyph(item.slot, ix + (iw - icon_sz) / 2, iy + 3, icon_sz, rc)
             if cw.world_has_component(w, cell_id, .RenderConfig) {
-                name := cw.render_config_name_cstr(cw.world_get_render_config(w, cell_id))
+                name := loc_lookup(cw.render_config_name_cstr(cw.world_get_render_config(w, cell_id)))
                 rl.DrawTextEx(g_font, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
                     uis(10), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
             }
@@ -353,7 +353,7 @@ draw_stash_hud :: proc(w: ^cw.World) {
     rl.DrawRectangle(px, py, PW, i32(uis(3)), COL_BRASS)
     rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
 
-    title := cstring("T R A V E L E R ' S   S T A S H")
+    title := t(.STASH_TITLE)
     title_fs := uis(17)
     tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
     rl.DrawTextEx(g_font, title, { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(14) }, title_fs, 1, COL_PARCH)
@@ -383,7 +383,7 @@ draw_stash_hud :: proc(w: ^cw.World) {
     hot := rl.CheckCollisionPointRec(mp, btn_r)
     rl.DrawRectangleRec(btn_r, rl.Color{ 74, 54, 18, 245 } if hot else rl.Color{ 42, 31, 14, 235 })
     rl.DrawRectangleLinesEx(btn_r, 1, COL_BRASS if hot else COL_RULE)
-    btn_lbl := cstring("DEPOSIT ALL CARRIED ITEMS")
+    btn_lbl := t(.STASH_DEPOSIT_ALL)
     btn_fs := uis(11)
     btn_sz := rl.MeasureTextEx(g_font, btn_lbl, btn_fs, 0.5)
     rl.DrawTextEx(g_font, btn_lbl, { btn_r.x + (btn_r.width - btn_sz.x) * 0.5, btn_r.y + (btn_r.height - btn_fs) * 0.5 },
@@ -394,6 +394,6 @@ draw_stash_hud :: proc(w: ^cw.World) {
 
     _draw_drag_item(w)
     if g_hover_item_id != cw.INVALID_ENTITY && g_drag_item_id == -1 {
-        draw_item_tooltip(w, g_hover_item_id, mp.x, mp.y)
+        draw_item_tooltip_or_compare(w, g_hover_item_id, mp.x, mp.y)
     }
 }

@@ -47,12 +47,14 @@ GameplayBinds :: struct {
 
 // UIBinds — keys consumed only while input_mode == .UI (a panel is open).
 UIBinds :: struct {
-    close_panel: i32,  // Escape — close the active panel
+    close_panel:     i32,  // Escape — close the active panel
+    compare_tooltip: i32,  // Left Alt — show equipped item comparison
 }
 
 // Bindings is the top-level config container written to / read from disk.
 // Each InputMode maps to exactly one sub-struct.
 Bindings :: struct {
+    language: u8,            // 0=EN 1=ES 2=PT — persisted as "language" in JSON
     gameplay: GameplayBinds,
     ui:       UIBinds,
 }
@@ -62,7 +64,7 @@ Bindings :: struct {
 // ---------------------------------------------------------------------------
 
 GAMEPLAY_BIND_COUNT :: 16
-UI_BIND_COUNT       :: 1
+UI_BIND_COUNT       :: 2
 TOTAL_BIND_COUNT    :: GAMEPLAY_BIND_COUNT + UI_BIND_COUNT
 
 // ---------------------------------------------------------------------------
@@ -92,7 +94,8 @@ default_binds :: proc() -> Bindings {
             pause          = i32(rl.KeyboardKey.ESCAPE),
         },
         ui = UIBinds{
-            close_panel = i32(rl.KeyboardKey.ESCAPE),
+            close_panel     = i32(rl.KeyboardKey.ESCAPE),
+            compare_tooltip = i32(rl.KeyboardKey.LEFT_ALT),
         },
     }
 }
@@ -149,7 +152,8 @@ gameplay_bind_rows :: proc() -> [GAMEPLAY_BIND_COUNT]BindRow {
 
 ui_bind_rows :: proc() -> [UI_BIND_COUNT]BindRow {
     return {
-        { "Close Panel",  &g_binds.ui.close_panel },
+        { "Close Panel",     &g_binds.ui.close_panel     },
+        { "Compare Tooltip", &g_binds.ui.compare_tooltip },
     }
 }
 

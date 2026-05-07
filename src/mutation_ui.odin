@@ -38,11 +38,11 @@ mut_panel_rect :: proc() -> (px, py, pw, ph: f32) {
 }
 
 @(private="file")
-mutation_branch_name :: proc(branch: MutationBranch) -> string {
+mutation_branch_name :: proc(branch: MutationBranch) -> cstring {
     switch branch {
-    case .Corpus: return "CORPUS"
-    case .Shadow: return "SHADOW"
-    case .Venom:  return "VENOM"
+    case .Corpus: return t(.MUT_BRANCH_CORPUS)
+    case .Shadow: return t(.MUT_BRANCH_SHADOW)
+    case .Venom:  return t(.MUT_BRANCH_VENOM)
     }
     return ""
 }
@@ -123,7 +123,7 @@ draw_mutation_workbench_world :: proc(w: ^cw.World) {
     _, pos, ok := find_nearby_mutation_workbench(w)
     if !ok { return }
 
-    prompt := cstring("[E] Craft Mutation")
+    prompt := t(.MUT_INTERACT)
     fs := f32(10)
     sz := rl.MeasureTextEx(g_font, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
@@ -203,7 +203,7 @@ update_mutation_tree :: proc(w: ^cw.World) {
     if rl.IsMouseButtonPressed(.LEFT) {
         footer_y    := py + ph - uis(24)
         footer_fs   := uis(8)
-        reset_label := fmt.ctprintf("RESET ALL  [%d serums]", MUT_CLEAR_COST)
+        reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
         reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
         reset_x     := px + pw - reset_sz.x - uis(14)
         reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
@@ -244,10 +244,10 @@ draw_mutation_tree :: proc(w: ^cw.World) {
     header_fs := uis(14)
     body_fs   := uis(9)
 
-    rl.DrawTextEx(g_font, "MUTATION WORKBENCH",
+    rl.DrawTextEx(g_font, t(.MUT_TITLE),
         {px + uis(14), py + uis(10)}, header_fs, 0.6, MUT_HEADER)
 
-    serum_str := fmt.ctprintf("SERUMS: %d", mc.serums)
+    serum_str := tf(.MUT_SERUMS, mc.serums)
     serum_sz  := rl.MeasureTextEx(g_font, serum_str, body_fs, 0.5)
     rl.DrawTextEx(g_font, serum_str,
         {px + pw - serum_sz.x - uis(14), py + uis(12)},
@@ -275,7 +275,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         rl.DrawRectangleRounded(rec, 0.28, 6, bg_col)
         rl.DrawRectangleLinesEx(rec, uis(1), bd_col)
 
-        label  := fmt.ctprintf("%s", mutation_branch_name(branch))
+        label  := mutation_branch_name(branch)
         lsz    := rl.MeasureTextEx(g_font, label, body_fs, 0.5)
         rl.DrawTextEx(g_font, label,
             {rec.x + rec.width*0.5 - lsz.x*0.5, rec.y + rec.height*0.5 - lsz.y*0.5},
@@ -314,15 +314,15 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         bg     := rl.Color{ 16, 14, 28, 240 }
         border := MUT_LOCKED
         name_c := MUT_HEADER
-        status := fmt.ctprintf("%d serums", def.serum_cost)
+        status := tf(.MUT_COST, def.serum_cost)
         stat_c := rl.Color{180, 60, 60, 200}
 
         if owned {
             bg = rl.Color{20, 40, 24, 240}; border = MUT_OWNED; name_c = MUT_OWNED
-            status = "ACQUIRED"; stat_c = MUT_OWNED
+            status = t(.MUT_ACQUIRED); stat_c = MUT_OWNED
         } else if conflict {
             bg = rl.Color{40, 14, 14, 240}; border = MUT_CONFLICT; name_c = MUT_CONFLICT
-            status = "CONFLICT"; stat_c = MUT_CONFLICT
+            status = t(.MUT_CONFLICT); stat_c = MUT_CONFLICT
         } else if can {
             bg = rl.Color{28, 14, 50, 240}
             border = rl.Color{220, 120, 255, 255} if hovered else MUT_CANGET
@@ -347,7 +347,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         rl.DrawTextEx(g_font, status, {cx + ipad, ty}, small_fs, 0.4, stat_c)
 
         if can && !owned && !conflict {
-            craft := cstring("CLICK TO CRAFT")
+            craft := t(.MUT_CRAFT_HINT)
             csz   := rl.MeasureTextEx(g_font, craft, small_fs, 0.4)
             rl.DrawTextEx(g_font, craft,
                 {cx + cw_ - csz.x - ipad, ty}, small_fs, 0.4, MUT_CANGET)
@@ -374,7 +374,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
 
     // ── Footer ─────────────────────────────────────────────────────────────
     footer_fs := uis(8)
-    hint      := cstring("[ESC] Close   |   Scroll to browse")
+    hint      := t(.MUT_FOOTER)
     hint_sz   := rl.MeasureTextEx(g_font, hint, footer_fs, 0.4)
     footer_y  := py + ph - footer_h
     rl.DrawTextEx(g_font, hint,
@@ -382,7 +382,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         footer_fs, 0.4, rl.Color{90, 70, 110, 180})
 
     // ── Reset-all button ───────────────────────────────────────────────────
-    reset_label := fmt.ctprintf("RESET ALL  [%d serums]", MUT_CLEAR_COST)
+    reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
     reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
     reset_x     := px + pw - reset_sz.x - uis(14)
     reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }

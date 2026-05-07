@@ -397,6 +397,10 @@ main :: proc() {
     rl.SetExitKey(.KEY_NULL)
 
     load_config()
+    g_lang = Language(min(g_binds.language, u8(LANG_COUNT - 1)))
+
+    loc_init()
+    defer loc_destroy()
 
     init_audio()
     defer shutdown_audio()

@@ -94,14 +94,14 @@ draw_main_menu :: proc() {
     sh := f32(rl.GetScreenHeight())
     cx := sw * 0.5
 
-    title    := cstring("LAS TORMENTAS")
+    title    := t(.MENU_TITLE)
     title_fs := uis(52)
     tsz      := rl.MeasureTextEx(g_font, title, title_fs, 0.8)
     rl.DrawTextEx(g_font, title,
         {cx - tsz.x * 0.5, sh * 0.12},
         title_fs, 0.8, rl.Color{200, 178, 108, 255})
 
-    sub    := cstring("prototype")
+    sub    := t(.MENU_SUBTITLE)
     sub_fs := uis(11)
     ssz    := rl.MeasureTextEx(g_font, sub, sub_fs, 0.5)
     rl.DrawTextEx(g_font, sub,
@@ -111,7 +111,7 @@ draw_main_menu :: proc() {
     if g_disconnect_msg_timer > 0 {
         frac := clamp(g_disconnect_msg_timer / DISCONNECT_MSG_DURATION, 0, 1)
         a    := u8(frac * 210)
-        msg  := cstring("Connection to peer was lost.")
+        msg  := t(.MENU_DISCONNECTED)
         mfs  := uis(11)
         msz  := rl.MeasureTextEx(g_font, msg, mfs, 0.5)
         rl.DrawTextEx(g_font, msg,
@@ -127,7 +127,7 @@ draw_main_menu :: proc() {
     btn_fs  := uis(10)
     btn_bh  := btn_fs + uis(14)
 
-    set_lbl := cstring("SETTINGS")
+    set_lbl := t(.MENU_BTN_SETTINGS)
     set_sz  := rl.MeasureTextEx(g_font, set_lbl, btn_fs, 0.5)
     set_bw  := set_sz.x + uis(22)
     set_r   := rl.Rectangle{
@@ -145,7 +145,7 @@ draw_main_menu :: proc() {
         ui_open(.Settings)
     }
 
-    exit_lbl := cstring("EXIT")
+    exit_lbl := t(.MENU_BTN_EXIT)
     exit_sz  := rl.MeasureTextEx(g_font, exit_lbl, btn_fs, 0.5)
     exit_bw  := exit_sz.x + uis(22)
     exit_r   := rl.Rectangle{
@@ -272,7 +272,7 @@ _mm_draw_char_select :: proc() {
     cards_x := sw * 0.5 - total_w * 0.5
     cards_y := sh * 0.42
 
-    lbl    := cstring("SELECT CHARACTER")
+    lbl    := t(.MENU_SELECT_CHARACTER)
     lfs    := uis(10)
     lsz    := rl.MeasureTextEx(g_font, lbl, lfs, 0.5)
     rl.DrawTextEx(g_font, lbl,
@@ -293,27 +293,27 @@ _mm_draw_char_select :: proc() {
     if g_mm.creating_slot >= 0 {
         name_w := sw * 0.24
         name_r := rl.Rectangle{sw * 0.5 - name_w * 0.5, btn_y - uis(52), name_w, uis(32)}
-        n_lbl  := cstring("NAME YOUR CHARACTER")
+        n_lbl  := t(.MENU_NAME_CHARACTER)
         n_lfs  := uis(9)
         n_lsz  := rl.MeasureTextEx(g_font, n_lbl, n_lfs, 0.5)
         rl.DrawTextEx(g_font, n_lbl,
             {sw * 0.5 - n_lsz.x * 0.5, name_r.y - n_lfs - uis(5)},
             n_lfs, 0.5, rl.Color{130, 118, 82, 200})
-        _mm_field_draw(name_r, g_mm.new_name[:], g_mm.focus == .NewName, "Wanderer")
+        _mm_field_draw(name_r, g_mm.new_name[:], g_mm.focus == .NewName, t(.MENU_CHAR_DEFAULT))
 
         create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
         cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
-        _mm_btn_draw(create_r, "CREATE", false)
-        _mm_btn_draw(cancel_r, "CANCEL", false)
+        _mm_btn_draw(create_r, t(.MENU_BTN_CREATE), false)
+        _mm_btn_draw(cancel_r, t(.MENU_BTN_CANCEL), false)
     } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
         play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
         delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
-        _mm_btn_draw(play_r, "PLAY", false)
+        _mm_btn_draw(play_r, t(.MENU_BTN_PLAY), false)
 
         if g_mm.confirm_delete {
-            _mm_btn_draw(delete_r, "CONFIRM?", true)
+            _mm_btn_draw(delete_r, t(.MENU_BTN_CONFIRM), true)
         } else {
-            _mm_btn_draw(delete_r, "DELETE", false)
+            _mm_btn_draw(delete_r, t(.MENU_BTN_DELETE), false)
         }
     }
 }
@@ -333,7 +333,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     rl.DrawRectangleLinesEx(r, 1, border)
 
     if creating {
-        lbl := cstring("NEW")
+        lbl := t(.MENU_SLOT_NEW)
         fs  := uis(11)
         sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
         rl.DrawTextEx(g_font, lbl,
@@ -343,7 +343,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     }
 
     if s.exists == 0 {
-        lbl := cstring("— NEW —")
+        lbl := t(.MENU_SLOT_EMPTY)
         fs  := uis(10)
         sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
         rl.DrawTextEx(g_font, lbl,
@@ -475,7 +475,7 @@ _mm_draw_play_options :: proc() {
 
     if g_active_slot >= 0 && g_active_slot < MAX_CHAR_SLOTS {
         s      := &g_char_save.slots[g_active_slot]
-        name_s := cstring(&s.name[0]) if s.name[0] != 0 else cstring("Wanderer")
+        name_s := cstring(&s.name[0]) if s.name[0] != 0 else t(.MENU_CHAR_DEFAULT)
         num_buf: [64]u8
         sub_s  := fmt.bprintf(num_buf[:], "Playing as: %s  |  Lv. %d", name_s, s.level)
         num_buf[len(sub_s)] = 0
@@ -498,13 +498,13 @@ _mm_draw_play_options :: proc() {
     host_r := rl.Rectangle{b0x + btn_w + gap,           btn_y, btn_w, btn_h}
     join_r := rl.Rectangle{b0x + (btn_w + gap) * 2,    btn_y, btn_w, btn_h}
 
-    _mm_btn_draw(sp_r,   "SINGLEPLAYER", false)
-    _mm_btn_draw(host_r, "HOST GAME",    false)
-    _mm_btn_draw(join_r, "JOIN GAME",    g_mm.show_join)
+    _mm_btn_draw(sp_r,   t(.MENU_BTN_SINGLEPLAYER), false)
+    _mm_btn_draw(host_r, t(.MENU_BTN_HOST),         false)
+    _mm_btn_draw(join_r, t(.MENU_BTN_JOIN),          g_mm.show_join)
 
     if g_mm.show_join {
         field_w := sw * 0.28
-        ip_lbl    := cstring("HOST IP  (port 7777)")
+        ip_lbl    := t(.MENU_HOST_IP_LABEL)
         ip_lbl_fs := uis(10)
         ilsz      := rl.MeasureTextEx(g_font, ip_lbl, ip_lbl_fs, 0.5)
         ip_r      := rl.Rectangle{cx - field_w * 0.5, sh * 0.68, field_w, uis(34)}
@@ -514,12 +514,12 @@ _mm_draw_play_options :: proc() {
         _mm_field_draw(ip_r, g_mm.ip[:], g_mm.focus == .IP, "127.0.0.1")
 
         conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.78, btn_w, btn_h}
-        _mm_btn_draw(conn_r, "CONNECT", false)
+        _mm_btn_draw(conn_r, t(.MENU_BTN_CONNECT), false)
     }
 
     back_w := sw * 0.12
     back_r := rl.Rectangle{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
-    _mm_btn_draw(back_r, "← BACK", false)
+    _mm_btn_draw(back_r, t(.MENU_BTN_BACK), false)
 }
 
 // ── Connecting screen ─────────────────────────────────────────────────────
@@ -553,16 +553,15 @@ draw_connecting :: proc() {
     sh := f32(rl.GetScreenHeight())
     cx := sw * 0.5
 
-    msg: string
+    msg_cs: cstring
     if g_is_host {
-        msg = "Waiting for player..."
+        msg_cs = t(.MENU_WAITING)
     } else {
         ip_raw := strings.clone_from_cstring(cstring(&g_mm.ip[0]),
             context.temp_allocator)
         if ip_raw == "" { ip_raw = "127.0.0.1" }
-        msg = fmt.tprintf("Connecting to %s:7777...", ip_raw)
+        msg_cs = tf(.MENU_CONNECTING, ip_raw)
     }
-    msg_cs := strings.clone_to_cstring(msg, context.temp_allocator)
 
     mfs := uis(18)
     msz := rl.MeasureTextEx(g_font, msg_cs, mfs, 0.5)
@@ -578,7 +577,7 @@ draw_connecting :: proc() {
     rl.DrawRectangleV({cx - bar_w * 0.5, sh * 0.50}, {bar_w * prog, bar_h},
         rl.Color{140, 118, 60, 200})
 
-    cancel := cstring("ESC — cancel")
+    cancel := t(.MENU_ESC_CANCEL)
     cfs    := uis(10)
     csz    := rl.MeasureTextEx(g_font, cancel, cfs, 0.5)
     rl.DrawTextEx(g_font, cancel,

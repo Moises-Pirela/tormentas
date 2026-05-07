@@ -196,9 +196,10 @@ _hud_fill_ammo_chip :: proc(w: ^cw.World, chip: ^UICustomAmmo) {
 
     // Weapon display name
     if cw.world_has_component(w, wid, .RenderConfig) {
-        rc     := cw.world_get_render_config(w, wid)
-        n_copy := min(int(rc.name_len), 23)
-        copy(chip.wep_name[:], rc.display_name[:n_copy])
+        rc         := cw.world_get_render_config(w, wid)
+        translated := string(loc_lookup(cw.render_config_name_cstr(rc)))
+        n_copy     := min(len(translated), 23)
+        copy(chip.wep_name[:], translated[:n_copy])
         chip.wep_name[n_copy] = 0
     }
 

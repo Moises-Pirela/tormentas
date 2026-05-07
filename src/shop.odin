@@ -37,21 +37,21 @@ RARITY_PRICE_MULT := [cw.ItemRarity]int{
 // item_name must match a LootDef.name in g_loot_table (loaded from loot_table.csv).
 @(private = "file")
 SHOP_CATALOGUE := [?]ShopEntry{
-    { item_name = "Corrupted Reliquary", base_price = 30 },
-    { item_name = "Leather Carapace",    base_price = 40 },
-    { item_name = "Iron Bulwark",        base_price = 65 },
-    { item_name = "Bandolier Rig",       base_price = 25 },
-    { item_name = "Ethereal Shard",      base_price = 35 },
-    { item_name = "Coyote Striders",     base_price = 30 },
-    { item_name = "Bone Fetish",         base_price = 45 },
-    { item_name = "Hammerlock Pistol",   base_price = 30 },
-    { item_name = "Lightcoil Repeater",  base_price = 30 },
-    { item_name = "Drumfeed Carbine",    base_price = 35 },
-    { item_name = "Desert Machete",      base_price = 50 },
-    { item_name = "War Cleaver",         base_price = 80 },
-    { item_name = "Quickfang Knife",     base_price = 45 },
-    { item_name = "Necrotic Serum",      base_price = 20 },
-    { item_name = "Necrotic Serum (x3)", base_price = 55 },
+    { item_name = "ITEM_CORRUPTED_RELIQUARY_NAME", base_price = 30 },
+    { item_name = "ITEM_LEATHER_CARAPACE_NAME",    base_price = 40 },
+    { item_name = "ITEM_IRON_BULWARK_NAME",        base_price = 65 },
+    { item_name = "ITEM_BANDOLIER_RIG_NAME",       base_price = 25 },
+    { item_name = "ITEM_ETHEREAL_SHARD_NAME",      base_price = 35 },
+    { item_name = "ITEM_COYOTE_STRIDERS_NAME",     base_price = 30 },
+    { item_name = "ITEM_BONE_FETISH_NAME",         base_price = 45 },
+    { item_name = "ITEM_HAMMERLOCK_PISTOL_NAME",   base_price = 30 },
+    { item_name = "ITEM_LIGHTCOIL_REPEATER_NAME",  base_price = 30 },
+    { item_name = "ITEM_DRUMFEED_CARBINE_NAME",    base_price = 35 },
+    { item_name = "ITEM_DESERT_MACHETE_NAME",      base_price = 50 },
+    { item_name = "ITEM_WAR_CLEAVER_NAME",         base_price = 80 },
+    { item_name = "ITEM_QUICKFANG_KNIFE_NAME",     base_price = 45 },
+    { item_name = "ITEM_NECROTIC_SERUM_NAME",      base_price = 20 },
+    { item_name = "ITEM_NECROTIC_SERUM3_NAME",     base_price = 55 },
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +252,7 @@ draw_shop_world :: proc(w: ^cw.World) {
         // Name tag
         pos := world_to_iso_xy(nt.position[0], nt.position[1])
         rc   := cw.world_get_render_config(w, nid)
-        name := cw.render_config_name_cstr(rc)
+        name := loc_lookup(cw.render_config_name_cstr(rc))
         nfs  := f32(10)
         nsz  := rl.MeasureTextEx(g_font, name, nfs, 0.5)
         rl.DrawTextEx(g_font, name,
@@ -261,7 +261,7 @@ draw_shop_world :: proc(w: ^cw.World) {
 
         // "E: Shop" prompt when nearby
         if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
-            prompt    := cstring("[E] Shop")
+            prompt    := t(.SHOP_INTERACT)
             pfs       := f32(9)
             psz       := rl.MeasureTextEx(g_font, prompt, pfs, 0.5)
             t_now     := f32(rl.GetTime())
@@ -293,14 +293,16 @@ draw_shop_hud :: proc(w: ^cw.World) {
 
     // Title
     rc       := cw.world_get_render_config(w, g_shop_npc_id)
-    npc_name := cw.render_config_name_cstr(rc)
+    npc_name := loc_lookup(cw.render_config_name_cstr(rc))
     title_fs := uis(20)
     tsz      := rl.MeasureTextEx(g_font, npc_name, title_fs, 1)
     rl.DrawTextEx(g_font, npc_name,
         { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(12) },
         title_fs, 1, COL_PARCH)
-    rl.DrawTextEx(g_font, cstring("TIENDA"),
-        { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font, "TIENDA", uis(10), 1).x*0.5,
+    shop_title    := t(.SHOP_TITLE)
+    shop_title_sz := rl.MeasureTextEx(g_font, shop_title, uis(10), 1)
+    rl.DrawTextEx(g_font, shop_title,
+        { f32(px) + f32(PW)*0.5 - shop_title_sz.x*0.5,
           f32(py) + uis(12) + title_fs + uis(2) },
         uis(10), 1, COL_MUTED)
     rl.DrawLineEx(
@@ -313,12 +315,10 @@ draw_shop_hud :: proc(w: ^cw.World) {
     if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Wallet) {
         wallet_gold = cw.world_get_wallet(w, pid).gold
     }
-    gold_str: [32]u8
-    gold_label := fmt.bprintf(gold_str[:31], "Gold: %d", wallet_gold)
-    gold_str[len(gold_label)] = 0
-    gfs := uis(13)
-    rl.DrawTextEx(g_font, cstring(&gold_str[0]),
-        { f32(px + PW) - uis(16) - rl.MeasureTextEx(g_font, cstring(&gold_str[0]), gfs, 1).x,
+    gold_cs := tf(.SHOP_GOLD, wallet_gold)
+    gfs     := uis(13)
+    rl.DrawTextEx(g_font, gold_cs,
+        { f32(px + PW) - uis(16) - rl.MeasureTextEx(g_font, gold_cs, gfs, 1).x,
           f32(py) + uis(12) },
         gfs, 1, rl.Color{ 255, 215, 50, 255 })
 
@@ -340,8 +340,9 @@ draw_shop_hud :: proc(w: ^cw.World) {
                 { f32(px + i32(uis(12))), f32(iy), f32(PW - i32(uis(24))), f32(item_h) },
                 1, rl.Color{ 55, 48, 34, 80 })
             so_fs := uis(11)
-            rl.DrawTextEx(g_font, cstring("Sold out"),
-                { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font,"Sold out",so_fs,0.5).x*0.5,
+            so_cs := t(.SHOP_SOLD_OUT)
+            rl.DrawTextEx(g_font, so_cs,
+                { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font, so_cs, so_fs, 0.5).x*0.5,
                   f32(iy) + f32(item_h)*0.5 - so_fs*0.5 },
                 so_fs, 0.5, COL_MUTED)
             continue
@@ -374,12 +375,12 @@ draw_shop_hud :: proc(w: ^cw.World) {
         name_fs := uis(12)
         name_x  := row_r.x + icon_r*2 + uis(18)
         name_col := rarity_color(item.rarity)
-        rl.DrawTextEx(g_font, cw.render_config_name_cstr(irc),
+        rl.DrawTextEx(g_font, loc_lookup(cw.render_config_name_cstr(irc)),
             { name_x, row_r.y + uis(8) }, name_fs, 0.5, name_col)
 
         // Description
         desc_fs := uis(9)
-        rl.DrawTextEx(g_font, cw.render_config_desc_cstr(irc),
+        rl.DrawTextEx(g_font, loc_lookup(cw.render_config_desc_cstr(irc)),
             { name_x, row_r.y + uis(8) + name_fs + uis(3) }, desc_fs, 0.5, COL_MUTED)
 
         // Price
@@ -407,13 +408,14 @@ draw_shop_hud :: proc(w: ^cw.World) {
         { f32(px) + uis(16), f32(sell_y) },
         { f32(px + PW) - uis(16), f32(sell_y) }, 1, COL_RULE)
     sell_hdr_fs := uis(11)
-    rl.DrawTextEx(g_font, cstring("SELL  (click an item in your backpack)"),
+    rl.DrawTextEx(g_font, t(.SHOP_SELL),
         { f32(px) + uis(16), f32(sell_y) + uis(5) }, sell_hdr_fs, 0.5, COL_MUTED)
 
     // Close hint
     close_fs := uis(10)
-    rl.DrawTextEx(g_font, cstring("ESC — close"),
-        { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font,"ESC — close",close_fs,0.5).x*0.5,
+    close_cs := t(.SHOP_ESC_CLOSE)
+    rl.DrawTextEx(g_font, close_cs,
+        { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font, close_cs, close_fs, 0.5).x*0.5,
           f32(py + PH) - close_fs - uis(10) },
         close_fs, 0.5, COL_MUTED)
 }

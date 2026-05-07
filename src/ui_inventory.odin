@@ -79,11 +79,11 @@ _item_fits_slot :: proc(item_slot: cw.EquipSlot, target: cw.EquipSlot) -> bool {
 
 @(private = "file")
 _inv_slot_name :: proc(w: ^cw.World, inv: ^cw.InventoryComp, slot: cw.EquipSlot) -> (cstring, bool) {
-    if inv == nil { return "unequipped", false }
+    if inv == nil { return t(.INV_UNEQUIPPED), false }
     eid := inv.equipped[int(slot)]
-    if !cw.world_is_valid(w, eid) { return "unequipped", false }
+    if !cw.world_is_valid(w, eid) { return t(.INV_UNEQUIPPED), false }
     if cw.world_has_component(w, eid, .RenderConfig) {
-        return cw.render_config_name_cstr(cw.world_get_render_config(w, eid)), true
+        return loc_lookup(cw.render_config_name_cstr(cw.world_get_render_config(w, eid))), true
     }
     return "???", true
 }
@@ -283,7 +283,7 @@ _draw_backpack_raw :: proc(w: ^cw.World, inv: ^cw.InventoryComp, grid_bb: clay.B
 
             if cw.world_has_component(w, cell_id, .RenderConfig) {
                 rcc  := cw.world_get_render_config(w, cell_id)
-                name := cw.render_config_name_cstr(rcc)
+                name := loc_lookup(cw.render_config_name_cstr(rcc))
                 rl.DrawTextEx(g_font, name,
                     { f32(ix) + uis(3), f32(iy + icon_margin + icon_sz + 2) },
                     uis(11), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
@@ -599,7 +599,7 @@ draw_inventory :: proc(w: ^cw.World) {
                     childAlignment = { x = .Center },
                 },
             }) {
-                clay.TextDynamic("E Q U I P M E N T", clay.TextConfig({
+                clay.TextDynamic(string(t(.INV_TITLE)), clay.TextConfig({
                     fontSize      = u16(uis(20)),
                     textColor     = ui_clay_color(COL_PARCH),
                     letterSpacing = 10,
@@ -607,18 +607,18 @@ draw_inventory :: proc(w: ^cw.World) {
             }
 
             ui_divider("InvDiv0")
-            ui_section("InvSecArmor", "ARMOR")
+            ui_section("InvSecArmor", string(t(.INV_ARMOR)))
 
             // Armor slots
             armor_slots  := [3]cw.EquipSlot{ .Head, .Chest, .Boots }
-            armor_labels := [3]string{ "HEAD", "CHEST", "BOOTS" }
+            armor_labels := [3]cstring{ t(.INV_SLOT_HEAD), t(.INV_SLOT_CHEST), t(.INV_SLOT_BOOTS) }
             for i in 0..<3 {
                 slot  := armor_slots[i]
                 n, has := _inv_slot_name(w, var_inv, slot)
                 d := UICustomData{ kind = .InvSlot }
                 d.inv_slot.has_item  = has
                 d.inv_slot.is_target = _inv_is_target(var_inv, drag_item_slot, slot)
-                lbl_bytes := transmute([]u8)armor_labels[i]
+                lbl_bytes := transmute([]u8)string(armor_labels[i])
                 n_copy    := min(len(lbl_bytes), 7)
                 copy(d.inv_slot.label[:], lbl_bytes[:n_copy])
                 d.inv_slot.label[n_copy] = 0
@@ -634,7 +634,7 @@ draw_inventory :: proc(w: ^cw.World) {
             }
 
             ui_divider("InvDiv1")
-            ui_section("InvSecWep", "WEAPONS")
+            ui_section("InvSecWep", string(t(.INV_WEAPONS)))
 
             // Weapon row
             if clay.UI(clay.ID("InvWepRow"))({
@@ -645,17 +645,17 @@ draw_inventory :: proc(w: ^cw.World) {
                 },
             }) {
                 wep_slots  := [2]cw.EquipSlot{ .WeaponPrimary, .WeaponOffhand }
-                wep_types  := [2]string{ "WEAPON I", "OFFHAND MOD" }
+                wep_types  := [2]cstring{ t(.INV_SLOT_WEAPON), t(.INV_SLOT_OFFHAND) }
 
                 // Primary weapon label: use actual equipped weapon name if any
                 wep_label1_buf: [12]u8
-                wep_label1 := "WEAPON I"
+                wep_label1 := string(t(.INV_SLOT_WEAPON))
                 if cw.world_has_component(w, w.player_id, .Equipment) {
                     eq := cw.world_get_equipment(w, w.player_id)
                     if cw.world_is_valid(w, eq.weapon_entity_id) &&
                        cw.world_has_component(w, eq.weapon_entity_id, .RenderConfig) {
-                        rc_name := cw.render_config_name_cstr(
-                            cw.world_get_render_config(w, eq.weapon_entity_id))
+                        rc_name := loc_lookup(cw.render_config_name_cstr(
+                            cw.world_get_render_config(w, eq.weapon_entity_id)))
                         wep_label1 = string(rc_name)
                     }
                 }
@@ -672,7 +672,7 @@ draw_inventory :: proc(w: ^cw.World) {
                     d.wep_slot.is_target  = !blocked && _inv_is_target(var_inv, drag_item_slot, slot)
 
                     // Type label
-                    tl_src := wep_types[i]
+                    tl_src := string(wep_types[i])
                     if i == 0 { tl_src = wep_label1 }
                     tl_bytes := transmute([]u8)tl_src
                     tl_n     := min(len(tl_bytes), 11)
@@ -692,7 +692,7 @@ draw_inventory :: proc(w: ^cw.World) {
             }
 
             ui_divider("InvDiv2")
-            ui_section("InvSecAbil", "ABILITIES")
+            ui_section("InvSecAbil", string(t(.INV_ABILITIES)))
 
             // Ability row
             if clay.UI(clay.ID("InvAbilRow"))({
@@ -745,7 +745,7 @@ draw_inventory :: proc(w: ^cw.World) {
             }
 
             ui_divider("InvDiv3")
-            ui_section("InvSecBag", "B A C K P A C K")
+            ui_section("InvSecBag", string(t(.INV_BACKPACK)))
 
             // Backpack grid placeholder — actual drawing happens via raw Raylib
             if clay.UI(clay.ID("InvBackpackGrid"))({
@@ -766,7 +766,7 @@ draw_inventory :: proc(w: ^cw.World) {
                     childAlignment = { x = .Center },
                 },
             }) {
-                clay.TextDynamic("[I]  Close", clay.TextConfig({
+                clay.TextDynamic(string(t(.INV_BTN_CLOSE)), clay.TextConfig({
                     fontSize      = u16(uis(15)),
                     textColor     = ui_clay_color(COL_MUTED),
                     letterSpacing = 8,
@@ -806,6 +806,6 @@ draw_inventory :: proc(w: ^cw.World) {
     // Tooltip
     if g_hover_item_id != cw.INVALID_ENTITY && g_drag_item_id == -1 {
         mp2 := rl.GetMousePosition()
-        draw_item_tooltip(w, g_hover_item_id, mp2.x, mp2.y)
+        draw_item_tooltip_or_compare(w, g_hover_item_id, mp2.x, mp2.y)
     }
 }

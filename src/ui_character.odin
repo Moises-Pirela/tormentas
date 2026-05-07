@@ -53,7 +53,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
     HPAD := u16(uis(24))
     VGAP := u16(uis(6))
 
-    stat_names  := [3]string{ "Strength", "Dexterity", "Science" }
+    stat_names  := [3]cstring{ t(.STATS_STRENGTH), t(.STATS_DEXTERITY), t(.STATS_SCIENCE) }
     stat_values := [3]int{ st.strength, st.dexterity, st.science }
 
     // XP ratio
@@ -70,9 +70,9 @@ draw_stats_screen :: proc(w: ^cw.World) {
     for i in 0..<3 {
         s: string
         switch i {
-        case 0: s = fmt.bprintf(eff_bufs[i][:31], "+%.0f%%  HP",     f32(stat_values[i]-1)*15)
-        case 1: s = fmt.bprintf(eff_bufs[i][:31], "+%.0f%%  Speed",  f32(stat_values[i]-1)*8)
-        case 2: s = fmt.bprintf(eff_bufs[i][:31], "+%.0f%%  Energy", f32(stat_values[i]-1)*12)
+        case 0: s = fmt.bprintf(eff_bufs[i][:31], string(t(.STATS_HP_BONUS)),     f32(stat_values[i]-1)*15)
+        case 1: s = fmt.bprintf(eff_bufs[i][:31], string(t(.STATS_SPEED_BONUS)),  f32(stat_values[i]-1)*8)
+        case 2: s = fmt.bprintf(eff_bufs[i][:31], string(t(.STATS_ENERGY_BONUS)), f32(stat_values[i]-1)*12)
         }
         eff_bufs[i][len(s)] = 0
         eff_strs[i] = s
@@ -95,10 +95,10 @@ draw_stats_screen :: proc(w: ^cw.World) {
 
     // History rows
     hist_rows := [4][2]string{
-        { "Raids completed",  fmt.tprintf("%d",   g_lifetime_stats.successful_raids)    },
-        { "Enemies killed",   fmt.tprintf("%d",   g_lifetime_stats.enemies_killed)      },
-        { "Deaths",           fmt.tprintf("%d",   g_lifetime_stats.deaths)              },
-        { "Best extract",     fmt.tprintf("%d g", int(g_lifetime_stats.max_extract_gold)) },
+        { string(t(.STATS_RAIDS)),        fmt.tprintf("%d",   g_lifetime_stats.successful_raids)    },
+        { string(t(.STATS_KILLS)),        fmt.tprintf("%d",   g_lifetime_stats.enemies_killed)      },
+        { string(t(.STATS_DEATHS)),       fmt.tprintf("%d",   g_lifetime_stats.deaths)              },
+        { string(t(.STATS_BEST_EXTRACT)), fmt.tprintf("%d g", int(g_lifetime_stats.max_extract_gold)) },
     }
 
     // ── Clay layout ──────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
                 childAlignment = { x = .Center },
             },
         }) {
-            clay.TextDynamic("C H A R A C T E R", clay.TextConfig({
+            clay.TextDynamic(string(t(.STATS_TITLE)), clay.TextConfig({
                 fontSize      = u16(uis(22)),
                 textColor     = ui_clay_color(COL_PARCH),
                 letterSpacing = 10,
@@ -177,7 +177,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
                 sizing          = { clay.SizingGrow(), clay.SizingFit() },
             },
         }) {
-            ui_label("CharStatsLbl", "STATS", uis(14), COL_MUTED)
+            ui_label("CharStatsLbl", string(t(.STATS_SECTION)), uis(14), COL_MUTED)
 
             if clay.UI(clay.ID("CharStatsHdrSep"))({
                 layout = { sizing = { clay.SizingGrow(), clay.SizingFit() } },
@@ -225,7 +225,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
                         sizing          = { clay.SizingFit(), clay.SizingFit() },
                     },
                 }) {
-                    clay.TextDynamic(stat_names[i], clay.TextConfig({
+                    clay.TextDynamic(string(stat_names[i]), clay.TextConfig({
                         fontSize  = u16(uis(18)),
                         textColor = ui_clay_color(COL_PARCH),
                     }))
@@ -288,7 +288,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
         ui_divider("CharDiv2")
 
         // ── HISTORY section ───────────────────────────────────────────────
-        ui_section("CharHistHdr", "HISTORY")
+        ui_section("CharHistHdr", string(t(.STATS_HISTORY)))
 
         for ri in 0..<4 {
             row_id   := fmt.tprintf("CharHistRow%d", ri)
@@ -325,7 +325,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
                 childAlignment = { x = .Center },
             },
         }) {
-            clay.TextDynamic("[C]  Close", clay.TextConfig({
+            clay.TextDynamic(string(t(.STATS_BTN_CLOSE)), clay.TextConfig({
                 fontSize      = u16(uis(13)),
                 textColor     = ui_clay_color(COL_MUTED),
                 letterSpacing = 5,

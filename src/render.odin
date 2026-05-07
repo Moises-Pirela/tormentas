@@ -156,7 +156,7 @@ draw_extraction_zones :: proc(w: ^cw.World) {
         draw_world_line({ cx, cy - cs }, { cx, cy + cs }, 2.0, rl.Color{ 55, 220, 85, 255 })
 
         lbl_fs  := f32(14)
-        lbl     := cstring("EXTRACT")
+        lbl     := t(.HUD_EXTRACT)
         lbl_sz  := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
         lbl_blink := u8(180 + i32(pulse * 60))
         center_iso := world_to_iso_v(center)
@@ -208,18 +208,18 @@ draw_loot_filter_hud :: proc() {
     if g_loot_filter_rarity == .Normal { return }
 
     filter_labels := [cw.ItemRarity]cstring{
-        .Normal    = "ALL",
-        .Rare      = "RARE+",
-        .Epic      = "EPIC+",
-        .Legendary = "LEGENDARY+",
-        .Unique    = "UNIQUE",
+        .Normal    = t(.HUD_FILTER_ALL),
+        .Rare      = t(.HUD_FILTER_RARE),
+        .Epic      = t(.HUD_FILTER_EPIC),
+        .Legendary = t(.HUD_FILTER_LEGENDARY),
+        .Unique    = t(.HUD_FILTER_UNIQUE),
     }
     lbl := filter_labels[g_loot_filter_rarity]
 
     sw  := f32(rl.GetScreenWidth())
     _   = sw
     fs  := uis(9)
-    prefix    := cstring("LOOT FILTER  ")
+    prefix    := t(.HUD_LOOT_FILTER)
     psz       := rl.MeasureTextEx(g_font, prefix, fs, 0.5)
     lsz       := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
     total_w   := psz.x + lsz.x + uis(16)
@@ -260,7 +260,7 @@ draw_raid_timer :: proc() {
     sw := f32(rl.GetScreenWidth())
     fs := uis(15)
 
-    icon := cstring("RAID TIMER")
+    icon := t(.HUD_RAID_TIMER)
     lbl  := cstring(&buf[0])
 
     icon_sz := rl.MeasureTextEx(g_font, icon, uis(8), 0.5)
@@ -274,8 +274,8 @@ draw_raid_timer :: proc() {
 draw_boss_warning :: proc() {
     if g_boss_warning_timer <= 0 { return }
 
-    t     := f32(rl.GetTime())
-    pulse := f32(0.5) + f32(0.5) * math.sin(t * 6.0)
+    tt    := f32(rl.GetTime())
+    pulse := f32(0.5) + f32(0.5) * math.sin(tt * 6.0)
     sw    := f32(rl.GetScreenWidth())
     sh    := f32(rl.GetScreenHeight())
 
@@ -283,8 +283,8 @@ draw_boss_warning :: proc() {
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{ 180, 0, 0, overlay_alpha })
 
     warn_fs := uis(22)
-    warn1   := cstring("WARNING")
-    warn2   := cstring("EL VERDUGO APPROACHES")
+    warn1   := t(.HUD_WARNING)
+    warn2   := t(.HUD_BOSS_APPROACHES)
     w1sz    := rl.MeasureTextEx(g_font, warn1, warn_fs, 1)
     w2sz    := rl.MeasureTextEx(g_font, warn2, warn_fs * 0.65, 1)
     cy      := sh * 0.5 - uis(40)
@@ -403,7 +403,7 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
     name_lbl := cstring("ENEMY")
     if cw.world_has_component(w, show_id, .RenderConfig) {
         rc := cw.world_get_render_config(w, show_id)
-        cs := cw.render_config_name_cstr(rc)
+        cs := loc_lookup(cw.render_config_name_cstr(rc))
         if cs != nil && len(cs) > 0 { name_lbl = cs }
     }
     name_fs := uis(9)
@@ -821,7 +821,7 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
         context.temp_allocator)
 
     alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
-    t        := f32(rl.GetTime())
+    tt       := f32(rl.GetTime())
 
     for id in ids {
         if is_fog_hidden(w, id)                             { continue }
@@ -837,11 +837,11 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
         iso := world_to_iso_v(pos)
 
         rcc  := cw.world_get_render_config(w, id)
-        name := cw.render_config_name_cstr(rcc)
+        name := loc_lookup(cw.render_config_name_cstr(rcc))
         if len(name) == 0 { continue }
 
         rc    := rarity_color(item.rarity)
-        pulse := (math.sin(t * 3.2 + f32(id) * 0.37) + 1) * 0.5
+        pulse := (math.sin(tt * 3.2 + f32(id) * 0.37) + 1) * 0.5
 
         nfs  := uis(9)
         nsz  := rl.MeasureTextEx(g_font, name, nfs, 0.4)
@@ -853,7 +853,7 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
         // Ability items get an ACTIVE / PASSIVE tag above the name.
         if item.ability_type != .None {
             def := ABILITY_DEFS[item.ability_type]
-            tag := cstring("[PASSIVE]") if def.is_passive else cstring("[ACTIVE]")
+            tag := t(.HUD_ITEM_PASSIVE) if def.is_passive else t(.HUD_ITEM_ACTIVE)
             tfs := uis(8)
             tsz := rl.MeasureTextEx(g_font, tag, tfs, 0.4)
             rl.DrawTextEx(g_font, tag,
@@ -1185,21 +1185,42 @@ PAUSE_RESOLUTIONS := [?]PauseResolution{
     { 2560, 1440, "2560 x 1440" },
 }
 
-g_pause_res_idx: int   
-g_borderless:    bool  
+g_pause_res_idx: int
+g_borderless:    bool
+
+// lang_name returns the native name of a language, always in that language
+// regardless of the current g_lang setting.
+@(private = "file")
+lang_name :: proc(lang: Language) -> cstring {
+    switch lang {
+    case .EN: return t(.LANG_EN)
+    case .ES: return t(.LANG_ES)
+    case .PT: return t(.LANG_PT)
+    }
+    return "?"
+}
+
+// _apply_lang changes the active language, syncs it to config and saves.
+@(private = "file")
+_apply_lang :: proc(lang: Language) {
+    g_lang           = lang
+    g_binds.language = u8(lang)
+    save_config()
+}
 
 PAUSE_W_BASE      :: f32(340)
-PAUSE_H_BASE      :: f32(586)   
+PAUSE_H_BASE      :: f32(668)
 PAUSE_BTN_W_BASE  :: f32(200)
 PAUSE_BTN_H_BASE  :: f32(42)
 
 PAUSE_Y_RESUME_BASE   :: f32(62)
 PAUSE_Y_RES_BASE      :: f32(140)
 PAUSE_Y_MODE_BASE     :: f32(222)
-PAUSE_Y_VOL_BASE      :: f32(316)   
-PAUSE_VOL_ROW_H_BASE  :: f32(34)    
-PAUSE_Y_KEYBINDS_BASE :: f32(484)   
-PAUSE_Y_QUIT_BASE     :: f32(534)   
+PAUSE_Y_LANG_BASE     :: f32(304)   // language selector row
+PAUSE_Y_VOL_BASE      :: f32(398)
+PAUSE_VOL_ROW_H_BASE  :: f32(34)
+PAUSE_Y_KEYBINDS_BASE :: f32(566)
+PAUSE_Y_QUIT_BASE     :: f32(616)
 
 pause_W          :: proc() -> i32 { return i32(uis(PAUSE_W_BASE))           }
 pause_H          :: proc() -> i32 { return i32(uis(PAUSE_H_BASE))           }
@@ -1208,6 +1229,7 @@ pause_btn_h      :: proc() -> i32 { return i32(uis(PAUSE_BTN_H_BASE))       }
 pause_y_resume   :: proc() -> i32 { return i32(uis(PAUSE_Y_RESUME_BASE))    }
 pause_y_res      :: proc() -> i32 { return i32(uis(PAUSE_Y_RES_BASE))       }
 pause_y_mode     :: proc() -> i32 { return i32(uis(PAUSE_Y_MODE_BASE))      }
+pause_y_lang     :: proc() -> i32 { return i32(uis(PAUSE_Y_LANG_BASE))      }
 pause_y_vol      :: proc() -> i32 { return i32(uis(PAUSE_Y_VOL_BASE))       }
 pause_vol_row_h  :: proc() -> i32 { return i32(uis(PAUSE_VOL_ROW_H_BASE))   }
 pause_y_keybinds :: proc() -> i32 { return i32(uis(PAUSE_Y_KEYBINDS_BASE))  }
@@ -1390,6 +1412,17 @@ update_pause_menu :: proc() -> (quit: bool) {
         }
     }
 
+    {
+        arrow_sz := f32(pBH)
+        lang_y   := f32(py + pause_y_lang())
+        l_rect   := rl.Rectangle{ f32(px + 16), lang_y, arrow_sz, arrow_sz }
+        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, lang_y, arrow_sz, arrow_sz }
+        lp := rl.CheckCollisionPointRec(mp, l_rect) && rl.IsMouseButtonPressed(.LEFT)
+        rp := rl.CheckCollisionPointRec(mp, r_rect) && rl.IsMouseButtonPressed(.LEFT)
+        if lp { _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT)) }
+        if rp { _apply_lang(Language((int(g_lang) + 1)              % LANG_COUNT)) }
+    }
+
     if rl.IsMouseButtonDown(.LEFT) {
         vol_ys := [4]i32{
             py + pause_y_vol(),
@@ -1444,7 +1477,7 @@ draw_pause_menu :: proc() {
     rl.DrawRectangleLinesEx(
         { f32(px), f32(py), f32(pW), f32(pH) }, 2, COL_RULE)
 
-    title    := cstring("P A U S E D")
+    title    := t(.PAUSE_TITLE)
     title_fs := uis(24)
     title_sz := rl.MeasureTextEx(g_font, title, title_fs, 1)
     rl.DrawTextEx(g_font, title,
@@ -1456,17 +1489,19 @@ draw_pause_menu :: proc() {
 
     draw_pause_btn(
         { bx, f32(py + pause_y_resume()), f32(pBW), f32(pBH) },
-        "Resume", mp)
+        t(.PAUSE_BTN_RESUME), mp)
 
     res_label := PAUSE_RESOLUTIONS[g_pause_res_idx].label
-    pause_arrow_row(px, py + pause_y_res(), "RESOLUTION", res_label, mp,
+    pause_arrow_row(px, py + pause_y_res(), t(.SETTINGS_RESOLUTION), res_label, mp,
         enabled = !g_borderless)
 
-    mode_label: cstring = "Borderless" if g_borderless else "Windowed"
-    pause_arrow_row(px, py + pause_y_mode(), "WINDOW MODE", mode_label, mp)
+    mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
+    pause_arrow_row(px, py + pause_y_mode(), t(.SETTINGS_WINDOW_MODE), mode_label, mp)
+
+    pause_arrow_row(px, py + pause_y_lang(), t(.SETTINGS_LANGUAGE), lang_name(g_lang), mp)
 
     {
-        vol_hdr    := cstring("VOLUME")
+        vol_hdr    := t(.SETTINGS_VOLUME)
         vol_hdr_fs := uis(13)
         vol_hdr_sz := rl.MeasureTextEx(g_font, vol_hdr, vol_hdr_fs, 1)
         vol_row_y  := f32(py + pause_y_vol())
@@ -1478,10 +1513,10 @@ draw_pause_menu :: proc() {
             vol_hdr_fs, 1, COL_MUTED)
 
         rh := pause_vol_row_h()
-        draw_vol_slider(px, py + pause_y_vol() + rh * 0, "SFX",      g_vol_sfx,      mp)
-        draw_vol_slider(px, py + pause_y_vol() + rh * 1, "MUSIC",    g_vol_music,    mp)
-        draw_vol_slider(px, py + pause_y_vol() + rh * 2, "AMBIENCE", g_vol_ambience, mp)
-        draw_vol_slider(px, py + pause_y_vol() + rh * 3, "VOICE",    g_vol_voice,    mp)
+        draw_vol_slider(px, py + pause_y_vol() + rh * 0, t(.SETTINGS_SFX),      g_vol_sfx,      mp)
+        draw_vol_slider(px, py + pause_y_vol() + rh * 1, t(.SETTINGS_MUSIC),    g_vol_music,    mp)
+        draw_vol_slider(px, py + pause_y_vol() + rh * 2, t(.SETTINGS_AMBIENCE), g_vol_ambience, mp)
+        draw_vol_slider(px, py + pause_y_vol() + rh * 3, t(.SETTINGS_VOICE),    g_vol_voice,    mp)
     }
 
     rl.DrawLineEx(
@@ -1489,14 +1524,14 @@ draw_pause_menu :: proc() {
         { f32(px + pW) - 16, f32(py + pause_y_keybinds()) - 12 }, 1, COL_RULE)
     draw_pause_btn(
         { bx, f32(py + pause_y_keybinds()), f32(pBW), f32(pBH) },
-        "Keybinds", mp)
+        t(.PAUSE_BTN_KEYBINDS), mp)
 
     rl.DrawLineEx(
         { f32(px) + 16, f32(py + pause_y_quit()) - 12 },
         { f32(px + pW) - 16, f32(py + pause_y_quit()) - 12 }, 1, COL_RULE)
     draw_pause_btn(
         { bx, f32(py + pause_y_quit()), f32(pBW), f32(pBH) },
-        "Quit", mp)
+        t(.PAUSE_BTN_QUIT), mp)
 }
 
 
@@ -1609,7 +1644,7 @@ draw_keybinds_screen :: proc() {
     rl.DrawRectangle(i32(px), i32(py), i32(uis(PW)), i32(uis(3)), COL_BRASS)
     rl.DrawRectangleLinesEx({ px, py, uis(PW), uis(PH) }, 2, COL_RULE)
 
-    title    := cstring("K E Y B I N D S")
+    title    := t(.KEYBINDS_TITLE)
     title_fs := uis(15)
     tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
     rl.DrawTextEx(g_font, title,
@@ -1624,11 +1659,11 @@ draw_keybinds_screen :: proc() {
 
     // ── Section headers ──────────────────────────────────────────────────────
     // Gameplay header (before row 0)
-    _draw_bind_section_header(px, content_y, uis(PW), hdr_fs, "GAMEPLAY")
+    _draw_bind_section_header(px, content_y, uis(PW), hdr_fs, t(.KEYBINDS_SECTION_GAMEPLAY))
 
     // UI header (before row GAMEPLAY_BIND_COUNT)
     ui_hdr_y := content_y + uis(BIND_HDR_H + f32(GAMEPLAY_BIND_COUNT) * BIND_ROW_H)
-    _draw_bind_section_header(px, ui_hdr_y, uis(PW), hdr_fs, "UI")
+    _draw_bind_section_header(px, ui_hdr_y, uis(PW), hdr_fs, t(.KEYBINDS_SECTION_UI))
 
     // ── Bind rows ────────────────────────────────────────────────────────────
     lfs := uis(13)
@@ -1652,7 +1687,7 @@ draw_keybinds_screen :: proc() {
 
         key_str: cstring
         if is_listening {
-            key_str = "[ press a key ]"
+            key_str = t(.KEYBINDS_PRESS_KEY)
         } else {
             key_str = key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:])
         }
@@ -1671,7 +1706,7 @@ draw_keybinds_screen :: proc() {
     reset_hot := rl.CheckCollisionPointRec(mp, reset_r) && g_rebind_idx < 0
     rl.DrawRectangleRec(reset_r, rl.Color{ 28, 14, 10, 240 } if reset_hot else rl.Color{ 18, 10, 8, 220 })
     rl.DrawRectangleLinesEx(reset_r, 1, COL_RULE)
-    reset_lbl := cstring("Reset Defaults")
+    reset_lbl := t(.KEYBINDS_BTN_RESET)
     rlbl_sz   := rl.MeasureTextEx(g_font, reset_lbl, rlbl_fs, 0.5)
     rl.DrawTextEx(g_font, reset_lbl,
         { reset_r.x + reset_r.width*0.5 - rlbl_sz.x*0.5,
@@ -1682,7 +1717,7 @@ draw_keybinds_screen :: proc() {
     close_hot := rl.CheckCollisionPointRec(mp, close_r) && g_rebind_idx < 0
     rl.DrawRectangleRec(close_r, rl.Color{ 28, 22, 16, 240 } if close_hot else rl.Color{ 18, 14, 10, 220 })
     rl.DrawRectangleLinesEx(close_r, 1, COL_RULE if !close_hot else COL_BRASS)
-    close_lbl := cstring("Close")
+    close_lbl := t(.KEYBINDS_BTN_CLOSE)
     clbl_sz   := rl.MeasureTextEx(g_font, close_lbl, rlbl_fs, 0.5)
     rl.DrawTextEx(g_font, close_lbl,
         { close_r.x + close_r.width*0.5 - clbl_sz.x*0.5,
@@ -1690,7 +1725,7 @@ draw_keybinds_screen :: proc() {
         rlbl_fs, 0.5, COL_BRASS if close_hot else COL_PARCH)
 
     if g_rebind_idx >= 0 {
-        hint    := cstring("Esc to cancel")
+        hint    := t(.KEYBINDS_ESC_CANCEL)
         hint_fs := uis(11)
         hsz     := rl.MeasureTextEx(g_font, hint, hint_fs, 0.5)
         rl.DrawTextEx(g_font, hint,
@@ -1711,18 +1746,20 @@ _draw_bind_section_header :: proc(px, ry, pw, fs: f32, label: cstring) {
         { px + uis(60) + lsz.x, ry + fs * 0.5 },
         { px + pw - uis(8),     ry + fs * 0.5 }, 1, COL_RULE)
 }
-SETTINGS_H_BASE          :: f32(566)
+SETTINGS_H_BASE          :: f32(648)
 SETTINGS_Y_RES_BASE       :: f32(80)
 SETTINGS_Y_MODE_BASE      :: f32(162)
-SETTINGS_Y_VOL_BASE       :: f32(256)   // first slider row_y
+SETTINGS_Y_LANG_BASE      :: f32(244)   // language selector row
+SETTINGS_Y_VOL_BASE       :: f32(338)   // first slider row_y
 SETTINGS_VOL_ROW_H_BASE   :: f32(34)
-SETTINGS_Y_KEYBINDS_BASE  :: f32(408)
-SETTINGS_Y_CLOSE_BASE     :: f32(460)
-SETTINGS_Y_EXIT_BASE      :: f32(514)
+SETTINGS_Y_KEYBINDS_BASE  :: f32(490)
+SETTINGS_Y_CLOSE_BASE     :: f32(542)
+SETTINGS_Y_EXIT_BASE      :: f32(596)
 
 settings_H          :: proc() -> i32 { return i32(uis(SETTINGS_H_BASE))         }
 settings_y_res      :: proc() -> i32 { return i32(uis(SETTINGS_Y_RES_BASE))     }
 settings_y_mode     :: proc() -> i32 { return i32(uis(SETTINGS_Y_MODE_BASE))    }
+settings_y_lang     :: proc() -> i32 { return i32(uis(SETTINGS_Y_LANG_BASE))    }
 settings_y_vol      :: proc() -> i32 { return i32(uis(SETTINGS_Y_VOL_BASE))     }
 settings_vol_row_h  :: proc() -> i32 { return i32(uis(SETTINGS_VOL_ROW_H_BASE)) }
 settings_y_keybinds :: proc() -> i32 { return i32(uis(SETTINGS_Y_KEYBINDS_BASE))}
@@ -1765,6 +1802,17 @@ update_settings_overlay :: proc() {
             rl.IsMouseButtonPressed(.LEFT) {
             set_window_mode(!g_borderless)
         }
+    }
+
+    {
+        arrow_sz := f32(pBH)
+        lang_y   := f32(py + settings_y_lang())
+        l_rect   := rl.Rectangle{ f32(px + 16), lang_y, arrow_sz, arrow_sz }
+        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, lang_y, arrow_sz, arrow_sz }
+        lp := rl.CheckCollisionPointRec(mp, l_rect) && rl.IsMouseButtonPressed(.LEFT)
+        rp := rl.CheckCollisionPointRec(mp, r_rect) && rl.IsMouseButtonPressed(.LEFT)
+        if lp { _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT)) }
+        if rp { _apply_lang(Language((int(g_lang) + 1)              % LANG_COUNT)) }
     }
 
     if rl.IsMouseButtonDown(.LEFT) {
@@ -1827,7 +1875,7 @@ draw_settings_overlay :: proc() {
     rl.DrawRectangle(px, py, pW, 3, COL_BRASS)
     rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(pW), f32(pH) }, 2, COL_RULE)
 
-    title    := cstring("S E T T I N G S")
+    title    := t(.SETTINGS_TITLE)
     title_fs := uis(24)
     title_sz := rl.MeasureTextEx(g_font, title, title_fs, 1)
     rl.DrawTextEx(g_font, title,
@@ -1838,14 +1886,16 @@ draw_settings_overlay :: proc() {
         { f32(px + pW) - 16, f32(py) + uis(52) }, 1, COL_RULE)
 
     res_label := PAUSE_RESOLUTIONS[g_pause_res_idx].label
-    pause_arrow_row(px, py + settings_y_res(), "RESOLUTION", res_label, mp,
+    pause_arrow_row(px, py + settings_y_res(), t(.SETTINGS_RESOLUTION), res_label, mp,
         enabled = !g_borderless)
 
-    mode_label: cstring = "Borderless" if g_borderless else "Windowed"
-    pause_arrow_row(px, py + settings_y_mode(), "WINDOW MODE", mode_label, mp)
+    mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
+    pause_arrow_row(px, py + settings_y_mode(), t(.SETTINGS_WINDOW_MODE), mode_label, mp)
+
+    pause_arrow_row(px, py + settings_y_lang(), t(.SETTINGS_LANGUAGE), lang_name(g_lang), mp)
 
     {
-        vol_hdr    := cstring("VOLUME")
+        vol_hdr    := t(.SETTINGS_VOLUME)
         vol_hdr_fs := uis(13)
         vol_hdr_sz := rl.MeasureTextEx(g_font, vol_hdr, vol_hdr_fs, 1)
         vol_row_y  := f32(py + settings_y_vol())
@@ -1857,10 +1907,10 @@ draw_settings_overlay :: proc() {
             vol_hdr_fs, 1, COL_MUTED)
 
         rh := settings_vol_row_h()
-        draw_vol_slider(px, py + settings_y_vol() + rh * 0, "SFX",      g_vol_sfx,      mp)
-        draw_vol_slider(px, py + settings_y_vol() + rh * 1, "MUSIC",    g_vol_music,    mp)
-        draw_vol_slider(px, py + settings_y_vol() + rh * 2, "AMBIENCE", g_vol_ambience, mp)
-        draw_vol_slider(px, py + settings_y_vol() + rh * 3, "VOICE",    g_vol_voice,    mp)
+        draw_vol_slider(px, py + settings_y_vol() + rh * 0, t(.SETTINGS_SFX),      g_vol_sfx,      mp)
+        draw_vol_slider(px, py + settings_y_vol() + rh * 1, t(.SETTINGS_MUSIC),    g_vol_music,    mp)
+        draw_vol_slider(px, py + settings_y_vol() + rh * 2, t(.SETTINGS_AMBIENCE), g_vol_ambience, mp)
+        draw_vol_slider(px, py + settings_y_vol() + rh * 3, t(.SETTINGS_VOICE),    g_vol_voice,    mp)
     }
 
     rl.DrawLineEx(
@@ -1868,14 +1918,14 @@ draw_settings_overlay :: proc() {
         { f32(px + pW) - 16, f32(py + settings_y_keybinds()) - 12 }, 1, COL_RULE)
     draw_pause_btn(
         { bx, f32(py + settings_y_keybinds()), f32(pBW), f32(pBH) },
-        "Keybinds", mp)
+        t(.SETTINGS_BTN_KEYBINDS), mp)
 
     rl.DrawLineEx(
         { f32(px) + 16, f32(py + settings_y_close()) - 12 },
         { f32(px + pW) - 16, f32(py + settings_y_close()) - 12 }, 1, COL_RULE)
     draw_pause_btn(
         { bx, f32(py + settings_y_close()), f32(pBW), f32(pBH) },
-        "Close", mp)
+        t(.SETTINGS_BTN_CLOSE), mp)
 
     rl.DrawLineEx(
         { f32(px) + 16, f32(py + settings_y_exit()) - 10 },
@@ -1888,7 +1938,7 @@ draw_settings_overlay :: proc() {
         exit_txt := rl.Color{ 235, 100, 75, 255 } if exit_hot else rl.Color{ 160, 60, 45, 220 }
         rl.DrawRectangleRec(exit_r, exit_bg)
         rl.DrawRectangleLinesEx(exit_r, 1, exit_bdr)
-        exit_lbl := cstring("Exit Game")
+        exit_lbl := t(.SETTINGS_BTN_EXIT)
         exit_fs  := uis(18)
         exit_sz  := rl.MeasureTextEx(g_font, exit_lbl, exit_fs, 1)
         rl.DrawTextEx(g_font, exit_lbl,
@@ -2152,7 +2202,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         rcc := cw.world_get_render_config(w, item_id)
         if rcc.desc_len > 0 {
             has_desc = true
-            desc_str = cw.render_config_desc_cstr(rcc)
+            desc_str = loc_lookup(cw.render_config_desc_cstr(rcc))
         }
     }
 
@@ -2239,7 +2289,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
 
     if cw.world_has_component(w, item_id, .RenderConfig) {
         rcc  := cw.world_get_render_config(w, item_id)
-        name := cw.render_config_name_cstr(rcc)
+        name := loc_lookup(cw.render_config_name_cstr(rcc))
         rl.DrawTextEx(g_font, name, { tx2, ty2 }, fs15, 0.5,
             rl.Color{ rc.r, rc.g, rc.b, 245 })
     }
@@ -2449,6 +2499,58 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     }
 }
 
+equipped_item_for_compare :: proc(w: ^cw.World, item_id: int) -> int {
+    if !cw.world_is_valid(w, w.player_id)                  { return cw.INVALID_ENTITY }
+    if !cw.world_has_component(w, w.player_id, .Inventory) { return cw.INVALID_ENTITY }
+    if !cw.world_is_valid(w, item_id)                      { return cw.INVALID_ENTITY }
+    if !cw.world_has_component(w, item_id, .Item)          { return cw.INVALID_ENTITY }
+
+    inv  := cw.world_get_inventory(w, w.player_id)
+    item := cw.world_get_item(w, item_id)
+
+    slot := item.slot
+    if slot == .WeaponOffhand {
+        eid := inv.equipped[int(cw.EquipSlot.WeaponOffhand)]
+        return eid if eid != item_id else cw.INVALID_ENTITY
+    }
+    if slot == .WeaponPrimary {
+        eid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
+        return eid if eid != item_id else cw.INVALID_ENTITY
+    }
+    if slot == .Ability1 || slot == .Ability2 || slot == .Ability3 || slot == .Ability4 {
+        ability_slots := [4]cw.EquipSlot{ .Ability1, .Ability2, .Ability3, .Ability4 }
+        for s in ability_slots {
+            eid := inv.equipped[int(s)]
+            if eid != cw.INVALID_ENTITY && eid != item_id {
+                return eid
+            }
+        }
+        return cw.INVALID_ENTITY
+    }
+
+    eid := inv.equipped[int(slot)]
+    return eid if eid != item_id else cw.INVALID_ENTITY
+}
+
+draw_item_tooltip_or_compare :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
+    compare_key := rl.KeyboardKey(g_binds.ui.compare_tooltip)
+    equipped_id := equipped_item_for_compare(w, item_id) if input_down(compare_key) else cw.INVALID_ENTITY
+
+    if equipped_id == cw.INVALID_ENTITY {
+        draw_item_tooltip(w, item_id, mx, my)
+        return
+    }
+
+    gap := uis(264)
+    if mx + gap + uis(238) < f32(rl.GetScreenWidth()) {
+        draw_item_tooltip(w, item_id, mx, my)
+        draw_item_tooltip(w, equipped_id, mx + gap, my)
+    } else {
+        draw_item_tooltip(w, equipped_id, mx, my)
+        draw_item_tooltip(w, item_id, mx - gap, my)
+    }
+}
+
 draw_levelup_flash :: proc() {
     if g_levelup_flash <= 0 { return }
 
@@ -2457,14 +2559,14 @@ draw_levelup_flash :: proc() {
 
     alpha := u8(clamp(g_levelup_flash / LEVELUP_FLASH_TIME, 0, 1) * 230)
     fs    := uis(52)
-    text  := cstring("LEVEL  UP!")
+    text  := t(.HUD_LEVELUP)
     tsz   := rl.MeasureTextEx(g_font, text, fs, 2)
     rl.DrawTextEx(g_font, text,
         { f32(sw)*0.5 - tsz.x*0.5, f32(sh)*0.36 - tsz.y*0.5 },
         fs, 2, { 220, 196, 58, alpha })
 
     sfs  := uis(18)
-    sub  := cstring("Stat point earned!")
+    sub  := t(.HUD_STATPOINT)
     ssz  := rl.MeasureTextEx(g_font, sub, sfs, 1)
     salp := u8(clamp(g_levelup_flash / LEVELUP_FLASH_TIME, 0, 1) * 180)
     rl.DrawTextEx(g_font, sub,

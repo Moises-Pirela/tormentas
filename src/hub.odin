@@ -83,11 +83,11 @@ update_hub_portal :: proc(w: ^cw.World) {
 draw_hub_world :: proc(w: ^cw.World) {
     px := HUB_PORTAL_POS[0]
     py := HUB_PORTAL_POS[1]
-    t  := f32(rl.GetTime())
+    tt := f32(rl.GetTime())
     center := rl.Vector2{ px, py }
     iso := world_to_iso_v(center)
 
-    pulse      := 0.7 + 0.3 * math.sin(t * 2.0)
+    pulse      := 0.7 + 0.3 * math.sin(tt * 2.0)
     fill_alpha := u8(50  * pulse)
     ring_alpha := u8(200 * pulse)
 
@@ -100,7 +100,7 @@ draw_hub_world :: proc(w: ^cw.World) {
         dx  := pos[0] - px
         dy  := pos[1] - py
         if dx*dx + dy*dy < (HUB_PORTAL_RADIUS * 2) * (HUB_PORTAL_RADIUS * 2) {
-            lbl    := cstring("[E] Select Level")
+            lbl    := t(.HUB_INTERACT)
             lbl_fs := f32(12)
             lsz    := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
             rl.DrawTextEx(g_font, lbl,
@@ -113,21 +113,15 @@ draw_hub_world :: proc(w: ^cw.World) {
 draw_hub_hud :: proc(w: ^cw.World) {
     sw := f32(rl.GetScreenWidth())
 
-    loc    := cstring("H U B")
+    loc    := t(.HUB_LABEL)
     loc_fs := uis(11)
     lsz    := rl.MeasureTextEx(g_font, loc, loc_fs, 0.5)
     rl.DrawTextEx(g_font, loc,
         {sw * 0.5 - lsz.x * 0.5, uis(10)},
         loc_fs, 0.5, COL_MUTED)
 
-    {
-        buf: [64]u8
-        s   := fmt.bprintf(buf[:63], "Stash:  %d Gold   %d Serums",
-            g_stash.gold, g_stash.serums)
-        buf[len(s)] = 0
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
-            {uis(14), uis(14)}, uis(11), 0.5, COL_BRASS)
-    }
+    rl.DrawTextEx(g_font, tf(.HUB_STASH, g_stash.gold, g_stash.serums),
+        {uis(14), uis(14)}, uis(11), 0.5, COL_BRASS)
 }
 
 draw_level_select :: proc(w: ^cw.World) {
@@ -158,7 +152,7 @@ draw_level_select :: proc(w: ^cw.World) {
 
     rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
 
-    title    := cstring("S E L E C T   L E V E L")
+    title    := t(.HUB_LEVEL_SELECT)
     title_fs := uis(16)
     tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
     rl.DrawTextEx(g_font, title,
@@ -184,13 +178,11 @@ draw_level_select :: proc(w: ^cw.World) {
         rl.DrawRectangleRec(r, bg)
         rl.DrawRectangleLinesEx(r, 1.5, border)
 
-        buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "LEVEL %d", i)
-        buf[len(s)] = 0
+        lbl_cs  := tf(.HUB_LEVEL_N, i)
         lbl_fs  := uis(12)
-        lsz     := rl.MeasureTextEx(g_font, cstring(&buf[0]), lbl_fs, 0.5)
+        lsz     := rl.MeasureTextEx(g_font, lbl_cs, lbl_fs, 0.5)
         lbl_col := rl.Color{235, 215, 145, 255} if hot else COL_BRASS
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        rl.DrawTextEx(g_font, lbl_cs,
             {r.x + (r.width - lsz.x) * 0.5, r.y + (r.height - lbl_fs) * 0.5},
             lbl_fs, 0.5, lbl_col)
 
@@ -200,7 +192,7 @@ draw_level_select :: proc(w: ^cw.World) {
         }
     }
 
-    cancel    := cstring("ESC — cancel")
+    cancel    := t(.HUB_ESC_CANCEL)
     cancel_fs := uis(10)
     csz       := rl.MeasureTextEx(g_font, cancel, cancel_fs, 0.5)
     rl.DrawTextEx(g_font, cancel,
@@ -274,8 +266,8 @@ draw_extract_screen :: proc(w: ^cw.World) {
     rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), rl.Color{60, 200, 80, 200})
 
     t_fs := uis(20)
-    t1   := cstring("E X T R A C T I O N")
-    t2   := cstring("S U C C E S S F U L")
+    t1   := t(.EXTRACT_TITLE)
+    t2   := t(.EXTRACT_SUBTITLE)
     t1sz := rl.MeasureTextEx(g_font, t1, t_fs, 1)
     t2sz := rl.MeasureTextEx(g_font, t2, t_fs, 1)
     rl.DrawTextEx(g_font, t1, {px + pw*0.5 - t1sz.x*0.5, py + uis(16)},
@@ -292,8 +284,8 @@ draw_extract_screen :: proc(w: ^cw.World) {
     sep_y  := r2y + uis(30)
     r3y    := sep_y + uis(14)
 
-    rl.DrawTextEx(g_font, "Gold earned",  {px + uis(24), r1y}, row_fs, 1, COL_MUTED)
-    rl.DrawTextEx(g_font, "Serums found", {px + uis(24), r2y}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font, t(.EXTRACT_GOLD),   {px + uis(24), r1y}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font, t(.EXTRACT_SERUMS), {px + uis(24), r2y}, row_fs, 1, COL_MUTED)
     {
         buf: [32]u8
         s   := fmt.bprintf(buf[:31], "+ %d", raid_result_gold)
@@ -311,7 +303,7 @@ draw_extract_screen :: proc(w: ^cw.World) {
             {px + pw - uis(24) - sz.x, r2y}, row_fs, 1, COL_BRASS)
     }
     rl.DrawLineEx({px + uis(16), sep_y}, {px + pw - uis(16), sep_y}, 1, COL_RULE)
-    rl.DrawTextEx(g_font, "Stash total", {px + uis(24), r3y}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font, t(.EXTRACT_STASH_TOTAL), {px + uis(24), r3y}, row_fs, 1, COL_MUTED)
     {
         buf: [48]u8
         s   := fmt.bprintf(buf[:47], "%d gold   %d serums", g_stash.gold, g_stash.serums)
@@ -328,7 +320,7 @@ draw_extract_screen :: proc(w: ^cw.World) {
         py + ph - uis(62),
         btn_w, btn_h,
     }
-    _hub_btn_draw(cont_r, "RETURN TO HUB", true)
+    _hub_btn_draw(cont_r, t(.HUB_BTN_RETURN), true)
     if _hub_btn_hit(cont_r) {
         enter_hub(w, true)
     }
@@ -363,7 +355,7 @@ draw_death_screen :: proc(w: ^cw.World) {
 
     rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), rl.Color{200, 40, 40, 200})
 
-    title    := cstring("Y O U   D I E D")
+    title    := t(.DEATH_TITLE)
     title_fs := uis(26)
     tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
     rl.DrawTextEx(g_font, title,
@@ -373,7 +365,7 @@ draw_death_screen :: proc(w: ^cw.World) {
         {px + uis(16), py + uis(60)},
         {px + pw - uis(16), py + uis(60)}, 1, rl.Color{100, 28, 28, 180})
 
-    sub    := cstring("Everything you carried was lost to the wastes.")
+    sub    := t(.DEATH_MSG)
     sub_fs := uis(12)
     ssz    := rl.MeasureTextEx(g_font, sub, sub_fs, 0.5)
     rl.DrawTextEx(g_font, sub,
@@ -384,7 +376,7 @@ draw_death_screen :: proc(w: ^cw.World) {
         {px + uis(16), py + uis(100)},
         {px + pw - uis(16), py + uis(100)}, 1, COL_RULE)
     row_fs := uis(15)
-    rl.DrawTextEx(g_font, "Stash preserved", {px + uis(24), py + uis(112)}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font, t(.DEATH_STASH), {px + uis(24), py + uis(112)}, row_fs, 1, COL_MUTED)
     {
         buf: [32]u8
         s   := fmt.bprintf(buf[:31], "%d gold", g_stash.gold)
@@ -404,8 +396,8 @@ draw_death_screen :: proc(w: ^cw.World) {
     retry_r := rl.Rectangle{ bx,             by, btn_w, btn_h }
     hub_r   := rl.Rectangle{ bx + btn_w+gap, by, btn_w, btn_h }
 
-    _hub_btn_draw(retry_r, "RETRY RAID",    true)
-    _hub_btn_draw(hub_r,   "RETURN TO HUB", false)
+    _hub_btn_draw(retry_r, t(.HUB_BTN_RETRY),  true)
+    _hub_btn_draw(hub_r,   t(.HUB_BTN_RETURN), false)
 
     if _hub_btn_hit(retry_r) {
         enter_raid(w, g_current_raid_level)
