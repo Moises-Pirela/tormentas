@@ -272,6 +272,7 @@ draw_raid_timer :: proc() {
 }
 
 draw_boss_warning :: proc() {
+    if (g_hub_active) {return}
     if g_boss_warning_timer <= 0 { return }
 
     tt    := f32(rl.GetTime())
@@ -1027,6 +1028,8 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
 
 draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     if !cw.world_has_component(w, id, .Transform) || is_fog_hidden(w, id) || entity_blindfire_hidden(w, id) { return }
+    // Open doors are invisible — player walks through the empty frame.
+    if cw.world_has_component(w, id, .Openable) && cw.world_get_openable(w, id).is_open { return }
     tr := cw.world_get_transform(w, id)
     pos := rl.Vector2{ tr.position[0], tr.position[1] }
     rot := tr.rotation
@@ -2062,6 +2065,106 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
             src     = { 0, 0, f32(size), -f32(size) },
             rt      = rt,
             from_rt = true,
+        }
+    case "env_door":
+        // Wooden door with frame and knob
+        rl.DrawRectangle(10,  6, 44, 52, rl.Color{ 60, 36, 14, 255})  // frame
+        rl.DrawRectangle(12,  8, 40, 48, rl.Color{ 96, 58, 22, 255})  // door face
+        rl.DrawRectangle(14, 10, 16, 20, rl.Color{ 80, 48, 18, 255})  // upper-left panel
+        rl.DrawRectangle(34, 10, 16, 20, rl.Color{ 80, 48, 18, 255})  // upper-right panel
+        rl.DrawRectangle(14, 34, 16, 18, rl.Color{ 80, 48, 18, 255})  // lower-left panel
+        rl.DrawRectangle(34, 34, 16, 18, rl.Color{ 80, 48, 18, 255})  // lower-right panel
+        rl.DrawCircle(37, 28, 3, rl.Color{200, 158, 50, 255})         // knob
+        rl.DrawCircle(37, 28, 2, rl.Color{220, 180, 80, 255})         // knob highlight
+        rl.DrawRectangle( 8, 56,  48, 4, rl.Color{ 48, 28, 10, 255}) // threshold
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+        }
+    case "env_switch":
+        // Wall-mounted lever
+        rl.DrawRectangle(18, 36, 28, 22, rl.Color{ 50, 50, 60, 255}) // base plate
+        rl.DrawRectangle(20, 38, 24, 18, rl.Color{ 68, 68, 80, 255}) // plate face
+        rl.DrawRectangle(22, 40,  8,  4, rl.Color{ 80,180, 70, 255}) // indicator light
+        rl.DrawRectangle(30, 14,  4, 30, rl.Color{130, 80, 26, 255}) // lever shaft
+        rl.DrawCircle(32, 14, 6, rl.Color{180, 116, 40, 255})        // handle ball
+        rl.DrawCircle(32, 14, 4, rl.Color{210, 150, 60, 255})        // ball highlight
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+        }
+    case "env_chest":
+        // Treasure chest with iron bands
+        rl.DrawRectangle( 8, 34, 48, 26, rl.Color{ 88, 54, 20, 255}) // body
+        rl.DrawRectangle(10, 36, 44, 22, rl.Color{108, 68, 26, 255}) // body face
+        rl.DrawRectangle( 8, 22, 48, 14, rl.Color{ 72, 44, 16, 255}) // lid
+        rl.DrawRectangle(10, 24, 44, 11, rl.Color{ 90, 56, 20, 255}) // lid face
+        rl.DrawRectangle( 8, 44, 48,  4, rl.Color{168, 130, 50, 255}) // horizontal band
+        rl.DrawRectangle(28, 36,  8,  8, rl.Color{180, 148, 52, 255}) // clasp
+        rl.DrawRectangle(30, 38,  4,  4, rl.Color{220, 188, 90, 255}) // clasp gem
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+        }
+    case "env_crate":
+        // Wooden crate with cross-brace planks
+        rl.DrawRectangle( 8, 10, 48, 48, rl.Color{ 90, 58, 24, 255}) // box
+        rl.DrawRectangle(10, 12, 44, 44, rl.Color{112, 72, 28, 255}) // face
+        rl.DrawRectangle( 8, 10, 48,  4, rl.Color{ 70, 42, 16, 255}) // top edge
+        rl.DrawRectangle( 8, 54, 48,  4, rl.Color{ 70, 42, 16, 255}) // bottom edge
+        rl.DrawRectangle( 8, 10,  4, 48, rl.Color{ 70, 42, 16, 255}) // left edge
+        rl.DrawRectangle(52, 10,  4, 48, rl.Color{ 70, 42, 16, 255}) // right edge
+        rl.DrawRectangle( 8, 30, 48,  4, rl.Color{ 70, 42, 16, 255}) // mid horiz
+        rl.DrawRectangle(30, 10,  4, 48, rl.Color{ 70, 42, 16, 255}) // mid vert
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+        }
+    case "env_lore_item":
+        // Folded parchment document
+        rl.DrawRectangle(14,  6, 36, 48, rl.Color{198, 176, 126, 255}) // paper
+        rl.DrawRectangle(16,  8, 32, 44, rl.Color{210, 192, 146, 255}) // paper face
+        rl.DrawRectangle(14,  6, 12, 12, rl.Color{180, 158, 108, 255}) // fold triangle bg
+        rl.DrawRectangle(16,  8,  4,  8, rl.Color{198, 176, 126, 255}) // fold detail
+        rl.DrawRectangle(19, 18, 26,  2, rl.Color{120, 100,  60, 160}) // text line 1
+        rl.DrawRectangle(19, 24, 26,  2, rl.Color{120, 100,  60, 160}) // text line 2
+        rl.DrawRectangle(19, 30, 26,  2, rl.Color{120, 100,  60, 160}) // text line 3
+        rl.DrawRectangle(19, 36, 18,  2, rl.Color{120, 100,  60, 160}) // text line 4 (short)
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+        }
+    case "env_phonograph":
+        // Wax cylinder phonograph with horn
+        rl.DrawRectangle( 8, 36, 28, 16, rl.Color{ 72, 44, 18, 255}) // cabinet
+        rl.DrawRectangle(10, 38, 24, 12, rl.Color{ 92, 56, 22, 255}) // cabinet face
+        rl.DrawRectangle(10, 40, 24,  8, rl.Color{ 78, 48, 20, 255}) // cylinder slot
+        rl.DrawEllipse(22, 44, 10, 4, rl.Color{ 40, 40, 40, 220})    // cylinder end
+        rl.DrawEllipseLines(22, 44, 10, 4, rl.Color{100, 100,110,255})
+        // Horn: triangular shape pointing up-right
+        rl.DrawTriangle(
+            {36, 52}, {54, 10}, {54, 52},
+            rl.Color{180, 130, 50, 200})
+        rl.DrawTriangleLines(
+            {36, 52}, {54, 10}, {54, 52},
+            rl.Color{220, 170, 70, 220})
+        rl.DrawEllipse(45, 10, 9, 4, rl.Color{200, 160, 60, 160})   // horn mouth
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+        }
+    case "env_key":
+        // Ornate key: ring head + shaft + teeth
+        rl.DrawCircle(20, 24, 14, rl.Color{180, 148, 40, 255})       // ring outer
+        rl.DrawCircle(20, 24, 10, rl.Color{130,  96, 22, 255})       // ring inner (hole)
+        rl.DrawCircle(20, 24,  5, rl.Color{180, 148, 40, 255})       // center hub
+        rl.DrawRectangle(30, 21, 26,  6, rl.Color{200, 162, 48, 255}) // shaft
+        rl.DrawRectangle(48, 27,  4,  8, rl.Color{200, 162, 48, 255}) // tooth 1
+        rl.DrawRectangle(42, 27,  4,  6, rl.Color{200, 162, 48, 255}) // tooth 2
+        rl.DrawRectangle(36, 27,  4,  4, rl.Color{200, 162, 48, 255}) // tooth 3
+        rl.EndTextureMode()
+        return EntitySpriteEntry{
+            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     }
 

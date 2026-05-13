@@ -21,12 +21,13 @@ MAX_STALL_SEC        :: f32(0.1)  // stall warning threshold (seconds)
 DISCONNECT_TIMEOUT   :: f32(6.0)  // seconds of silence before declaring disconnect
 
 MsgType :: enum u8 {
-    Hello       = 1,   // client → host
-    HelloAck    = 2,   // host   → client
-    Ready       = 3,   // client → host (after HelloAck)
-    InputBundle = 4,   // both   → both (unreliable, frequent)
-    EditorOp    = 5,   // both   → both (unreliable, editor tile delta)
-    LevelLoad   = 6,   // both   → both (unreliable, load level N from disk)
+    Hello        = 1,   // client → host
+    HelloAck     = 2,   // host   → client
+    Ready        = 3,   // client → host (after HelloAck)
+    InputBundle  = 4,   // both   → both (unreliable, frequent)
+    EditorOp     = 5,   // both   → both (unreliable, editor tile delta)
+    LevelLoad    = 6,   // both   → both (unreliable, load level N from disk)
+    EditorModOp  = 7,   // both   → both (unreliable, inspector field edit)
 }
 
 SessionState :: enum {
@@ -56,8 +57,9 @@ Session :: struct {
     local_name:  [NAME_SIZE]u8,
     remote_name: [NAME_SIZE]u8,
 
-    // Editor sync queues — filled by _handle, drained by session_drain_editor.
+    // Editor sync queues — filled by _handle, drained by session_drain_editor*.
     editor_ops:          [dynamic]EditorOp,
+    editor_mod_ops:      [dynamic]EditorModOp,
     pending_level_load:  int,     // 0 = none; > 0 = level number to load
 
     // Disconnect detection: time since any packet was last received.
@@ -125,6 +127,7 @@ session_shutdown :: proc(s: ^Session) {
     if s.state == .Offline { return }
     net.close(s.socket)
     delete(s.editor_ops)
+    delete(s.editor_mod_ops)
     s^ = {}
 }
 
@@ -240,5 +243,7 @@ _handle :: proc(s: ^Session, data: []u8, from: net.Endpoint) {
         _handle_editor_op(s, data[1:])
     case .LevelLoad:
         _handle_level_load_msg(s, data[1:])
+    case .EditorModOp:
+        _handle_editor_mod_op(s, data[1:])
     }
 }

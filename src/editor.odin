@@ -38,9 +38,17 @@ EditorBrush :: enum u8 {
     // Hazard entities (Entities)
     FireBarrel  = 16,   // exploding fire barrel
     WaterBarrel = 17,   // water-splash barrel
+    // Interactive objects (v7)
+    Door        = 18,   // door; target_level low-byte = link_id
+    SwitchLever = 19,   // toggle lever; target_level low-byte = link_id
+    Chest       = 20,   // locked/unlocked chest container
+    Crate       = 21,   // breakable crate
+    LoreItem    = 22,   // readable document; target_level low-byte = lore_id
+    Phonograph  = 23,   // wax-cylinder phonograph; target_level low-byte = recording_id
+    KeyPickup   = 24,   // dropped key; target_level low-byte = key_id
 }
 
-EditorCategory :: enum u8 { Environment, Entities }
+EditorCategory :: enum u8 { Environment, Entities, Interactive }
 
 @(private = "file")
 PaletteEntry :: struct {
@@ -59,7 +67,8 @@ ED_PAL_HOTKEYS :: [14]cstring{"1","2","3","4","5","6","7","8","9","0","","","","
 @(private = "file") g_ed_palette:        [40]PaletteEntry
 @(private = "file") g_ed_palette_n:      int
 @(private = "file") g_ed_pal_scroll:     f32      
-@(private = "file") g_ed_cat_collapsed:  [2]bool  
+@(private = "file") g_ed_cat_collapsed:  [3]bool
+@(private = "file") g_ed_key_id:         int = 0   // high-byte param for Door (key_id) and future uses
 
 @(private = "file") g_ed_brush:          EditorBrush = .Floor
 @(private = "file") g_ed_zoom:           f32 = 1.0
@@ -112,20 +121,30 @@ ed_build_palette :: proc() {
     add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
     add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
 
-    entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, ok: bool) {
+    // entity_to_brush maps entity def names to editor palette entries.
+    // Returns the brush, label, background colour, palette category, and ok.
+    // Enemies go to .Entities; env_* objects go to .Interactive.
+    entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, cat: EditorCategory, ok: bool) {
         switch name {
-        case "enemy_melee":  return .SpawnMelee,  "Melee",  {80, 28, 20, 255}, true
-        case "enemy_brute":  return .SpawnBrute,  "Brute",  {60, 12, 12, 255}, true
-        case "enemy_hunter": return .SpawnHunter, "Hunter", {48, 24, 80, 255}, true
-        case "enemy_ranged": return .SpawnRanged, "Ranged", {16, 60, 60, 255}, true
-        case "enemy_sniper": return .SpawnSniper, "Sniper", {16, 28, 80, 255}, true
+        case "enemy_melee":    return .SpawnMelee,  "Melee",  {80, 28, 20, 255}, .Entities,    true
+        case "enemy_brute":    return .SpawnBrute,  "Brute",  {60, 12, 12, 255}, .Entities,    true
+        case "enemy_hunter":   return .SpawnHunter, "Hunter", {48, 24, 80, 255}, .Entities,    true
+        case "enemy_ranged":   return .SpawnRanged, "Ranged", {16, 60, 60, 255}, .Entities,    true
+        case "enemy_sniper":   return .SpawnSniper, "Sniper", {16, 28, 80, 255}, .Entities,    true
+        case "env_door":       return .Door,        "Door",   {52, 34, 16, 255}, .Interactive, true
+        case "env_switch":     return .SwitchLever, "Lever",  {36, 60, 36, 255}, .Interactive, true
+        case "env_chest":      return .Chest,       "Chest",  {70, 56, 14, 255}, .Interactive, true
+        case "env_crate":      return .Crate,       "Crate",  {44, 32, 16, 255}, .Interactive, true
+        case "env_lore_item":  return .LoreItem,    "Lore",   {24, 44, 68, 255}, .Interactive, true
+        case "env_phonograph": return .Phonograph,  "Phono",  {52, 28, 52, 255}, .Interactive, true
+        case "env_key":        return .KeyPickup,   "Key",    {80, 70, 14, 255}, .Interactive, true
         }
-        return .Erase, "", {}, false
+        return .Erase, "", {}, .Entities, false
     }
     for &def in g_entity_defs {
-        b, lbl, bg, ok := entity_to_brush(def.name)
+        b, lbl, bg, cat, ok := entity_to_brush(def.name)
         if !ok { continue }
-        add(b, .Entities, lbl, bg, &ki)
+        add(b, cat, lbl, bg, &ki)
     }
     add(.Shopkeeper,       .Entities, "Shop",    {84, 64, 28, 255}, &ki)
     add(.MutationWorkbench,.Entities, "Mutator", {76, 34, 84, 255}, &ki)
@@ -152,7 +171,7 @@ ed_pal_panel_rect :: proc() -> rl.Rectangle {
 ed_pal_content_height :: proc() -> f32 {
     CAT_H    :: f32(22)
     total    := f32(0)
-    seen_cat := [2]bool{}
+    seen_cat := [3]bool{}
     for i in 0..<g_ed_palette_n {
         e := &g_ed_palette[i]
         if !seen_cat[e.category] {
@@ -252,7 +271,14 @@ update_editor :: proc(dt: f32) {
         g_ed_level = load_n
         level_load(g_ed_level)
         ed_rebuild_filtered()
+        ed_insp_deselect()
     }
+
+    remote_mod_ops := p2p.session_drain_editor_mod_ops(&g_session)
+    for op in remote_mod_ops { ed_apply_mod_op(op) }
+
+    ed_insp_update_anim(dt)
+    ed_insp_validate()
 
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
@@ -266,7 +292,7 @@ update_editor :: proc(dt: f32) {
     mp       := rl.GetMousePosition()
     over_tab := rl.CheckCollisionPointRec(mp, tab_rect)
     over_pal := rl.CheckCollisionPointRec(mp, ed_pal_panel_rect())
-    over_ui  := over_tab || over_pal || (g_ed_panel_open && mp.x >= panel_x)
+    over_ui  := over_tab || over_pal || (g_ed_panel_open && mp.x >= panel_x) || ed_insp_over_ui()
 
     if rl.IsMouseButtonPressed(.LEFT) && over_tab {
         g_ed_panel_open = !g_ed_panel_open
@@ -385,7 +411,7 @@ update_editor :: proc(dt: f32) {
         }
     }
 
-    if !g_ed_name_editing {
+    if !g_ed_name_editing && !ed_insp_is_text_active() {
         PAL_KEYS := [10]rl.KeyboardKey{
             .ONE, .TWO, .THREE, .FOUR, .FIVE,
             .SIX, .SEVEN, .EIGHT, .NINE, .ZERO,
@@ -396,8 +422,15 @@ update_editor :: proc(dt: f32) {
             }
         }
 
-        if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_target_level > 1  { g_ed_target_level -= 1 }
-        if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_target_level < 99 { g_ed_target_level += 1 }
+        if rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL) {
+            // Ctrl+[ / Ctrl+] adjusts key_id (for Door lock / KeyPickup pairing)
+            if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_key_id > 0  { g_ed_key_id -= 1 }
+            if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_key_id < 63 { g_ed_key_id += 1 }
+        } else {
+            // [ / ] adjusts link_id or item ID (target_level low byte)
+            if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_target_level > 0  { g_ed_target_level -= 1 }
+            if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_target_level < 99 { g_ed_target_level += 1 }
+        }
 
         if rl.IsKeyPressed(.MINUS) && g_ed_level > 0 {
             g_ed_level -= 1
@@ -423,7 +456,7 @@ update_editor :: proc(dt: f32) {
         }
         if rl.IsMouseButtonPressed(.LEFT) {
             cy   := pal_rect.y + uis(ED_PAL_PAD) - g_ed_pal_scroll
-            seen_cat_pal := [2]bool{}
+            seen_cat_pal := [3]bool{}
             for i in 0..<g_ed_palette_n {
                 e := &g_ed_palette[i]
                 if !seen_cat_pal[e.category] {
@@ -454,10 +487,12 @@ update_editor :: proc(dt: f32) {
 
     PAN :: f32(400)
     pan_screen: [2]f32
-    if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    { pan_screen[1] -= 1 }
-    if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  { pan_screen[1] += 1 }
-    if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)  { pan_screen[0] -= 1 }
-    if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) { pan_screen[0] += 1 }
+    if !g_ed_name_editing && !ed_insp_is_text_active() {
+        if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    { pan_screen[1] -= 1 }
+        if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  { pan_screen[1] += 1 }
+        if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)  { pan_screen[0] -= 1 }
+        if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) { pan_screen[0] += 1 }
+    }
     pan_mag := math.sqrt(pan_screen[0]*pan_screen[0] + pan_screen[1]*pan_screen[1])
     if pan_mag > 0 {
         pan_screen[0] /= pan_mag
@@ -478,7 +513,19 @@ update_editor :: proc(dt: f32) {
         world_mp := screen_to_world_cartesian(mp)
         tx, ty   := world_to_tile(world_mp.x, world_mp.y)
         if rl.IsMouseButtonDown(.LEFT)  { ed_paint(tx, ty) }
-        if rl.IsMouseButtonDown(.RIGHT) { ed_erase(tx, ty) }
+        if rl.IsMouseButtonPressed(.RIGHT) {
+            // RMB: select entity at tile, or erase entity data only (tiles preserved)
+            if !ed_try_select_at(tx, ty) {
+                ed_erase_objects(tx, ty)
+            }
+        } else if rl.IsMouseButtonDown(.RIGHT) && !ed_insp_has_selection() {
+            // Holding RMB while no selection → drag-erase entities only
+            ed_erase_objects(tx, ty)
+        }
+    }
+
+    if !g_ed_name_editing && !ed_insp_is_text_active() && rl.IsKeyPressed(.ESCAPE) {
+        ed_insp_deselect()
     }
 
     ctrl := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
@@ -497,12 +544,18 @@ update_editor :: proc(dt: f32) {
 
 @(private = "file")
 ed_paint :: proc(tx, ty: int) {
+    // For Door: low byte = link_id, high byte = key_id.
+    // For all others: target_level carries the ID in the low byte.
+    tl_val := u16(g_ed_target_level & 0xFF)
+    if EditorBrush(g_ed_brush) == .Door {
+        tl_val |= u16(g_ed_key_id & 0xFF) << 8
+    }
     op := p2p.EditorOp{
         action       = .Paint,
         brush        = u8(g_ed_brush),
         tx           = i16(tx),
         ty           = i16(ty),
-        target_level = u16(g_ed_target_level),
+        target_level = tl_val,
     }
     ed_apply_op(op)
     p2p.session_send_editor_op(&g_session, op)
@@ -604,11 +657,98 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
                 r = 255, g = 200, b = 100,
                 radius = 120.0, intensity = 1.0,
             })
+        case .Door:
+            link_id := u8(op.target_level & 0xFF)   // low byte = link_id
+            key_id  := u8(op.target_level >> 8)      // high byte = key_id (0 = no lock)
+            for i := len(g_level_data.doors) - 1; i >= 0; i -= 1 {
+                d := g_level_data.doors[i]
+                if int(d.tx) == tx && int(d.ty) == ty {
+                    unordered_remove(&g_level_data.doors, i)
+                }
+            }
+            // Also place a Wall tile so the door visually blocks
+            g_tilemap[[2]int{tx, ty}] = .Wall
+            append(&g_level_data.doors, LevelDoor{
+                tx = i16(tx), ty = i16(ty),
+                link_id = link_id, key_id = key_id,
+            })
+        case .SwitchLever:
+            param := u8(op.target_level & 0xFF)  // link_id
+            for i := len(g_level_data.switches) - 1; i >= 0; i -= 1 {
+                s := g_level_data.switches[i]
+                if int(s.tx) == tx && int(s.ty) == ty {
+                    unordered_remove(&g_level_data.switches, i)
+                }
+            }
+            append(&g_level_data.switches, LevelSwitch{
+                tx = i16(tx), ty = i16(ty),
+                link_id = param, flags = 0x01,  // is_toggle=true
+            })
+        case .Chest:
+            for i := len(g_level_data.containers) - 1; i >= 0; i -= 1 {
+                c := g_level_data.containers[i]
+                if int(c.tx) == tx && int(c.ty) == ty {
+                    unordered_remove(&g_level_data.containers, i)
+                }
+            }
+            append(&g_level_data.containers, LevelContainer{
+                tx = i16(tx), ty = i16(ty),
+                kind = .Chest, gold_min = 5, gold_max = 25,
+            })
+        case .Crate:
+            for i := len(g_level_data.containers) - 1; i >= 0; i -= 1 {
+                c := g_level_data.containers[i]
+                if int(c.tx) == tx && int(c.ty) == ty {
+                    unordered_remove(&g_level_data.containers, i)
+                }
+            }
+            append(&g_level_data.containers, LevelContainer{
+                tx = i16(tx), ty = i16(ty),
+                kind = .Crate, gold_min = 0, gold_max = 10,
+            })
+        case .LoreItem:
+            id := u8(op.target_level & 0xFF)
+            if id == 0 { id = 1 }
+            for i := len(g_level_data.lore_items) - 1; i >= 0; i -= 1 {
+                li := g_level_data.lore_items[i]
+                if int(li.tx) == tx && int(li.ty) == ty {
+                    unordered_remove(&g_level_data.lore_items, i)
+                }
+            }
+            append(&g_level_data.lore_items, LevelLoreItem{
+                tx = i16(tx), ty = i16(ty), lore_id = id,
+            })
+        case .Phonograph:
+            id := u8(op.target_level & 0xFF)
+            if id == 0 { id = 1 }
+            for i := len(g_level_data.phonographs) - 1; i >= 0; i -= 1 {
+                ph := g_level_data.phonographs[i]
+                if int(ph.tx) == tx && int(ph.ty) == ty {
+                    unordered_remove(&g_level_data.phonographs, i)
+                }
+            }
+            append(&g_level_data.phonographs, LevelPhonograph{
+                tx = i16(tx), ty = i16(ty), recording_id = id,
+            })
+        case .KeyPickup:
+            id := u8(op.target_level & 0xFF)
+            if id == 0 { id = 1 }
+            for i := len(g_level_data.key_pickups) - 1; i >= 0; i -= 1 {
+                kp := g_level_data.key_pickups[i]
+                if int(kp.tx) == tx && int(kp.ty) == ty {
+                    unordered_remove(&g_level_data.key_pickups, i)
+                }
+            }
+            append(&g_level_data.key_pickups, LevelKeyPickup{
+                tx = i16(tx), ty = i16(ty), key_id = id,
+            })
         case .Erase:
             ed_apply_erase(tx, ty)
         }
     case .Erase:
         ed_apply_erase(tx, ty)
+    case .EraseObjects:
+        _erase_objects(tx, ty)
     case .ClearAll:
         tilemap_fill_default()
         clear(&g_level_data.spawns)
@@ -616,16 +756,23 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
+        clear(&g_level_data.doors)
+        clear(&g_level_data.switches)
+        clear(&g_level_data.containers)
+        clear(&g_level_data.lore_items)
+        clear(&g_level_data.phonographs)
+        clear(&g_level_data.key_pickups)
         g_level_data.player_start = {}
     }
 
     g_wall_mask_dirty = true
 }
 
+// _erase_objects removes all entity-layer data at (tx, ty) without touching
+// the tilemap or overlay_map.  Called by both ed_apply_erase (which adds tile
+// deletion on top) and the EraseObjects op (RMB — preserves floor/wall).
 @(private = "file")
-ed_apply_erase :: proc(tx, ty: int) {
-    delete_key(&g_tilemap, [2]int{tx, ty})
-    delete_key(&g_overlay_map, [2]int{tx, ty})
+_erase_objects :: proc(tx, ty: int) {
     for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
         sp := g_level_data.spawns[i]
         if int(sp.tx) == tx && int(sp.ty) == ty {
@@ -656,6 +803,64 @@ ed_apply_erase :: proc(tx, ty: int) {
             unordered_remove(&g_level_data.barrels, i)
         }
     }
+    for i := len(g_level_data.doors) - 1; i >= 0; i -= 1 {
+        d := g_level_data.doors[i]
+        if int(d.tx) == tx && int(d.ty) == ty {
+            unordered_remove(&g_level_data.doors, i)
+        }
+    }
+    for i := len(g_level_data.switches) - 1; i >= 0; i -= 1 {
+        s := g_level_data.switches[i]
+        if int(s.tx) == tx && int(s.ty) == ty {
+            unordered_remove(&g_level_data.switches, i)
+        }
+    }
+    for i := len(g_level_data.containers) - 1; i >= 0; i -= 1 {
+        c := g_level_data.containers[i]
+        if int(c.tx) == tx && int(c.ty) == ty {
+            unordered_remove(&g_level_data.containers, i)
+        }
+    }
+    for i := len(g_level_data.lore_items) - 1; i >= 0; i -= 1 {
+        li := g_level_data.lore_items[i]
+        if int(li.tx) == tx && int(li.ty) == ty {
+            unordered_remove(&g_level_data.lore_items, i)
+        }
+    }
+    for i := len(g_level_data.phonographs) - 1; i >= 0; i -= 1 {
+        ph := g_level_data.phonographs[i]
+        if int(ph.tx) == tx && int(ph.ty) == ty {
+            unordered_remove(&g_level_data.phonographs, i)
+        }
+    }
+    for i := len(g_level_data.key_pickups) - 1; i >= 0; i -= 1 {
+        kp := g_level_data.key_pickups[i]
+        if int(kp.tx) == tx && int(kp.ty) == ty {
+            unordered_remove(&g_level_data.key_pickups, i)
+        }
+    }
+}
+
+// ed_apply_erase removes the tile, the overlay AND all entity data at (tx, ty).
+// Used by the Erase brush (LMB with Erase selected) and the full .Erase op.
+@(private = "file")
+ed_apply_erase :: proc(tx, ty: int) {
+    delete_key(&g_tilemap,    [2]int{tx, ty})
+    delete_key(&g_overlay_map,[2]int{tx, ty})
+    _erase_objects(tx, ty)
+}
+
+// ed_erase_objects sends an EraseObjects op that removes entity data only —
+// floor/wall tiles are left intact.  Used by RMB.
+@(private = "file")
+ed_erase_objects :: proc(tx, ty: int) {
+    op := p2p.EditorOp{
+        action = .EraseObjects,
+        tx     = i16(tx),
+        ty     = i16(ty),
+    }
+    ed_apply_op(op)
+    p2p.session_send_editor_op(&g_session, op)
 }
 
 @(private = "file")
@@ -799,6 +1004,207 @@ draw_editor_world :: proc() {
             fs * 0.85, 0.5, rl.Color{255, 240, 220, 240})
     }
 
+    // ── Doors ─────────────────────────────────────────────────────────────────
+    DOOR_COL :: rl.Color{160, 110, 50, 220}
+    for d in g_level_data.doors {
+        wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(d.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        rl.DrawRectangleLinesEx({ip.x - ts*0.16, ip.y - ts*0.35, ts*0.32, ts*0.38},
+            lw * 2.5, DOOR_COL)
+        rl.DrawRectangleRec({ip.x - ts*0.16, ip.y - ts*0.35, ts*0.32, ts*0.38},
+            rl.Color{DOOR_COL.r, DOOR_COL.g, DOOR_COL.b, 40})
+        // Keyhole dot
+        rl.DrawCircleV({ip.x, ip.y - ts*0.08}, ts*0.04, DOOR_COL)
+        if d.link_id != 0 {
+            buf: [8]u8
+            s := fmt.bprintf(buf[:7], "L%d", d.link_id)
+            buf[len(s)] = 0
+            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
+            rl.DrawTextEx(g_font, cstring(&buf[0]),
+                {ip.x - lsz.x*0.5, ip.y + ts*0.12},
+                fs * 0.8, 0.5, rl.Color{220, 180, 80, 220})
+        }
+        if d.key_id != 0 {
+            buf: [8]u8
+            s := fmt.bprintf(buf[:7], "K%d", d.key_id)
+            buf[len(s)] = 0
+            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
+            rl.DrawTextEx(g_font, cstring(&buf[0]),
+                {ip.x - lsz.x*0.5, ip.y - ts*0.32},
+                fs * 0.8, 0.5, rl.Color{220, 80, 80, 220})
+        }
+        // Open-type badge (top-right corner of door glyph)
+        switch d.open_type {
+        case .LeverSwitch:
+            badge := cstring("[LV]")
+            bsz := rl.MeasureTextEx(g_font, badge, fs * 0.65, 0.5)
+            rl.DrawTextEx(g_font, badge,
+                {ip.x + ts*0.17 - bsz.x*0.5, ip.y - ts*0.38},
+                fs * 0.65, 0.5, rl.Color{80, 210, 110, 230})
+        case .Key:
+            badge := cstring("[KY]")
+            bsz := rl.MeasureTextEx(g_font, badge, fs * 0.65, 0.5)
+            rl.DrawTextEx(g_font, badge,
+                {ip.x + ts*0.17 - bsz.x*0.5, ip.y - ts*0.38},
+                fs * 0.65, 0.5, rl.Color{230, 160, 60, 230})
+        case .None:
+        }
+        // Locked indicator (small red dot at door centre when starts locked)
+        if d.is_locked {
+            rl.DrawCircleV({ip.x + ts*0.14, ip.y - ts*0.08}, ts*0.035,
+                rl.Color{220, 55, 55, 210})
+        }
+    }
+
+    // ── Switches / Levers ────────────────────────────────────────────────────
+    LEVER_COL :: rl.Color{60, 180, 60, 220}
+    for s in g_level_data.switches {
+        wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        // Base plate
+        rl.DrawRectangleRec({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
+            rl.Color{LEVER_COL.r, LEVER_COL.g, LEVER_COL.b, 60})
+        rl.DrawRectangleLinesEx({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
+            lw * 2, LEVER_COL)
+        // Lever arm
+        rl.DrawLineEx({ip.x, ip.y + ts*0.08}, {ip.x + ts*0.12, ip.y - ts*0.18},
+            lw * 3, LEVER_COL)
+        rl.DrawCircleV({ip.x + ts*0.12, ip.y - ts*0.18}, ts * 0.05, LEVER_COL)
+        if s.link_id != 0 {
+            buf: [8]u8
+            str := fmt.bprintf(buf[:7], "L%d", s.link_id)
+            buf[len(str)] = 0
+            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
+            rl.DrawTextEx(g_font, cstring(&buf[0]),
+                {ip.x - lsz.x*0.5, ip.y - ts*0.30},
+                fs * 0.8, 0.5, rl.Color{120, 240, 120, 220})
+        }
+    }
+
+    // ── Containers ───────────────────────────────────────────────────────────
+    for c in g_level_data.containers {
+        wx := f32(int(c.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(c.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        col: rl.Color
+        lbl: cstring
+        switch c.kind {
+        case .Chest:   col = rl.Color{210, 175, 40, 220}; lbl = "CH"
+        case .Crate:   col = rl.Color{150, 110, 55, 220}; lbl = "CR"
+        case .Locker:  col = rl.Color{100, 140, 180, 220}; lbl = "LK"
+        case .Cabinet: col = rl.Color{140, 100, 160, 220}; lbl = "CB"
+        }
+        box_w := ts * 0.32
+        box_h := ts * 0.28
+        rl.DrawRectangleRec({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
+            rl.Color{col.r, col.g, col.b, 45})
+        rl.DrawRectangleLinesEx({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
+            lw * 2.5, col)
+        // Lid line
+        rl.DrawLineEx({ip.x - box_w*0.5, ip.y - box_h*0.22},
+                      {ip.x + box_w*0.5, ip.y - box_h*0.22},
+                      lw * 1.5, rl.Color{col.r, col.g, col.b, 160})
+        lsz := rl.MeasureTextEx(g_font, lbl, fs * 0.85, 0.5)
+        rl.DrawTextEx(g_font, lbl,
+            {ip.x - lsz.x*0.5, ip.y - box_h*0.1 - lsz.y*0.5},
+            fs * 0.85, 0.5, col)
+    }
+
+    // ── Lore items ────────────────────────────────────────────────────────────
+    LORE_COL :: rl.Color{80, 160, 220, 220}
+    for li in g_level_data.lore_items {
+        wx := f32(int(li.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(li.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        // Paper icon: rectangle with folded corner
+        pw := ts * 0.22
+        ph := ts * 0.28
+        rl.DrawRectangleRec({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
+            rl.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 40})
+        rl.DrawRectangleLinesEx({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
+            lw * 2, LORE_COL)
+        // Folded corner
+        rl.DrawLineEx({ip.x + pw*0.5 - pw*0.25, ip.y - ph*0.7},
+                      {ip.x + pw*0.5, ip.y - ph*0.7 + ph*0.25},
+                      lw * 1.5, LORE_COL)
+        // Text lines
+        for row in 0..<3 {
+            lx0 := ip.x - pw*0.35
+            lx1 := ip.x + pw*0.35 * (0.7 if row == 2 else 1.0)
+            ly  := ip.y - ph*0.55 + f32(row) * ph * 0.22
+            rl.DrawLineEx({lx0, ly}, {lx1, ly}, lw, rl.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 130})
+        }
+        buf: [6]u8
+        s := fmt.bprintf(buf[:5], "#%d", li.lore_id)
+        buf[len(s)] = 0
+        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
+        rl.DrawTextEx(g_font, cstring(&buf[0]),
+            {ip.x - lsz.x*0.5, ip.y - ph*0.7 - lsz.y - uis(2)},
+            fs * 0.75, 0.5, rl.Color{120, 200, 255, 220})
+    }
+
+    // ── Phonographs ───────────────────────────────────────────────────────────
+    PHONO_COL :: rl.Color{180, 80, 200, 220}
+    for ph in g_level_data.phonographs {
+        wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        // Cylinder
+        rl.DrawEllipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, rl.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
+        rl.DrawEllipseLines(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, PHONO_COL)
+        // Horn triangle
+        rl.DrawTriangle(
+            {ip.x + ts*0.22, ip.y - ts*0.26},
+            {ip.x + ts*0.10, ip.y - ts*0.02},
+            {ip.x + ts*0.10, ip.y + ts*0.04},
+            rl.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 60})
+        rl.DrawLineEx({ip.x + ts*0.10, ip.y - ts*0.02},
+                      {ip.x + ts*0.22, ip.y - ts*0.26},
+                      lw * 2, PHONO_COL)
+        buf: [6]u8
+        s := fmt.bprintf(buf[:5], "#%d", ph.recording_id)
+        buf[len(s)] = 0
+        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
+        rl.DrawTextEx(g_font, cstring(&buf[0]),
+            {ip.x - lsz.x*0.5, ip.y - ts*0.38},
+            fs * 0.75, 0.5, rl.Color{220, 120, 240, 220})
+    }
+
+    // ── Key pickups ───────────────────────────────────────────────────────────
+    KEY_COL :: rl.Color{245, 210, 30, 230}
+    for kp in g_level_data.key_pickups {
+        wx := f32(int(kp.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
+        ip := world_to_iso_xy(wx, wy)
+        // Key head (circle)
+        rl.DrawCircleV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10,
+            rl.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 50})
+        rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10, KEY_COL)
+        // Key hole
+        rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.04,
+            rl.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 180})
+        // Key shaft
+        rl.DrawLineEx({ip.x - ts*0.06 + ts*0.10, ip.y - ts*0.10},
+                      {ip.x + ts*0.20, ip.y - ts*0.10},
+                      lw * 2.5, KEY_COL)
+        // Key teeth
+        rl.DrawLineEx({ip.x + ts*0.14, ip.y - ts*0.10},
+                      {ip.x + ts*0.14, ip.y - ts*0.03},
+                      lw * 2, KEY_COL)
+        rl.DrawLineEx({ip.x + ts*0.20, ip.y - ts*0.10},
+                      {ip.x + ts*0.20, ip.y - ts*0.04},
+                      lw * 2, KEY_COL)
+        buf: [6]u8
+        s := fmt.bprintf(buf[:5], "K%d", kp.key_id)
+        buf[len(s)] = 0
+        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
+        rl.DrawTextEx(g_font, cstring(&buf[0]),
+            {ip.x - lsz.x*0.5, ip.y + ts*0.12},
+            fs * 0.8, 0.5, rl.Color{255, 230, 60, 230})
+    }
+
     ps := g_level_data.player_start
     if ps[0] != 0 || ps[1] != 0 {
         ptx, pty := world_to_tile(ps[0], ps[1])
@@ -813,6 +1219,9 @@ draw_editor_world :: proc() {
             {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
             fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
     }
+
+    // Selection highlight (drawn over entities, under cursor)
+    ed_insp_draw_selection_highlight()
 
     mp       := rl.GetMousePosition()
     world_mp := screen_to_world_cartesian(mp)
@@ -871,6 +1280,13 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     case .Fire:        return { 90,  22,   6,  90}, {240,  80,  15, 210}
     case .FireBarrel:  return {120,  40,   8,  80}, {230,  90,  20, 210}
     case .WaterBarrel: return {  8,  42,  90,  80}, { 60, 150, 230, 210}
+    case .Door:        return { 64,  40,  18,  85}, {160, 110,  50, 210}
+    case .SwitchLever: return { 24,  56,  24,  85}, { 60, 160,  60, 210}
+    case .Chest:       return { 88,  68,  14,  85}, {210, 175,  40, 210}
+    case .Crate:       return { 54,  38,  18,  85}, {150, 110,  55, 210}
+    case .LoreItem:    return { 20,  42,  72,  85}, { 60, 120, 200, 210}
+    case .Phonograph:  return { 62,  28,  62,  85}, {170,  70, 180, 210}
+    case .KeyPickup:   return { 96,  84,  10,  85}, {245, 210,  30, 210}
     case .Erase:       return {170,  45,  45,  85}, {220,  70,  70, 200}
     }
     return {128, 128, 128, 85}, {200, 200, 200, 200}
@@ -904,7 +1320,7 @@ draw_editor_hud :: proc() {
         {sw*0.5 - title_sz.x*0.5, uis(9)}, uis(13), 1,
         rl.Color{220, 190, 80, 255})
 
-    left_hint := cstring("1-0:Brush  LMB:Paint  RMB:Erase  WASD/Arrows:Pan  [/]:ExitTarget  -/=:Level")
+    left_hint := cstring("1-0:Brush  LMB:Paint  RMB:Select/EraseObj  WASD:Pan  [/]:ID  Ctrl+[/]:KeyID  -/=:Level")
     rl.DrawTextEx(g_font, left_hint, {uis(8), uis(10)}, uis(7.5), 0.5,
         rl.Color{140, 128, 95, 190})
 
@@ -917,10 +1333,15 @@ draw_editor_hud :: proc() {
     CAT_H     :: f32(22)
     ITEM_H    :: ED_PAL_ITEM_H
     PAD       :: ED_PAL_PAD
-    CAT_NAMES := [EditorCategory]cstring{ .Environment = "ENVIRONMENT", .Entities = "ENTITIES" }
+    CAT_NAMES := [EditorCategory]cstring{
+        .Environment = "ENVIRONMENT",
+        .Entities    = "ENTITIES",
+        .Interactive = "INTERACTIVE",
+    }
     CAT_COLS  := [EditorCategory]rl.Color{
-        .Environment = {40, 110, 60, 255},
-        .Entities    = {110, 60, 40, 255},
+        .Environment = { 40, 110,  60, 255},
+        .Entities    = {110,  60,  40, 255},
+        .Interactive = { 50,  70, 130, 255},
     }
 
     pal_r := ed_pal_panel_rect()
@@ -932,7 +1353,7 @@ draw_editor_hud :: proc() {
     rl.BeginScissorMode(i32(pal_r.x), i32(pal_r.y), i32(pal_r.width), i32(pal_r.height))
 
     cy           := pal_r.y + uis(PAD) - g_ed_pal_scroll
-    seen_cat_drw := [2]bool{}
+    seen_cat_drw := [3]bool{}
 
     for i in 0..<g_ed_palette_n {
         entry := &g_ed_palette[i]
@@ -1003,17 +1424,18 @@ draw_editor_hud :: proc() {
         rl.Color{8, 6, 4, 220})
     rl.DrawRectangle(i32(pal_r.x), i32(stat_y), i32(pal_r.width), i32(uis(1)),
         rl.Color{80, 70, 45, 160})
-    lv_buf: [48]u8
-    lv_s := fmt.bprintf(lv_buf[:47], "Lv%d  T%d  S%d",
+    lv_buf: [64]u8
+    lv_s := fmt.bprintf(lv_buf[:63], "Lv%d  T%d  Sp%d",
         g_ed_level, len(g_tilemap), len(g_level_data.spawns))
     lv_buf[len(lv_s)] = 0
     rl.DrawTextEx(g_font, cstring(&lv_buf[0]),
         { pal_r.x + uis(5), stat_y + uis(5) }, uis(8), 0.5, rl.Color{150, 138, 100, 210})
 
-    // Zoom + exit-target in banner area (top-left, after palette)
+    // Zoom + ID params in banner area (top-left, after palette)
     sx := uis(ED_PAL_W) + uis(8)
-    zoom_buf: [24]u8
-    zoom_s := fmt.bprintf(zoom_buf[:23], "Zoom %.2fx  Exit->%d", g_ed_zoom, g_ed_target_level)
+    zoom_buf: [64]u8
+    zoom_s := fmt.bprintf(zoom_buf[:63], "Zoom %.2fx  ID:%d  KeyID:%d",
+        g_ed_zoom, g_ed_target_level, g_ed_key_id)
     zoom_buf[len(zoom_s)] = 0
     rl.DrawTextEx(g_font, cstring(&zoom_buf[0]),
         { sx, uis(10) }, uis(7.5), 0.5, rl.Color{150, 138, 100, 210})
@@ -1157,4 +1579,7 @@ draw_editor_hud :: proc() {
         ed_panel_btn(mp, new_rect, "+ NEW LEVEL",
             {28, 44, 28, 220}, {36, 60, 36, 220}, {60, 160, 70, 200}, {100, 220, 110, 230})
     }
+
+    // Inspector panel (slides up from bottom)
+    ed_insp_draw_panel()
 }

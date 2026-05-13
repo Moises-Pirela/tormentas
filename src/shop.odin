@@ -462,6 +462,8 @@ _shop_buy :: proc(w: ^cw.World, stock_i: int) {
     backpack_place(inv, item, ss.item_entity, col, row)
     ss.item_entity = cw.INVALID_ENTITY
     play_sfx("pickup")
+    ui_mark_dirty(.Shop)
+    ui_mark_dirty(.Inventory)
     if cw.world_is_valid(w, pid) {
         save_player(w, pid)
     }
@@ -521,6 +523,8 @@ _shop_sell :: proc(w: ^cw.World, item_id: int) {
     wallet := cw.world_get_wallet(w, pid)
     wallet.gold += sell_val
     play_sfx("pickup")
+    ui_mark_dirty(.Shop)
+    ui_mark_dirty(.Inventory)
 
     cw.world_destroy_entity(w, item_id)
 

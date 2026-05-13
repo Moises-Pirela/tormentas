@@ -97,7 +97,10 @@ pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             backpack_place(inv, item, gid, col, row)
             cw.world_clear_ground_item(w, gid)
-            if pid == w.player_id { play_sfx("pickup") }
+            if pid == w.player_id {
+                play_sfx("pickup")
+                ui_mark_dirty(.Inventory)
+            }
             cw.entity_sig_clear(&w.entities[gid].signature, .Transform)
         }
     }

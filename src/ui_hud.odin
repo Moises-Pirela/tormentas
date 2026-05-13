@@ -21,6 +21,26 @@ import cw   "clockwork"
 import clay "../clay"
 import      "core:fmt"
 
+// ── Status-effect display tables ─────────────────────────────────────────────
+// Indexed by cw.StatusEffectType ordinal.  Keep in sync with the enum order:
+//   Slow(0), Poison(1), Burn(2), Stun(3), Root(4), Oiled(5), Wet(6)
+
+@(private = "file")
+STATUS_EFFECT_LABELS := [len(cw.StatusEffectType)]string{
+    "SLOW", "PSN", "BURN", "STUN", "ROOT", "OIL", "WET",
+}
+
+@(private = "file")
+STATUS_EFFECT_COLORS := [len(cw.StatusEffectType)]rl.Color{
+    {  80, 160, 220, 255 }, // Slow  — icy blue
+    {  80, 205,  80, 255 }, // Poison — green
+    { 240, 120,  30, 255 }, // Burn  — orange
+    { 255, 220,  40, 255 }, // Stun  — yellow
+    { 145, 100,  45, 255 }, // Root  — bark brown
+    { 130,  95,  40, 255 }, // Oiled — dark amber
+    { 100, 185, 240, 255 }, // Wet   — sky blue
+}
+
 // draw_hud is the single entry point called from main.odin's draw_playing.
 // It supersedes draw_hud_clay + draw_ammo_ring + draw_ability_hud.
 draw_hud :: proc(w: ^cw.World) {
@@ -80,6 +100,24 @@ draw_hud :: proc(w: ^cw.World) {
         chip_data: [cw.ABILITY_SLOT_COUNT]UICustomData
         _hud_fill_ability_chips(w, &chip_data)
 
+        // Active status effects on the player
+        HUDStatusInfo :: struct { label: string, color: rl.Color, duration: f32 }
+        se_buf: [len(cw.StatusEffectType)]HUDStatusInfo
+        se_n   := 0
+        if cw.world_has_component(w, w.player_id, .StatusEffect) {
+            sec := cw.world_get_status_effects(w, w.player_id)
+            for et in 0..<len(cw.StatusEffectType) {
+                ef := &sec.effects[et]
+                if ef.duration <= 0 { continue }
+                se_buf[se_n] = HUDStatusInfo{
+                    label    = STATUS_EFFECT_LABELS[et],
+                    color    = STATUS_EFFECT_COLORS[et],
+                    duration = ef.duration,
+                }
+                se_n += 1
+            }
+        }
+
         // ── Clay layout ───────────────────────────────────────────────────
         ORB_SZ   := uis(80)
         CHIP_SZ  := uis(54)
@@ -122,7 +160,7 @@ draw_hud :: proc(w: ^cw.World) {
                 custom = { customData = ui_push_custom(hp_orb) },
             }) {}
 
-            // Centre column: chip row on top, XP bar below
+            // Centre column: status row (conditional) + chip row + XP bar
             if clay.UI(clay.ID("HUDCenter"))({
                 layout = {
                     layoutDirection = .TopToBottom,
@@ -132,6 +170,59 @@ draw_hud :: proc(w: ^cw.World) {
                                        clay.SizingFit() },
                 },
             }) {
+
+                // Status-effect indicators (only when at least one is active)
+                if se_n > 0 {
+                    SCHIP_W  := uis(36)
+                    SCHIP_H  := uis(28)
+                    SCHIP_ID := [len(cw.StatusEffectType)]string{
+                        "SE0","SE1","SE2","SE3","SE4","SE5","SE6" }
+
+                    if clay.UI(clay.ID("StatusRow"))({
+                        layout = {
+                            layoutDirection = .LeftToRight,
+                            childGap        = u16(uis(4)),
+                            childAlignment  = { x = .Center, y = .Center },
+                            sizing          = { clay.SizingGrow(), clay.SizingFit() },
+                        },
+                    }) {
+                        for i in 0..<se_n {
+                            se     := &se_buf[i]
+                            dark   := rl.Color{
+                                se.color.r / 5, se.color.g / 5,
+                                se.color.b / 5, 220 }
+                            dur_s  := fmt.tprintf("%.1fs", se.duration)
+
+                            if clay.UI(clay.ID(SCHIP_ID[i]))({
+                                layout = {
+                                    layoutDirection = .TopToBottom,
+                                    childGap        = u16(uis(1)),
+                                    childAlignment  = { x = .Center, y = .Center },
+                                    padding         = {
+                                        left = u16(uis(3)), right  = u16(uis(3)),
+                                        top  = u16(uis(3)), bottom = u16(uis(3)),
+                                    },
+                                    sizing = { clay.SizingFixed(SCHIP_W),
+                                               clay.SizingFixed(SCHIP_H) },
+                                },
+                                backgroundColor = ui_clay_color(dark),
+                                cornerRadius    = clay.CornerRadiusAll(3),
+                                border          = { color = ui_clay_color(se.color),
+                                                    width = { 1, 1, 1, 1, 0 } },
+                            }) {
+                                clay.TextDynamic(se.label, clay.TextConfig({
+                                    fontSize  = u16(uis(10)),
+                                    textColor = ui_clay_color(se.color),
+                                }))
+                                clay.TextDynamic(dur_s, clay.TextConfig({
+                                    fontSize  = u16(uis(8)),
+                                    textColor = ui_clay_color(
+                                        rl.Color{ 175, 165, 145, 190 }),
+                                }))
+                            }
+                        }
+                    } // StatusRow
+                }
 
                 // Chip row: ammo + 4 ability slots
                 if clay.UI(clay.ID("ChipRow"))({
@@ -181,6 +272,48 @@ draw_hud :: proc(w: ^cw.World) {
 
     cmds := clay.EndLayout()
     clay_raylib_render(&cmds)
+
+    // ── Interaction prompt (screen-space, above HUD) ───────────────────────────
+    draw_interact_prompt(w)
+}
+
+// draw_interact_prompt draws the "[E] Prompt" hint when the player is near an
+// interactable entity.  Called from draw_hud (screen-space, no BeginMode2D).
+@(private = "file")
+draw_interact_prompt :: proc(w: ^cw.World) {
+    if g_interact_focused_id == cw.INVALID_ENTITY { return }
+    if !cw.world_is_valid(w, g_interact_focused_id) { return }
+    if !cw.world_has_component(w, g_interact_focused_id, .Interactable) { return }
+
+    ia := cw.world_get_interactable(w, g_interact_focused_id)
+    if !ia.active || ia.prompt[0] == 0 { return }
+
+    sw := f32(rl.GetScreenWidth())
+    sh := f32(rl.GetScreenHeight())
+
+    prompt_cs := cstring(&ia.prompt[0])
+    prompt_fs := uis(15)
+    psz       := rl.MeasureTextEx(g_font, prompt_cs, prompt_fs, 1)
+    px := sw * 0.5 - psz.x * 0.5
+    py := sh * 0.60 - psz.y
+
+    // Shadow
+    rl.DrawTextEx(g_font, prompt_cs, {px + uis(1.5), py + uis(1.5)},
+        prompt_fs, 1, rl.Color{0, 0, 0, 180})
+    // Text
+    rl.DrawTextEx(g_font, prompt_cs, {px, py},
+        prompt_fs, 1, rl.Color{255, 235, 160, 240})
+
+    // [E] key hint below the prompt
+    key_cs  := cstring("[E]")
+    key_fs  := uis(10)
+    ksz     := rl.MeasureTextEx(g_font, key_cs, key_fs, 0.5)
+    kx      := sw * 0.5 - ksz.x * 0.5
+    ky      := py + psz.y + uis(3)
+    rl.DrawTextEx(g_font, key_cs, {kx + uis(1), ky + uis(1)}, key_fs, 0.5,
+        rl.Color{0, 0, 0, 150})
+    rl.DrawTextEx(g_font, key_cs, {kx, ky}, key_fs, 0.5,
+        rl.Color{190, 190, 190, 210})
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────

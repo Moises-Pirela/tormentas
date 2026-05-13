@@ -1,0 +1,17 @@
+[
+    {
+        "id": 1,
+        "title": "LORE_01_TITLE",
+        "body": "LORE_01_BODY"
+    },
+    {
+        "id": 2,
+        "title": "LORE_02_TITLE",
+        "body": "LORE_02_BODY"
+    },
+    {
+        "id": 3,
+        "title": "LORE_03_TITLE",
+        "body": "LORE_03_BODY"
+    }
+]

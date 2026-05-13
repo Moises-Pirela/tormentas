@@ -74,6 +74,18 @@ ComponentType :: enum u8 {
     Reanimated,
     StatusEffect,
     Flammable,
+    Organic,
+    // ── Environmental interaction ─────────────────────────
+    Interactable,
+    Openable,
+    Lockable,
+    SignalEmitter,
+    SignalReceiver,
+    Container,
+    KeyPickup,
+    KeyRing,
+    LoreItem,
+    Phonograph,
 }
 
 COMPONENT_COUNT :: len(ComponentType)
@@ -122,16 +134,105 @@ StatusEffect :: struct {
     type:     StatusEffectType,
     application: EffectApplicationPolicy,
     stack_behavior: EffectStackPolicy,
+    stacks: int,
     duration: f32,
     strength: f32, 
+    acumulator: f32,
     source_id: int,
 }
 
 MAX_STATUS_EFFECTS :: 8   
 
+OrganicComp :: struct {
+}
+
 FlammableComp :: struct {
     isImmune : bool
 }
+
+// ── Environmental interaction components ──────────────────────────────────────
+
+// InteractableComp — any world object the player can press E to use.
+// prompt is a null-terminated display string; leave zeroed to derive from
+// the entity's other components at render time.
+InteractableComp :: struct {
+    radius:       f32,
+    prompt:       [48]u8,
+    active:       bool,
+    cooldown:     f32,
+    cooldown_max: f32,
+}
+
+// OpenableComp — binary open/closed state.  Owns one tile-space blocker.
+// When is_open=false the door_system writes 'tile' into g_door_blockers so
+// both wall_collision and A* treat it as impassable.
+OpenableComp :: struct {
+    is_open:      bool,
+    tile:         [2]int,
+    link_id:      u8,
+    blocks_sight: bool,
+}
+
+// LockableComp — key-gated gate; composes onto Interactable+Openable or Container.
+LockableComp :: struct {
+    key_id:    u8,   // which KeyRing bit must be set; 0 = no lock
+    is_locked: bool,
+}
+
+// SignalEmitterComp — lever / switch / pressure plate.
+// Broadcasts link_id to all SignalReceiverComp with the same link_id.
+SignalEmitterComp :: struct {
+    link_id:       u8,
+    is_on:         bool,
+    is_toggle:     bool,   // flip each press; false = one-shot
+    needs_weight:  bool,   // true = pressure plate, triggered by proximity not E
+    weight_radius: f32,
+}
+
+// SignalReceiverComp — door or mechanism that reacts to a broadcast link_id.
+SignalReceiverComp :: struct {
+    link_id: u8,
+    invert:  bool,   // open when signal is OFF
+}
+
+ContainerKind :: enum u8 { Chest, Crate, Locker, Cabinet }
+
+// ContainerComp — chest (interact to open) or crate (shoot to break, uses Health).
+ContainerComp :: struct {
+    kind:          ContainerKind,
+    is_open:       bool,
+    loot_table_id: u8,
+    gold_min:      u16,
+    gold_max:      u16,
+    emits_signal:  bool,   // opening broadcasts link_id
+    link_id:       u8,
+}
+
+// KeyPickupComp — world-space key object; picked up into player's KeyRingComp.
+KeyPickupComp :: struct {
+    key_id: u8,
+    label:  [40]u8,   // null-terminated: "Warden's Key"
+}
+
+// KeyRingComp — player-side key storage (bit 0-63 = key_id 0-63).
+KeyRingComp :: struct {
+    held: bit_set[0..<64; u64],
+}
+
+// LoreItemComp — readable document; indexes into g_lore_db.
+LoreItemComp :: struct {
+    lore_id: u8,
+    is_read: bool,
+}
+
+// PhonographComp — wax cylinder audio log; indexes into g_recording_db.
+PhonographComp :: struct {
+    recording_id: u8,
+    is_playing:   bool,
+    play_timer:   f32,
+}
+
+// ── End environmental interaction components ──────────────────────────────────
 
 StatusEffectComp :: struct {
     effects: [len(StatusEffectType)]StatusEffect,
@@ -152,20 +253,20 @@ HealthComp :: struct {
     max:                f32,
     energy:             f32,
     max_energy:         f32,
-    iron_will_consumed: bool,   // true after IronHeart has saved the player this life
-    shield:             f32,    // current shield HP (absorbs damage before HP)
+    shield:             f32,
 }
 
 InputStateComp :: struct {
-    move:           [2]f32,   
-    mouse_world:    [3]f32,   
-    fire_pressed:   bool,
-    reload_pressed: bool,     
-    dodge_pressed:  bool,     
-    skill1_pressed: bool,
-    skill2_pressed: bool,
-    skill3_pressed: bool,
-    skill4_pressed: bool,
+    move:             [2]f32,
+    mouse_world:      [3]f32,
+    fire_pressed:     bool,
+    reload_pressed:   bool,
+    dodge_pressed:    bool,
+    skill1_pressed:   bool,
+    skill2_pressed:   bool,
+    skill3_pressed:   bool,
+    skill4_pressed:   bool,
+    interact_pressed: bool,
 }
 
 WeaponSlotComp :: struct {
@@ -436,19 +537,24 @@ SelfDestructComp :: struct {
 AIType :: enum u8 { Melee, Ranged }
 
 AIAgentComp :: struct {
-    state:        u8,    // 0=idle 1=chase 2=attack
+    state:        u8,    // AI_STATE_* constants defined in stealth_system.odin
     target_id:    int,
-    cooldown:     f32, 
+    cooldown:     f32,
 
     // config (from JSON, never mutated during play)
     aggro_range:  f32,
     attack_range: f32,
-    cooldown_max: f32,   
-    speed:        f32,   
-    damage:       f32,   
+    cooldown_max: f32,
+    speed:        f32,
+    damage:       f32,
     ai_type:      AIType,  // .Melee = arc swing, .Ranged = shotgun burst
-    pellet_count: int,     
-    spread_angle: f32,     
+    pellet_count: int,
+    spread_angle: f32,
+
+    // stealth detection (runtime; zero-initialised on spawn, never saved to level)
+    suspicion:      f32,      // 0.0–1.0 suspicion meter
+    last_known_pos: [3]f32,   // world pos where noise/sight last detected
+    search_timer:   f32,      // countdown before giving up search and returning to idle
 }
 
 MeleeArcComp :: struct {
@@ -848,6 +954,18 @@ World :: struct {
     reanimateds:            [dynamic]ReanimatedComp,
     status_effects:         [dynamic]StatusEffectComp,
     flammbles:              [dynamic]FlammableComp,
+    organics:               [dynamic]OrganicComp,
+    // ── Environmental interaction ─────────────────────────
+    interactables:          [dynamic]InteractableComp,
+    openables:              [dynamic]OpenableComp,
+    lockables:              [dynamic]LockableComp,
+    signal_emitters:        [dynamic]SignalEmitterComp,
+    signal_receivers:       [dynamic]SignalReceiverComp,
+    containers:             [dynamic]ContainerComp,
+    key_pickups:            [dynamic]KeyPickupComp,
+    key_rings:              [dynamic]KeyRingComp,
+    lore_items:             [dynamic]LoreItemComp,
+    phonographs:            [dynamic]PhonographComp,
 
     damage_events:   [dynamic]DamageEvent,
 
@@ -930,6 +1048,17 @@ make_world :: proc() -> World {
     resize(&w.reanimateds,            CHUNK_SIZE)
     resize(&w.status_effects,         CHUNK_SIZE)
     resize(&w.flammbles,              CHUNK_SIZE)
+    resize(&w.organics,               CHUNK_SIZE)
+    resize(&w.interactables,          CHUNK_SIZE)
+    resize(&w.openables,              CHUNK_SIZE)
+    resize(&w.lockables,              CHUNK_SIZE)
+    resize(&w.signal_emitters,        CHUNK_SIZE)
+    resize(&w.signal_receivers,       CHUNK_SIZE)
+    resize(&w.containers,             CHUNK_SIZE)
+    resize(&w.key_pickups,            CHUNK_SIZE)
+    resize(&w.key_rings,              CHUNK_SIZE)
+    resize(&w.lore_items,             CHUNK_SIZE)
+    resize(&w.phonographs,            CHUNK_SIZE)
     for i in 0..<CHUNK_SIZE {
         w.entities[i] = entity_empty()
     }
@@ -1008,6 +1137,17 @@ destroy_world :: proc(w: ^World) {
     delete(w.recycled_ids)
     delete(w.status_effects)
     delete(w.flammbles)
+    delete(w.organics)
+    delete(w.interactables)
+    delete(w.openables)
+    delete(w.lockables)
+    delete(w.signal_emitters)
+    delete(w.signal_receivers)
+    delete(w.containers)
+    delete(w.key_pickups)
+    delete(w.key_rings)
+    delete(w.lore_items)
+    delete(w.phonographs)
 }
 
 world_create_entity :: proc(w: ^World) -> int {
@@ -1104,8 +1244,19 @@ world_destroy_entity :: proc(w: ^World, id: int) {
     w.mut_false_saint[id]        = {}
     w.mut_black_lung[id]         = {}
     w.reanimateds[id]            = {}
-    w.status_effects[id]           = {}
-    w.flammbles[id]                = {}
+    w.status_effects[id]         = {}
+    w.flammbles[id]              = {}
+    w.organics[id]               = {}
+    w.interactables[id]          = {}
+    w.openables[id]              = {}
+    w.lockables[id]              = {}
+    w.signal_emitters[id]        = {}
+    w.signal_receivers[id]       = {}
+    w.containers[id]             = {}
+    w.key_pickups[id]            = {}
+    w.key_rings[id]              = {}
+    w.lore_items[id]             = {}
+    w.phonographs[id]            = {}
     append(&w.recycled_ids, id)
 }
 
@@ -1204,6 +1355,17 @@ world_ensure_capacity :: proc(w: ^World, id: int) {
     resize(&w.reanimateds,            target)
     resize(&w.status_effects,         target)
     resize(&w.flammbles,              target)
+    resize(&w.organics,               target)
+    resize(&w.interactables,          target)
+    resize(&w.openables,              target)
+    resize(&w.lockables,              target)
+    resize(&w.signal_emitters,        target)
+    resize(&w.signal_receivers,       target)
+    resize(&w.containers,             target)
+    resize(&w.key_pickups,            target)
+    resize(&w.key_rings,              target)
+    resize(&w.lore_items,             target)
+    resize(&w.phonographs,            target)
 }
 
 world_set_transform :: proc(w: ^World, id: int, c: TransformComp) {
@@ -1262,6 +1424,98 @@ world_set_flammable :: proc(w: ^World, id: int, c: FlammableComp) {
 world_get_flammable :: proc(w: ^World, id: int) -> ^FlammableComp {
     return &w.flammbles[id]
 }
+
+world_set_organic :: proc(w: ^World, id: int, c: OrganicComp) {
+    w.organics[id] = c
+    entity_sig_set(&w.entities[id].signature, .Organic)
+}
+world_get_organic :: proc(w: ^World, id: int) -> ^OrganicComp {
+    return &w.organics[id]
+}
+
+// ── Environmental interaction get/set ─────────────────────────────────────────
+
+world_set_interactable :: proc(w: ^World, id: int, c: InteractableComp) {
+    w.interactables[id] = c
+    entity_sig_set(&w.entities[id].signature, .Interactable)
+}
+world_get_interactable :: proc(w: ^World, id: int) -> ^InteractableComp {
+    return &w.interactables[id]
+}
+
+world_set_openable :: proc(w: ^World, id: int, c: OpenableComp) {
+    w.openables[id] = c
+    entity_sig_set(&w.entities[id].signature, .Openable)
+}
+world_get_openable :: proc(w: ^World, id: int) -> ^OpenableComp {
+    return &w.openables[id]
+}
+
+world_set_lockable :: proc(w: ^World, id: int, c: LockableComp) {
+    w.lockables[id] = c
+    entity_sig_set(&w.entities[id].signature, .Lockable)
+}
+world_get_lockable :: proc(w: ^World, id: int) -> ^LockableComp {
+    return &w.lockables[id]
+}
+
+world_set_signal_emitter :: proc(w: ^World, id: int, c: SignalEmitterComp) {
+    w.signal_emitters[id] = c
+    entity_sig_set(&w.entities[id].signature, .SignalEmitter)
+}
+world_get_signal_emitter :: proc(w: ^World, id: int) -> ^SignalEmitterComp {
+    return &w.signal_emitters[id]
+}
+
+world_set_signal_receiver :: proc(w: ^World, id: int, c: SignalReceiverComp) {
+    w.signal_receivers[id] = c
+    entity_sig_set(&w.entities[id].signature, .SignalReceiver)
+}
+world_get_signal_receiver :: proc(w: ^World, id: int) -> ^SignalReceiverComp {
+    return &w.signal_receivers[id]
+}
+
+world_set_container :: proc(w: ^World, id: int, c: ContainerComp) {
+    w.containers[id] = c
+    entity_sig_set(&w.entities[id].signature, .Container)
+}
+world_get_container :: proc(w: ^World, id: int) -> ^ContainerComp {
+    return &w.containers[id]
+}
+
+world_set_key_pickup :: proc(w: ^World, id: int, c: KeyPickupComp) {
+    w.key_pickups[id] = c
+    entity_sig_set(&w.entities[id].signature, .KeyPickup)
+}
+world_get_key_pickup :: proc(w: ^World, id: int) -> ^KeyPickupComp {
+    return &w.key_pickups[id]
+}
+
+world_set_key_ring :: proc(w: ^World, id: int, c: KeyRingComp) {
+    w.key_rings[id] = c
+    entity_sig_set(&w.entities[id].signature, .KeyRing)
+}
+world_get_key_ring :: proc(w: ^World, id: int) -> ^KeyRingComp {
+    return &w.key_rings[id]
+}
+
+world_set_lore_item :: proc(w: ^World, id: int, c: LoreItemComp) {
+    w.lore_items[id] = c
+    entity_sig_set(&w.entities[id].signature, .LoreItem)
+}
+world_get_lore_item :: proc(w: ^World, id: int) -> ^LoreItemComp {
+    return &w.lore_items[id]
+}
+
+world_set_phonograph :: proc(w: ^World, id: int, c: PhonographComp) {
+    w.phonographs[id] = c
+    entity_sig_set(&w.entities[id].signature, .Phonograph)
+}
+world_get_phonograph :: proc(w: ^World, id: int) -> ^PhonographComp {
+    return &w.phonographs[id]
+}
+
+// ── End environmental interaction get/set ────────────────────────────────────
 
 world_set_extraction :: proc(w: ^World, id: int, c: ExtractionComp) {
     w.extractions[id] = c
@@ -1715,49 +1969,48 @@ world_get_status_effects :: proc(w: ^World, id: int) -> ^StatusEffectComp {
 }
 
 status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
-    // Wet blocks Burn and Oiled from being applied.
-    if effect.type == .Burn || effect.type == .Oiled {
-        if world_has_component(w, id, .StatusEffect) {
-            sec_chk := world_get_status_effects(w, id)
-            if status_effect_is_active(sec_chk, .Wet) { return }
-        }
-    }
-
     if !world_has_component(w, id, .StatusEffect) {
         world_set_status_effect(w, id, StatusEffectComp{})
     }
-
     sec := world_get_status_effects(w, id)
+
+    if effect.type == .Burn || effect.type == .Oiled {
+        if status_effect_is_active(sec, .Wet) { return } // Wet blocks fire
+    }
+    
+    if effect.type == .Wet {
+        if status_effect_is_active(sec, .Burn) {
+            sec.effects[int(StatusEffectType.Burn)].duration = 0
+            sec.count -= 1
+        }
+    }
+
     et := int(effect.type)
     current := &sec.effects[et]
     
     if current.duration <= 0 {
-        // No active effect, apply new one
         current^ = effect
+        current.stacks = 1
         sec.count += 1
     } else {
-        // Effect already active, apply stacking policy
-        #partial switch effect.application {
-        case .Flat:
+        switch effect.application {
+        case .Flat, .Percent:
             current.strength += effect.strength
         case .Base:
-            current.strength *= effect.strength
-        case .Percent:
-            current.strength += effect.strength
+            current.strength = effect.strength 
         }
         
-        #partial switch effect.stack_behavior {
+        switch effect.stack_behavior {
         case .Stack:
-            // Already added strength above
-            current.duration = max(current.duration, effect.duration)
+            current.duration = effect.duration // Refresh duration
+            current.stacks += 1
         case .Refresh:
-            current.duration = effect.duration
+            current.duration = max(current.duration, effect.duration)
         case .Extend:
             current.duration += effect.duration
         }
     }
 }
-
 status_effect_is_active :: proc(sec: ^StatusEffectComp, stype: StatusEffectType) -> bool {
     et := int(stype)
     return sec.effects[et].duration > 0

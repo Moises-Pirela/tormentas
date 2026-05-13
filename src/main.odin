@@ -65,6 +65,9 @@ init_game :: proc() {
     cw.sim_register_system(&g_sim, { .Update      }, animation_system)
     cw.sim_register_system(&g_sim, { .Update      }, facing_system)
     cw.sim_register_system(&g_sim, { .Update      }, weapon_system)
+    // stealth_system runs after weapon_system so gunshot noise is emitted before
+    // AI perception runs this tick; runs before ai_system so state changes take effect.
+    cw.sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system)
     cw.sim_register_system(&g_sim, { .Update      }, ai_system)
     cw.sim_register_system(&g_sim, { .Update      }, spawn_director_system)
     cw.sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system)
@@ -76,8 +79,10 @@ init_game :: proc() {
     cw.sim_register_system(&g_sim, { .Update      }, pickup_system)
     cw.sim_register_system(&g_sim, { .Update      }, status_effect_system)
     cw.sim_register_system(&g_sim, { .Update      }, fire_patch_system)
+    cw.sim_register_system(&g_sim, { .Update      }, env_interaction_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, damage_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, barrel_system)
+    cw.sim_register_system(&g_sim, { .LateUpdate  }, env_container_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
@@ -90,9 +95,11 @@ init_game :: proc() {
     w.local_player_slot = g_session.local_slot
 
     fire_system_init()
+    door_blockers_init()
 
     level_load(0)
     level_apply(w)
+    door_init_blockers(w)
     hub_apply(w)
     spawn_players(w)
     g_stash = stash_make_empty()
@@ -124,6 +131,7 @@ shutdown_game :: proc() {
 
     if g_sim_alive {
         fire_system_destroy()
+        door_blockers_destroy()
         cw.destroy_simulation(&g_sim)
         g_sim_alive = false
     }
@@ -258,7 +266,8 @@ update_playing :: proc(dt: f32) {
                     update_shop(w)
                 case .Stash:
                     update_stash(w)
-                case .Settings, .LevelSelect, .Inventory, .Stats:
+                case .Settings, .LevelSelect, .Inventory, .Stats,
+                     .Lore, .Phonograph:
                     // No panel-specific update needed; universal ESC and
                     // mouse clicks inside the draw proc handle interaction.
                 }
@@ -348,6 +357,7 @@ draw_playing :: proc() {
     draw_ground_item_labels(w)
     draw_explosions()
     update_draw_dmg_numbers(rl.GetFrameTime())
+    if !g_editor_mode { draw_stealth_indicators(w) }
     rl.EndMode2D()
 
     draw_editor_hud()
@@ -465,6 +475,8 @@ main :: proc() {
 
     if !loot_table_load("data/loot_table.csv") { return }
     defer loot_table_destroy()
+
+    lore_db_load()
 
     {
         defs, ok := load_entity_defs("data/entities.json")

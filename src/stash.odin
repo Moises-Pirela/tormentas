@@ -152,6 +152,8 @@ stash_deposit_item :: proc(w: ^cw.World, item_id: int) -> bool {
     }
 
     play_sfx("pickup")
+    ui_mark_dirty(.Stash)
+    ui_mark_dirty(.Inventory)
     save_player(w, pid)
     return true
 }

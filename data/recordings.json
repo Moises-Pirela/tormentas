@@ -1,0 +1,23 @@
+[
+    {
+        "id": 1,
+        "title": "REC_01_TITLE",
+        "transcript": "REC_01_TRANSCRIPT",
+        "sfx_key": "phonograph_01",
+        "duration": 14.0
+    },
+    {
+        "id": 2,
+        "title": "REC_02_TITLE",
+        "transcript": "REC_02_TRANSCRIPT",
+        "sfx_key": "phonograph_02",
+        "duration": 11.0
+    },
+    {
+        "id": 3,
+        "title": "REC_03_TITLE",
+        "transcript": "REC_03_TRANSCRIPT",
+        "sfx_key": "phonograph_03",
+        "duration": 9.0
+    }
+]

@@ -187,6 +187,32 @@ LocKey :: enum {
     ITEM_NECROTIC_SERUM_DESC,
     ITEM_NECROTIC_SERUM3_NAME,
     ITEM_NECROTIC_SERUM3_DESC,
+    // ── Interaction prompts ───────────────────────────────────────
+    INTERACT_OPEN,
+    INTERACT_UNLOCK,
+    INTERACT_OPENS_ELSEWHERE,
+    INTERACT_PULL_LEVER,
+    INTERACT_OPEN_CHEST,
+    INTERACT_BREAK_CRATE,
+    INTERACT_OPEN_LOCKER,
+    INTERACT_SEARCH_CABINET,
+    INTERACT_READ_DOCUMENT,
+    INTERACT_WIND_PHONOGRAPH,
+    INTERACT_TAKE_KEY,
+    // ── Lore pages ────────────────────────────────────────────────
+    LORE_01_TITLE,
+    LORE_01_BODY,
+    LORE_02_TITLE,
+    LORE_02_BODY,
+    LORE_03_TITLE,
+    LORE_03_BODY,
+    // ── Phonograph recordings ─────────────────────────────────────
+    REC_01_TITLE,
+    REC_01_TRANSCRIPT,
+    REC_02_TITLE,
+    REC_02_TRANSCRIPT,
+    REC_03_TITLE,
+    REC_03_TRANSCRIPT,
     // ── Sentinel — keep last ──────────────────────────────────────
     _LOC_COUNT,
 }
@@ -214,7 +240,7 @@ loc_init :: proc() {
     lines   := strings.split_lines(content, context.temp_allocator)
     if len(lines) < 2 { return }
 
-    hdr := strings.split(lines[0], ",", context.temp_allocator)
+    hdr := _loc_csv_split(lines[0], context.temp_allocator)
     col_lang: [16]int
     for i in 0..<16 { col_lang[i] = -1 }
     nc := min(len(hdr), 16)
@@ -231,7 +257,7 @@ loc_init :: proc() {
         line := strings.trim_space(raw_line)
         if len(line) == 0 || line[0] == '#' { continue }
 
-        cols := strings.split(line, ",", context.temp_allocator)
+        cols := _loc_csv_split(line, context.temp_allocator)
         if len(cols) < 2 { continue }
 
         key, found := _loc_key_from_name(strings.trim_space(cols[0]))
@@ -260,6 +286,34 @@ loc_destroy :: proc() {
         }
     }
 }
+// _loc_csv_split splits a CSV line respecting RFC 4180 double-quote enclosure.
+// Quoted fields may contain commas; embedded double-quotes are not supported
+// (not needed for our content).  Returns slices into the original line string.
+@(private = "file")
+_loc_csv_split :: proc(line: string, allocator := context.allocator) -> []string {
+    result: [dynamic]string
+    result.allocator = allocator
+    i := 0
+    n := len(line)
+    for {
+        if i >= n { break }
+        if line[i] == '"' {
+            i += 1          // skip opening quote
+            start := i
+            for i < n && line[i] != '"' { i += 1 }
+            append(&result, line[start:i])
+            if i < n { i += 1 }                        // skip closing quote
+            if i < n && line[i] == ',' { i += 1 }     // skip comma
+        } else {
+            start := i
+            for i < n && line[i] != ',' { i += 1 }
+            append(&result, line[start:i])
+            if i < n { i += 1 }                        // skip comma
+        }
+    }
+    return result[:]
+}
+
 t :: proc(key: LocKey) -> cstring {
     s := g_loc[int(g_lang)][int(key)]
     if s == nil { s = g_loc[int(Language.EN)][int(key)] }
@@ -448,6 +502,32 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "ITEM_NECROTIC_SERUM_DESC":       return .ITEM_NECROTIC_SERUM_DESC, true
     case "ITEM_NECROTIC_SERUM3_NAME":      return .ITEM_NECROTIC_SERUM3_NAME, true
     case "ITEM_NECROTIC_SERUM3_DESC":      return .ITEM_NECROTIC_SERUM3_DESC, true
+    // Interaction prompts
+    case "INTERACT_OPEN":              return .INTERACT_OPEN, true
+    case "INTERACT_UNLOCK":            return .INTERACT_UNLOCK, true
+    case "INTERACT_OPENS_ELSEWHERE":   return .INTERACT_OPENS_ELSEWHERE, true
+    case "INTERACT_PULL_LEVER":        return .INTERACT_PULL_LEVER, true
+    case "INTERACT_OPEN_CHEST":        return .INTERACT_OPEN_CHEST, true
+    case "INTERACT_BREAK_CRATE":       return .INTERACT_BREAK_CRATE, true
+    case "INTERACT_OPEN_LOCKER":       return .INTERACT_OPEN_LOCKER, true
+    case "INTERACT_SEARCH_CABINET":    return .INTERACT_SEARCH_CABINET, true
+    case "INTERACT_READ_DOCUMENT":     return .INTERACT_READ_DOCUMENT, true
+    case "INTERACT_WIND_PHONOGRAPH":   return .INTERACT_WIND_PHONOGRAPH, true
+    case "INTERACT_TAKE_KEY":          return .INTERACT_TAKE_KEY, true
+    // Lore pages
+    case "LORE_01_TITLE":             return .LORE_01_TITLE, true
+    case "LORE_01_BODY":              return .LORE_01_BODY, true
+    case "LORE_02_TITLE":             return .LORE_02_TITLE, true
+    case "LORE_02_BODY":              return .LORE_02_BODY, true
+    case "LORE_03_TITLE":             return .LORE_03_TITLE, true
+    case "LORE_03_BODY":              return .LORE_03_BODY, true
+    // Phonograph recordings
+    case "REC_01_TITLE":              return .REC_01_TITLE, true
+    case "REC_01_TRANSCRIPT":         return .REC_01_TRANSCRIPT, true
+    case "REC_02_TITLE":              return .REC_02_TITLE, true
+    case "REC_02_TRANSCRIPT":         return .REC_02_TRANSCRIPT, true
+    case "REC_03_TITLE":              return .REC_03_TITLE, true
+    case "REC_03_TRANSCRIPT":         return .REC_03_TRANSCRIPT, true
     }
     return {}, false
 }

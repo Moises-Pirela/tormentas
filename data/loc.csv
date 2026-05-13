@@ -1,4 +1,4 @@
-key,en,es,P
+key,en,es,pt
 # ── Main Menu ─────────────────────────────────────────────────────────────────
 MENU_TITLE,LAS TORMENTAS,LAS TORMENTAS,LAS TORMENTAS
 MENU_SUBTITLE,prototype,prototipo,protótipo
@@ -173,3 +173,29 @@ ITEM_NECROTIC_SERUM_NAME,Necrotic Serum,Suero Necrótico,Soro Necrótico
 ITEM_NECROTIC_SERUM_DESC,A volatile vial of corrupted biomatter. Inject to graft unstable mutations.,Vial volátil de biomateria corrompida. Inyectar para injertar mutaciones inestables.,Frasco volátil de biomatéria corrompida. Injete para enxertar mutações instáveis.
 ITEM_NECROTIC_SERUM3_NAME,Necrotic Serum (x3),Suero Necrótico (x3),Soro Necrótico (x3)
 ITEM_NECROTIC_SERUM3_DESC,Three doses of necrotic essence. Sufficient for a major mutation graft.,Tres dosis de esencia necrótica. Suficiente para un injerto de mutación mayor.,Três doses de essência necrótica. Suficiente para um enxerto de mutação maior.
+# ── Interaction prompts ────────────────────────────────────────────────────────
+INTERACT_OPEN,Open,Abrir,Abrir
+INTERACT_UNLOCK,Unlock,Desbloquear,Desbloquear
+INTERACT_OPENS_ELSEWHERE,Opens elsewhere,Se abre en otro lugar,Abre em outro lugar
+INTERACT_PULL_LEVER,Pull Lever,Tirar de la palanca,Puxar a alavanca
+INTERACT_OPEN_CHEST,Open Chest,Abrir cofre,Abrir baú
+INTERACT_BREAK_CRATE,Break Crate,Romper caja,Quebrar engradado
+INTERACT_OPEN_LOCKER,Open Locker,Abrir taquilla,Abrir armário
+INTERACT_SEARCH_CABINET,Search Cabinet,Registrar armario,Revistar armário
+INTERACT_READ_DOCUMENT,Read Document,Leer documento,Ler documento
+INTERACT_WIND_PHONOGRAPH,Wind Phonograph,Dar cuerda al fonógrafo,Dar corda ao fonógrafo
+INTERACT_TAKE_KEY,Take Key,Tomar llave,Pegar chave
+# ── Lore pages ────────────────────────────────────────────────────────────────
+LORE_01_TITLE,Field Notes — Entry I,Notas de campo — Entrada I,Notas de campo — Entrada I
+LORE_01_BODY,"The fog settled over the valley three days before the first disappearance. Rodriguez says he saw lights moving through it — not lanterns, something lower to the ground. I told him it was foxes. I no longer believe that.","La niebla se instaló sobre el valle tres días antes de la primera desaparición. Rodríguez dice que vio luces moviéndose — no linternas, algo más cerca del suelo. Le dije que eran zorros. Ya no lo creo.","A névoa se instalou sobre o vale três dias antes do primeiro desaparecimento. Rodriguez diz que viu luzes se movendo — não lanternas, algo mais perto do chão. Disse que eram raposas. Já não acredito nisso."
+LORE_02_TITLE,Torn Letter,Carta Rasgada,Carta Rasgada
+LORE_02_BODY,"...they have taken the lower cellars for themselves. Do not go below the third landing after dark. Leave food by the iron door and it will be gone by morning. I pray that is all they want from us...","...han tomado los sótanos inferiores para ellos. No bajes del tercer rellano después de anochecer. Deja comida junto a la puerta de hierro y habrá desaparecido al amanecer. Rezo para que eso sea todo lo que nos pidan...","...eles tomaram os porões inferiores para si. Não desça do terceiro patamar após o anoitecer. Deixe comida perto da porta de ferro e ela terá sumido pela manhã. Rezo para que isso seja tudo que querem de nós..."
+LORE_03_TITLE,Operative's Cipher Log,Registro de Cifrado Operativo,Registro de Cifra Operativa
+LORE_03_BODY,DESIGNATION: TORMENT STATION 7. Personnel cleared: zero. Asset status: CONTAMINATED. Extraction window: 72 hours before Protocol Ash initiates. Do not attempt communication with subjects. They listen.,DESIGNACIÓN: ESTACIÓN TORMENTA 7. Personal depurado: cero. Estado del activo: CONTAMINADO. Ventana de extracción: 72 horas antes de que el Protocolo Ceniza se inicie. No intente comunicarse con los sujetos. Escuchan.,DESIGNAÇÃO: ESTAÇÃO TORMENTA 7. Pessoal depurado: zero. Status do ativo: CONTAMINADO. Janela de extração: 72 horas antes do Protocolo Cinza iniciar. Não tente comunicação com os sujeitos. Eles escutam.
+# ── Phonograph recordings ──────────────────────────────────────────────────────
+REC_01_TITLE,Cylinder No. 1 — Dr. Vásquez,Cilindro Núm. 1 — Dra. Vásquez,Cilindro Núm. 1 — Dra. Vásquez
+REC_01_TRANSCRIPT,"[Hiss of wax cylinder] This is Dr. Elena Vásquez, recording for the archives of the Sociedad Científica, the fourteenth of September, 1893. The specimens retrieved from the lower excavation do not correspond to any known genus. The... the movement is wrong. I have discontinued solo night work.","[Silbido del cilindro] Soy la Dra. Elena Vásquez, grabando para los archivos de la Sociedad Científica, el catorce de septiembre de 1893. Los especímenes del yacimiento inferior no corresponden a ningún género conocido. El... el movimiento está mal. He suspendido el trabajo nocturno en solitario.","[Chiado do cilindro] Aqui é a Dra. Elena Vásquez, gravando para os arquivos da Sociedade Científica, no décimo quarto de setembro de 1893. Os espécimes do yacimento inferior não correspondem a nenhum gênero conhecido. O... o movimento está errado. Suspendi o trabalho noturno solo."
+REC_02_TITLE,Cylinder No. 2 — Commander Reyes,Cilindro Núm. 2 — Comandante Reyes,Cilindro Núm. 2 — Comandante Reyes
+REC_02_TRANSCRIPT,"[Crackle] All personnel are ordered to consolidate on the upper floor. The barricade at the east corridor has held for two days. Rations are sufficient for six. [Pause] There are four of us now. Do not come looking.","[Crepitar] Todo el personal debe consolidarse en el piso superior. La barricada del corredor este ha resistido dos días. Las raciones son suficientes para seis. [Pausa] Ahora somos cuatro. No vengan a buscarnos.","[Crepitar] Todo o pessoal deve se consolidar no andar superior. A barricada no corredor leste resistiu por dois dias. As rações são suficientes para seis. [Pausa] Agora somos quatro. Não venham nos procurar."
+REC_03_TITLE,Cylinder No. 3 — Unknown Voice,Cilindro Núm. 3 — Voz Desconocida,Cilindro Núm. 3 — Voz Desconhecida
+REC_03_TRANSCRIPT,"[Heavy breathing, distant knocking] I found the machine. I know what it does. I know why they built it. I am going to destroy it. If you are hearing this — [sharp noise, silence]","[Respiración pesada, golpes lejanos] Encontré la máquina. Sé lo que hace. Sé por qué la construyeron. Voy a destruirla. Si estás escuchando esto — [ruido agudo, silencio]","[Respiração pesada, batidas distantes] Encontrei a máquina. Sei o que ela faz. Sei por que a construíram. Vou destruí-la. Se você está ouvindo isso — [barulho agudo, silêncio]"

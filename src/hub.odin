@@ -23,6 +23,7 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     level_clear(w)
     level_load(0)
     level_apply(w)
+    door_init_blockers(w)
     hub_apply(w)
     spawn_players(w)
     load_player(w, w.player_id)
@@ -48,6 +49,7 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     level_clear(w)
     level_load(n)
     level_apply(w)
+    door_init_blockers(w)
     spawn_extraction_point(w)
     spawn_players(w)
     load_player(w, w.player_id)
@@ -64,6 +66,8 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     g_hub_active       = false
     g_was_player_alive = true
     set_playing_state(.Gameplay)
+
+    ui_close_all()
 }
 
 update_hub_portal :: proc(w: ^cw.World) {

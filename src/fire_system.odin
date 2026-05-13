@@ -200,17 +200,18 @@ _explode_fire_barrel :: proc(w: ^cw.World, wx, wy: f32) {
 
              has_oiled := cw.world_has_component(w, id, .StatusEffect) &&
                 cw.status_effect_is_active(cw.world_get_status_effects(w, id), .Oiled)
-            burn_str := f32(0.10) * (2.0 if has_oiled else 1.0)
+            burn_str := f32(0.05) * (2.0 if has_oiled else 1.0)
             if has_oiled {
                 cw.world_get_status_effects(w, id).effects[int(cw.StatusEffectType.Oiled)].duration = 0
             }
 
             cw.status_effect_apply(w, id, cw.StatusEffect{
-                type           = .Burn,
-                duration       = 3.5,
-                strength       = burn_str,
-                stack_behavior = .Refresh,
-                source_id      = 0,
+                type            = .Burn,
+                duration        = 2.5,
+                strength        = burn_str,
+                stack_behavior  = .Refresh,
+                application     = .Base,
+                source_id       = 0,
             })
         }
     }
@@ -388,7 +389,6 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         tr := cw.world_get_transform(w, eid)
         cl := cw.world_get_collider(w, eid)
 
-        // Water puddle contact → WET (status_effect_apply will Refresh duration)
         for wi in 0..<g_water_n {
             wp := g_water[wi]
             dx := tr.position[0] - wp.pos[0]
@@ -404,7 +404,6 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        // Oil tile contact → OILED (refreshed every tick while standing on oil)
         etx, ety := world_to_tile(tr.position[0], tr.position[1])
         if overlay_at(etx, ety) == .Oil {
             cw.status_effect_apply(w, eid, cw.StatusEffect{
@@ -454,18 +453,14 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             if (!cw.world_has_component(w, eid, .Flammable) || cw.world_get_flammable(w, eid).isImmune) {
                 continue
             }
-            _, is_barrel := g_barrel_registry[eid]
-            if is_barrel { continue }   // barrels die from projectiles, not fire
             tr := cw.world_get_transform(w, eid)
             cl := cw.world_get_collider(w, eid)
             dx := tr.position[0] - fp.pos[0]
             dy := tr.position[1] - fp.pos[1]
             if math.sqrt(dx*dx + dy*dy) < fp.radius + cl.radius {
-                cw.world_push_damage(w, eid, FIRE_DMG_PER_SEC * dt, 0)
-
                 has_oiled := cw.world_has_component(w, eid, .StatusEffect) &&
                     cw.status_effect_is_active(cw.world_get_status_effects(w, eid), .Oiled)
-                burn_str := f32(0.06) * (2.0 if has_oiled else 1.0)
+                burn_str := f32(0.03) * (2.0 if has_oiled else 1.0)
                 if has_oiled {
                     cw.world_get_status_effects(w, eid).effects[int(cw.StatusEffectType.Oiled)].duration = 0
                 }
@@ -474,6 +469,7 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     duration       = 2.5,
                     strength       = burn_str,
                     stack_behavior = .Refresh,
+                    application     = .Base,
                     source_id      = 0,
                 })
             }

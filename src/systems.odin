@@ -28,27 +28,29 @@ collect_local_input :: proc() -> p2p.InputFrame {
     mp    := screen_to_world_cartesian(rl.GetMousePosition())
     f.aim  = { mp.x, mp.y }
 
-    if rl.IsMouseButtonDown(.LEFT)                              { f.actions += {.Fire}   }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))  { f.actions += {.Dodge}  }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1)) { f.actions += {.Skill1} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill2)) { f.actions += {.Skill2} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill3)) { f.actions += {.Skill3} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill4)) { f.actions += {.Skill4} }
+    if rl.IsMouseButtonDown(.LEFT)                                { f.actions += {.Fire}     }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill2))  { f.actions += {.Skill2}   }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill3))  { f.actions += {.Skill3}   }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill4))  { f.actions += {.Skill4}   }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.interact)){ f.actions += {.Interact} }
     return f
 }
 
 apply_input_frame :: proc(w: ^cw.World, entity_id: int, f: p2p.InputFrame) {
     cw.world_set_input(w, entity_id, cw.InputStateComp{
-        move           = f.move,
-        mouse_world    = { f.aim[0], f.aim[1], 0 },
-        fire_pressed   = .Fire   in f.actions,
-        reload_pressed = .Reload in f.actions,
-        dodge_pressed  = .Dodge  in f.actions,
-        skill1_pressed = .Skill1 in f.actions,
-        skill2_pressed = .Skill2 in f.actions,
-        skill3_pressed = .Skill3 in f.actions,
-        skill4_pressed = .Skill4 in f.actions,
+        move             = f.move,
+        mouse_world      = { f.aim[0], f.aim[1], 0 },
+        fire_pressed     = .Fire     in f.actions,
+        reload_pressed   = .Reload   in f.actions,
+        dodge_pressed    = .Dodge    in f.actions,
+        skill1_pressed   = .Skill1   in f.actions,
+        skill2_pressed   = .Skill2   in f.actions,
+        skill3_pressed   = .Skill3   in f.actions,
+        skill4_pressed   = .Skill4   in f.actions,
+        interact_pressed = .Interact in f.actions,
     })
 }
 

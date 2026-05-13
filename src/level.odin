@@ -76,12 +76,65 @@ LevelBarrel :: struct {
     btype:  u8,
 }
 
+// v7 interactive-object records (all tile-coordinate based) ──────────────────
+
+DoorOpenType :: enum u8 {
+    None        = 0,  // player presses E to open/close (default)
+    LeverSwitch = 1,  // opened only via linked lever; link_id must be set
+    Key         = 2,  // requires key item with matching key_id
+}
+
+LevelDoor :: struct {
+    tx, ty:    i16,
+    link_id:   u8,
+    key_id:    u8,           // 0 = no lock
+    open_type: DoorOpenType, // v8+; how the door is opened
+    is_locked: bool,         // v8+; initial locked state
+    label:     [24]u8,       // v9+; designer-written interaction prompt (e.g. "Opens elsewhere")
+}
+
+LevelSwitch :: struct {
+    tx, ty:  i16,
+    link_id: u8,
+    flags:   u8,  // bit0 = is_toggle, bit1 = needs_weight (pressure plate)
+}
+
+LevelContainer :: struct {
+    tx, ty:        i16,
+    kind:          cw.ContainerKind,
+    loot_table_id: u8,
+    gold_min:      u16,
+    gold_max:      u16,
+}
+
+LevelLoreItem :: struct {
+    tx, ty:  i16,
+    lore_id: u8,
+}
+
+LevelPhonograph :: struct {
+    tx, ty:       i16,
+    recording_id: u8,
+}
+
+LevelKeyPickup :: struct {
+    tx, ty: i16,
+    key_id: u8,
+}
+
 LevelData :: struct {
     spawns:       [dynamic]SpawnPoint,
     exits:        [dynamic]LevelExit,
     lights:       [dynamic]LevelLight,
     npcs:         [dynamic]LevelNPC,
     barrels:      [dynamic]LevelBarrel,
+    // v7 interactive objects
+    doors:        [dynamic]LevelDoor,
+    switches:     [dynamic]LevelSwitch,
+    containers:   [dynamic]LevelContainer,
+    lore_items:   [dynamic]LevelLoreItem,
+    phonographs:  [dynamic]LevelPhonograph,
+    key_pickups:  [dynamic]LevelKeyPickup,
     player_start: [2]f32,
     lighting:     LevelLightingConfig,
 }
@@ -111,12 +164,18 @@ g_raid_timer: f32
 // ─── Init / destroy ───────────────────────────────────────────────────────────
 
 level_data_init :: proc() {
-    g_level_data.spawns   = make([dynamic]SpawnPoint)
-    g_level_data.exits    = make([dynamic]LevelExit)
-    g_level_data.lights   = make([dynamic]LevelLight)
-    g_level_data.npcs     = make([dynamic]LevelNPC)
-    g_level_data.barrels  = make([dynamic]LevelBarrel)
-    g_level_data.lighting = LIGHTING_CONFIG_DEFAULT
+    g_level_data.spawns       = make([dynamic]SpawnPoint)
+    g_level_data.exits        = make([dynamic]LevelExit)
+    g_level_data.lights       = make([dynamic]LevelLight)
+    g_level_data.npcs         = make([dynamic]LevelNPC)
+    g_level_data.barrels      = make([dynamic]LevelBarrel)
+    g_level_data.doors        = make([dynamic]LevelDoor)
+    g_level_data.switches     = make([dynamic]LevelSwitch)
+    g_level_data.containers   = make([dynamic]LevelContainer)
+    g_level_data.lore_items   = make([dynamic]LevelLoreItem)
+    g_level_data.phonographs  = make([dynamic]LevelPhonograph)
+    g_level_data.key_pickups  = make([dynamic]LevelKeyPickup)
+    g_level_data.lighting     = LIGHTING_CONFIG_DEFAULT
 }
 
 level_data_destroy :: proc() {
@@ -125,6 +184,12 @@ level_data_destroy :: proc() {
     delete(g_level_data.lights)
     delete(g_level_data.npcs)
     delete(g_level_data.barrels)
+    delete(g_level_data.doors)
+    delete(g_level_data.switches)
+    delete(g_level_data.containers)
+    delete(g_level_data.lore_items)
+    delete(g_level_data.phonographs)
+    delete(g_level_data.key_pickups)
 }
 
 // ─── File path ────────────────────────────────────────────────────────────────
@@ -187,7 +252,7 @@ lv_rbf32 :: proc(raw: []u8, cur: int) -> (val: f32, next: int, ok: bool) {
 // ─── Persistence ─────────────────────────────────────────────────────────────
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
-LEVEL_VERSION :: u16(6)
+LEVEL_VERSION :: u16(9)
 
 // level_save writes g_tilemap and g_level_data to data/levels/levelNN.bin.
 level_save :: proc(n: int) {
@@ -301,24 +366,83 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(v))
     }
 
+    // Doors (v7+, open_type/is_locked added v8, label added v9)
+    lv_wb4(&buf, u32(len(g_level_data.doors)))
+    for d in g_level_data.doors {
+        lv_wbi16(&buf, d.tx)
+        lv_wbi16(&buf, d.ty)
+        lv_wb1  (&buf, d.link_id)
+        lv_wb1  (&buf, d.key_id)
+        lv_wb1  (&buf, u8(d.open_type))  // v8+
+        lv_wb1  (&buf, u8(d.is_locked))  // v8+
+        for b in d.label { lv_wb1(&buf, b) }  // v9+: 24 bytes, NUL-terminated string
+    }
+
+    // Switches (v7+)
+    lv_wb4(&buf, u32(len(g_level_data.switches)))
+    for s in g_level_data.switches {
+        lv_wbi16(&buf, s.tx)
+        lv_wbi16(&buf, s.ty)
+        lv_wb1  (&buf, s.link_id)
+        lv_wb1  (&buf, s.flags)
+    }
+
+    // Containers (v7+)
+    lv_wb4(&buf, u32(len(g_level_data.containers)))
+    for c in g_level_data.containers {
+        lv_wbi16(&buf, c.tx)
+        lv_wbi16(&buf, c.ty)
+        lv_wb1  (&buf, u8(c.kind))
+        lv_wb1  (&buf, c.loot_table_id)
+        lv_wb2  (&buf, c.gold_min)
+        lv_wb2  (&buf, c.gold_max)
+    }
+
+    // Lore items (v7+)
+    lv_wb4(&buf, u32(len(g_level_data.lore_items)))
+    for li in g_level_data.lore_items {
+        lv_wbi16(&buf, li.tx)
+        lv_wbi16(&buf, li.ty)
+        lv_wb1  (&buf, li.lore_id)
+    }
+
+    // Phonographs (v7+)
+    lv_wb4(&buf, u32(len(g_level_data.phonographs)))
+    for ph in g_level_data.phonographs {
+        lv_wbi16(&buf, ph.tx)
+        lv_wbi16(&buf, ph.ty)
+        lv_wb1  (&buf, ph.recording_id)
+    }
+
+    // Key pickups (v7+)
+    lv_wb4(&buf, u32(len(g_level_data.key_pickups)))
+    for kp in g_level_data.key_pickups {
+        lv_wbi16(&buf, kp.tx)
+        lv_wbi16(&buf, kp.ty)
+        lv_wb1  (&buf, kp.key_id)
+    }
+
     os.write_entire_file(level_path(n), buf[:])
 }
 
-// level_load reads data/levels/levelNN.bin into g_tilemap and g_level_data.
-// Silently does nothing if the file is missing or has an unrecognised format.
 level_load :: proc(n: int) {
     g_level_data.lighting = LIGHTING_CONFIG_DEFAULT
     defer lighting_config_apply(g_level_data.lighting)
 
     raw, ok := os.read_entire_file(level_path(n), context.temp_allocator)
     if !ok || len(raw) < 10 {
-        // No file yet — give the designer a default canvas to work from
         tilemap_fill_default()
         clear(&g_level_data.spawns)
         clear(&g_level_data.exits)
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
+        clear(&g_level_data.doors)
+        clear(&g_level_data.switches)
+        clear(&g_level_data.containers)
+        clear(&g_level_data.lore_items)
+        clear(&g_level_data.phonographs)
+        clear(&g_level_data.key_pickups)
         g_level_data.player_start = {}
         return
     }
@@ -334,14 +458,20 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
+        clear(&g_level_data.doors)
+        clear(&g_level_data.switches)
+        clear(&g_level_data.containers)
+        clear(&g_level_data.lore_items)
+        clear(&g_level_data.phonographs)
+        clear(&g_level_data.key_pickups)
         g_level_data.player_start = {}
         return
     }
     cur = 4
 
-    // Version — accept 1..6
+    // Version — accept 1..9
     ver, ver_c, ver_ok := lv_rb2(raw, cur)
-    if !ver_ok || ver < 1 || ver > 6 {
+    if !ver_ok || ver < 1 || ver > 9 {
         clear(&g_tilemap)
         clear(&g_overlay_map)
         clear(&g_level_data.spawns)
@@ -349,6 +479,12 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
+        clear(&g_level_data.doors)
+        clear(&g_level_data.switches)
+        clear(&g_level_data.containers)
+        clear(&g_level_data.lore_items)
+        clear(&g_level_data.phonographs)
+        clear(&g_level_data.key_pickups)
         g_level_data.player_start = {}
         return
     }
@@ -364,8 +500,6 @@ level_load :: proc(n: int) {
         x,  xc,  xok  := lv_rbi16(raw, cur);  if !xok  { return };  cur = xc
         y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
         t,  tc2, tok  := lv_rb1  (raw, cur);  if !tok  { return };  cur = tc2
-        // Migration: old format had Oil=4, Fire=5 as tile types (v1-v5).
-        // In v6+ these are overlays on Floor tiles.
         key := [2]int{int(x), int(y)}
         switch t {
         case 4:  // old TileType.Oil
@@ -541,6 +675,136 @@ level_load :: proc(n: int) {
             }
         }
     }
+
+    // Doors (v7+, open_type/is_locked added v8, label added v9)
+    clear(&g_level_data.doors)
+    if ver >= 7 {
+        dc, dc_c, dc_ok := lv_rb4(raw, cur)
+        if dc_ok {
+            cur = dc_c
+            for _ in 0..<dc {
+                dx,  dxc,  dxok  := lv_rbi16(raw, cur); if !dxok  { break }; cur = dxc
+                dy,  dyc,  dyok  := lv_rbi16(raw, cur); if !dyok  { break }; cur = dyc
+                dli, dlic, dliok := lv_rb1  (raw, cur); if !dliok { break }; cur = dlic
+                dki, dkic, dkiok := lv_rb1  (raw, cur); if !dkiok { break }; cur = dkic
+                dot  := DoorOpenType(0)
+                dlk  := false
+                dlbl := [24]u8{}
+                if ver >= 8 {
+                    dov, dovc, dovok := lv_rb1(raw, cur); if !dovok { break }; cur = dovc
+                    dlv, dlvc, dlvok := lv_rb1(raw, cur); if !dlvok { break }; cur = dlvc
+                    dot = DoorOpenType(clamp(int(dov), 0, 2))
+                    dlk = dlv != 0
+                }
+                if ver >= 9 {
+                    ok9 := true
+                    for i in 0..<24 {
+                        b, bc, bok := lv_rb1(raw, cur); if !bok { ok9 = false; break }
+                        dlbl[i] = b; cur = bc
+                    }
+                    if !ok9 { break }
+                }
+                append(&g_level_data.doors, LevelDoor{
+                    tx = dx, ty = dy, link_id = dli, key_id = dki,
+                    open_type = dot, is_locked = dlk, label = dlbl,
+                })
+            }
+        }
+    }
+
+    // Switches (v7+)
+    clear(&g_level_data.switches)
+    if ver >= 7 {
+        swc, swcc, swcok := lv_rb4(raw, cur)
+        if swcok {
+            cur = swcc
+            for _ in 0..<swc {
+                sx,  sxc,  sxok  := lv_rbi16(raw, cur); if !sxok  { break }; cur = sxc
+                sy,  syc,  syok  := lv_rbi16(raw, cur); if !syok  { break }; cur = syc
+                sli, slic, sliok := lv_rb1  (raw, cur); if !sliok { break }; cur = slic
+                sfl, sflc, sflok := lv_rb1  (raw, cur); if !sflok { break }; cur = sflc
+                append(&g_level_data.switches, LevelSwitch{
+                    tx = sx, ty = sy, link_id = sli, flags = sfl,
+                })
+            }
+        }
+    }
+
+    // Containers (v7+)
+    clear(&g_level_data.containers)
+    if ver >= 7 {
+        cc, ccc, ccok := lv_rb4(raw, cur)
+        if ccok {
+            cur = ccc
+            for _ in 0..<cc {
+                ctx, ctxc, ctxok := lv_rbi16(raw, cur); if !ctxok { break }; cur = ctxc
+                cty, ctyc, ctyok := lv_rbi16(raw, cur); if !ctyok { break }; cur = ctyc
+                cki, ckic, ckiok := lv_rb1  (raw, cur); if !ckiok { break }; cur = ckic
+                clt, cltc, cltok := lv_rb1  (raw, cur); if !cltok { break }; cur = cltc
+                cgm, cgmc, cgmok := lv_rb2  (raw, cur); if !cgmok { break }; cur = cgmc
+                cgx, cgxc, cgxok := lv_rb2  (raw, cur); if !cgxok { break }; cur = cgxc
+                append(&g_level_data.containers, LevelContainer{
+                    tx = ctx, ty = cty,
+                    kind          = cw.ContainerKind(clamp(int(cki), 0, 3)),
+                    loot_table_id = clt,
+                    gold_min      = cgm,
+                    gold_max      = cgx,
+                })
+            }
+        }
+    }
+
+    // Lore items (v7+)
+    clear(&g_level_data.lore_items)
+    if ver >= 7 {
+        lic, licc, licok := lv_rb4(raw, cur)
+        if licok {
+            cur = licc
+            for _ in 0..<lic {
+                lx, lxc, lxok := lv_rbi16(raw, cur); if !lxok { break }; cur = lxc
+                ly, lyc, lyok := lv_rbi16(raw, cur); if !lyok { break }; cur = lyc
+                li, lic2, liok := lv_rb1 (raw, cur); if !liok { break }; cur = lic2
+                append(&g_level_data.lore_items, LevelLoreItem{
+                    tx = lx, ty = ly, lore_id = li,
+                })
+            }
+        }
+    }
+
+    // Phonographs (v7+)
+    clear(&g_level_data.phonographs)
+    if ver >= 7 {
+        phc, phcc, phcok := lv_rb4(raw, cur)
+        if phcok {
+            cur = phcc
+            for _ in 0..<phc {
+                phx, phxc, phxok := lv_rbi16(raw, cur); if !phxok { break }; cur = phxc
+                phy, phyc, phyok := lv_rbi16(raw, cur); if !phyok { break }; cur = phyc
+                phi, phic, phiok := lv_rb1  (raw, cur); if !phiok { break }; cur = phic
+                append(&g_level_data.phonographs, LevelPhonograph{
+                    tx = phx, ty = phy, recording_id = phi,
+                })
+            }
+        }
+    }
+
+    // Key pickups (v7+)
+    clear(&g_level_data.key_pickups)
+    if ver >= 7 {
+        kpc, kpcc, kpcok := lv_rb4(raw, cur)
+        if kpcok {
+            cur = kpcc
+            for _ in 0..<kpc {
+                kx, kxc, kxok := lv_rbi16(raw, cur); if !kxok { break }; cur = kxc
+                ky, kyc, kyok := lv_rbi16(raw, cur); if !kyok { break }; cur = kyc
+                ki, kic, kiok := lv_rb1  (raw, cur); if !kiok { break }; cur = kic
+                append(&g_level_data.key_pickups, LevelKeyPickup{
+                    tx = kx, ty = ky, key_id = ki,
+                })
+            }
+        }
+    }
+
     _ = cur
 
     g_wall_mask_dirty = true
@@ -632,6 +896,169 @@ level_apply :: proc(w: ^cw.World) {
         wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
         spawn_barrel(w, wx, wy, BarrelType(b.btype))
     }
+
+    // ── v7: Interactive objects ───────────────────────────────────────────────
+
+    for d in g_level_data.doors {
+        wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(d.ty) * TILE_SIZE + TILE_SIZE / 2)
+        id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_door"))
+        if id == cw.INVALID_ENTITY { continue }
+        cw.world_get_transform(w, id).position = {wx, wy, 0}
+
+        // Build prompt via loc table; designer label (loc key or literal) overrides
+        prompt_cs: cstring
+        switch d.open_type {
+        case .None:        prompt_cs = t(.INTERACT_UNLOCK) if d.key_id != 0 else t(.INTERACT_OPEN)
+        case .LeverSwitch: prompt_cs = t(.INTERACT_OPENS_ELSEWHERE)
+        case .Key:         prompt_cs = t(.INTERACT_UNLOCK) if d.is_locked else t(.INTERACT_OPEN)
+        }
+        lbl := d.label   // local copy — d.label is not addressable in a value for-loop
+        if lbl[0] != 0 { prompt_cs = loc_lookup(cstring(&lbl[0])) }
+
+        prompt: [48]u8
+        copy(prompt[:], string(prompt_cs))
+        cw.world_set_interactable(w, id, cw.InteractableComp{
+            radius = f32(TILE_SIZE) * 1.5,
+            prompt = prompt,
+            active = true,   // always interactive; LeverSwitch uses lockable sentinel for budge
+        })
+        cw.world_set_openable(w, id, cw.OpenableComp{
+            is_open      = false,
+            tile         = {int(d.tx), int(d.ty)},
+            link_id      = d.link_id,
+            blocks_sight = true,
+        })
+        // LeverSwitch: permanent lever-only lock (key_id=0 sentinel).
+        // dispatch_interaction plays "door_locked" and returns — that IS the budge.
+        if d.open_type == .LeverSwitch {
+            cw.world_set_lockable(w, id, cw.LockableComp{
+                key_id    = 0,
+                is_locked = true,
+            })
+        } else if d.key_id != 0 {
+            // Key lock; v7 backward compat: force locked when open_type==.None
+            initially_locked := d.is_locked || d.open_type == .None
+            cw.world_set_lockable(w, id, cw.LockableComp{
+                key_id    = d.key_id,
+                is_locked = initially_locked,
+            })
+        }
+    }
+
+    for s in g_level_data.switches {
+        wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
+        id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_switch"))
+        if id == cw.INVALID_ENTITY { continue }
+        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        is_toggle    := (s.flags & 0x01) != 0
+        needs_weight := (s.flags & 0x02) != 0
+        prompt: [48]u8
+        if needs_weight {
+            copy(prompt[:], "")  // weight plates activate on overlap, no prompt
+        } else {
+            copy(prompt[:], string(t(.INTERACT_PULL_LEVER)))
+        }
+        cw.world_set_interactable(w, id, cw.InteractableComp{
+            radius = f32(TILE_SIZE) * 1.2,
+            prompt = prompt,
+            active = !needs_weight,
+        })
+        cw.world_set_signal_emitter(w, id, cw.SignalEmitterComp{
+            link_id      = s.link_id,
+            is_on        = false,
+            is_toggle    = is_toggle,
+            needs_weight = needs_weight,
+            weight_radius = f32(TILE_SIZE) * 0.6,
+        })
+    }
+
+    for c in g_level_data.containers {
+        wx := f32(int(c.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(c.ty) * TILE_SIZE + TILE_SIZE / 2)
+        def_name := "env_chest" if c.kind == .Chest else "env_crate"
+        id := spawn_from_def(w, find_entity_def(g_entity_defs, def_name))
+        if id == cw.INVALID_ENTITY { continue }
+        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        prompt: [48]u8
+        switch c.kind {
+        case .Chest:   copy(prompt[:], string(t(.INTERACT_OPEN_CHEST)))
+        case .Crate:   copy(prompt[:], string(t(.INTERACT_BREAK_CRATE)))
+        case .Locker:  copy(prompt[:], string(t(.INTERACT_OPEN_LOCKER)))
+        case .Cabinet: copy(prompt[:], string(t(.INTERACT_SEARCH_CABINET)))
+        }
+        cw.world_set_interactable(w, id, cw.InteractableComp{
+            radius = f32(TILE_SIZE) * 1.2,
+            prompt = prompt,
+            active = true,
+        })
+        cw.world_set_container(w, id, cw.ContainerComp{
+            kind          = c.kind,
+            is_open       = false,
+            loot_table_id = c.loot_table_id,
+            gold_min      = c.gold_min,
+            gold_max      = c.gold_max,
+        })
+    }
+
+    for li in g_level_data.lore_items {
+        wx := f32(int(li.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(li.ty) * TILE_SIZE + TILE_SIZE / 2)
+        id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_lore_item"))
+        if id == cw.INVALID_ENTITY { continue }
+        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        prompt: [48]u8
+        copy(prompt[:], string(t(.INTERACT_READ_DOCUMENT)))
+        cw.world_set_interactable(w, id, cw.InteractableComp{
+            radius = f32(TILE_SIZE) * 1.2,
+            prompt = prompt,
+            active = true,
+        })
+        cw.world_set_lore_item(w, id, cw.LoreItemComp{
+            lore_id = li.lore_id,
+            is_read = false,
+        })
+    }
+
+    for ph in g_level_data.phonographs {
+        wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
+        id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_phonograph"))
+        if id == cw.INVALID_ENTITY { continue }
+        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        prompt: [48]u8
+        copy(prompt[:], string(t(.INTERACT_WIND_PHONOGRAPH)))
+        cw.world_set_interactable(w, id, cw.InteractableComp{
+            radius = f32(TILE_SIZE) * 1.5,
+            prompt = prompt,
+            active = true,
+        })
+        cw.world_set_phonograph(w, id, cw.PhonographComp{
+            recording_id = ph.recording_id,
+            is_playing   = false,
+        })
+    }
+
+    for kp in g_level_data.key_pickups {
+        wx := f32(int(kp.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
+        id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_key"))
+        if id == cw.INVALID_ENTITY { continue }
+        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        prompt: [48]u8
+        copy(prompt[:], string(t(.INTERACT_TAKE_KEY)))
+        cw.world_set_interactable(w, id, cw.InteractableComp{
+            radius = f32(TILE_SIZE) * 1.0,
+            prompt = prompt,
+            active = true,
+        })
+        label: [40]u8
+        cw.world_set_key_pickup(w, id, cw.KeyPickupComp{
+            key_id = kp.key_id,
+            label  = label,
+        })
+    }
 }
 
 spawn_players :: proc(w: ^cw.World) {
@@ -667,6 +1094,7 @@ spawn_players :: proc(w: ^cw.World) {
         cw.world_set_player(w, pid, cw.PlayerComp{ slot = slot })
         cw.world_set_wallet(w, pid, cw.WalletComp{ gold = 0 })
         cw.world_set_status_effect(w, pid, cw.StatusEffectComp{})
+        cw.world_set_key_ring(w, pid, cw.KeyRingComp{})   // cleared each raid
         w.player_ids[slot] = pid
     }
 
@@ -685,6 +1113,7 @@ level_clear :: proc(w: ^cw.World) {
     _clear_all_shop_stock(w)
 
     ai_paths_clear()
+    door_blockers_clear()
 
     cw.world_reset(w)
 
@@ -771,6 +1200,7 @@ level_do_switch :: proc(w: ^cw.World, n: int) {
     director_init()
     level_load(n)
     level_apply(w)        // spawns editor-placed barrels + all other entities
+    door_init_blockers(w) // rebuild door-blocker map from newly spawned doors
     spawn_extraction_point(w)
     spawn_players(w)
 }

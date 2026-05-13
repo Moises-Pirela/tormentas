@@ -279,6 +279,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
                 }
                 st.stat_points -= 1
                 play_sfx("stat_up")
+                ui_mark_dirty(.Stats)
                 if cw.world_is_valid(w, w.player_id) {
                     save_player(w, w.player_id)
                 }

@@ -355,6 +355,13 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         play_sfx("shoot")
 
+        // Alert nearby enemies — gunshots are loud regardless of light level.
+        emit_noise(
+            { t_snap.position[0], t_snap.position[1], 0 },
+            280,                   // audible radius in world units
+            STEALTH_NOISE_LOUD,    // instant full suspicion for any AI that hears it
+        )
+
         // Re-fetch weapon after all spawns (backing arrays may have been resized).
         wfresh := cw.world_get_weapon_data(w, wid)
         if wp_snap.fire_rate > 0 {

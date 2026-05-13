@@ -76,7 +76,8 @@ update_main_menu :: proc(dt: f32) {
                 update_settings_overlay()
             case .Keybinds:
                 update_keybinds_screen()
-            case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .PauseMenu, .LevelSelect:
+            case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .PauseMenu, .LevelSelect,
+                 .Lore, .Phonograph:
                 // not opened from the main menu
             }
         }

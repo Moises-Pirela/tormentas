@@ -14,6 +14,7 @@ InputAction :: enum u8 {
     Skill2,
     Skill3,
     Skill4,
+    Interact,   // press E — environmental interaction
 }
 
 InputFrame :: struct {

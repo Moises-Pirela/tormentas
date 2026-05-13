@@ -35,8 +35,16 @@ tilemap_fill_default :: proc() {
     }
 }
 
-g_tilemap:    map[[2]int]TileType
+g_tilemap:     map[[2]int]TileType
 g_overlay_map: map[[2]int]TileOverlay
+
+// g_door_blockers maps tile → entity ID of the closed door that blocks it.
+// Maintained by env_door_system; queried by tile_is_walkable and A*.
+g_door_blockers: map[[2]int]int
+
+door_blockers_init    :: proc() { g_door_blockers = make(map[[2]int]int) }
+door_blockers_destroy :: proc() { delete(g_door_blockers) }
+door_blockers_clear   :: proc() { clear(&g_door_blockers) }
 
 TileSpriteEntry :: struct {
     tex:     rl.Texture2D,
@@ -149,7 +157,9 @@ overlay_at :: proc(tx, ty: int) -> TileOverlay {
 
 tile_is_walkable :: proc(tx, ty: int) -> bool {
     // Overlays (Oil, Fire) sit on Floor tiles — Floor check covers them.
-    return tile_at(tx, ty) == .Floor
+    if tile_at(tx, ty) != .Floor { return false }
+    _, blocked := g_door_blockers[[2]int{tx, ty}]
+    return !blocked
 }
 
 tile_exists :: proc(tx, ty: int) -> bool {

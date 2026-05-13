@@ -3,9 +3,10 @@ package p2p
 import "core:mem"
 
 EditorOpAction :: enum u8 {
-    Paint    = 1,
-    Erase    = 2,
-    ClearAll = 3,
+    Paint         = 1,
+    Erase         = 2,   // removes tile + overlay + all entity data
+    ClearAll      = 3,
+    EraseObjects  = 4,   // removes entity data only (RMB — preserves floor/wall tile)
 }
 
 EditorOp :: struct #packed {
@@ -17,6 +18,18 @@ EditorOp :: struct #packed {
 }                                  // 8 bytes total
 
 EDITOR_OP_SIZE :: size_of(EditorOp)
+
+// EditorModOp carries a single field edit for an already-placed entity.
+// Broadcast when the inspector panel modifies a field value.
+EditorModOp :: struct #packed {
+    tx:    i16,   // tile x of the entity
+    ty:    i16,   // tile y
+    kind:  u8,    // EditorSelKind cast to u8
+    field: u8,    // field index within that kind (0-based)
+    value: u32,   // new value (u8/u16 in low bytes; f32 reinterpreted as bits)
+}                 // 10 bytes total
+
+EDITOR_MOD_OP_SIZE :: size_of(EditorModOp)
 
 session_send_editor_op :: proc(s: ^Session, op: EditorOp) {
     if s.state != .Connected { return }
@@ -37,6 +50,23 @@ session_send_level_load :: proc(s: ^Session, n: int) {
     _send(s, pkt[:])
 }
 
+session_send_editor_mod_op :: proc(s: ^Session, op: EditorModOp) {
+    if s.state != .Connected { return }
+    op := op
+    pkt: [1 + EDITOR_MOD_OP_SIZE]u8
+    pkt[0] = u8(MsgType.EditorModOp)
+    mem.copy(&pkt[1], &op, EDITOR_MOD_OP_SIZE)
+    _send(s, pkt[:])
+}
+
+session_drain_editor_mod_ops :: proc(s: ^Session) -> []EditorModOp {
+    if len(s.editor_mod_ops) == 0 { return nil }
+    ops := make([]EditorModOp, len(s.editor_mod_ops), context.temp_allocator)
+    copy(ops, s.editor_mod_ops[:])
+    clear(&s.editor_mod_ops)
+    return ops
+}
+
 session_drain_editor :: proc(s: ^Session) -> (ops: []EditorOp, load_level: int) {
     if len(s.editor_ops) > 0 {
         ops = make([]EditorOp, len(s.editor_ops), context.temp_allocator)
@@ -54,6 +84,14 @@ _handle_editor_op :: proc(s: ^Session, payload: []u8) {
     op: EditorOp
     mem.copy(&op, raw_data(payload), EDITOR_OP_SIZE)
     append(&s.editor_ops, op)
+}
+
+@(private)
+_handle_editor_mod_op :: proc(s: ^Session, payload: []u8) {
+    if len(payload) < EDITOR_MOD_OP_SIZE { return }
+    op: EditorModOp
+    mem.copy(&op, raw_data(payload), EDITOR_MOD_OP_SIZE)
+    append(&s.editor_mod_ops, op)
 }
 
 @(private)

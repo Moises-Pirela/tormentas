@@ -14,16 +14,12 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
     pending_drops       := make([dynamic]DropPending, context.temp_allocator)
-    heart_killed_player := false   // set when a HeartCage heart is destroyed
+    heart_killed_player := false  
 
-    // Entities whose bomb triggered this tick.
-    // All subsequent damage events for these entities are skipped so same-tick
-    // multi-hits cannot kill the revived entity before the frame ends.
     bomb_skip   : [32]int
     bomb_skip_n : int
 
     for ev in w.damage_events {
-        // Skip further events for entities that already detonated this tick.
         {
             skip := false
             for i in 0..<bomb_skip_n { if bomb_skip[i] == ev.target_id { skip = true; break } }
@@ -40,7 +36,6 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             amount *= (1.0 - cw.world_get_stats(w, ev.target_id).armor)
         }
 
-        // Shield absorbs remaining damage before HP (when the entity has a shield).
         if amount > 0 && h.shield > 0 {
             absorbed  := min(h.shield, amount)
             h.shield  -= absorbed
@@ -260,7 +255,7 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if h.current > 0 && !force_death {
             if ev.target_id == w.player_id && amount > 0 {
                 play_sfx("player_hurt")
-                camera_shake(1)  
+                //camera_shake(1)  
             }
             continue
         }
@@ -438,6 +433,7 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
                     st := cw.world_get_stats(w, pid)
                     st.xp += XP_PER_KILL
+                    if pid == w.player_id { ui_mark_dirty(.Stats) }
                     leveled := false
                     for st.xp >= st.xp_next {
                         st.xp          -= st.xp_next
@@ -447,11 +443,16 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         leveled          = true
                     }
                     if leveled {
+                        // Restore health and energy to full on level-up.
+                        if cw.world_has_component(w, pid, .Health) {
+                            health := cw.world_get_health(w, pid)
+                            health.current = health.max
+                            health.energy  = health.max_energy
+                        }
                         if pid == w.player_id {
                             g_levelup_flash = LEVELUP_FLASH_TIME
                             play_sfx("levelup")
                         }
-                        // TODO: ability points replaced by item system
                     }
                 }
 
@@ -521,7 +522,6 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if cw.world_has_component(w, id, .Health) {
             h := cw.world_get_health(w, id)
             h.current            = h.max
-            h.iron_will_consumed = false  
         }
         if cw.world_has_component(w, id, .Transform) {
             t := cw.world_get_transform(w, id)
