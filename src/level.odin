@@ -37,6 +37,22 @@ import p2p "p2p"
 
 LEVEL_DIR :: "data/levels"
 
+// g_available_levels is the number of raid levels discovered on disk (level01.bin …).
+// Refreshed every time the player enters the hub via level_scan_available().
+g_available_levels: int
+
+// level_scan_available probes the filesystem for level01.bin, level02.bin, …
+// Returns the count of consecutive files found starting at index 1.
+// Stops at the first gap so sparse numbering is not supported.
+// Cap of 64 prevents an infinite loop if someone fills the directory.
+level_scan_available :: proc() -> int {
+    MAX_SCAN :: 64
+    for n in 1 ..= MAX_SCAN {
+        if !os.exists(level_path(n)) { return n - 1 }
+    }
+    return MAX_SCAN
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 EnemySpawnType :: enum u8 {
@@ -1181,15 +1197,22 @@ hub_apply :: proc(w: ^cw.World) {
     }
 }
 
-spawn_extraction_point :: proc(w: ^cw.World) {
+// spawn_extraction_at_tile places a timed extraction zone centred on tile (tx, ty).
+spawn_extraction_at_tile :: proc(w: ^cw.World, tx, ty: int) {
     ext_id := cw.world_create_entity(w)
     cw.world_set_transform(w, ext_id, cw.TransformComp{
-        position = { 12 * TILE_SIZE, 7 * TILE_SIZE, 0 },
+        position = { f32(tx * TILE_SIZE + TILE_SIZE/2), f32(ty * TILE_SIZE + TILE_SIZE/2), 0 },
     })
     cw.world_set_extraction(w, ext_id, cw.ExtractionComp{
         interact_radius = EXTRACT_RADIUS,
         activate_time   = EXTRACT_TIME,
     })
+}
+
+// spawn_extraction_point is the legacy single-zone fallback (tile 12,7).
+// Used only when a level defines no exits with target_level == 0.
+spawn_extraction_point :: proc(w: ^cw.World) {
+    spawn_extraction_at_tile(w, 12, 7)
 }
 
 level_do_switch :: proc(w: ^cw.World, n: int) {
@@ -1201,7 +1224,20 @@ level_do_switch :: proc(w: ^cw.World, n: int) {
     level_load(n)
     level_apply(w)        // spawns editor-placed barrels + all other entities
     door_init_blockers(w) // rebuild door-blocker map from newly spawned doors
-    spawn_extraction_point(w)
+
+    // Spawn timed extraction zones from exits with target_level == 0.
+    // Falls back to the legacy hardcoded point if none are defined (old levels).
+    found_zone := false
+    for ex in g_level_data.exits {
+        if ex.target_level == 0 {
+            spawn_extraction_at_tile(w, int(ex.tx), int(ex.ty))
+            found_zone = true
+        }
+    }
+    if !found_zone {
+        spawn_extraction_point(w)
+    }
+
     spawn_players(w)
 }
 
@@ -1311,6 +1347,9 @@ level_exit_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         xPos, yPos := world_to_tile(pos[0], pos[1])
 
         for ex in g_level_data.exits {
+            // target_level == 0 means a timed extraction zone (ExtractionComp),
+            // not an instant step-on exit — skip those here.
+            if ex.target_level == 0 { continue }
             if int(ex.tx) == xPos && int(ex.ty) == yPos {
                 on_player_extract(w)
                 return

@@ -132,6 +132,7 @@ LocKey :: enum {
     HUB_STASH,
     HUB_LEVEL_SELECT,
     HUB_LEVEL_N,
+    HUB_NO_LEVELS,     // shown in the selector when no raid level files are found
     HUB_ESC_CANCEL,
     HUB_BTN_RETURN,
     HUB_BTN_RETRY,
@@ -447,6 +448,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "HUB_STASH":              return .HUB_STASH, true
     case "HUB_LEVEL_SELECT":       return .HUB_LEVEL_SELECT, true
     case "HUB_LEVEL_N":            return .HUB_LEVEL_N, true
+    case "HUB_NO_LEVELS":          return .HUB_NO_LEVELS, true
     case "HUB_ESC_CANCEL":         return .HUB_ESC_CANCEL, true
     case "HUB_BTN_RETURN":         return .HUB_BTN_RETURN, true
     case "HUB_BTN_RETRY":          return .HUB_BTN_RETRY, true

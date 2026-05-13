@@ -13,13 +13,12 @@ HUB_SHOPKEEPER_POS :: [3]f32{ 200, 0, 0 }
 HUB_MUTATION_WORKBENCH_POS :: [3]f32{ 300, -40, 0 }
 HUB_STASH_POS :: [3]f32{ 105, -95, 0 }
 
-MAX_RAID_LEVELS :: 3
-
 enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     if save_progress && cw.world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
-    g_raid_timer = 0
+    g_raid_timer      = 0
+    g_available_levels = level_scan_available()
     level_clear(w)
     level_load(0)
     level_apply(w)
@@ -50,7 +49,20 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     level_load(n)
     level_apply(w)
     door_init_blockers(w)
-    spawn_extraction_point(w)
+
+    // Spawn timed extraction zones from exits with target_level == 0.
+    // Falls back to the legacy hardcoded point if the level defines none.
+    found_zone := false
+    for ex in g_level_data.exits {
+        if ex.target_level == 0 {
+            spawn_extraction_at_tile(w, int(ex.tx), int(ex.ty))
+            found_zone = true
+        }
+    }
+    if !found_zone {
+        spawn_extraction_point(w)
+    }
+
     spawn_players(w)
     load_player(w, w.player_id)
     // Full HP at the start of every raid.
@@ -134,8 +146,9 @@ draw_level_select :: proc(w: ^cw.World) {
 
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 160})
 
+    n_levels := max(g_available_levels, 1)   // at least one row so the panel isn't empty
     pw := uis(360)
-    ph := uis(80) + f32(MAX_RAID_LEVELS) * uis(62) + uis(48)
+    ph := uis(80) + f32(n_levels) * uis(62) + uis(48)
     px := (sw - pw) * 0.5
     py := (sh - ph) * 0.5
 
@@ -170,7 +183,16 @@ draw_level_select :: proc(w: ^cw.World) {
     btn_h := uis(46)
     bx    := px + uis(16)
 
-    for i in 1 ..= MAX_RAID_LEVELS {
+    if g_available_levels == 0 {
+        // No raid levels found — show a hint instead of an empty panel.
+        msg    := t(.HUB_NO_LEVELS)
+        msg_fs := uis(11)
+        msz    := rl.MeasureTextEx(g_font, msg, msg_fs, 0.5)
+        rl.DrawTextEx(g_font, msg,
+            {px + pw * 0.5 - msz.x * 0.5, py + uis(70)},
+            msg_fs, 0.5, COL_MUTED)
+    }
+    for i in 1 ..= g_available_levels {
         by := py + uis(58) + f32(i - 1) * (btn_h + uis(10))
         r  := rl.Rectangle{ bx, by, btn_w, btn_h }
 
@@ -191,7 +213,12 @@ draw_level_select :: proc(w: ^cw.World) {
             lbl_fs, 0.5, lbl_col)
 
         if hot && rl.IsMouseButtonReleased(.LEFT) {
-            enter_raid(w, i)
+            // Do NOT call enter_raid here — this proc runs inside ui_draw's
+            // BeginTextureMode context.  enter_raid calls ui_close_all() which
+            // unloads the active RT mid-render, corrupting the frame.
+            // Defer to the update phase via g_pending_raid_start instead.
+            g_pending_raid_start = i
+            ui_close(.LevelSelect)
             return
         }
     }

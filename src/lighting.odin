@@ -497,6 +497,7 @@ g_fog_scatter: f32    = 1.35
     wall_origin:      c.int,
     wall_size:        c.int,
     tile_size:        c.int,
+    pass:             c.int, // 0 = fog (BLEND_ALPHA), 1 = light halos (BLEND_ADDITIVE)
 }
 
 init_foglight_shader :: proc() {
@@ -520,6 +521,7 @@ init_foglight_shader :: proc() {
     g_foglight_locs.wall_origin     = rl.GetShaderLocation(g_foglight_shader, "u_wall_origin")
     g_foglight_locs.wall_size       = rl.GetShaderLocation(g_foglight_shader, "u_wall_size")
     g_foglight_locs.tile_size       = rl.GetShaderLocation(g_foglight_shader, "u_tile_size")
+    g_foglight_locs.pass            = rl.GetShaderLocation(g_foglight_shader, "u_pass")
 }
 
 shutdown_foglight_shader :: proc() {
@@ -880,12 +882,37 @@ draw_fog_and_lights :: proc(w: ^cw.World) {
         rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_intensity, &intensities, .FLOAT, c.int(count))
     }
 
+    // ── Pass 0: fog layer (BLEND_ALPHA) ──────────────────────────────────────
+    // Dark overlay where the player has no vision.  Point lights and the
+    // player's own vision radius carve transparent holes.  Alpha = fog only;
+    // lights do NOT contribute to alpha, so sprites are never hidden by an
+    // opaque coloured quad.
+    pass := c.int(0)
+    rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
     rl.BeginShaderMode(g_foglight_shader)
     if g_wall_mask.id != 0 {
         rl.SetShaderValueTexture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
     }
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
     rl.EndShaderMode()
+
+    // ── Pass 1: additive light halos (BLEND_ADDITIVE) ─────────────────────
+    // Warm glow on ground tiles and through the fog.  Drawn additively so it
+    // only ever brightens — never hides — whatever is already composited.
+    // Sprites inside lights are already tinted by sprite_light.fs, so the
+    // halo contribution is kept dim (see shader's combined scale).
+    if count > 0 {
+        pass = c.int(1)
+        rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
+        rl.BeginBlendMode(.ADDITIVE)
+        rl.BeginShaderMode(g_foglight_shader)
+        if g_wall_mask.id != 0 {
+            rl.SetShaderValueTexture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
+        }
+        rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
+        rl.EndShaderMode()
+        rl.EndBlendMode()
+    }
 }
 
 @(private = "file")

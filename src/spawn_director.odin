@@ -8,6 +8,11 @@ BOSS_MIN_DIST       :: f32(520)
 BOSS_WARNING_LEAD   :: f32(18.0)
 DIRECTOR_BUDGET_CAP :: f32(24.0)
 
+// MAX_DIRECTOR_LEVELS is the compile-time size of the director config arrays.
+// Levels beyond this cap are clamped to the last defined config entry.
+// Increase this (and add matching entries below) to support more difficulty tiers.
+MAX_DIRECTOR_LEVELS :: 3
+
 DirectorConfig :: struct {
     budget_rate:    f32,
     max_alive:      int,
@@ -16,9 +21,9 @@ DirectorConfig :: struct {
     boss_spawn_at:  f32,
 }
 
-DIRECTOR_CONFIGS := [MAX_RAID_LEVELS + 1]DirectorConfig{
+DIRECTOR_CONFIGS := [MAX_DIRECTOR_LEVELS + 1]DirectorConfig{
     0 = {},
-    1 = { budget_rate = 2.00, max_alive = 100, spawn_interval = 1.0, has_boss = true, boss_spawn_at = RAID_TIME * 0.99 },
+    1 = { budget_rate = 2.00, max_alive = 100, spawn_interval = 1.0, has_boss = true, boss_spawn_at = RAID_TIME * 0.50 },
     2 = { budget_rate = 0.85, max_alive = 100, spawn_interval = 1.0, has_boss = true,  boss_spawn_at = RAID_TIME * 0.60 },
     3 = { budget_rate = 1.25, max_alive = 100, spawn_interval = 1.0, has_boss = true,  boss_spawn_at = RAID_TIME * 0.72 },
 }
@@ -46,7 +51,7 @@ ENEMY_MUTATION_POOL :: [?]cw.MutationType{
 }
 
 // Probability that a newly spawned enemy receives a mutation, per raid level.
-ENEMY_MUTATION_CHANCE :: [MAX_RAID_LEVELS + 1]f32{
+ENEMY_MUTATION_CHANCE :: [MAX_DIRECTOR_LEVELS + 1]f32{
     0 = 0.00,  // level 0 — unused
     1 = 0.00,  // level 1 — clean intro, no random mutations
     2 = 0.10,  // level 2 — 1-in-10 enemies is mutated
@@ -75,7 +80,7 @@ spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if g_playing_state != .Gameplay  { return }
     if g_raid_timer <= 0             { return }
 
-    cfg_idx := clamp(g_current_raid_level, 0, MAX_RAID_LEVELS)
+    cfg_idx := clamp(g_current_raid_level, 0, MAX_DIRECTOR_LEVELS)
     cfg     := DIRECTOR_CONFIGS[cfg_idx]
     if cfg.budget_rate <= 0 { return }
 
@@ -90,7 +95,7 @@ spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 _director_mutate_enemy :: proc(w: ^cw.World, id: int) {
     if id == cw.INVALID_ENTITY { return }
 
-    idx     := clamp(g_current_raid_level, 0, MAX_RAID_LEVELS)
+    idx     := clamp(g_current_raid_level, 0, MAX_DIRECTOR_LEVELS)
     chances := ENEMY_MUTATION_CHANCE   // snapshot into addressable local
     chance  := chances[idx]
     if chance <= 0 { return }

@@ -118,6 +118,7 @@ HUB_LABEL,H U B,H U B,H U B
 HUB_STASH,Stash:  %d Gold   %d Serums,Reserva:  %d Oro   %d Sueros,Baú:  %d Ouro   %d Soros
 HUB_LEVEL_SELECT,S E L E C T   L E V E L,S E L E C C I O N A R,S E L E C I O N A R
 HUB_LEVEL_N,LEVEL %d,NIVEL %d,NÍVEL %d
+HUB_NO_LEVELS,No raid levels found.,No hay niveles disponibles.,Nenhum nivel disponivel.
 HUB_ESC_CANCEL,ESC — cancel,ESC — cancelar,ESC — cancelar
 HUB_BTN_RETURN,RETURN TO HUB,VOLVER AL HUB,VOLTAR AO HUB
 HUB_BTN_RETRY,RETRY RAID,REINTENTAR RAID,TENTAR NOVAMENTE

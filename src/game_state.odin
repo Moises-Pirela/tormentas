@@ -25,6 +25,11 @@ g_hub_active: bool
 
 g_current_raid_level: int
 
+// Set by draw_level_select instead of calling enter_raid directly.
+// Processed in the Hub update phase, safely outside BeginTextureMode.
+// 0 = none pending; positive = level index to start.
+g_pending_raid_start: int
+
 
 STASH_MAX_ITEMS :: 64
 STASH_COLS :: 12

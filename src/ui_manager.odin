@@ -238,15 +238,21 @@ ui_mark_dirty :: proc(panel: UIPanel) {
 ui_update :: proc(dt: f32) {
     _ui_ensure_rt()
 
-    // Detect mouse movement and button presses once per frame.
+    // Detect mouse movement, presses AND releases once per frame.
+    // Releases must be included: draw_level_select (and other panels) listen for
+    // IsMouseButtonReleased, so the panel must be re-rendered on the release frame
+    // or the click handler never fires.
     mp  := rl.GetMousePosition()
     ddx := mp.x - g_ui.last_mouse_pos.x
     ddy := mp.y - g_ui.last_mouse_pos.y
     mouse_event :=
-        (ddx*ddx + ddy*ddy > 0.25)       ||
-        rl.IsMouseButtonPressed(.LEFT)    ||
-        rl.IsMouseButtonPressed(.RIGHT)   ||
-        rl.IsMouseButtonPressed(.MIDDLE)
+        (ddx*ddx + ddy*ddy > 0.25)        ||
+        rl.IsMouseButtonPressed (.LEFT)    ||
+        rl.IsMouseButtonPressed (.RIGHT)   ||
+        rl.IsMouseButtonPressed (.MIDDLE)  ||
+        rl.IsMouseButtonReleased(.LEFT)    ||
+        rl.IsMouseButtonReleased(.RIGHT)   ||
+        rl.IsMouseButtonReleased(.MIDDLE)
     g_ui.last_mouse_pos = mp
 
     i := 0

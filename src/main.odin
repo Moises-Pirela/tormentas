@@ -97,6 +97,7 @@ init_game :: proc() {
     fire_system_init()
     door_blockers_init()
 
+    g_available_levels = level_scan_available()
     level_load(0)
     level_apply(w)
     door_init_blockers(w)
@@ -197,6 +198,16 @@ update_playing :: proc(dt: f32) {
             update_editor(dt)
 
         case .Hub:
+            // Deferred raid start: draw_level_select sets g_pending_raid_start
+            // instead of calling enter_raid directly (which would run inside
+            // BeginTextureMode and unload the active RT via ui_close_all).
+            if g_pending_raid_start > 0 {
+                n := g_pending_raid_start
+                g_pending_raid_start = 0
+                enter_raid(w, n)
+                break
+            }
+
             // input_is_gameplay() is true when no panel is open (mode == .Gameplay)
             if input_is_gameplay() {
                 if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
