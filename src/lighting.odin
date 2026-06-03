@@ -680,6 +680,9 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
             }
         }
 
+        top_down := cw.world_has_component(w, id, .RenderConfig) &&
+            cw.world_get_render_config(w, id).top_down_sprite
+
         for i in 0..<4 {
             t_frac := f32(i) / 3.0
             offset := radius * (0.45 + t_frac * 0.95)
@@ -689,7 +692,11 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
                 pos.x + dir[0] * offset,
                 pos.y + dir[1] * offset,
             }
-            draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, rl.Color{ 8, 10, 6, a }, ISO_SPRITE_Y, anchor)
+            if top_down {
+                draw_player_sprite(entry.tex, src, shadow_pos, world_size, rl.Color{ 8, 10, 6, a }, anchor)
+            } else {
+                draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, rl.Color{ 8, 10, 6, a }, ISO_SPRITE_Y, anchor)
+            }
         }
     }
 }

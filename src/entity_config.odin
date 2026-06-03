@@ -56,13 +56,14 @@ DodgeDef :: struct {
 }
 
 RenderConfigDef :: struct {
-    display_name: string,
-    sprite_name:  string,
-    sprite_scale: f32,
-    world_size:   f32,
-    render_layer: cw.RenderLayer,
-    show_hp_bar:  bool,
-    show_dir_tip: bool,
+    display_name:    string,
+    sprite_name:     string,
+    sprite_scale:    f32,
+    world_size:      f32,
+    render_layer:    cw.RenderLayer,
+    show_hp_bar:     bool,
+    show_dir_tip:    bool,
+    top_down_sprite: bool,
 }
 
 NPCDef :: struct {
@@ -352,6 +353,9 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
             }
             if v, ok2 := r_obj["show_dir_tip"].(bool); ok2 {
                 r.show_dir_tip = v
+            }
+            if v, ok2 := r_obj["top_down_sprite"].(bool); ok2 {
+                r.top_down_sprite = v
             }
             if v, ok2 := r_obj["layer"].(string); ok2 {
                 switch v {
@@ -647,7 +651,8 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         comp.world_size   = rc.world_size
         comp.render_layer = rc.render_layer
         comp.show_hp_bar  = rc.show_hp_bar
-        comp.show_dir_tip = rc.show_dir_tip
+        comp.show_dir_tip    = rc.show_dir_tip
+        comp.top_down_sprite = rc.top_down_sprite
         cw.world_set_render_config(w, id, comp)
 
         cw.world_set_anim_state(w, id, cw.AnimStateComp{})

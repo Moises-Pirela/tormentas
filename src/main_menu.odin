@@ -6,10 +6,9 @@ import        "core:strings"
 import        "core:mem"
 import p2p    "p2p"
 
-MenuPhase :: enum { CharSelect, PlayOptions }
+MenuPhase :: enum { CharSelect, ClassSelect, PlayOptions }
 MenuFocus :: enum { None, NewName, IP }
 
-@(private = "file")
 g_mm: struct {
     phase:          MenuPhase,
     selected_slot:  int,
@@ -21,18 +20,24 @@ g_mm: struct {
     ip:             [64]u8,
     conn_timer:     f32,
     new_char:       int,
+    cs_hovered:     int,
+    cs_anim_t:      f32,
+    cs_pending_slot: int,
 }
 
 CONN_TIMEOUT :: f32(15.0)
 
 @(private)
 _mm_init :: proc() {
-    g_mm.phase         = .CharSelect
-    g_mm.selected_slot = -1
-    g_mm.creating_slot = -1
-    g_mm.confirm_delete = false
-    g_mm.focus         = .None
-    g_mm.show_join     = false
+    g_mm.phase           = .CharSelect
+    g_mm.selected_slot   = -1
+    g_mm.creating_slot   = -1
+    g_mm.confirm_delete  = false
+    g_mm.focus           = .None
+    g_mm.show_join       = false
+    g_mm.cs_hovered      = -1
+    g_mm.cs_anim_t       = 0
+    g_mm.cs_pending_slot = -1
 }
 
 @(private)
@@ -84,8 +89,9 @@ update_main_menu :: proc(dt: f32) {
     }
 
     switch g_mm.phase {
-    case .CharSelect:  _mm_update_char_select()
-    case .PlayOptions: _mm_update_play_options()
+    case .CharSelect:   _mm_update_char_select()
+    case .ClassSelect:  _mm_update_class_select()
+    case .PlayOptions:  _mm_update_play_options()
     }
 }
 
@@ -120,8 +126,9 @@ draw_main_menu :: proc() {
     }
 
     switch g_mm.phase {
-    case .CharSelect:  _mm_draw_char_select()
-    case .PlayOptions: _mm_draw_play_options()
+    case .CharSelect:   _mm_draw_char_select()
+    case .ClassSelect:  _mm_draw_class_select()
+    case .PlayOptions:  _mm_draw_play_options()
     }
 
     btn_fs  := uis(13)
@@ -218,37 +225,6 @@ _mm_update_char_select :: proc() {
     cx_base := sw * 0.5
 
     if g_mm.creating_slot >= 0 {
-
-        picker_y  := btn_y - uis(52)
-        arrow_w   := uis(28)
-        arrow_h   := uis(28)
-        picker_cx := cx_base
-        left_r  := rl.Rectangle{ picker_cx - uis(90) - arrow_w, picker_y, arrow_w, arrow_h }
-        right_r := rl.Rectangle{ picker_cx + uis(90),            picker_y, arrow_w, arrow_h }
-
-        if _mm_btn_hit(left_r) {
-            g_mm.new_char = (g_mm.new_char - 1 + len(PLAYER_STEMS)) % len(PLAYER_STEMS)
-        }
-        if _mm_btn_hit(right_r) {
-            g_mm.new_char = (g_mm.new_char + 1) % len(PLAYER_STEMS)
-        }
-
-        _mm_btn_draw(left_r,  "<", false)
-        _mm_btn_draw(right_r, ">", false)
-
-        stems  := PLAYER_STEMS
-        stem   := stems[g_mm.new_char]
-
-        dname  := stem[len("player_"):]
-        dname_cs: [32]u8
-        n := copy(dname_cs[:31], dname)
-        dname_cs[n] = 0
-        name_fs := uis(13)
-        nsz     := rl.MeasureTextEx(g_font, cstring(&dname_cs[0]), name_fs, 0.5)
-        rl.DrawTextEx(g_font, cstring(&dname_cs[0]),
-            { picker_cx - nsz.x*0.5, picker_y + (arrow_h - name_fs)*0.5 },
-            name_fs, 0.5, rl.Color{ 210, 200, 180, 255 })
-
         create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
         cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
         if _mm_btn_hit(create_r) { _mm_confirm_create() }
@@ -284,16 +260,16 @@ _mm_confirm_create :: proc() {
     if g_mm.new_name[0] == 0 { return }
     idx := g_mm.creating_slot
 
-    ci    := clamp(g_mm.new_char, 0, len(PLAYER_STEMS) - 1)
-    stems := PLAYER_STEMS
-    g_player_stem = stems[ci]
-    char_slot_create(idx, g_mm.new_name[:])
-    g_mm.creating_slot = -1
-    g_mm.focus         = .None
-    g_mm.selected_slot = idx
+    char_slot_create(idx, g_mm.new_name[:], save_to_disk = false)
+    g_mm.cs_pending_slot = idx
+    g_mm.creating_slot   = -1
+    g_mm.focus           = .None
+    g_mm.new_char        = 0
+    g_mm.cs_hovered      = 0
+    g_mm.cs_anim_t       = 0
+    g_mm.phase           = .ClassSelect
 }
 
-@(private = "file")
 _mm_select_slot :: proc(idx: int) {
     g_active_slot = idx
     mem.zero_slice(g_player_name[:])
@@ -345,6 +321,7 @@ _mm_draw_char_select :: proc() {
         cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
         _mm_btn_draw(create_r, t(.MENU_BTN_CREATE), false)
         _mm_btn_draw(cancel_r, t(.MENU_BTN_CANCEL), false)
+
     } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
         play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
         delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
@@ -624,13 +601,11 @@ draw_connecting :: proc() {
 }
 
 
-@(private = "file")
 _mm_btn_hit :: proc(r: rl.Rectangle) -> bool {
     return rl.IsMouseButtonReleased(.LEFT) &&
            rl.CheckCollisionPointRec(rl.GetMousePosition(), r)
 }
 
-@(private = "file")
 _mm_btn_draw :: proc(r: rl.Rectangle, label: cstring, active: bool) {
     mp   := rl.GetMousePosition()
     over := rl.CheckCollisionPointRec(mp, r)

@@ -806,6 +806,115 @@ create_ability_item :: proc(w: ^cw.World, at: cw.AbilityType) -> int {
     return item_id
 }
 
+give_class_starter_items :: proc(w: ^cw.World, pid: int, class_idx: int) {
+    ci := clamp(class_idx, 0, 3)
+
+    // Ensure the visual reflects the chosen class immediately.
+    // get_entity_sprite_stem() returns g_player_stem directly, so this
+    // must be set before spawn_players sets the RenderConfig sprite key.
+    stems := PLAYER_STEMS
+    g_player_stem = stems[ci]
+    g_selected_class_idx = ci
+
+    if cw.world_has_component(w, pid, .Stats) {
+        st            := cw.world_get_stats(w, pid)
+        st.strength    = CLASS_BASE_STR[ci]
+        st.dexterity   = CLASS_BASE_DEX[ci]
+        st.science     = CLASS_BASE_SCI[ci]
+        st.base_hp     = CLASS_BASE_HP[ci]
+        st.base_energy = CLASS_BASE_ENERGY[ci]
+        st.base_speed  = CLASS_BASE_SPEED[ci]
+    }
+
+    if cw.world_has_component(w, pid, .Health) {
+        h            := cw.world_get_health(w, pid)
+        h.max         = CLASS_BASE_HP[ci]
+        h.current     = CLASS_BASE_HP[ci]
+        h.max_energy  = CLASS_BASE_ENERGY[ci]
+        h.energy      = CLASS_BASE_ENERGY[ci]
+    }
+
+    give_starter_items(w, pid)
+
+    switch ci {
+    case 1:
+        _give_class_weapon(w, pid, .Shotgun, cw.Affix{})
+    case 2:
+        _give_class_weapon(w, pid, .Pistol, cw.Affix{type = .BonusFireRate, value = 0.30})
+    }
+
+    at    := CLASS_STARTER_ABILITIES[ci]
+    ab_id := create_ability_item(w, at)
+    if cw.world_is_valid(w, ab_id) && cw.world_has_component(w, pid, .Inventory) {
+        inv := cw.world_get_inventory(w, pid)
+        inv.equipped[int(cw.EquipSlot.Ability1)] = ab_id
+    }
+}
+
+@(private = "file")
+_give_class_weapon :: proc(w: ^cw.World, pid: int, archetype: cw.WeaponArchetype, extra_affix: cw.Affix) {
+    if !cw.world_has_component(w, pid, .Inventory) { return }
+
+    inv     := cw.world_get_inventory(w, pid)
+    old_wep := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
+    if cw.world_is_valid(w, old_wep) {
+        cw.world_destroy_entity(w, old_wep)
+        inv = cw.world_get_inventory(w, pid)
+        inv.equipped[int(cw.EquipSlot.WeaponPrimary)] = cw.INVALID_ENTITY
+    }
+
+    for &d in g_loot_table {
+        if d.slot != .WeaponPrimary        { continue }
+        if d.weapon_archetype != archetype { continue }
+        if .Normal not_in d.rarities       { continue }
+
+        wep_id := cw.world_create_entity(w)
+        if !cw.world_is_valid(w, wep_id) { break }
+
+        item_comp                 := cw.item_empty()
+        item_comp.slot             = .WeaponPrimary
+        item_comp.rarity           = .Normal
+        item_comp.grid_w           = d.grid_w
+        item_comp.grid_h           = d.grid_h
+        item_comp.req_str          = d.req_str
+        item_comp.req_dex          = d.req_dex
+        item_comp.req_sci          = d.req_sci
+        item_comp.is_two_handed    = d.is_two_handed
+        item_comp.is_melee         = d.is_melee
+        item_comp.weapon_archetype = d.weapon_archetype
+        item_comp.base_damage      = d.base_damage
+        item_comp.base_fire_rate   = d.base_fire_rate
+        item_comp.base_ammo_max    = d.base_ammo_max
+        item_comp.base_reload_time = d.base_reload_time
+        item_comp.base_proj_speed  = d.base_proj_speed
+        item_comp.base_armor       = d.base_armor
+        item_comp.base_shield      = d.base_shield
+        item_comp.affix_count      = d.base_affix_count
+        for i in 0..<int(d.base_affix_count) { item_comp.affixes[i] = d.base_affixes[i] }
+
+        if extra_affix.type != .None {
+            idx := int(item_comp.affix_count)
+            if idx < cw.MAX_AFFIXES {
+                item_comp.affixes[idx]  = extra_affix
+                item_comp.affix_count  += 1
+            }
+        }
+
+        roll_affixes(&item_comp)
+        cw.world_set_item(w, wep_id, item_comp)
+
+        rc: cw.RenderConfigComp
+        cw.render_config_set_name(&rc, d.name)
+        cw.render_config_set_icon(&rc, d.icon)
+        cw.render_config_set_desc(&rc, d.desc)
+        cw.world_set_render_config(w, wep_id, rc)
+
+        inv = cw.world_get_inventory(w, pid)
+        inv.equipped[int(cw.EquipSlot.WeaponPrimary)] = wep_id
+        break
+    }
+}
+
 loot_seed :: proc(tick: u64, entity_id: int) -> u64 {
     h := (u64(entity_id) + 1) * 6364136223846793005 ~ (tick * 2685821657736338717)
     h ~= h >> 33

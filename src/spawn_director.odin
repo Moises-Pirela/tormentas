@@ -32,12 +32,7 @@ DirectorEnemy :: struct {
 }
 
 DIRECTOR_ROSTER := [?]DirectorEnemy{
-    { "enemy_melee",   1 },
-    { "enemy_spider",  1.5 },
-    { "enemy_hunter",  2 },
-    { "enemy_brute",   3 },
-    { "enemy_ranged",  3 },
-    { "enemy_sniper",  4 },
+    { "enemy_spider", 1 },
 }
 
 
@@ -48,13 +43,8 @@ ENEMY_MUTATION_POOL :: [?]cw.MutationType{
     .BlackLung,
 }
 
-
-ENEMY_MUTATION_CHANCE :: [MAX_DIRECTOR_LEVELS + 1]f32{
-    0 = 0.00,
-    1 = 0.00,
-    2 = 0.10,
-    3 = 0.22,
-}
+TIER_RARE_CHANCE      :: f32(0.22)
+TIER_LEGENDARY_CHANCE :: f32(0.05)
 
 SpawnDirector :: struct {
     budget:       f32,
@@ -88,37 +78,47 @@ spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
 @(private = "file")
-_director_mutate_enemy :: proc(w: ^cw.World, id: int) {
-    if id == cw.INVALID_ENTITY { return }
-
-    idx     := clamp(g_current_raid_level, 0, MAX_DIRECTOR_LEVELS)
-    chances := ENEMY_MUTATION_CHANCE
-    chance  := chances[idx]
-    if chance <= 0 { return }
+_director_apply_tier :: proc(w: ^cw.World, id: int) {
+    if id == cw.INVALID_ENTITY                          { return }
+    if !cw.world_has_component(w, id, .AIAgent)         { return }
 
     rng_state := rand.create(u64(w.tick) ~ (u64(id) * 0x9e3779b97f4a7c15))
     context.random_generator = rand.default_random_generator(&rng_state)
 
-    if rand.float32() > chance { return }
+    r    := rand.float32()
+    tier := cw.EnemyTier.Normal
+    mut_count := 0
 
-    pool := ENEMY_MUTATION_POOL
-    mt   := pool[rand.int_max(len(pool))]
-
-
-    if cw.world_has_component(w, id, .MutationContainer) {
-        mc := cw.world_get_mutation(w, id)
-        for i in 0..<mc.entity_count {
-            meid := mc.entities[i]
-            if !cw.world_is_valid(w, meid)             { continue }
-            if !cw.world_has_component(w, meid, .Mut)  { continue }
-            if cw.world_get_mut(w, meid).type_id == mt { return }
-        }
+    if r < TIER_LEGENDARY_CHANCE {
+        tier      = .Legendary
+        mut_count = rand.int_max(3) + 3
+    } else if r < TIER_LEGENDARY_CHANCE + TIER_RARE_CHANCE {
+        tier      = .Rare
+        mut_count = rand.int_max(2) + 1
     }
+
+    cw.world_get_ai(w, id).tier = tier
+
+    if mut_count == 0 { return }
 
     if !cw.world_has_component(w, id, .MutationContainer) {
         cw.world_set_mutation(w, id, cw.mutation_container_empty())
     }
-    mutation_restore_direct(w, id, mt)
+
+    pool    := ENEMY_MUTATION_POOL
+    picked  : [len(ENEMY_MUTATION_POOL)]cw.MutationType
+    n_picked := 0
+    attempts := 0
+    for n_picked < mut_count && attempts < 20 {
+        attempts += 1
+        mt := pool[rand.int_max(len(pool))]
+        dup := false
+        for i in 0..<n_picked { if picked[i] == mt { dup = true; break } }
+        if dup { continue }
+        picked[n_picked] = mt
+        n_picked += 1
+        mutation_restore_direct(w, id, mt)
+    }
 }
 
 @(private = "file")
@@ -261,7 +261,7 @@ _director_spawn_boss :: proc(w: ^cw.World) {
 
     cw.world_get_transform(w, id).position = {wx, wy, 0}
     g_boss_id = id
-    _director_mutate_enemy(w, id)
+    _director_apply_tier(w, id)
 
     camera_shake(1.0)
     play_sfx("levelup")
@@ -311,29 +311,10 @@ _tile_open_3x3 :: proc(tx, ty: int) -> bool {
 
 @(private = "file")
 _director_spawn_enemy :: proc(w: ^cw.World, name: string, wx, wy: f32) -> int {
-    id  := cw.INVALID_ENTITY
-    wid := cw.INVALID_ENTITY
-
-    switch name {
-    case "enemy_ranged":
-        wid = spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_shotgun"))
-        id  = spawn_from_def(w, find_entity_def(g_entity_defs, name))
-        if id != cw.INVALID_ENTITY && wid != cw.INVALID_ENTITY {
-            cw.world_set_equipment(w, id, cw.EquipmentComp{ weapon_entity_id = wid })
-        }
-    case "enemy_sniper":
-        wid = spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_rifle"))
-        id  = spawn_from_def(w, find_entity_def(g_entity_defs, name))
-        if id != cw.INVALID_ENTITY && wid != cw.INVALID_ENTITY {
-            cw.world_set_equipment(w, id, cw.EquipmentComp{ weapon_entity_id = wid })
-        }
-    case:
-        id = spawn_from_def(w, find_entity_def(g_entity_defs, name))
-    }
-
+    id := spawn_from_def(w, find_entity_def(g_entity_defs, name))
     if id != cw.INVALID_ENTITY && cw.world_has_component(w, id, .Transform) {
         cw.world_get_transform(w, id).position = {wx, wy, 0}
     }
-    _director_mutate_enemy(w, id)
+    _director_apply_tier(w, id)
     return id
 }

@@ -624,11 +624,12 @@ SelfDestructComp :: struct {
 
 AIType :: enum u8 { Melee, Ranged }
 
+EnemyTier :: enum u8 { Normal, Rare, Legendary }
+
 AIAgentComp :: struct {
     state:        u8,
     target_id:    int,
     cooldown:     f32,
-
 
     aggro_range:  f32,
     attack_range: f32,
@@ -639,10 +640,11 @@ AIAgentComp :: struct {
     pellet_count: int,
     spread_angle: f32,
 
-
     suspicion:      f32,
     last_known_pos: [3]f32,
     search_timer:   f32,
+
+    tier: EnemyTier,
 }
 
 MeleeArcComp :: struct {
@@ -971,19 +973,20 @@ RenderLayer :: enum u8 {
 }
 
 RenderConfigComp :: struct {
-    display_name: [RENDER_NAME_CAP]u8,
-    name_len:     u8,
-    icon_name:    [RENDER_ICON_CAP]u8,
-    icon_len:     u8,
-    sprite_name:  [RENDER_SPRITE_CAP]u8,
-    sprite_len:   u8,
-    sprite_scale: f32,
-    world_size:   f32,
-    render_layer: RenderLayer,
-    show_hp_bar:  bool,
-    show_dir_tip: bool,
-    desc:         [RENDER_DESC_CAP]u8,
-    desc_len:     u8,
+    display_name:    [RENDER_NAME_CAP]u8,
+    name_len:        u8,
+    icon_name:       [RENDER_ICON_CAP]u8,
+    icon_len:        u8,
+    sprite_name:     [RENDER_SPRITE_CAP]u8,
+    sprite_len:      u8,
+    sprite_scale:    f32,
+    world_size:      f32,
+    render_layer:    RenderLayer,
+    show_hp_bar:     bool,
+    show_dir_tip:    bool,
+    top_down_sprite: bool,
+    desc:            [RENDER_DESC_CAP]u8,
+    desc_len:        u8,
 }
 
 render_config_set_name :: proc(c: ^RenderConfigComp, name: string) {

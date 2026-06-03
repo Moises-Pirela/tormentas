@@ -218,6 +218,34 @@ LocKey :: enum {
     REC_03_TITLE,
     REC_03_TRANSCRIPT,
 
+    CLASS_SELECT_TITLE,
+    CLASS_SELECT_BEGIN,
+    CLASS_STARTER_ABILITY,
+    CLASS_STARTER_WEAPON,
+    CLASS_STAT_STR,
+    CLASS_STAT_DEX,
+    CLASS_STAT_SCI,
+
+    CLASS_NURSE_NAME,
+    CLASS_PR1S_NAME,
+    CLASS_SHERIFF_NAME,
+    CLASS_SRBRAIN_NAME,
+
+    CLASS_NURSE_TITLE,
+    CLASS_PR1S_TITLE,
+    CLASS_SHERIFF_TITLE,
+    CLASS_SRBRAIN_TITLE,
+
+    CLASS_NURSE_DESC,
+    CLASS_PR1S_DESC,
+    CLASS_SHERIFF_DESC,
+    CLASS_SRBRAIN_DESC,
+
+    CLASS_NURSE_WEAPON,
+    CLASS_PR1S_WEAPON,
+    CLASS_SHERIFF_WEAPON,
+    CLASS_SRBRAIN_WEAPON,
+
     _LOC_COUNT,
 }
 
@@ -529,6 +557,34 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "REC_02_TRANSCRIPT":         return .REC_02_TRANSCRIPT, true
     case "REC_03_TITLE":              return .REC_03_TITLE, true
     case "REC_03_TRANSCRIPT":         return .REC_03_TRANSCRIPT, true
+
+    case "CLASS_SELECT_TITLE":        return .CLASS_SELECT_TITLE, true
+    case "CLASS_SELECT_BEGIN":        return .CLASS_SELECT_BEGIN, true
+    case "CLASS_STARTER_ABILITY":     return .CLASS_STARTER_ABILITY, true
+    case "CLASS_STARTER_WEAPON":      return .CLASS_STARTER_WEAPON, true
+    case "CLASS_STAT_STR":            return .CLASS_STAT_STR, true
+    case "CLASS_STAT_DEX":            return .CLASS_STAT_DEX, true
+    case "CLASS_STAT_SCI":            return .CLASS_STAT_SCI, true
+
+    case "CLASS_NURSE_NAME":          return .CLASS_NURSE_NAME, true
+    case "CLASS_PR1S_NAME":           return .CLASS_PR1S_NAME, true
+    case "CLASS_SHERIFF_NAME":        return .CLASS_SHERIFF_NAME, true
+    case "CLASS_SRBRAIN_NAME":        return .CLASS_SRBRAIN_NAME, true
+
+    case "CLASS_NURSE_TITLE":         return .CLASS_NURSE_TITLE, true
+    case "CLASS_PR1S_TITLE":          return .CLASS_PR1S_TITLE, true
+    case "CLASS_SHERIFF_TITLE":       return .CLASS_SHERIFF_TITLE, true
+    case "CLASS_SRBRAIN_TITLE":       return .CLASS_SRBRAIN_TITLE, true
+
+    case "CLASS_NURSE_DESC":          return .CLASS_NURSE_DESC, true
+    case "CLASS_PR1S_DESC":           return .CLASS_PR1S_DESC, true
+    case "CLASS_SHERIFF_DESC":        return .CLASS_SHERIFF_DESC, true
+    case "CLASS_SRBRAIN_DESC":        return .CLASS_SRBRAIN_DESC, true
+
+    case "CLASS_NURSE_WEAPON":        return .CLASS_NURSE_WEAPON, true
+    case "CLASS_PR1S_WEAPON":         return .CLASS_PR1S_WEAPON, true
+    case "CLASS_SHERIFF_WEAPON":      return .CLASS_SHERIFF_WEAPON, true
+    case "CLASS_SRBRAIN_WEAPON":      return .CLASS_SRBRAIN_WEAPON, true
     }
     return {}, false
 }

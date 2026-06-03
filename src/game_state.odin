@@ -86,6 +86,8 @@ g_should_exit: bool
 
 g_loot_filter_rarity: cw.ItemRarity = .Normal
 
+g_selected_class_idx: int = 0
+
 
 FADE_SPEED :: f32(2.5)
 

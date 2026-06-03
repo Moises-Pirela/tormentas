@@ -832,28 +832,7 @@ level_apply :: proc(w: ^cw.World) {
             return id
         }
 
-        switch sp.enemy_type {
-        case .Melee:
-            spawn_enemy(w, "enemy_melee",  wx, wy)
-        case .Brute:
-            spawn_enemy(w, "enemy_brute",  wx, wy)
-        case .Hunter:
-            spawn_enemy(w, "enemy_hunter", wx, wy)
-        case .Ranged:
-            wid := spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_shotgun"))
-            id  := spawn_enemy(w, "enemy_ranged", wx, wy)
-            if id != cw.INVALID_ENTITY && wid != cw.INVALID_ENTITY {
-                cw.world_set_equipment(w, id, cw.EquipmentComp{ weapon_entity_id = wid })
-            }
-        case .Sniper:
-            wid := spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_rifle"))
-            id  := spawn_enemy(w, "enemy_sniper", wx, wy)
-            if id != cw.INVALID_ENTITY && wid != cw.INVALID_ENTITY {
-                cw.world_set_equipment(w, id, cw.EquipmentComp{ weapon_entity_id = wid })
-            }
-        case .Spider:
-            spawn_enemy(w, "enemy_spider", wx, wy)
-        }
+        spawn_enemy(w, "enemy_spider", wx, wy)
     }
 
     for lt in g_level_data.lights {
@@ -1090,6 +1069,8 @@ spawn_players :: proc(w: ^cw.World) {
 
 level_clear :: proc(w: ^cw.World) {
     g_pending_level_switch = 0
+
+    minimap_clear_explored()
 
     _clear_all_shop_stock(w)
 

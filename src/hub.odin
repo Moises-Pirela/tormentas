@@ -27,7 +27,7 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     hub_apply(w)
     spawn_players(w)
     if !load_player(w, w.player_id) {
-        give_starter_items(w, w.player_id)
+        give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
 
     if cw.world_has_component(w, w.player_id, .Health) {
@@ -67,7 +67,7 @@ enter_raid :: proc(w: ^cw.World, n: int) {
 
     spawn_players(w)
     if !load_player(w, w.player_id) {
-        give_starter_items(w, w.player_id)
+        give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
 
     if cw.world_has_component(w, w.player_id, .Health) {

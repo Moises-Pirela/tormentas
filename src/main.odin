@@ -110,7 +110,7 @@ init_game :: proc() {
     spawn_players(w)
     g_stash = stash_make_empty()
     if !load_player(w, w.player_id) {
-        give_starter_items(w, w.player_id)
+        give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
 
 
@@ -185,6 +185,8 @@ update_playing :: proc(dt: f32) {
 
     if !g_sim_alive { return }
     w := &g_sim.world
+
+    minimap_update(w)
 
     if cw.world_is_valid(w, w.player_id) &&
        cw.world_has_component(w, w.player_id, .Transform) {
@@ -409,6 +411,7 @@ draw_playing :: proc() {
 
         }
 
+        draw_minimap(w)
         draw_levelup_flash()
         draw_loot_filter_hud()
     }

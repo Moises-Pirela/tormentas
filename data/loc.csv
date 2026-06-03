@@ -203,3 +203,31 @@ REC_02_TITLE,Cylinder No. 2 — Commander Reyes,Cilindro Núm. 2 — Comandante 
 REC_02_TRANSCRIPT,"[Crackle] All personnel are ordered to consolidate on the upper floor. The barricade at the east corridor has held for two days. Rations are sufficient for six. [Pause] There are four of us now. Do not come looking.","[Crepitar] Todo el personal debe consolidarse en el piso superior. La barricada del corredor este ha resistido dos días. Las raciones son suficientes para seis. [Pausa] Ahora somos cuatro. No vengan a buscarnos.","[Crepitar] Todo o pessoal deve se consolidar no andar superior. A barricada no corredor leste resistiu por dois dias. As rações são suficientes para seis. [Pausa] Agora somos quatro. Não venham nos procurar."
 REC_03_TITLE,Cylinder No. 3 — Unknown Voice,Cilindro Núm. 3 — Voz Desconocida,Cilindro Núm. 3 — Voz Desconhecida
 REC_03_TRANSCRIPT,"[Heavy breathing, distant knocking] I found the machine. I know what it does. I know why they built it. I am going to destroy it. If you are hearing this — [sharp noise, silence]","[Respiración pesada, golpes lejanos] Encontré la máquina. Sé lo que hace. Sé por qué la construyeron. Voy a destruirla. Si estás escuchando esto — [ruido agudo, silencio]","[Respiração pesada, batidas distantes] Encontrei a máquina. Sei o que ela faz. Sei por que a construíram. Vou destruí-la. Se você está ouvindo isso — [barulho agudo, silêncio]"
+# ── Class Select ───────────────────────────────────────────────────────────────
+CLASS_SELECT_TITLE,Choose Your Class,Elige tu Clase,Escolha sua Classe
+CLASS_SELECT_BEGIN,BEGIN,COMENZAR,COMEÇAR
+CLASS_STARTER_ABILITY,Starter Ability,Habilidad Inicial,Habilidade Inicial
+CLASS_STARTER_WEAPON,Starter Weapon,Arma Inicial,Arma Inicial
+CLASS_STAT_STR,STR,FUE,FOR
+CLASS_STAT_DEX,DEX,DES,DES
+CLASS_STAT_SCI,SCI,CIE,CIÊ
+# ── Class names ────────────────────────────────────────────────────────────────
+CLASS_NURSE_NAME,Nurse,Enfermera,Enfermeira
+CLASS_PR1S_NAME,Pr1s,Pr1s,Pr1s
+CLASS_SHERIFF_NAME,Sheriff,Sheriff,Sheriff
+CLASS_SRBRAIN_NAME,Sr. Brain,Sr. Cerebro,Sr. Cérebro
+# ── Class titles ───────────────────────────────────────────────────────────────
+CLASS_NURSE_TITLE,Field Medic,Médica de Campo,Médica de Campo
+CLASS_PR1S_TITLE,The Brawler,La Combatiente,A Lutadora
+CLASS_SHERIFF_TITLE,The Gunslinger,El Pistolero,O Pistoleiro
+CLASS_SRBRAIN_TITLE,The Alchemist,El Alquimista,O Alquimista
+# ── Class descriptions ─────────────────────────────────────────────────────────
+CLASS_NURSE_DESC,"Alchemy, improvised medicine, and a personal disregard for her own safety.","Alquimia, medicina improvisada y una indiferencia hacia su propia seguridad.","Alquimia, medicina improvisada e total descaso pela própria segurança."
+CLASS_PR1S_DESC,"Pain is a language. She speaks it fluently, and loudly.","El dolor es un lenguaje. Ella lo habla con fluidez, y en voz alta.","A dor é uma linguagem. Ela a fala fluentemente, e em voz alta."
+CLASS_SHERIFF_DESC,"Fastest draw in the condemned lands. Second fastest is buried outside town.","El pistolero más rápido de las tierras condenadas. El segundo está enterrado a las afueras.","O saque mais rápido das terras condenadas. O segundo mais rápido está enterrado nos arredores."
+CLASS_SRBRAIN_DESC,"Every problem has a chemical solution. Some just require more chemicals.","Todo problema tiene una solución química. Algunos solo requieren más químicos.","Todo problema tem uma solução química. Alguns apenas requerem mais químicos."
+# ── Class weapons ──────────────────────────────────────────────────────────────
+CLASS_NURSE_WEAPON,Pistol,Pistola,Pistola
+CLASS_PR1S_WEAPON,Shotgun,Escopeta,Espingarda
+CLASS_SHERIFF_WEAPON,Pistol (Fast Draw),Pistola (Saque Rápido),Pistola (Saque Rápido)
+CLASS_SRBRAIN_WEAPON,Pistol,Pistola,Pistola

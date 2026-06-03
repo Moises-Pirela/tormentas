@@ -262,14 +262,14 @@ chars_save_all :: proc() {
     os.write_entire_file(CHAR_SAVE_PATH, data[:])
 }
 
-char_slot_create :: proc(idx: int, name: []u8) {
+char_slot_create :: proc(idx: int, name: []u8, save_to_disk: bool = true) {
     if idx < 0 || idx >= MAX_CHAR_SLOTS { return }
     s := &g_char_save.slots[idx]
     mem.zero(s, size_of(CharSlot))
     s.exists = 1
     n := min(len(name), PLAYER_NAME_MAX)
     copy(s.name[:], name[:n])
-    chars_save_all()
+    if save_to_disk { chars_save_all() }
 }
 
 char_slot_delete :: proc(idx: int) {
@@ -307,6 +307,17 @@ _migrate_player_v4 :: proc(old: ^PlayerSaveFileV4) -> PlayerSaveFile {
     copy(save.mut_types[:], old.mut_types[:])
     copy(save.items[:], old.items[:])
     return save
+}
+
+// Returns the class index stored for the given slot (0-3).
+// Falls back to g_selected_class_idx if nothing was persisted yet
+// (e.g. old saves or slots created before the class select was added).
+class_idx_for_slot :: proc(slot_idx: int) -> int {
+    if slot_idx >= 0 && slot_idx < MAX_CHAR_SLOTS {
+        b := g_char_save.slots[slot_idx]._reserved[0]
+        if b > 0 { return int(b) - 1 }
+    }
+    return g_selected_class_idx
 }
 
 strip_player_carried :: proc(w: ^cw.World, pid: int) {

@@ -152,12 +152,7 @@ ed_build_palette :: proc() {
 
     entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, cat: EditorCategory, ok: bool) {
         switch name {
-        case "enemy_spider":   return .SpawnSpider, "Spider", {20, 60, 20, 255}, .Entities,    true
-        case "enemy_melee":    return .SpawnMelee,  "Melee",  {80, 28, 20, 255}, .Entities,    true
-        case "enemy_brute":    return .SpawnBrute,  "Brute",  {60, 12, 12, 255}, .Entities,    true
-        case "enemy_hunter":   return .SpawnHunter, "Hunter", {48, 24, 80, 255}, .Entities,    true
-        case "enemy_ranged":   return .SpawnRanged, "Ranged", {16, 60, 60, 255}, .Entities,    true
-        case "enemy_sniper":   return .SpawnSniper, "Sniper", {16, 28, 80, 255}, .Entities,    true
+        case "enemy_spider": return .SpawnSpider, "Spider", {20, 60, 20, 255}, .Entities, true
         case "env_door":       return .Door,        "Door",   {52, 34, 16, 255}, .Interactive, true
         case "env_switch":     return .SwitchLever, "Lever",  {36, 60, 36, 255}, .Interactive, true
         case "env_chest":      return .Chest,       "Chest",  {70, 56, 14, 255}, .Interactive, true

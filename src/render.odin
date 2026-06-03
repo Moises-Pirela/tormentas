@@ -641,7 +641,11 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
 
     if cw.world_has_component(w, id, .RenderConfig) {
         rc := cw.world_get_render_config(w, id)
-        if rc.sprite_len > 0 {
+        // Player sprite is always driven by g_player_stem (see get_entity_sprite_stem).
+        // Skip the stored RenderConfig key for player entities so that load_player
+        // or give_class_starter_items setting g_player_stem takes effect immediately
+        // without needing a second render_config_set_sprite call.
+        if rc.sprite_len > 0 && !is_player_entity(w, id) {
             info.sprite_key = cw.render_config_sprite_cstr(rc)
         }
         if rc.world_size > 0 {
@@ -672,7 +676,8 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
 
     if info.sprite_key == nil {
         if is_player_entity(w, id) {
-            info.sprite_key = cstring("player_sheriff")
+            // g_player_stem is a string literal (from PLAYER_STEMS) — null-terminated, static lifetime.
+            info.sprite_key = cstring(raw_data(g_player_stem))
         } else if cw.world_has_component(w, id, .NPC) {
             npc := cw.world_get_npc(w, id)
             switch npc.npc_type {
@@ -1020,8 +1025,11 @@ draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     tint := rl.WHITE
     if is_player_entity(w, id) && cw.world_has_component(w, id, .DodgeState) && cw.world_get_dodge(w, id).active {
         tint = rl.Color{ 180, 220, 255, 255 }
-    } else if cw.world_has_component(w, id, .AIAgent) && cw.world_get_ai(w, id).ai_type == .Ranged {
-        tint = color_mix(rl.Color{ 230, 238, 255, 255 }, rl.Color{ 255, 245, 235, 255 }, 0.18)
+    } else if cw.world_has_component(w, id, .AIAgent) {
+        #partial switch cw.world_get_ai(w, id).tier {
+        case .Rare:      tint = rl.Color{ 160, 200, 255, 255 }
+        case .Legendary: tint = rl.Color{ 255, 215,  50, 255 }
+        }
     } else if cw.world_has_component(w, id, .NPC) && cw.world_get_npc(w, id).npc_type == .MutationWorkbench {
         tint = rl.Color{ 250, 242, 255, 255 }
     }
@@ -1038,11 +1046,14 @@ draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     }
 
 
+    top_down := is_player_entity(w, id) ||
+        (cw.world_has_component(w, id, .RenderConfig) &&
+         cw.world_get_render_config(w, id).top_down_sprite)
+
     sprite_iso_h := vis.world_size * ISO_SPRITE_Y * anchor[1]
     if entry, ok := get_or_load_entity_sprite(vis.sprite_key); ok {
         src := anim_source_rect(w, id, entry.src, string(vis.sprite_key)) if !entry.from_rt else entry.src
-        if is_player_entity(w, id) {
-
+        if top_down {
             if src.width > 0 { sprite_iso_h = vis.world_size * src.height / src.width * anchor[1] }
             draw_player_sprite(entry.tex, src, pos, vis.world_size, tint, anchor)
         } else {
