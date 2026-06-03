@@ -4,12 +4,11 @@ import "core:encoding/json"
 import "core:os"
 import cw "clockwork"
 
-// ── Lore database ────────────────────────────────────────────────────────────
 
 MAX_LORE_PAGES    :: 128
 MAX_RECORDINGS    :: 64
 LORE_BODY_LEN     :: 1024
-RECORDING_LEN     :: 256   // transcript / sfx key
+RECORDING_LEN     :: 256
 
 LorePage :: struct {
     id:      u8,
@@ -17,9 +16,7 @@ LorePage :: struct {
     body:    [LORE_BODY_LEN]u8,
 }
 
-// A recording is a wax-cylinder phonograph entry, 1893-era audio log.
-// `sfx_key` is the sound asset name (e.g. "phonograph_01"); `transcript` is
-// the subtitle text shown while playing.
+
 Recording :: struct {
     id:         u8,
     title:      [80]u8,
@@ -33,7 +30,6 @@ g_lore_count:   int
 g_recording_db: [MAX_RECORDINGS]Recording
 g_recording_count: int
 
-// ── Loading ───────────────────────────────────────────────────────────────────
 
 @(private = "file")
 lore_jf32 :: proc(v: json.Value) -> f32 {
@@ -137,7 +133,6 @@ lore_load_recordings :: proc(path: string) {
     }
 }
 
-// ── Lookup ────────────────────────────────────────────────────────────────────
 
 lore_get_page :: proc(id: u8) -> (^LorePage, bool) {
     for i in 0..<g_lore_count {
@@ -153,8 +148,6 @@ lore_get_recording :: proc(id: u8) -> (^Recording, bool) {
     return nil, false
 }
 
-// ── Phonograph tick ───────────────────────────────────────────────────────────
-// Called by env_interaction_system each Update when a phonograph is playing.
 
 phonograph_tick :: proc(w: ^cw.World, entity_id: int, dt: f32) {
     if !cw.world_has_component(w, entity_id, .Phonograph) { return }
@@ -165,6 +158,6 @@ phonograph_tick :: proc(w: ^cw.World, entity_id: int, dt: f32) {
     if ph.play_timer <= 0 {
         ph.is_playing  = false
         ph.play_timer  = 0
-        // UI panel clears itself by watching ph.is_playing
+
     }
 }

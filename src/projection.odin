@@ -34,14 +34,7 @@ camera_set_target_world :: proc(wx, wy: f32) {
     g_camera.target = iso
 }
 
-// screen_dir_to_world_dir converts a normalised screen-space direction into the
-// world-space velocity vector that produces equal visual speed on screen.
-//
-// The iso transform compresses Y by 0.5, so a normalised world velocity that
-// points screen-right travels √2 more screen pixels per frame than one that
-// points screen-down.  Dropping the re-normalisation step lets the inverse-iso
-// mapping preserve screen-speed: every screen-space unit direction produces the
-// same number of screen pixels per unit of MOVE_SPEED, regardless of angle.
+
 screen_dir_to_world_dir :: proc(dir: [2]f32) -> [2]f32 {
     wx := dir[1] + dir[0] * 0.5
     wy := dir[1] - dir[0] * 0.5
@@ -63,8 +56,10 @@ iso_tile_bounds :: proc(tx, ty: int) -> (center: rl.Vector2, top: rl.Vector2, ri
     wx := f32(tx * TILE_SIZE)
     wy := f32(ty * TILE_SIZE)
     center = world_to_iso_xy(wx + f32(TILE_SIZE) * 0.5, wy + f32(TILE_SIZE) * 0.5)
-    half_w := ISO_TILE_W * 0.5
-    half_h := ISO_TILE_H * 0.5
+
+
+    half_w := ISO_TILE_W
+    half_h := ISO_TILE_H
     top    = { center.x,          center.y - half_h }
     right  = { center.x + half_w, center.y          }
     bottom = { center.x,          center.y + half_h }

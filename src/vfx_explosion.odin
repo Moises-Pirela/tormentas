@@ -3,22 +3,13 @@ package main
 import rl "vendor:raylib"
 import    "core:math"
 
-// ── Procedural explosion visual effect ────────────────────────────────────────
-//
-// Usage:
-//   push_explosion(wx, wy, radius, r, g, b)  — spawn; call from damage_system
-//   tick_explosions(dt)                       — advance timers (real-time, not sim)
-//   draw_explosions()                         — render; call inside BeginMode2D
-//
-// Rendering reuses draw_world_circle/lines/line helpers from render.odin,
-// which apply the iso projection automatically.
 
 MAX_EXPLOSIONS     :: 16
 VFX_EXPLOSION_LIFE :: f32(0.55)
 
 @(private="file")
 ExplosionVfx :: struct {
-    pos:     rl.Vector2,   // world-space XY
+    pos:     rl.Vector2,
     radius:  f32,
     timer:   f32,
     r, g, b: u8,
@@ -33,7 +24,7 @@ push_explosion :: proc(wx, wy, radius: f32, r, g, b: u8) {
         e = ExplosionVfx{ pos = {wx, wy}, radius = radius, timer = VFX_EXPLOSION_LIFE, r = r, g = g, b = b }
         return
     }
-    // All slots busy — overwrite the first (oldest) entry.
+
     g_explosions[0] = ExplosionVfx{ pos = {wx, wy}, radius = radius, timer = VFX_EXPLOSION_LIFE, r = r, g = g, b = b }
 }
 
@@ -43,16 +34,16 @@ tick_explosions :: proc(dt: f32) {
     }
 }
 
-// draw_explosions must be called inside BeginMode2D so the iso helpers work.
+
 draw_explosions :: proc() {
     for &e in g_explosions {
         if e.timer <= 0 { continue }
 
-        t := 1.0 - e.timer / VFX_EXPLOSION_LIFE   // 0 = just born,  1 = dead
+        t := 1.0 - e.timer / VFX_EXPLOSION_LIFE
         p := e.pos
         r := e.radius
 
-        // ── 1. Central flash ── bright white-orange, fades fast (first 35% of life)
+
         if t < 0.35 {
             ft      := t / 0.35
             inv     := 1.0 - ft
@@ -61,7 +52,7 @@ draw_explosions :: proc() {
             draw_world_circle(p, r * 0.18 * ft,       rl.Color{255, 255, 210, u8(clamp(f32(flash_a) * 1.15, 0, 255))})
         }
 
-        // ── 2. Primary expanding ring ── travels to max radius with sqrt curve
+
         rr    := r * math.sqrt(t)
         inv_t := 1.0 - t
         ring_a := u8(clamp(210.0 * inv_t * inv_t, 0, 255))
@@ -70,7 +61,7 @@ draw_explosions :: proc() {
             draw_world_circle_lines(p, rr - 5,   rl.Color{e.r, e.g, e.b, ring_a / 3})
         }
 
-        // ── 3. Inner secondary ring ── slower, warmer colour, active first 65%
+
         if t < 0.65 {
             it      := t / 0.65
             inner_r := r * 0.52 * math.sqrt(it)
@@ -78,7 +69,7 @@ draw_explosions :: proc() {
             draw_world_circle_lines(p, inner_r, rl.Color{255, 200, 80, inner_a})
         }
 
-        // ── 4. Radial sparks ── 8 short lines flying outward
+
         NSPARKS :: 8
         for i in 0..<NSPARKS {
             angle  := f32(i) * (math.PI * 2.0 / NSPARKS)
@@ -92,7 +83,7 @@ draw_explosions :: proc() {
             draw_world_line(p0, p1, 2.5, rl.Color{255, 200, 80, spark_a})
         }
 
-        // ── 5. Ground scorch ── dark fill that peaks around t=0.4 then fades
+
         scorch_a := u8(clamp(80.0 * math.sqrt(t) * (1.0 - t * 0.8), 0, 255))
         draw_world_circle(p, r * 0.38, rl.Color{20, 10, 5, scorch_a})
     }

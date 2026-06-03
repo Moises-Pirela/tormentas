@@ -8,11 +8,11 @@ import cw       "clockwork"
 
 CONSOLE_MAX_LINES  :: 48
 CONSOLE_LINE_CAP   :: 320
-CONSOLE_SLIDE_SPD  :: f32(12.0)   // panel-heights per second
-CONSOLE_SCROLL_AMT :: 3           // lines per wheel tick
+CONSOLE_SLIDE_SPD  :: f32(12.0)
+CONSOLE_SCROLL_AMT :: 3
 
-g_console_open: bool   // true = input captured, game input blocked
-g_god_mode:     bool   // when true, player HP cannot drop below 1
+g_console_open: bool
+g_god_mode:     bool
 
 @(private = "file")
 ConsoleLine :: struct {
@@ -26,8 +26,8 @@ ConsoleLine :: struct {
 @(private = "file") g_console_input:    [512]u8
 @(private = "file") g_console_in_len:   int
 @(private = "file") g_console_bs_timer: f32
-@(private = "file") g_console_slide:    f32   // 0 = fully closed, 1 = fully open
-@(private = "file") g_console_scroll:   int   // 0 = newest at bottom, +n = scroll back
+@(private = "file") g_console_slide:    f32
+@(private = "file") g_console_scroll:   int
 
 console_log :: proc(msg: string) {
     idx := g_console_cursor % CONSOLE_MAX_LINES
@@ -46,7 +46,7 @@ console_logf :: proc(format: string, args: ..any) {
     console_log(s)
 }
 
-// ── console_geo: shared geometry so update + draw agree ───────────────────
+
 @(private = "file")
 ConsoleGeo :: struct {
     panel_h, y_off: f32,
@@ -59,7 +59,7 @@ ConsoleGeo :: struct {
 console_geo :: proc() -> ConsoleGeo {
     sh      := f32(rl.GetScreenHeight())
     panel_h := sh * 0.46
-    y_off   := panel_h * (g_console_slide - 1)   // 0 when open, -panel_h when closed
+    y_off   := panel_h * (g_console_slide - 1)
     fs      := uis(12)
     pad     := uis(8)
     line_h  := fs * 1.4
@@ -70,20 +70,19 @@ console_geo :: proc() -> ConsoleGeo {
     return { panel_h, y_off, fs, line_h, pad, input_y, log_bot_y, visible }
 }
 
-// ── update ─────────────────────────────────────────────────────────────────
 
 update_console :: proc(dt: f32) {
-    // Toggle on grave
+
     if rl.IsKeyPressed(.GRAVE) {
         g_console_open = !g_console_open
         if g_console_open {
             g_console_in_len   = 0
             g_console_bs_timer = 0
-            g_console_scroll   = 0   // jump to newest on open
+            g_console_scroll   = 0
         }
     }
 
-    // Animate slide toward target
+
     target := f32(1) if g_console_open else f32(0)
     if g_console_slide < target {
         g_console_slide = min(g_console_slide + dt * CONSOLE_SLIDE_SPD, f32(1))
@@ -93,15 +92,15 @@ update_console :: proc(dt: f32) {
 
     if !g_console_open { return }
 
-    // Scroll wheel
+
     wh := rl.GetMouseWheelMove()
     if wh != 0 {
         g_console_scroll -= int(wh) * CONSOLE_SCROLL_AMT
         if g_console_scroll < 0 { g_console_scroll = 0 }
-        // upper clamp applied in draw where visible count is known
+
     }
 
-    // Character input
+
     for {
         ch := rl.GetCharPressed()
         if ch == 0 { break }
@@ -112,7 +111,7 @@ update_console :: proc(dt: f32) {
         }
     }
 
-    // Backspace
+
     if rl.IsKeyPressed(.BACKSPACE) {
         if g_console_in_len > 0 { g_console_in_len -= 1 }
         g_console_bs_timer = 0.4
@@ -124,7 +123,7 @@ update_console :: proc(dt: f32) {
         }
     }
 
-    // Enter: run command, jump back to newest
+
     if rl.IsKeyPressed(.ENTER) {
         raw := string(g_console_input[:g_console_in_len])
         console_logf("> %s", raw)
@@ -136,7 +135,6 @@ update_console :: proc(dt: f32) {
     }
 }
 
-// ── draw ───────────────────────────────────────────────────────────────────
 
 draw_console :: proc() {
     if g_console_slide <= 0 { return }
@@ -146,17 +144,17 @@ draw_console :: proc() {
     bar_w := uis(6)
     spacing := f32(0.4)
 
-    // Clamp scroll now that we know visible
+
     max_scroll := max(g_console_count - g.visible, 0)
     if g_console_scroll > max_scroll { g_console_scroll = max_scroll }
 
-    // ── Panel background + bottom edge ─────────────────────────────────────
+
     rl.DrawRectangle(0, i32(g.y_off), i32(sw), i32(g.panel_h),
         rl.Color{ 8, 8, 12, 225 })
     rl.DrawRectangle(0, i32(g.y_off + g.panel_h) - 1, i32(sw), 1,
         rl.Color{ 140, 90, 35, 255 })
 
-    // ── Log lines (drawn bottom-to-top, newest at bottom) ──────────────────
+
     log_clip_y := i32(max(g.y_off, 0))
     log_clip_h := i32(g.log_bot_y) - log_clip_y
     if log_clip_h > 0 {
@@ -179,7 +177,7 @@ draw_console :: proc() {
         rl.EndScissorMode()
     }
 
-    // ── Scrollbar ──────────────────────────────────────────────────────────
+
     if max_scroll > 0 {
         track_x := sw - bar_w - g.pad * 0.5
         track_y := g.y_off + g.pad
@@ -187,11 +185,11 @@ draw_console :: proc() {
 
         thumb_frac := f32(g.visible) / f32(g_console_count)
         thumb_h    := max(track_h * thumb_frac, uis(20))
-        // scroll=0 → thumb at bottom; scroll=max → thumb at top
+
         t := f32(g_console_scroll) / f32(max_scroll)
         thumb_y := track_y + (track_h - thumb_h) * (1.0 - t)
 
-        // only draw if track is actually on screen
+
         if track_y + track_h > 0 {
             rl.DrawRectangleRounded(
                 { track_x, track_y, bar_w, track_h }, 0.5, 4,
@@ -202,7 +200,7 @@ draw_console :: proc() {
         }
     }
 
-    // ── Input line ─────────────────────────────────────────────────────────
+
     prompt     := cstring("> ")
     prompt_col := rl.Color{ 160, 120, 55, 255 }
     rl.DrawTextEx(g_font, prompt, { g.pad, g.input_y }, g.fs, spacing, prompt_col)
@@ -225,7 +223,6 @@ draw_console :: proc() {
     }
 }
 
-// ── command execution ──────────────────────────────────────────────────────
 
 @(private = "file")
 _console_exec :: proc(w: ^cw.World, raw: string) {
@@ -239,13 +236,15 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
     switch cmd {
 
     case "help":
-        console_log("  mut <name>       apply mutation by json entity name")
-        console_log("  serums <n>       set player serum count")
-        console_log("  gold <n>         add gold to wallet")
-        console_log("  hp <n>           set player current HP")
-        console_log("  kill             kill player")
-        console_log("  god_mode         toggle invincibility (player HP floor = 1)")
-        console_log("  clear            clear console log")
+        console_log("  mut <name>                apply mutation by json entity name")
+        console_log("  ability <name> [lv]       spawn ability item at feet (lv 1-5)")
+        console_log("  ability_levelup <1-4>     level up ability in equip slot")
+        console_log("  serums <n>                set player serum count")
+        console_log("  gold <n>                  add gold to wallet")
+        console_log("  hp <n>                    set player current HP")
+        console_log("  kill                      kill player")
+        console_log("  god_mode                  toggle invincibility")
+        console_log("  clear                     clear console log")
         console_log("available mutations:")
         for mt in cw.MutationType {
             if mt == .None { continue }
@@ -327,9 +326,116 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
             console_log("god mode OFF")
         }
 
+    case "ability":
+
+
+        if w == nil { console_log("ERROR: no world active"); return }
+        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        sep2 := strings.last_index_byte(args, ' ')
+        name_part := args
+        lv_part   := "1"
+        if sep2 >= 0 {
+            maybe_lv := strings.trim_space(args[sep2+1:])
+            _, ok2 := strconv.parse_int(maybe_lv)
+            if ok2 {
+                name_part = strings.trim_space(args[:sep2])
+                lv_part   = maybe_lv
+            }
+        }
+        at := _ability_type_from_name(name_part)
+        if at == .None || int(at) >= len(ABILITY_DEFS) {
+            console_logf("ERROR: unknown ability '%s'", name_part)
+            console_log("  try: spasm, slam, surge, grip, burst, charge, blink, indexed, vitriol, spray, contagion, exothermic, tormenta, overcharged, coil, shock")
+            return
+        }
+        lv, _ := strconv.parse_int(lv_part)
+        lv      = clamp(lv, 1, ABILITY_MAX_LEVEL)
+        if cw.world_has_component(w, w.player_id, .Transform) {
+            pos := cw.world_get_transform(w, w.player_id).position
+            iid := cw.world_create_entity(w)
+            cw.world_set_transform(w, iid, cw.TransformComp{ position = pos })
+            item               := cw.item_empty()
+            item.slot           = .Ability1
+            item.ability_type   = at
+            item.ability_level  = u8(lv)
+            item.grid_w         = 1
+            item.grid_h         = 1
+            item.rarity         = .Epic
+            cw.world_set_item(w, iid, item)
+            def := &ABILITY_DEFS[at]
+            rc: cw.RenderConfigComp
+            cw.render_config_set_name(&rc, def.name)
+            cw.render_config_set_icon(&rc, "ability_active")
+            cw.render_config_set_desc(&rc, def.desc)
+            cw.world_set_render_config(w, iid, rc)
+            cw.world_set_ground_item(w, iid)
+            cw.world_set_fog_of_war(w, iid)
+            console_logf("spawned %s (lv %d) at player position", def.name, lv)
+        }
+
+    case "ability_levelup":
+
+        if w == nil { console_log("ERROR: no world active"); return }
+        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        slot_n, ok3 := strconv.parse_int(args)
+        if !ok3 || slot_n < 1 || slot_n > 4 {
+            console_log("usage: ability_levelup <1-4>")
+            return
+        }
+        if cw.world_has_component(w, w.player_id, .Inventory) {
+            inv  := cw.world_get_inventory(w, w.player_id)
+            eq   := ability_slot_to_equip(slot_n - 1)
+            iid  := inv.equipped[eq]
+            if cw.world_is_valid(w, iid) && cw.world_has_component(w, iid, .Item) {
+                item := cw.world_get_item(w, iid)
+                if item.ability_type != .None {
+                    old_lv := max(1, int(item.ability_level))
+                    if old_lv >= ABILITY_MAX_LEVEL {
+                        console_logf("slot %d already at max level (%d)", slot_n, ABILITY_MAX_LEVEL)
+                    } else {
+                        item.ability_level = u8(old_lv + 1)
+                        save_player(w, w.player_id)
+                        console_logf("slot %d upgraded to level %d", slot_n, old_lv+1)
+                    }
+                } else { console_logf("slot %d has no ability", slot_n) }
+            } else { console_logf("slot %d is empty", slot_n) }
+        }
+
     case:
         console_logf("unknown command '%s' — type 'help'", cmd)
     }
+}
+
+@(private = "file")
+_ability_type_from_name :: proc(raw: string) -> cw.AbilityType {
+    s := strings.to_lower(raw, context.temp_allocator)
+
+    switch s {
+
+    case "cadavericspasm",  "cadaveric_spasm",  "spasm":    return .CadavericSpasm
+    case "osseouslam",      "osseous_slam",     "slam":     return .OsseousSlam
+    case "necroticsurge",   "necrotic_surge",   "surge":    return .NecroticSurge
+    case "crushinggrip",    "crushing_grip",    "grip":     return .CrushingGrip
+
+    case "rapiddischarge",  "rapid_discharge",  "burst":    return .RapidDischarge
+    case "deliberateround", "deliberate_round", "charge":   return .DeliberateRound
+    case "ethervial",       "ether_vial",       "blink":    return .EtherVial
+    case "indexed":                                          return .Indexed
+
+    case "vetriolflask",    "vetriol_flask",    "vitriol":  return .VetriolFlask
+    case "carbolicspray",   "carbolic_spray",   "spray":    return .CarbolicSpray
+    case "contagion":                                        return .Contagion
+    case "exothermic":                                      return .Exothermic
+
+    case "latormenta",      "la_tormenta",      "tormenta": return .LaTormenta
+    case "overcharged":                                      return .Overcharged
+    case "inductioncoil",   "induction_coil",   "coil":     return .InductionCoil
+    case "galvanicshock",   "galvanic_shock",   "shock":    return .GalvanicShock
+
+    case "whirlwind",   "whirl_wind":   return .CadavericSpasm
+    case "chemgrenade", "chem_grenade": return .VetriolFlask
+    }
+    return .None
 }
 
 @(private = "file")

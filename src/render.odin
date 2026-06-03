@@ -1,56 +1,41 @@
 package main
 
-// =============================================================================
-// RENDER — world draw procs + Clay HUD lifecycle
-//
-// World rendering:  draw_player, draw_floor
-// Text HUD:         draw_hud  (position, corruption, controls)
-// Clay HUD:         draw_hud_clay  (HP + Energy bars)
-//   └ init_clay / shutdown_clay / update_clay_input  (called from main)
-//
-// All draw procs read from ECS; none write back.
-// Clay command execution lives in clay_renderer.odin.
-// =============================================================================
 
 import rl       "vendor:raylib"
 import          "core:math"
 import          "core:c"
 import          "core:fmt"
 import          "core:strings"
+import slice    "core:slice"
 import          "base:runtime"
 import cw       "clockwork"
 import clay     "../clay"
 
-// g_font and g_ui_scale are package-visible so editor.odin and other HUD files
-// can draw text without duplicating the helpers.
+
 g_font: rl.Font
 
 @(private = "file")
 FONT_PATH :: cstring("data/fonts/cinzel.ttf")
 
-// g_ui_scale is recomputed every frame in update_clay_input.
-// All HUD draw procs call uis() so they stay readable at any resolution.
+
 g_ui_scale: f32 = 1.0
 
 uis :: proc(base: f32) -> f32 { return base * g_ui_scale }
 
-// g_levelup_flash counts down from LEVELUP_FLASH_TIME to 0 after a level-up.
-// Written by damage_system; decremented in main's game loop; read by draw_levelup_flash.
+
 g_levelup_flash: f32
 
-// ── Floating damage numbers ───────────────────────────────────────────────
-// Spawned by push_dmg_number (called from damage_system).
-// Drawn in world space inside BeginMode2D via update_draw_dmg_numbers.
+
 MAX_DMGNUM   :: 48
 DMGNUM_LIFE  :: f32(1.3)
-DMGNUM_SPEED :: f32(30)    // world pixels per second (upward = decreasing y)
+DMGNUM_SPEED :: f32(30)
 
 DmgNum :: struct {
     x, y:     f32,
     value:    f32,
     lifetime: f32,
-    is_enemy: bool,   // false = player took the hit (red tint)
-    is_crit:  bool,   // crit: larger text, white→gold fade
+    is_enemy: bool,
+    is_crit:  bool,
 }
 
 g_dmgnums: [MAX_DMGNUM]DmgNum
@@ -73,8 +58,7 @@ push_dmg_number :: proc(x, y, value: f32, is_enemy: bool, is_crit: bool = false)
     }
 }
 
-// update_draw_dmg_numbers ticks lifetimes, floats numbers upward, and draws them.
-// Call inside BeginMode2D each frame.
+
 update_draw_dmg_numbers :: proc(dt: f32) {
     for i in 0..<MAX_DMGNUM {
         n := &g_dmgnums[i]
@@ -89,15 +73,15 @@ update_draw_dmg_numbers :: proc(dt: f32) {
         col: rl.Color
         fs:  f32
         if n.is_crit {
-            // Crits: white → gold as they fade. Larger font.
+
             fs = 22
-            white := clamp(frac * 3.0 - 1.5, 0, 1)   // white in the first half
+            white := clamp(frac * 3.0 - 1.5, 0, 1)
             col = rl.Color{255, u8(160 + white * 95), u8(white * 200), alpha}
         } else if n.is_enemy {
-            col = rl.Color{255, 220, 60, alpha}        // gold
+            col = rl.Color{255, 220, 60, alpha}
             fs  = 15
         } else {
-            col = rl.Color{255, 70, 70, alpha}         // red (player hit)
+            col = rl.Color{255, 70, 70, alpha}
             fs  = 15
         }
 
@@ -113,7 +97,7 @@ update_draw_dmg_numbers :: proc(dt: f32) {
 
 
 draw_extraction_zones :: proc(w: ^cw.World) {
-    if g_hub_active { return }   
+    if g_hub_active { return }
 
     time := f32(rl.GetTime())
 
@@ -202,8 +186,7 @@ draw_extraction_zones :: proc(w: ^cw.World) {
     }
 }
 
-// draw_loot_filter_hud shows the current loot filter level in the top-left corner.
-// Only visible when the filter is active (non-Normal). Hold ALT to see filtered items.
+
 draw_loot_filter_hud :: proc() {
     if g_loot_filter_rarity == .Normal { return }
 
@@ -218,7 +201,7 @@ draw_loot_filter_hud :: proc() {
 
     sw  := f32(rl.GetScreenWidth())
     _   = sw
-    fs  := uis(9)
+    fs  := uis(12)
     prefix    := t(.HUD_LOOT_FILTER)
     psz       := rl.MeasureTextEx(g_font, prefix, fs, 0.5)
     lsz       := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
@@ -252,23 +235,23 @@ draw_raid_timer :: proc() {
         flash := f32(0.5) + f32(0.5) * math.sin(f32(rl.GetTime()) * 5.0)
         col = rl.Color{ 255, u8(80 + i32(flash * 80)), 60, 255 }
     } else if g_raid_timer < 300 {
-        col = rl.Color{ 240, 180, 60, 255 }   // orange under 5 min
+        col = rl.Color{ 240, 180, 60, 255 }
     } else {
-        col = rl.Color{ 170, 235, 145, 220 }  // normal green
+        col = rl.Color{ 170, 235, 145, 220 }
     }
 
     sw := f32(rl.GetScreenWidth())
-    fs := uis(15)
+    fs := uis(17)
 
     icon := t(.HUD_RAID_TIMER)
     lbl  := cstring(&buf[0])
 
-    icon_sz := rl.MeasureTextEx(g_font, icon, uis(8), 0.5)
+    icon_sz := rl.MeasureTextEx(g_font, icon, uis(11), 0.5)
     lbl_sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
 
     x := sw - max(icon_sz.x, lbl_sz.x) - uis(20)
-    rl.DrawTextEx(g_font, icon, { x, uis(12) }, uis(8), 0.5, rl.Color{ 150, 200, 130, 180 })
-    rl.DrawTextEx(g_font, lbl,  { x, uis(23) }, fs, 0.5, col)
+    rl.DrawTextEx(g_font, icon, { x, uis(12) }, uis(11), 0.5, rl.Color{ 150, 200, 130, 180 })
+    rl.DrawTextEx(g_font, lbl,  { x, uis(26) }, fs, 0.5, col)
 }
 
 draw_boss_warning :: proc() {
@@ -309,13 +292,10 @@ draw_boss_warning :: proc() {
         cd_fs, 0.5, rl.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
 }
 
-// g_inspected_entity is set each frame by update_entity_hover to whichever
-// non-player entity the mouse is currently over (INVALID_ENTITY if none).
+
 g_inspected_entity: int = cw.INVALID_ENTITY
 
-// update_entity_hover hit-tests non-player entities in world space and stores
-// the nearest one under the cursor in g_inspected_entity.
-// Call once per rendered frame, before draw_entity_inspect_hud.
+
 update_entity_hover :: proc(w: ^cw.World) {
     if g_playing_state != .Gameplay || ui_any() {
         g_inspected_entity = cw.INVALID_ENTITY
@@ -347,16 +327,14 @@ update_entity_hover :: proc(w: ^cw.World) {
     }
 }
 
-// draw_entity_inspect_hud draws a centred top-of-screen panel for the hovered
-// entity (if any), falling back to the boss when nothing is hovered.
-// Replaces the old draw_boss_hud; call it in the same place.
+
 draw_entity_inspect_hud :: proc(w: ^cw.World) {
-    // Stale boss cleanup (mirrors old draw_boss_hud).
+
     if g_boss_id != cw.INVALID_ENTITY && !cw.world_is_valid(w, g_boss_id) {
         g_boss_id = cw.INVALID_ENTITY
     }
 
-    // Priority: hovered entity → boss → nothing.
+
     show_id := g_inspected_entity
     if show_id == cw.INVALID_ENTITY || !cw.world_is_valid(w, show_id) {
         show_id = g_boss_id
@@ -371,11 +349,11 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
 
     sw := f32(rl.GetScreenWidth())
     bw := sw * 0.42
-    bh := uis(14)
+    bh := uis(18)
     bx := sw * 0.5 - bw * 0.5
-    by := uis(14)
+    by := uis(16)
 
-    // ── Background + fill ─────────────────────────────────────────────────────
+
     rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, rl.Color{  8,  4,  4, 220 })
     rl.DrawRectangleRec({ bx, by, bw, bh },                  rl.Color{ 45, 12, 12, 200 })
     if frac > 0 {
@@ -392,36 +370,36 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
     }
     rl.DrawRectangleLinesEx({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, rl.Color{ 140, 40, 40, 200 })
 
-    // ── HP numbers (right-aligned inside bar) ─────────────────────────────────
+
     hp_str := rl.TextFormat("%d / %d", i32(h.current), i32(h.max))
-    hp_fs  := uis(8)
+    hp_fs  := uis(11)
     hp_sz  := rl.MeasureTextEx(g_font, hp_str, hp_fs, 0.4)
     rl.DrawTextEx(g_font, hp_str,
         { bx + bw - hp_sz.x - uis(3), by + (bh - hp_fs) * 0.5 },
         hp_fs, 0.4, rl.Color{ 220, 200, 200, 130 })
 
-    // ── Entity name ───────────────────────────────────────────────────────────
+
     name_lbl := cstring("ENEMY")
     if cw.world_has_component(w, show_id, .RenderConfig) {
         rc := cw.world_get_render_config(w, show_id)
         cs := loc_lookup(cw.render_config_name_cstr(rc))
         if cs != nil && len(cs) > 0 { name_lbl = cs }
     }
-    name_fs := uis(9)
+    name_fs := uis(13)
     name_sz := rl.MeasureTextEx(g_font, name_lbl, name_fs, 0.5)
     name_y  := by + bh + uis(3)
     rl.DrawTextEx(g_font, name_lbl,
         { sw * 0.5 - name_sz.x * 0.5, name_y },
         name_fs, 0.5, rl.Color{ 200, 120, 120, 200 })
 
-    // ── Mutation badges (centered row below name) ─────────────────────────────
+
     if cw.world_has_component(w, show_id, .MutationContainer) {
         mc := cw.world_get_mutation(w, show_id)
 
-        // First pass — collect valid mutations and measure total row width.
-        badge_fs  := uis(8)
-        dot_r     := f32(3.5)
-        gap       := uis(12)
+
+        badge_fs  := uis(11)
+        dot_r     := f32(4.5)
+        gap       := uis(14)
         b_mt      : [cw.MAX_MUTATION_SLOTS]cw.MutationType
         b_name    : [cw.MAX_MUTATION_SLOTS]cstring
         b_sz      : [cw.MAX_MUTATION_SLOTS]rl.Vector2
@@ -462,13 +440,15 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
     }
 }
 
-// draw_boss_hud kept as a thin wrapper so any call sites outside main.odin still compile.
+
 draw_boss_hud :: proc(w: ^cw.World) {
     draw_entity_inspect_hud(w)
 }
 
 @(private = "file")
-FONT_SIZE :: i32(64)
+
+
+FONT_SIZE :: i32(128)
 
 init_font :: proc() {
     if rl.FileExists(FONT_PATH) {
@@ -557,7 +537,7 @@ update_clay_input :: proc() {
     g_ui_scale = f32(rl.GetScreenHeight()) / 720.0
     g_inv = InvLayout{
         panel_w       = i32(uis(420)),
-        panel_h       = i32(uis(720)),  
+        panel_h       = i32(uis(720)),
         pad           = i32(uis(16)),
         col_gap       = i32(uis(12)),
         title_y       = i32(uis(14)),
@@ -565,15 +545,15 @@ update_clay_input :: proc() {
         slots_y       = i32(uis(50)),
         slot_h        = i32(uis(46)),
         slot_gap      = i32(uis(6)),
-        slot_w        = i32(uis(388)),  
+        slot_w        = i32(uis(388)),
         sec_y         = i32(uis(212)),
         wep_y         = i32(uis(232)),
         wep_h         = i32(uis(60)),
-        wep_w         = i32(uis(188)),  
+        wep_w         = i32(uis(188)),
         ability_sec_y = i32(uis(306)),
         ability_y     = i32(uis(326)),
         ability_h     = i32(uis(46)),
-        ability_w     = i32(uis(88)),   
+        ability_w     = i32(uis(88)),
         pack_sec_y    = i32(uis(430)),
         pack_y        = i32(uis(452)),
         hint_y        = i32(uis(692)),
@@ -615,10 +595,10 @@ clay_measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElement
 
 @(private = "file")
 PLAYER_SLOT_COLORS := [cw.MAX_PLAYERS][3]rl.Color{
-    { {  55,  55,  70, 255 }, { 100, 100, 120, 255 }, {255,  60,  60, 255} },  // slot 0 — grey/red
-    { {  28,  80,  28, 255 }, {  55, 145,  55, 255 }, { 80, 230,  80, 255} },  // slot 1 — green
-    { {  28,  55, 100, 255 }, {  55, 100, 180, 255 }, { 80, 170, 255, 255} },  // slot 2 — blue
-    { { 100,  55,  10, 255 }, { 180, 110,  30, 255 }, {255, 180,  40, 255} },  // slot 3 — orange
+    { {  55,  55,  70, 255 }, { 100, 100, 120, 255 }, {255,  60,  60, 255} },
+    { {  28,  80,  28, 255 }, {  55, 145,  55, 255 }, { 80, 230,  80, 255} },
+    { {  28,  55, 100, 255 }, {  55, 100, 180, 255 }, { 80, 170, 255, 255} },
+    { { 100,  55,  10, 255 }, { 180, 110,  30, 255 }, {255, 180,  40, 255} },
 }
 
 EntityVisualInfo :: struct {
@@ -685,19 +665,21 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
             case .Shopkeeper:        info.world_size = 64
             case .MutationWorkbench: info.world_size = 78
             case .Stash:             info.world_size = 70
+            case .AbilityVendor:     info.world_size = 64
             }
         }
     }
 
     if info.sprite_key == nil {
         if is_player_entity(w, id) {
-            info.sprite_key = cstring("player_wanderer")
+            info.sprite_key = cstring("player_sheriff")
         } else if cw.world_has_component(w, id, .NPC) {
             npc := cw.world_get_npc(w, id)
             switch npc.npc_type {
             case .Shopkeeper:        info.sprite_key = cstring("npc_shopkeeper")
             case .MutationWorkbench: info.sprite_key = cstring("mutation_workbench")
             case .Stash:             info.sprite_key = cstring("mutation_workbench")
+            case .AbilityVendor:     info.sprite_key = cstring("npc_shopkeeper")
             }
         } else if cw.world_has_component(w, id, .AIAgent) {
             ai := cw.world_get_ai(w, id)
@@ -774,7 +756,7 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
 
     if cw.world_has_component(w, id, .GroundItem) && cw.world_has_component(w, id, .Item) {
         item := cw.world_get_item(w, id)
-        // Hide circles for filtered-out items (ALT overrides).
+
         alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
         if !alt_held && item.rarity < g_loot_filter_rarity { return }
         t     := f32(rl.GetTime())
@@ -813,10 +795,7 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
     }
 }
 
-// draw_ground_item_labels draws floating item names above every visible ground item.
-// Must be called inside BeginMode2D so world_to_iso_v maps correctly.
-// Called in the final screen-space pass (after lighting composites) so labels are
-// unaffected by fog/shadow shaders.
+
 draw_ground_item_labels :: proc(w: ^cw.World) {
     ids := cw.world_query(w, cw.query_mask(.GroundItem, .Item, .Transform),
         context.temp_allocator)
@@ -830,7 +809,7 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
 
         item := cw.world_get_item(w, id)
 
-        // Respect loot filter (ALT reveals everything).
+
         if !alt_held && item.rarity < g_loot_filter_rarity { continue }
 
         tr  := cw.world_get_transform(w, id)
@@ -851,10 +830,9 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
             { iso.x - nsz.x * 0.5, iso.y - uis(20) - nsz.y },
             nfs, 0.4, rl.Color{ rc.r, rc.g, rc.b, name_a })
 
-        // Ability items get an ACTIVE / PASSIVE tag above the name.
+
         if item.ability_type != .None {
-            def := ABILITY_DEFS[item.ability_type]
-            tag := t(.HUD_ITEM_PASSIVE) if def.is_passive else t(.HUD_ITEM_ACTIVE)
+            tag := t(.HUD_ITEM_ACTIVE)
             tfs := uis(8)
             tsz := rl.MeasureTextEx(g_font, tag, tfs, 0.4)
             rl.DrawTextEx(g_font, tag,
@@ -864,7 +842,7 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
     }
 }
 
-draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base_size: f32, rot: f32) {
+draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base_size: f32, rot: f32, sprite_iso_h: f32) {
     slot := player_slot_for_id(w, id)
     is_player := slot >= 0
     show_hp := false
@@ -895,10 +873,8 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
         draw_world_circle(tip, 5, line_col)
     }
 
-    // After ISO_SPRITE_Y squish the sprite's visual half-height in screen space
-    // is base_size * ISO_SPRITE_Y * 0.5 = base_size * 0.25.
-    // All vertical offsets below are relative to that compressed top edge.
-    sprite_top := base_size * ISO_SPRITE_Y * 0.5   // screen px above iso centre
+
+    sprite_top := sprite_iso_h
 
     if show_hp && cw.world_has_component(w, id, .Health) {
         h := cw.world_get_health(w, id)
@@ -916,16 +892,14 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
         }
     }
 
-    // ── Enemy mutation overlay ─────────────────────────────────────────────────
-    // Badge dots below the HP bar + mutation name label above it.
-    // Only for non-player entities that carry at least one mutation.
+
     if !is_player && cw.world_has_component(w, id, .MutationContainer) {
         mc := cw.world_get_mutation(w, id)
         if mc.entity_count > 0 {
             iso   := world_to_iso_v(pos)
             bar_w := base_size * 0.65
 
-            // Name label (first mutation only, centred above the HP bar).
+
             label_fs := f32(9)
             for i in 0..<mc.entity_count {
                 meid := mc.entities[i]
@@ -938,10 +912,10 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
                 rl.DrawTextEx(g_font, name,
                     { iso.x - lsz.x * 0.5, iso.y - sprite_top - 14 },
                     label_fs, 0.4, rl.Color{ col.r, col.g, col.b, 175 })
-                break  // show first mutation name only; dots below cover the rest
+                break
             }
 
-            // Coloured dot per mutation, left-aligned beneath the HP bar.
+
             dot_x0 := iso.x - bar_w * 0.5 + 3
             dot_y  := iso.y - sprite_top + 3
             n      := 0
@@ -973,7 +947,7 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
             { iso.x - name_sz.x * 0.5, iso.y - sprite_top - name_fs - 3 },
             name_fs, 0.5, rl.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
-        // ── HeartCage visual ─────────────────────────────────────────────────
+
         if cw.world_has_component(w, id, .MutationContainer) {
             mc_hc := cw.world_get_mutation(w, id)
             for hi in 0..<mc_hc.entity_count {
@@ -982,10 +956,9 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
                 if !cw.world_has_component(w, hmeid, .MutHeartCage) { continue }
                 hc    := cw.world_get_mut_heart_cage(w, hmeid)
                 t_now := f32(rl.GetTime())
-                hrad  := f32(12.0)   // larger, more visible heart
+                hrad  := f32(12.0)
 
-                // Authoritative world position is the orbit entity; fall back
-                // to analytic orbit if entity was somehow destroyed.
+
                 hworld: rl.Vector2
                 if cw.world_is_valid(w, hc.heart_id) &&
                    cw.world_has_component(w, hc.heart_id, .Transform) {
@@ -1006,12 +979,12 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
                     hp_pct := hh.current / hh.max
                     pulse  := f32(0.8) + f32(0.2) * math.sin(t_now * 5.0)
                     alpha  := u8(160 + int(95.0 * pulse))
-                    // Outer glow layers → bright core → rim
+
                     draw_world_circle(hworld, hrad + 8, rl.Color{200, 40, 60, 25})
                     draw_world_circle(hworld, hrad + 4, rl.Color{200, 40, 60, 55})
                     draw_world_circle(hworld, hrad,     rl.Color{220, 55, 70, alpha})
                     draw_world_circle_lines(hworld, hrad, rl.Color{255, 130, 150, 220})
-                    // HP bar above the heart in screen space
+
                     bw  := f32(30);  bh := f32(4)
                     bx  := hiso.x - bw * 0.5
                     by  := hiso.y - hrad * 0.55 - 8
@@ -1028,7 +1001,7 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
 
 draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     if !cw.world_has_component(w, id, .Transform) || is_fog_hidden(w, id) || entity_blindfire_hidden(w, id) { return }
-    // Open doors are invisible — player walks through the empty frame.
+
     if cw.world_has_component(w, id, .Openable) && cw.world_get_openable(w, id).is_open { return }
     tr := cw.world_get_transform(w, id)
     pos := rl.Vector2{ tr.position[0], tr.position[1] }
@@ -1054,11 +1027,29 @@ draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     }
     tint = color_mix(tint, rl.WHITE, get_hit_flash_intensity(id) * 0.75)
 
+
+    anchor := [2]f32{ 0.5, 1.0 }
+    if def, aok := get_or_load_anim_def(string(vis.sprite_key)); aok &&
+       def.frame_width > 0 && def.frame_height > 0 {
+        anchor = {
+            f32(def.anchor_px_x) / f32(def.frame_width),
+            f32(def.anchor_px_y) / f32(def.frame_height),
+        }
+    }
+
+
+    sprite_iso_h := vis.world_size * ISO_SPRITE_Y * anchor[1]
     if entry, ok := get_or_load_entity_sprite(vis.sprite_key); ok {
         src := anim_source_rect(w, id, entry.src, string(vis.sprite_key)) if !entry.from_rt else entry.src
-        draw_entity_sprite_quad_ex(entry.tex, src, pos, vis.world_size, rot, tint)
+        if is_player_entity(w, id) {
+
+            if src.width > 0 { sprite_iso_h = vis.world_size * src.height / src.width * anchor[1] }
+            draw_player_sprite(entry.tex, src, pos, vis.world_size, tint, anchor)
+        } else {
+            draw_entity_sprite_quad_ex(entry.tex, src, pos, vis.world_size, rot, tint, ISO_SPRITE_Y, anchor)
+        }
     }
-    draw_entity_sprite_overlays(w, id, pos, vis.world_size, rot)
+    draw_entity_sprite_overlays(w, id, pos, vis.world_size, rot, sprite_iso_h)
 }
 
 draw_entities :: proc(w: ^cw.World, pass: cw.RenderLayer) {
@@ -1066,20 +1057,14 @@ draw_entities :: proc(w: ^cw.World, pass: cw.RenderLayer) {
     defer delete(ids)
 
     if pass == .Sprite {
-        for i in 1..<len(ids) {
-            key := ids[i]
-            key_t := cw.world_get_transform(w, key).position
-            key_sort := iso_depth_sort_y(key_t[0], key_t[1])
-            j := i
-            for j > 0 {
-                prev := ids[j - 1]
-                prev_t := cw.world_get_transform(w, prev).position
-                if iso_depth_sort_y(prev_t[0], prev_t[1]) <= key_sort { break }
-                ids[j] = prev
-                j -= 1
-            }
-            ids[j] = key
+        SpriteSort :: struct { id: int, depth: f32 }
+        temp := make([]SpriteSort, len(ids), context.temp_allocator)
+        for i in 0..<len(ids) {
+            t := cw.world_get_transform(w, ids[i]).position
+            temp[i] = SpriteSort{ ids[i], iso_depth_sort_y(t[0], t[1]) }
         }
+        slice.sort_by(temp, proc(a, b: SpriteSort) -> bool { return a.depth < b.depth })
+        for i in 0..<len(ids) { ids[i] = temp[i].id }
     }
 
     for id in ids {
@@ -1094,31 +1079,42 @@ draw_entities :: proc(w: ^cw.World, pass: cw.RenderLayer) {
 }
 
 draw_player :: proc(w: ^cw.World) {
-    // Legacy entry point retired. Use draw_entities(w, .Sprite).
+
 }
 
 draw_floor :: proc() {
-    // Retired with tilemap sprite rendering.
+
 }
 
 draw_enemies :: proc(w: ^cw.World) {
-    // Legacy entry point retired. Use draw_entities(w, .Sprite).
+
 }
 
 draw_world_npcs :: proc(w: ^cw.World) {
-    // Legacy entry point retired. Use draw_entities(w, .Sprite).
+
 }
 
 draw_melee_arcs :: proc(w: ^cw.World) {
-    // Legacy entry point retired. Use draw_entities(w, .WorldFX).
+
 }
 
 draw_projectiles :: proc(w: ^cw.World) {
-    // Legacy entry point retired. Use draw_entities(w, .WorldFX).
+
 }
 
 draw_ground_items :: proc(w: ^cw.World) {
-    // Legacy entry point retired. Use draw_entities(w, .WorldFX).
+
+}
+
+
+ability_trait_color :: proc(trait: AbilityTrait) -> rl.Color {
+    switch trait {
+    case .Strength:  return rl.Color{ 220,  80,  60, 255 }
+    case .Dexterity: return rl.Color{  90, 200,  90, 255 }
+    case .Science:   return rl.Color{  80, 160, 230, 255 }
+    case .None:
+    }
+    return rl.Color{ 140, 134, 120, 255 }
 }
 
 rarity_color :: proc(rarity: cw.ItemRarity) -> rl.Color {
@@ -1132,18 +1128,18 @@ rarity_color :: proc(rarity: cw.ItemRarity) -> rl.Color {
     return rl.Color{ 160, 155, 148, 255 }
 }
 
-// mutation_visual_color returns the canonical display colour for a mutation type.
+
 mutation_visual_color :: proc(mt: cw.MutationType) -> rl.Color {
     #partial switch mt {
-    case .LivingBomb:  return rl.Color{ 255, 120,  30, 255 }  // ember orange
-    case .ToxicFlesh:  return rl.Color{  80, 200,  60, 255 }  // toxic green
-    case .ThornPact:   return rl.Color{ 180, 160, 255, 255 }  // silver-purple
-    case .BlackLung:   return rl.Color{  80, 160, 130, 255 }  // teal
+    case .LivingBomb:  return rl.Color{ 255, 120,  30, 255 }
+    case .ToxicFlesh:  return rl.Color{  80, 200,  60, 255 }
+    case .ThornPact:   return rl.Color{ 180, 160, 255, 255 }
+    case .BlackLung:   return rl.Color{  80, 160, 130, 255 }
     }
-    return rl.Color{ 180, 180, 180, 255 }                     // grey fallback
+    return rl.Color{ 180, 180, 180, 255 }
 }
 
-// mutation_short_name returns a short uppercase display name for HUD labels.
+
 @(private = "file")
 mutation_short_name :: proc(mt: cw.MutationType) -> cstring {
     #partial switch mt {
@@ -1155,29 +1151,27 @@ mutation_short_name :: proc(mt: cw.MutationType) -> cstring {
     return "MUTANT"
 }
 
-// draw_hud, draw_ammo_ring, draw_ability_hud, and draw_hud_clay have been
-// consolidated into draw_hud() — see ui_hud.odin.
 
 @(private = "file")
 InvLayout :: struct {
     panel_w, panel_h,
-    pad,              
-    col_gap,          
+    pad,
+    col_gap,
     title_y,
     rule1_y,
     slots_y, slot_h, slot_gap, slot_w,
     sec_y,
     wep_y, wep_h, wep_w,
-    ability_sec_y,    
-    ability_y,        
-    ability_h,        
-    ability_w,        
+    ability_sec_y,
+    ability_y,
+    ability_h,
+    ability_w,
     pack_sec_y, pack_y,
     hint_y,
     cell_sz: i32,
 }
 
-g_inv: InvLayout  
+g_inv: InvLayout
 
 PauseResolution :: struct { w, h: i32, label: cstring }
 
@@ -1191,8 +1185,7 @@ PAUSE_RESOLUTIONS := [?]PauseResolution{
 g_pause_res_idx: int
 g_borderless:    bool
 
-// lang_name returns the native name of a language, always in that language
-// regardless of the current g_lang setting.
+
 @(private = "file")
 lang_name :: proc(lang: Language) -> cstring {
     switch lang {
@@ -1203,7 +1196,7 @@ lang_name :: proc(lang: Language) -> cstring {
     return "?"
 }
 
-// _apply_lang changes the active language, syncs it to config and saves.
+
 @(private = "file")
 _apply_lang :: proc(lang: Language) {
     g_lang           = lang
@@ -1219,7 +1212,7 @@ PAUSE_BTN_H_BASE  :: f32(42)
 PAUSE_Y_RESUME_BASE   :: f32(62)
 PAUSE_Y_RES_BASE      :: f32(140)
 PAUSE_Y_MODE_BASE     :: f32(222)
-PAUSE_Y_LANG_BASE     :: f32(304)   // language selector row
+PAUSE_Y_LANG_BASE     :: f32(304)
 PAUSE_Y_VOL_BASE      :: f32(398)
 PAUSE_VOL_ROW_H_BASE  :: f32(34)
 PAUSE_Y_KEYBINDS_BASE :: f32(566)
@@ -1385,7 +1378,7 @@ update_pause_menu :: proc() -> (quit: bool) {
     if rl.CheckCollisionPointRec(mp,
         { bx, f32(py + pause_y_resume()), f32(pBW), f32(pBH) }) &&
        rl.IsMouseButtonPressed(.LEFT) {
-        ui_close_top()  // _ui_on_close(.PauseMenu) clears g_paused
+        ui_close_top()
         return false
     }
 
@@ -1538,28 +1531,14 @@ draw_pause_menu :: proc() {
 }
 
 
-// ── Keybinds screen ──────────────────────────────────────────────────────────
-//
-// Rows are grouped by InputMode with a visual section header between them.
-// Adding a new mode: add its xxx_bind_rows() call to all_bind_rows() (config.odin)
-// and add a header at the section boundary below.
-//
-// Row index layout inside all_bind_rows():
-//   [0 .. GAMEPLAY_BIND_COUNT)   → Gameplay section
-//   [GAMEPLAY_BIND_COUNT .. TOTAL_BIND_COUNT) → UI section
-//   … future modes continue after UI_BIND_COUNT …
+@(private = "file") BIND_ROW_H :: f32(30)
+@(private = "file") BIND_HDR_H :: f32(22)
 
-@(private = "file") BIND_ROW_H :: f32(30)   // compact enough to fit 17 rows at 720 p
-@(private = "file") BIND_HDR_H :: f32(22)   // section label row height
 
-// Returns the Y offset (from the top of the bind content area) for flat
-// row index i, accounting for section-header rows inserted between groups.
 @(private = "file")
 _bind_row_y :: proc(i: int) -> f32 {
-    // Section 0: Gameplay  (rows 0 .. GAMEPLAY_BIND_COUNT-1)
-    //   → preceded by one header
-    // Section 1: UI        (rows GAMEPLAY_BIND_COUNT .. TOTAL_BIND_COUNT-1)
-    //   → preceded by one header after the gameplay rows
+
+
     if i < GAMEPLAY_BIND_COUNT {
         return BIND_HDR_H + f32(i) * BIND_ROW_H
     }
@@ -1568,7 +1547,7 @@ _bind_row_y :: proc(i: int) -> f32 {
            BIND_HDR_H + f32(j) * BIND_ROW_H
 }
 
-// Total height of the scrollable bind content.
+
 @(private = "file")
 _bind_content_h :: proc() -> f32 {
     return _bind_row_y(TOTAL_BIND_COUNT - 1) + BIND_ROW_H
@@ -1587,9 +1566,7 @@ update_keybinds_screen :: proc() {
     py := f32(sh) * 0.5 - uis(PH) * 0.5
     mp := rl.GetMousePosition()
 
-    // While waiting for a key press, eat the next key.
-    // ESC cancels the rebind and is consumed so the universal close handler
-    // does not also close the whole Keybinds panel on the same frame.
+
     if g_rebind_idx >= 0 {
         k := rl.GetKeyPressed()
         if k == .ESCAPE {
@@ -1660,15 +1637,14 @@ draw_keybinds_screen :: proc() {
     hdr_fs    := uis(10)
     name_buf  : [16]u8
 
-    // ── Section headers ──────────────────────────────────────────────────────
-    // Gameplay header (before row 0)
+
     _draw_bind_section_header(px, content_y, uis(PW), hdr_fs, t(.KEYBINDS_SECTION_GAMEPLAY))
 
-    // UI header (before row GAMEPLAY_BIND_COUNT)
+
     ui_hdr_y := content_y + uis(BIND_HDR_H + f32(GAMEPLAY_BIND_COUNT) * BIND_ROW_H)
     _draw_bind_section_header(px, ui_hdr_y, uis(PW), hdr_fs, t(.KEYBINDS_SECTION_UI))
 
-    // ── Bind rows ────────────────────────────────────────────────────────────
+
     lfs := uis(13)
     for i in 0..<TOTAL_BIND_COUNT {
         ry           := content_y + uis(_bind_row_y(i))
@@ -1701,7 +1677,7 @@ draw_keybinds_screen :: proc() {
             lfs, 0.5, kcol)
     }
 
-    // ── Footer buttons ───────────────────────────────────────────────────────
+
     footer_y  := content_y + uis(_bind_content_h()) + uis(16)
     rlbl_fs   := uis(13)
 
@@ -1752,8 +1728,8 @@ _draw_bind_section_header :: proc(px, ry, pw, fs: f32, label: cstring) {
 SETTINGS_H_BASE          :: f32(648)
 SETTINGS_Y_RES_BASE       :: f32(80)
 SETTINGS_Y_MODE_BASE      :: f32(162)
-SETTINGS_Y_LANG_BASE      :: f32(244)   // language selector row
-SETTINGS_Y_VOL_BASE       :: f32(338)   // first slider row_y
+SETTINGS_Y_LANG_BASE      :: f32(244)
+SETTINGS_Y_VOL_BASE       :: f32(338)
 SETTINGS_VOL_ROW_H_BASE   :: f32(34)
 SETTINGS_Y_KEYBINDS_BASE  :: f32(490)
 SETTINGS_Y_CLOSE_BASE     :: f32(542)
@@ -1772,7 +1748,7 @@ settings_y_exit     :: proc() -> i32 { return i32(uis(SETTINGS_Y_EXIT_BASE))    
 update_settings_overlay :: proc() {
     sw  := rl.GetScreenWidth()
     sh  := rl.GetScreenHeight()
-    pW  := pause_W()   // same width as pause panel
+    pW  := pause_W()
     pH  := settings_H()
     pBW := pause_btn_w()
     pBH := pause_btn_h()
@@ -1973,7 +1949,7 @@ init_icon_cache :: proc() {
 shutdown_icon_cache :: proc() {
     for key, tex in g_icon_cache {
         if tex.id != 0 { rl.UnloadTexture(tex) }
-        delete(key)   // free the strings.clone'd key
+        delete(key)
     }
     delete(g_icon_cache)
 
@@ -2029,10 +2005,27 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
     eye   := rl.Color{ 236, 240, 214, 255 }
 
     switch key {
-    case "player_wanderer":
-        base  = rl.Color{ 82, 96, 118, 255 }
-        shade = rl.Color{ 44, 52, 68, 255 }
-        glow  = rl.Color{ 218, 112, 72, 220 }
+    case "player_nurse":
+        base  = rl.Color{ 210, 210, 210, 255 }
+        shade = rl.Color{ 140, 148, 160, 255 }
+        glow  = rl.Color{ 200, 80, 80, 220 }
+    case "player_pr1s":
+        base  = rl.Color{ 40, 50, 40, 255 }
+        shade = rl.Color{ 20, 28, 20, 255 }
+        glow  = rl.Color{ 80, 220, 80, 220 }
+    case "player_sheriff":
+        base  = rl.Color{ 120, 100, 60, 255 }
+        shade = rl.Color{ 64, 50, 28, 255 }
+        glow  = rl.Color{ 230, 200, 80, 220 }
+    case "player_srbrain":
+        base  = rl.Color{ 60, 40, 80, 255 }
+        shade = rl.Color{ 30, 18, 46, 255 }
+        glow  = rl.Color{ 160, 80, 240, 220 }
+    case "enemy_spider":
+        base  = rl.Color{ 20, 50, 18, 255 }
+        shade = rl.Color{ 10, 24, 8, 255 }
+        glow  = rl.Color{ 80, 220, 60, 220 }
+        eye   = rl.Color{ 220, 240, 80, 255 }
     case "enemy_brute":
         base  = rl.Color{ 90, 40, 26, 255 }
         shade = rl.Color{ 48, 18, 14, 255 }
@@ -2067,101 +2060,101 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
             from_rt = true,
         }
     case "env_door":
-        // Wooden door with frame and knob
-        rl.DrawRectangle(10,  6, 44, 52, rl.Color{ 60, 36, 14, 255})  // frame
-        rl.DrawRectangle(12,  8, 40, 48, rl.Color{ 96, 58, 22, 255})  // door face
-        rl.DrawRectangle(14, 10, 16, 20, rl.Color{ 80, 48, 18, 255})  // upper-left panel
-        rl.DrawRectangle(34, 10, 16, 20, rl.Color{ 80, 48, 18, 255})  // upper-right panel
-        rl.DrawRectangle(14, 34, 16, 18, rl.Color{ 80, 48, 18, 255})  // lower-left panel
-        rl.DrawRectangle(34, 34, 16, 18, rl.Color{ 80, 48, 18, 255})  // lower-right panel
-        rl.DrawCircle(37, 28, 3, rl.Color{200, 158, 50, 255})         // knob
-        rl.DrawCircle(37, 28, 2, rl.Color{220, 180, 80, 255})         // knob highlight
-        rl.DrawRectangle( 8, 56,  48, 4, rl.Color{ 48, 28, 10, 255}) // threshold
+
+        rl.DrawRectangle(10,  6, 44, 52, rl.Color{ 60, 36, 14, 255})
+        rl.DrawRectangle(12,  8, 40, 48, rl.Color{ 96, 58, 22, 255})
+        rl.DrawRectangle(14, 10, 16, 20, rl.Color{ 80, 48, 18, 255})
+        rl.DrawRectangle(34, 10, 16, 20, rl.Color{ 80, 48, 18, 255})
+        rl.DrawRectangle(14, 34, 16, 18, rl.Color{ 80, 48, 18, 255})
+        rl.DrawRectangle(34, 34, 16, 18, rl.Color{ 80, 48, 18, 255})
+        rl.DrawCircle(37, 28, 3, rl.Color{200, 158, 50, 255})
+        rl.DrawCircle(37, 28, 2, rl.Color{220, 180, 80, 255})
+        rl.DrawRectangle( 8, 56,  48, 4, rl.Color{ 48, 28, 10, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_switch":
-        // Wall-mounted lever
-        rl.DrawRectangle(18, 36, 28, 22, rl.Color{ 50, 50, 60, 255}) // base plate
-        rl.DrawRectangle(20, 38, 24, 18, rl.Color{ 68, 68, 80, 255}) // plate face
-        rl.DrawRectangle(22, 40,  8,  4, rl.Color{ 80,180, 70, 255}) // indicator light
-        rl.DrawRectangle(30, 14,  4, 30, rl.Color{130, 80, 26, 255}) // lever shaft
-        rl.DrawCircle(32, 14, 6, rl.Color{180, 116, 40, 255})        // handle ball
-        rl.DrawCircle(32, 14, 4, rl.Color{210, 150, 60, 255})        // ball highlight
+
+        rl.DrawRectangle(18, 36, 28, 22, rl.Color{ 50, 50, 60, 255})
+        rl.DrawRectangle(20, 38, 24, 18, rl.Color{ 68, 68, 80, 255})
+        rl.DrawRectangle(22, 40,  8,  4, rl.Color{ 80,180, 70, 255})
+        rl.DrawRectangle(30, 14,  4, 30, rl.Color{130, 80, 26, 255})
+        rl.DrawCircle(32, 14, 6, rl.Color{180, 116, 40, 255})
+        rl.DrawCircle(32, 14, 4, rl.Color{210, 150, 60, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_chest":
-        // Treasure chest with iron bands
-        rl.DrawRectangle( 8, 34, 48, 26, rl.Color{ 88, 54, 20, 255}) // body
-        rl.DrawRectangle(10, 36, 44, 22, rl.Color{108, 68, 26, 255}) // body face
-        rl.DrawRectangle( 8, 22, 48, 14, rl.Color{ 72, 44, 16, 255}) // lid
-        rl.DrawRectangle(10, 24, 44, 11, rl.Color{ 90, 56, 20, 255}) // lid face
-        rl.DrawRectangle( 8, 44, 48,  4, rl.Color{168, 130, 50, 255}) // horizontal band
-        rl.DrawRectangle(28, 36,  8,  8, rl.Color{180, 148, 52, 255}) // clasp
-        rl.DrawRectangle(30, 38,  4,  4, rl.Color{220, 188, 90, 255}) // clasp gem
+
+        rl.DrawRectangle( 8, 34, 48, 26, rl.Color{ 88, 54, 20, 255})
+        rl.DrawRectangle(10, 36, 44, 22, rl.Color{108, 68, 26, 255})
+        rl.DrawRectangle( 8, 22, 48, 14, rl.Color{ 72, 44, 16, 255})
+        rl.DrawRectangle(10, 24, 44, 11, rl.Color{ 90, 56, 20, 255})
+        rl.DrawRectangle( 8, 44, 48,  4, rl.Color{168, 130, 50, 255})
+        rl.DrawRectangle(28, 36,  8,  8, rl.Color{180, 148, 52, 255})
+        rl.DrawRectangle(30, 38,  4,  4, rl.Color{220, 188, 90, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_crate":
-        // Wooden crate with cross-brace planks
-        rl.DrawRectangle( 8, 10, 48, 48, rl.Color{ 90, 58, 24, 255}) // box
-        rl.DrawRectangle(10, 12, 44, 44, rl.Color{112, 72, 28, 255}) // face
-        rl.DrawRectangle( 8, 10, 48,  4, rl.Color{ 70, 42, 16, 255}) // top edge
-        rl.DrawRectangle( 8, 54, 48,  4, rl.Color{ 70, 42, 16, 255}) // bottom edge
-        rl.DrawRectangle( 8, 10,  4, 48, rl.Color{ 70, 42, 16, 255}) // left edge
-        rl.DrawRectangle(52, 10,  4, 48, rl.Color{ 70, 42, 16, 255}) // right edge
-        rl.DrawRectangle( 8, 30, 48,  4, rl.Color{ 70, 42, 16, 255}) // mid horiz
-        rl.DrawRectangle(30, 10,  4, 48, rl.Color{ 70, 42, 16, 255}) // mid vert
+
+        rl.DrawRectangle( 8, 10, 48, 48, rl.Color{ 90, 58, 24, 255})
+        rl.DrawRectangle(10, 12, 44, 44, rl.Color{112, 72, 28, 255})
+        rl.DrawRectangle( 8, 10, 48,  4, rl.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 54, 48,  4, rl.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 10,  4, 48, rl.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle(52, 10,  4, 48, rl.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 30, 48,  4, rl.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle(30, 10,  4, 48, rl.Color{ 70, 42, 16, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_lore_item":
-        // Folded parchment document
-        rl.DrawRectangle(14,  6, 36, 48, rl.Color{198, 176, 126, 255}) // paper
-        rl.DrawRectangle(16,  8, 32, 44, rl.Color{210, 192, 146, 255}) // paper face
-        rl.DrawRectangle(14,  6, 12, 12, rl.Color{180, 158, 108, 255}) // fold triangle bg
-        rl.DrawRectangle(16,  8,  4,  8, rl.Color{198, 176, 126, 255}) // fold detail
-        rl.DrawRectangle(19, 18, 26,  2, rl.Color{120, 100,  60, 160}) // text line 1
-        rl.DrawRectangle(19, 24, 26,  2, rl.Color{120, 100,  60, 160}) // text line 2
-        rl.DrawRectangle(19, 30, 26,  2, rl.Color{120, 100,  60, 160}) // text line 3
-        rl.DrawRectangle(19, 36, 18,  2, rl.Color{120, 100,  60, 160}) // text line 4 (short)
+
+        rl.DrawRectangle(14,  6, 36, 48, rl.Color{198, 176, 126, 255})
+        rl.DrawRectangle(16,  8, 32, 44, rl.Color{210, 192, 146, 255})
+        rl.DrawRectangle(14,  6, 12, 12, rl.Color{180, 158, 108, 255})
+        rl.DrawRectangle(16,  8,  4,  8, rl.Color{198, 176, 126, 255})
+        rl.DrawRectangle(19, 18, 26,  2, rl.Color{120, 100,  60, 160})
+        rl.DrawRectangle(19, 24, 26,  2, rl.Color{120, 100,  60, 160})
+        rl.DrawRectangle(19, 30, 26,  2, rl.Color{120, 100,  60, 160})
+        rl.DrawRectangle(19, 36, 18,  2, rl.Color{120, 100,  60, 160})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_phonograph":
-        // Wax cylinder phonograph with horn
-        rl.DrawRectangle( 8, 36, 28, 16, rl.Color{ 72, 44, 18, 255}) // cabinet
-        rl.DrawRectangle(10, 38, 24, 12, rl.Color{ 92, 56, 22, 255}) // cabinet face
-        rl.DrawRectangle(10, 40, 24,  8, rl.Color{ 78, 48, 20, 255}) // cylinder slot
-        rl.DrawEllipse(22, 44, 10, 4, rl.Color{ 40, 40, 40, 220})    // cylinder end
+
+        rl.DrawRectangle( 8, 36, 28, 16, rl.Color{ 72, 44, 18, 255})
+        rl.DrawRectangle(10, 38, 24, 12, rl.Color{ 92, 56, 22, 255})
+        rl.DrawRectangle(10, 40, 24,  8, rl.Color{ 78, 48, 20, 255})
+        rl.DrawEllipse(22, 44, 10, 4, rl.Color{ 40, 40, 40, 220})
         rl.DrawEllipseLines(22, 44, 10, 4, rl.Color{100, 100,110,255})
-        // Horn: triangular shape pointing up-right
+
         rl.DrawTriangle(
             {36, 52}, {54, 10}, {54, 52},
             rl.Color{180, 130, 50, 200})
         rl.DrawTriangleLines(
             {36, 52}, {54, 10}, {54, 52},
             rl.Color{220, 170, 70, 220})
-        rl.DrawEllipse(45, 10, 9, 4, rl.Color{200, 160, 60, 160})   // horn mouth
+        rl.DrawEllipse(45, 10, 9, 4, rl.Color{200, 160, 60, 160})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_key":
-        // Ornate key: ring head + shaft + teeth
-        rl.DrawCircle(20, 24, 14, rl.Color{180, 148, 40, 255})       // ring outer
-        rl.DrawCircle(20, 24, 10, rl.Color{130,  96, 22, 255})       // ring inner (hole)
-        rl.DrawCircle(20, 24,  5, rl.Color{180, 148, 40, 255})       // center hub
-        rl.DrawRectangle(30, 21, 26,  6, rl.Color{200, 162, 48, 255}) // shaft
-        rl.DrawRectangle(48, 27,  4,  8, rl.Color{200, 162, 48, 255}) // tooth 1
-        rl.DrawRectangle(42, 27,  4,  6, rl.Color{200, 162, 48, 255}) // tooth 2
-        rl.DrawRectangle(36, 27,  4,  4, rl.Color{200, 162, 48, 255}) // tooth 3
+
+        rl.DrawCircle(20, 24, 14, rl.Color{180, 148, 40, 255})
+        rl.DrawCircle(20, 24, 10, rl.Color{130,  96, 22, 255})
+        rl.DrawCircle(20, 24,  5, rl.Color{180, 148, 40, 255})
+        rl.DrawRectangle(30, 21, 26,  6, rl.Color{200, 162, 48, 255})
+        rl.DrawRectangle(48, 27,  4,  8, rl.Color{200, 162, 48, 255})
+        rl.DrawRectangle(42, 27,  4,  6, rl.Color{200, 162, 48, 255})
+        rl.DrawRectangle(36, 27,  4,  4, rl.Color{200, 162, 48, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
@@ -2208,7 +2201,7 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
 
     loaded := rl.LoadTexture(cstring(&path_buf[0]))
     if loaded.id != 0 {
-        rl.SetTextureFilter(loaded, .POINT)
+        rl.SetTextureFilter(loaded, .BILINEAR)
         entry = EntitySpriteEntry{
             tex = loaded,
             src = { 0, 0, f32(loaded.width), f32(loaded.height) },
@@ -2222,39 +2215,53 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
     return entry, true
 }
 
+
+get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: rl.Rectangle, ok: bool) {
+    if len(stem) == 0 { return }
+    buf: [64]u8
+    n   := min(len(stem), len(buf)-1)
+    copy(buf[:], stem[:n])
+    buf[n] = 0
+    entry, eok := get_or_load_entity_sprite(cstring(&buf[0]))
+    if !eok { return }
+    return entry.tex, entry.src, true
+}
+
 draw_entity_sprite_quad :: proc(entry: EntitySpriteEntry, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color) {
     draw_entity_sprite_quad_ex(entry.tex, entry.src, pos, world_size, rotation_rad, tint)
 }
 
-// ISO_SPRITE_Y is the vertical scale applied to all entity sprite quads so
-// that their screen footprint matches the 2:1 isometric projection.
-// (ISO_TILE_H / ISO_TILE_W = 0.5)
-ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W   // = 0.5
 
-draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color) {
+ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W
+
+draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color, y_scale: f32 = ISO_SPRITE_Y, anchor: [2]f32 = {0.5, 1.0}) {
     iso     := world_to_iso_v(pos)
-    iso_h   := world_size * ISO_SPRITE_Y
+    iso_h   := world_size * y_scale
     dst     := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
-    origin  := rl.Vector2{ world_size * 0.5, iso_h * 0.5 }
+    origin  := rl.Vector2{ world_size * anchor[0], iso_h * anchor[1] }
     iso_rot := world_rot_to_iso(rotation_rad)
     rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
 }
 
 
-
-
-
+draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, tint: rl.Color, anchor: [2]f32 = {0.5, 1.0}) {
+    iso    := world_to_iso_v(pos)
+    aspect := src.height / src.width
+    iso_h  := world_size * aspect
+    dst    := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
+    origin := rl.Vector2{ world_size * anchor[0], iso_h * anchor[1] }
+    rl.DrawTexturePro(tex, src, dst, origin, 0.0, tint)
+}
 
 
 shop_panel_origin :: proc() -> (px, py: i32) {
     shop_w   := i32(uis(480))
     shop_h   := i32(uis(520))
-    game_w   := rl.GetScreenWidth() - g_inv.panel_w   // usable left area
+    game_w   := rl.GetScreenWidth() - g_inv.panel_w
     left_x   := (game_w - shop_w) / 2
     top_y    := rl.GetScreenHeight() / 2 - shop_h / 2
     return left_x, top_y
 }
-
 
 
 @(private = "file")
@@ -2314,7 +2321,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
                    (1 if item.req_dex > 0 else 0) +
                    (1 if item.req_sci > 0 else 0)
 
-    // Count stat display lines for tooltip height.
+
     stat_line_count := 0
     if item.weapon_archetype != .None && !item.is_melee {
         if item.base_damage > 0      { stat_line_count += 1 }
@@ -2407,20 +2414,46 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     rl.DrawTextEx(g_font, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
         rl.Color{ rc.r, rc.g, rc.b, 195 })
 
-    if item.ability_type != .None {
-        // Ability item: show type and cooldown instead of slot/size.
+    if item.ability_type != .None && int(item.ability_type) < len(ABILITY_DEFS) {
+
         def := ABILITY_DEFS[item.ability_type]
-        type_lbl: cstring = "Passive Ability" if def.is_passive else "Active Ability"
-        rl.DrawTextEx(g_font, type_lbl, { tx2, ty2 + uis(42) }, fs13, 0.5,
+        rl.DrawTextEx(g_font, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
             rl.Color{ 200, 170, 100, 210 })
         cd_buf: [32]u8
-        if def.is_passive {
-            rl.DrawTextEx(g_font, "Passive", { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
-        } else {
-            cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
-            cd_buf[len(cd_s)] = 0
-            rl.DrawTextEx(g_font, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
+        cd_buf[len(cd_s)] = 0
+        rl.DrawTextEx(g_font, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+    } else if cw.world_has_component(w, item_id, .Flask) {
+
+        fc := cw.world_get_flask(w, item_id)
+
+        if !cw.world_has_component(w, item_id, .RenderConfig) {
+            size_names := [cw.FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
+            kind_names := [cw.FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
+            name_buf: [40]u8
+            ns := fmt.bprintf(name_buf[:39], "%s %s Flask",
+                size_names[fc.size], kind_names[fc.kind])
+            name_buf[len(ns)] = 0
+            rl.DrawTextEx(g_font, cstring(&name_buf[0]), { tx2, ty2 }, fs15, 0.5,
+                rl.Color{ rc.r, rc.g, rc.b, 245 })
         }
+        slot_label: cstring = "Health Flask [1]" if item.slot == .Flask1 else "Energy Flask [2]"
+        rl.DrawTextEx(g_font, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
+
+
+        stat_buf: [64]u8
+        recover_what: string = "HP" if fc.kind == .Health else "Energy"
+        rs := fmt.bprintf(stat_buf[:63], "Recovers %.0f %s over %.0fs",
+            fc.recover_amount, recover_what, fc.recover_duration)
+        stat_buf[len(rs)] = 0
+        rl.DrawTextEx(g_font, cstring(&stat_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_STAT)
+
+
+        chg_buf: [32]u8
+        cs := fmt.bprintf(chg_buf[:31], "Charges: %d / %d", fc.charges, fc.max_charges)
+        chg_buf[len(cs)] = 0
+        chg_col := COL_AFFIX if fc.charges > 0 else COL_MUTED
+        rl.DrawTextEx(g_font, cstring(&chg_buf[0]), { tx2, ty2 + uis(78) }, fs13, 0.5, chg_col)
     } else {
         slot_labels := [cw.EquipSlot]cstring{
             .Head          = "Slot: Head",
@@ -2433,6 +2466,8 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             .Ability2      = "Ability Skill",
             .Ability3      = "Ability Skill",
             .Ability4      = "Ability Skill",
+            .Flask1        = "Health Flask",
+            .Flask2        = "Energy Flask",
         }
         rl.DrawTextEx(g_font, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
@@ -2456,8 +2491,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         }
     }
 
-    // ── Base stat block ───────────────────────────────────────────────────────
-    // COL_STAT is the package-level constant defined in ui.odin
+
     stat_y := ty2 + uis(78)
     {
         sbuf: [48]u8
@@ -2572,18 +2606,39 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         .BonusMeleeDamage = "Melee Damage",
         .BonusMeleeRange  = "Melee Range",
         .BonusMeleeSpeed  = "Attack Speed",
+        .BonusStrength    = "Strength",
+        .BonusDexterity   = "Dexterity",
+        .BonusScience     = "Science",
+        .BonusEnergyRegen = "Energy Regen/s",
+        .ReduceEnergyCost = "Energy Cost",
+        .ResistPhysical   = "Physical Resist",
+        .ResistNecrotic   = "Necrotic Resist",
+        .ResistFire       = "Fire Resist",
+        .ResistGalvanic   = "Galvanic Resist",
+        .ResistPoison     = "Poison Resist",
     }
-    // COL_AFFIX is the package-level constant defined in ui.odin
+
     affix_base_y := stat_y + uis(17) * f32(req_count)
     for i in 0..<affix_count {
         a   := item.affixes[i]
         ay  := affix_base_y + uis(17) * f32(i)
         abuf: [32]u8
         as: string
-        // BonusPierce is a flat count (1, 2, …) not a percentage.
-        if a.type == .BonusPierce {
+        #partial switch a.type {
+        case .BonusPierce, .BonusStrength, .BonusDexterity, .BonusScience:
+
             as = fmt.bprintf(abuf[:31], "+%.0f  %s", a.value, affix_type_labels[a.type])
-        } else {
+        case .BonusEnergyRegen:
+
+            as = fmt.bprintf(abuf[:31], "+%.1f/s  %s", a.value, affix_type_labels[a.type])
+        case .ReduceEnergyCost:
+
+            as = fmt.bprintf(abuf[:31], "-%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
+        case .ResistPhysical, .ResistNecrotic, .ResistFire, .ResistGalvanic, .ResistPoison:
+
+            as = fmt.bprintf(abuf[:31], "+%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
+        case:
+
             as = fmt.bprintf(abuf[:31], "+%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
         }
         abuf[len(as)] = 0
@@ -2677,17 +2732,7 @@ draw_levelup_flash :: proc() {
         sfs, 1, { 200, 180, 120, salp })
 }
 
-// ── Enemy mutation auras ───────────────────────────────────────────────────────
-//
-// Draws world-space rings around non-player entities that carry mutations.
-// Must be called inside BeginMode2D so draw_world_circle_lines applies the
-// iso projection correctly.
-//
-// Visual language per mutation:
-//   LivingBomb  — two concentric pulsing orange rings (breathing, ~1.4 Hz)
-//   ToxicFlesh  — single slow-pulsing green ring at the proximity radius
-//   ThornPact   — tight constant silver-purple double ring
-//   BlackLung   — pressure-scaled teal ring; invisible at zero pressure
+
 draw_enemy_mutation_auras :: proc(w: ^cw.World) {
     t   := f32(rl.GetTime())
     ids := cw.world_query(w, cw.query_mask(.MutationContainer, .Transform, .AIAgent),
@@ -2704,7 +2749,7 @@ draw_enemy_mutation_auras :: proc(w: ^cw.World) {
             meid := mc.entities[i]
             if !cw.world_is_valid(w, meid) { continue }
 
-            // ── LivingBomb — pulsing orange rings ──
+
             if cw.world_has_component(w, meid, .MutOnDeathExplode) {
                 pulse := f32(0.87) + f32(0.13) * math.sin(t * 1.4 * math.PI * 2)
                 r     := f32(38) * pulse
@@ -2713,7 +2758,7 @@ draw_enemy_mutation_auras :: proc(w: ^cw.World) {
                 draw_world_circle_lines(pos, r * 0.58,  rl.Color{ col.r, col.g, col.b,  60 })
             }
 
-            // ── ToxicFlesh — slow pulsing green ring at proximity radius ──
+
             if cw.world_has_component(w, meid, .MutProximityDamage) {
                 pd    := cw.world_get_mut_proximity_damage(w, meid)
                 pulse := f32(0.45) + f32(0.45) * math.sin(t * math.PI * 0.7)
@@ -2722,14 +2767,14 @@ draw_enemy_mutation_auras :: proc(w: ^cw.World) {
                 draw_world_circle_lines(pos, pd.radius, rl.Color{ col.r, col.g, col.b, alpha })
             }
 
-            // ── ThornPact — tight constant double ring ──
+
             if cw.world_has_component(w, meid, .MutThornPact) {
                 col := mutation_visual_color(.ThornPact)
                 draw_world_circle_lines(pos, 40, rl.Color{ col.r, col.g, col.b, 115 })
                 draw_world_circle_lines(pos, 47, rl.Color{ col.r, col.g, col.b,  42 })
             }
 
-            // ── BlackLung — pressure-scaled teal ring ──
+
             if cw.world_has_component(w, meid, .MutBlackLung) {
                 bl := cw.world_get_mut_black_lung(w, meid)
                 if bl.pressure > 5 {

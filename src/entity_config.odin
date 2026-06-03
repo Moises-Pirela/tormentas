@@ -1,17 +1,5 @@
 package main
 
-// =============================================================================
-// ENTITY CONFIG — data-driven entity spawning from JSON
-//
-// JSON format (data/entities.json): a top-level array of entity objects.
-// Each object key names a component; its presence means "add this component".
-// Absent key → component not added. Empty object {} is valid (flag-only).
-//
-// Workflow:
-//   defs, ok := load_entity_defs("data/entities.json")
-//   defer destroy_entity_defs(defs)
-//   pid := spawn_from_def(world, find_entity_def(defs, "player"))
-// =============================================================================
 
 import "core:encoding/json"
 import "core:fmt"
@@ -39,36 +27,36 @@ ColliderDef :: struct {
 }
 
 WeaponDef :: struct {
-    type:             cw.WeaponType, 
+    type:             cw.WeaponType,
     damage:           f32,
-    fire_rate:        f32,           
-    projectile_speed: f32,           
-    projectile_life:  f32,           
-    range:            f32,           
-    ammo_max:         int,           
-    reload_time:      f32,           
+    fire_rate:        f32,
+    projectile_speed: f32,
+    projectile_life:  f32,
+    range:            f32,
+    ammo_max:         int,
+    reload_time:      f32,
 }
 
 AIAgentDef :: struct {
     state:        u8,
     aggro_range:  f32,
     attack_range: f32,
-    cooldown_max: f32,      
+    cooldown_max: f32,
     speed:        f32,
     damage:       f32,
     ai_type:      cw.AIType,
-    pellet_count: int,      
-    spread_angle: f32,      
+    pellet_count: int,
+    spread_angle: f32,
 }
 
 DodgeDef :: struct {
-    duration:     f32,   
-    speed:        f32,   
-    cooldown:     f32,   
+    duration:     f32,
+    speed:        f32,
+    cooldown:     f32,
 }
 
 RenderConfigDef :: struct {
-    display_name: string,   
+    display_name: string,
     sprite_name:  string,
     sprite_scale: f32,
     world_size:   f32,
@@ -182,7 +170,7 @@ FlammableDef :: struct {
 }
 
 EntityDef :: struct {
-    name:         string,            
+    name:         string,
 
     transform:    Maybe(TransformDef),
     health:       Maybe(HealthDef),
@@ -388,6 +376,8 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
                     n.npc_type = .MutationWorkbench
                 case "stash":
                     n.npc_type = .Stash
+                case "ability_vendor":
+                    n.npc_type = .AbilityVendor
                 case:
                     n.npc_type = .Shopkeeper
                 }
@@ -621,7 +611,7 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
             range            = wp.range,
             ammo_max         = wp.ammo_max,
             reload_time      = wp.reload_time,
-            ammo_current     = wp.ammo_max,  
+            ammo_current     = wp.ammo_max,
             cooldown         = 0,
             reload_timer     = 0,
             is_reloading     = false,
@@ -801,7 +791,7 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         })
     }
 
-    // Mutations listed in the def are applied at spawn via MutationContainer.
+
     if len(def.mutations) > 0 {
         cw.world_set_mutation(w, id, cw.mutation_container_empty())
         for name in def.mutations {
@@ -826,7 +816,7 @@ jf32 :: proc(v: json.Value) -> f32 {
     switch n in v {
     case json.Float:   return f32(n)
     case json.Integer: return f32(n)
-    case json.Null, bool, string, json.Array, json.Object: // not numeric — fall through
+    case json.Null, bool, string, json.Array, json.Object:
     }
     return 0
 }

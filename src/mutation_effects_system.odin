@@ -45,7 +45,7 @@ _mut_tick_proximity_damage :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
     if !cw.world_has_component(w, eid, .MutProximityDamage)  { return }
     if !cw.world_has_component(w, pid, .Transform)           { return }
 
-    pd  := cw.world_get_mut_proximity_damage(w, eid)^  // copy — world_set_* can resize the array
+    pd  := cw.world_get_mut_proximity_damage(w, eid)^
 
     pos := cw.world_get_transform(w, pid).position
     r2  := pd.radius * pd.radius
@@ -181,7 +181,6 @@ _mut_tick_extra_dodge_charges :: proc(w: ^cw.World, eid: int, dt: f32) {
     }
 }
 
-// ── Heart Cage ─────────────────────────────────────────────────────────────
 
 @(private = "file")
 _mut_tick_heart_cage :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
@@ -189,15 +188,15 @@ _mut_tick_heart_cage :: proc(w: ^cw.World, pid: int, eid: int, dt: f32) {
     hc := cw.world_get_mut_heart_cage(w, eid)
     if hc.heart_id == cw.INVALID_ENTITY { return }
 
-    // Orbit angle advances every tick.
+
     hc.orbit_angle += cw.HEART_CAGE_ORBIT_SPEED * dt
 
-    // Stop updating orbit position once the heart is dead.
+
     if !cw.world_is_valid(w, hc.heart_id)                        { return }
     if !cw.world_has_component(w, hc.heart_id, .Health)          { return }
     if cw.world_get_health(w, hc.heart_id).current <= 0          { return }
 
-    // Update heart entity's world-space position to the current orbit point.
+
     if cw.world_is_valid(w, hc.heart_id) &&
        cw.world_has_component(w, pid, .Transform) {
         pt := cw.world_get_transform(w, pid)
@@ -217,10 +216,10 @@ _spawn_heart_entity :: proc(w: ^cw.World, owner_id: int, max_hp: f32) -> int {
         pos[0] += cw.HEART_CAGE_ORBIT_RADIUS
     }
     cw.world_set_transform(w, id, cw.TransformComp{ position = pos })
-    // Collider (faction=0) lets enemy projectiles hit the heart — enemy shots are
-    // faction=1, which != 0, so they collide.  Player shots are faction=0 and skip it.
+
+
     cw.world_set_collider(w, id, cw.ColliderComp{ radius = 14, faction = 0 })
-    // Health lives directly on the entity; damage_system tracks it like any other.
+
     cw.world_set_health(w, id, cw.HealthComp{ current = max_hp, max = max_hp })
     return id
 }
@@ -280,12 +279,12 @@ _mut_early_false_saint_beacon :: proc(w: ^cw.World, pid: int, eid: int) {
     for ai_id in ai_ids {
         if cw.world_has_component(w, ai_id, .Reanimated) { continue }
         ai := cw.world_get_ai(w, ai_id)
-        if ai.state != 0 { continue }  // only idle enemies
+        if ai.state != 0 { continue }
         ap := cw.world_get_transform(w, ai_id).position
         dx := ap[0] - pos[0]
         dy := ap[1] - pos[1]
         if dx*dx + dy*dy > r2 { continue }
-        ai.state     = 1  // chase
+        ai.state     = 1
         ai.target_id = pid
     }
 }
@@ -365,7 +364,7 @@ _tick_reanimated_servant :: proc(w: ^cw.World, sid: int) {
     if cw.world_is_valid(w, ai.target_id) &&
        cw.world_has_component(w, ai.target_id, .AIAgent) &&
        !cw.world_has_component(w, ai.target_id, .Reanimated) {
-        ai.state = 1  // ensure chase stays on
+        ai.state = 1
         return
     }
 
@@ -389,9 +388,9 @@ _tick_reanimated_servant :: proc(w: ^cw.World, sid: int) {
 
     if best_id != cw.INVALID_ENTITY {
         ai.target_id = best_id
-        ai.state     = 1  // chase
+        ai.state     = 1
     } else {
-        ai.state = 0  // no enemies — idle
+        ai.state = 0
     }
 }
 

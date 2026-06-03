@@ -1,13 +1,13 @@
 [
     {
         "name": "player",
-        "render":    { "name": "Wanderer", "sprite": "player_wanderer", "sprite_scale": 1.0, "layer": "sprite", "world_size": 70, "show_dir_tip": true },
+        "render":    { "name": "Sheriff", "sprite": "player_sheriff", "sprite_scale": 1.0, "layer": "sprite", "world_size": 70, "show_dir_tip": true },
         "transform": { "position": [0, 0, 0], "rotation": 0 },
         "velocity":  {},
         "health":    { "current": 100, "max": 100, "corruption": 0, "energy": 100, "max_energy": 100 },
         "input":     {},
         "collider":  { "radius": 16, "faction": 0 },
-        "dodge":     { "duration": 0.18, "speed": 490, "cooldown": 0.72 },
+        "dodge":     { "duration": 0.18, "speed": 784, "cooldown": 0.72 },
         "flammable": { "is_immune": false },
         "organic": {}
     },
@@ -18,9 +18,9 @@
             "type":             "ranged",
             "damage":           25,
             "fire_rate":        5,
-            "projectile_speed": 500,
+            "projectile_speed": 800,
             "projectile_life":  1.5,
-            "range":            750,
+            "range":            1200,
             "ammo_max":         8,
             "reload_time":      1.5
         }
@@ -32,9 +32,9 @@
             "type":             "ranged",
             "damage":           18,
             "fire_rate":        0.8,
-            "projectile_speed": 360,
+            "projectile_speed": 576,
             "projectile_life":  0.48,
-            "range":            400,
+            "range":            640,
             "ammo_max":         0
         }
     },
@@ -45,12 +45,30 @@
             "type":             "ranged",
             "damage":           48,
             "fire_rate":        0.45,
-            "projectile_speed": 720,
+            "projectile_speed": 1152,
             "projectile_life":  2.4,
-            "range":            1100,
+            "range":            1760,
             "ammo_max":         5,
             "reload_time":      3.2
         }
+    },
+    {
+        "name": "enemy_spider",
+        "render":    { "name": "Dreadspider", "sprite": "enemy_spider", "sprite_scale": 0.9, "layer": "sprite", "show_hp_bar": true, "show_dir_tip": true },
+        "transform": { "position": [100, 100, 0], "rotation": 0 },
+        "velocity":  {},
+        "health":    { "current": 30, "max": 30, "corruption": 0 },
+        "collider":  { "radius": 10, "faction": 1 },
+        "ai_agent":  {
+            "ai_type":      "melee",
+            "aggro_range":  480,
+            "attack_range": 36,
+            "cooldown":     0.9,
+            "speed":        184,
+            "damage":       8
+        },
+        "flammable": { "is_immune": false },
+        "organic": {}
     },
     {
         "name": "enemy_melee",
@@ -61,10 +79,10 @@
         "collider":  { "radius": 14, "faction": 1 },
         "ai_agent":  {
             "ai_type":      "melee",
-            "aggro_range":  280,
+            "aggro_range":  448,
             "attack_range": 44,
             "cooldown":     1.5,
-            "speed":        72,
+            "speed":        115,
             "damage":       12
         },
         "flammable": { "is_immune": false },
@@ -79,10 +97,10 @@
         "collider":  { "radius": 20, "faction": 1 },
         "ai_agent":  {
             "ai_type":      "melee",
-            "aggro_range":  310,
+            "aggro_range":  496,
             "attack_range": 54,
             "cooldown":     2.2,
-            "speed":        42,
+            "speed":        67,
             "damage":       32
         },
         "flammable": { "is_immune": false },
@@ -97,10 +115,10 @@
         "collider":  { "radius": 11, "faction": 1 },
         "ai_agent":  {
             "ai_type":      "melee",
-            "aggro_range":  360,
+            "aggro_range":  576,
             "attack_range": 36,
             "cooldown":     0.75,
-            "speed":        145,
+            "speed":        232,
             "damage":       8
         },
         "flammable": { "is_immune": false },
@@ -115,10 +133,10 @@
         "collider":  { "radius": 14, "faction": 1 },
         "ai_agent":  {
             "ai_type":      "ranged",
-            "aggro_range":  400,
-            "attack_range": 340,
+            "aggro_range":  640,
+            "attack_range": 544,
             "cooldown":     2.2,
-            "speed":        50,
+            "speed":        80,
             "damage":       18,
             "pellet_count": 5,
             "spread_angle": 0.45
@@ -135,10 +153,10 @@
         "collider":  { "radius": 13, "faction": 1 },
         "ai_agent":  {
             "ai_type":      "ranged",
-            "aggro_range":  620,
-            "attack_range": 560,
+            "aggro_range":  992,
+            "attack_range": 896,
             "cooldown":     3.8,
-            "speed":        28,
+            "speed":        45,
             "damage":       46,
             "pellet_count": 1,
             "spread_angle": 0.04
@@ -151,7 +169,7 @@
         "render":    { "name": "El Mercader", "sprite": "npc_shopkeeper", "sprite_scale": 1.0, "layer": "sprite", "world_size": 64 },
         "transform": { "position": [160, 160, 0], "rotation": 0 },
         "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
-        "npc":       { "npc_type": "shopkeeper", "interact_radius": 80 },
+        "npc":       { "npc_type": "shopkeeper", "interact_radius": 128 },
         "flammable": { "is_immune": false },
         "organic": {}
     },
@@ -160,14 +178,23 @@
         "render":    { "name": "Mutator Shrine", "sprite": "mutation_workbench", "sprite_scale": 1.15, "layer": "sprite", "world_size": 78 },
         "transform": { "position": [220, 160, 0], "rotation": 0 },
         "collider":  { "radius": 18, "faction": 0, "is_trigger": true },
-        "npc":       { "npc_type": "mutation_workbench", "interact_radius": 84 }
+        "npc":       { "npc_type": "mutation_workbench", "interact_radius": 134 }
     },
     {
         "name": "npc_stash",
         "render":    { "name": "Traveler's Stash", "sprite": "mutation_workbench", "sprite_scale": 0.95, "layer": "sprite", "world_size": 70 },
         "transform": { "position": [120, 110, 0], "rotation": 0 },
         "collider":  { "radius": 18, "faction": 0, "is_trigger": true },
-        "npc":       { "npc_type": "stash", "interact_radius": 84 }
+        "npc":       { "npc_type": "stash", "interact_radius": 134 }
+    },
+    {
+        "name": "npc_ability_vendor",
+        "render":    { "name": "Ability Vendor", "sprite": "npc_shopkeeper", "sprite_scale": 1.0, "layer": "sprite", "world_size": 64 },
+        "transform": { "position": [200, 120, 0], "rotation": 0 },
+        "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "ability_vendor", "interact_radius": 128 },
+        "flammable": { "is_immune": false },
+        "organic": {}
     },
     {
         "name": "mut_glass_cannon",

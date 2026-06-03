@@ -139,6 +139,9 @@ SHOP_GOLD,Gold: %d,Oro: %d,Ouro: %d
 SHOP_SOLD_OUT,Sold out,Agotado,Esgotado
 SHOP_SELL,SELL  (click an item in your backpack),VENDER  (selecciona un ítem),VENDER  (clique num item)
 SHOP_ESC_CLOSE,ESC — close,ESC — cerrar,ESC — fechar
+# ── Ability Vendor ────────────────────────────────────────────────────────────
+ABILITY_VENDOR_INTERACT,[E] Abilities,[E] Habilidades,[E] Habilidades
+ABILITY_VENDOR_SUBTITLE,ABILITIES FOR SERUMS,HABILIDADES POR SUEROS,HABILIDADES POR SOROS
 # ── Stash UI ──────────────────────────────────────────────────────────────────
 STASH_INTERACT,[E] Stash,[E] Reserva,[E] Baú
 STASH_TITLE,T R A V E L E R ' S   S T A S H,R E S E R V A,B A Ú

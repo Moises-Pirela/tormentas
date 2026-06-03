@@ -8,9 +8,9 @@ import "core:path/filepath"
 
 SCREEN_WIDTH  :: 1920
 SCREEN_HEIGHT :: 1080
-MOVE_SPEED    :: 150.0
+MOVE_SPEED    :: 240.0
 CAMERA_ZOOM   :: 1.0
-TILE_SIZE     :: 40
+TILE_SIZE     :: 64
 PLAYER_RADIUS :: 16.0
 
 TICK_RATE :: 60
@@ -65,14 +65,18 @@ init_game :: proc() {
     cw.sim_register_system(&g_sim, { .Update      }, animation_system)
     cw.sim_register_system(&g_sim, { .Update      }, facing_system)
     cw.sim_register_system(&g_sim, { .Update      }, weapon_system)
-    // stealth_system runs after weapon_system so gunshot noise is emitted before
-    // AI perception runs this tick; runs before ai_system so state changes take effect.
+
+
     cw.sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system)
     cw.sim_register_system(&g_sim, { .Update      }, ai_system)
     cw.sim_register_system(&g_sim, { .Update      }, spawn_director_system)
     cw.sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system)
     cw.sim_register_system(&g_sim, { .Update      }, reanimated_system)
     cw.sim_register_system(&g_sim, { .Update      }, ability_system)
+    cw.sim_register_system(&g_sim, { .Update      }, flask_system)
+    cw.sim_register_system(&g_sim, { .Update      }, homing_system)
+    cw.sim_register_system(&g_sim, { .Update      }, trap_system)
+    cw.sim_register_system(&g_sim, { .Update      }, grenade_system)
     cw.sim_register_system(&g_sim, { .Update      }, extraction_system)
     cw.sim_register_system(&g_sim, { .Update      }, melee_arc_system)
     cw.sim_register_system(&g_sim, { .Update      }, projectile_collision_system)
@@ -84,6 +88,7 @@ init_game :: proc() {
     cw.sim_register_system(&g_sim, { .LateUpdate  }, barrel_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, env_container_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
+    cw.sim_register_system(&g_sim, { .LateUpdate  }, entity_separation_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
     cw.sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system)
@@ -104,9 +109,11 @@ init_game :: proc() {
     hub_apply(w)
     spawn_players(w)
     g_stash = stash_make_empty()
-    load_player(w, w.player_id)
+    if !load_player(w, w.player_id) {
+        give_starter_items(w, w.player_id)
+    }
 
-    // Full HP on first spawn-in.
+
     if cw.world_has_component(&g_sim.world, g_sim.world.player_id, .Health) {
         h := cw.world_get_health(&g_sim.world, g_sim.world.player_id)
         h.current = h.max
@@ -142,7 +149,7 @@ shutdown_game :: proc() {
     g_stall_acc  = 0
     g_accumulator = 0
 
-    ui_close_all()   // clear any open UI panels instantly
+    ui_close_all()
 
     set_playing_state(.Gameplay)
     g_pending_level_switch = 0
@@ -184,23 +191,26 @@ update_playing :: proc(dt: f32) {
         set_audio_listener(cw.world_get_transform(w, w.player_id).position)
     }
 
-    if input_pressed(.F1) && g_is_host && !g_console_open &&
+    if input_pressed(.F1) && g_is_host && !g_console_open && !g_anim_ed.open &&
        (g_playing_state == .Editor || g_playing_state == .Gameplay || g_playing_state == .Hub) {
         editor_toggle()
     }
+    if input_pressed(.F3) && g_is_host && !g_console_open &&
+       (g_playing_state == .Editor || g_playing_state == .Gameplay || g_playing_state == .Hub) {
+        if g_anim_ed.open { anim_editor_close() } else { anim_editor_open() }
+    }
     update_lighting_widget()
 
-    if !g_console_open {
-        // ── World-state specific update ─────────────────────────────────────
+    if !g_console_open && !g_anim_ed.open {
+
         switch g_playing_state {
 
         case .Editor:
             update_editor(dt)
 
         case .Hub:
-            // Deferred raid start: draw_level_select sets g_pending_raid_start
-            // instead of calling enter_raid directly (which would run inside
-            // BeginTextureMode and unload the active RT via ui_close_all).
+
+
             if g_pending_raid_start > 0 {
                 n := g_pending_raid_start
                 g_pending_raid_start = 0
@@ -208,7 +218,7 @@ update_playing :: proc(dt: f32) {
                 break
             }
 
-            // input_is_gameplay() is true when no panel is open (mode == .Gameplay)
+
             if input_is_gameplay() {
                 if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
                     ui_open(.PauseMenu)
@@ -222,6 +232,7 @@ update_playing :: proc(dt: f32) {
                 update_mutation_workbench(w)
                 update_shop(w)
                 update_stash(w)
+                update_ability_vendor(w)
                 update_hub_portal(w)
             }
 
@@ -239,7 +250,8 @@ update_playing :: proc(dt: f32) {
                 update_mutation_workbench(w)
                 update_shop(w)
                 update_stash(w)
-                // Cycle loot filter: Normal → Rare → Epic → Legendary → Normal
+                update_ability_vendor(w)
+
                 if input_pressed(rl.KeyboardKey(g_binds.gameplay.loot_filter)) {
                     switch g_loot_filter_rarity {
                     case .Normal:    g_loot_filter_rarity = .Rare
@@ -252,14 +264,11 @@ update_playing :: proc(dt: f32) {
             }
 
         case .ExtractScreen, .DeathScreen:
-            // All interaction is handled inside the draw procs.
+
 
         }
 
-        // ── Panel-specific update (active when mode == .UI) ─────────────────
-        // ESC to close the topmost panel is handled universally in the main
-        // loop AFTER this block, so individual cases only do what is unique
-        // to that panel (button logic, sub-state updates, quit detection).
+
         if input_is_ui() {
             top, ok := ui_top()
             if ok {
@@ -277,10 +286,12 @@ update_playing :: proc(dt: f32) {
                     update_shop(w)
                 case .Stash:
                     update_stash(w)
+                case .AbilityVendor:
+                    update_ability_vendor(w)
                 case .Settings, .LevelSelect, .Inventory, .Stats,
                      .Lore, .Phonograph:
-                    // No panel-specific update needed; universal ESC and
-                    // mouse clicks inside the draw proc handle interaction.
+
+
                 }
             }
         }
@@ -328,6 +339,7 @@ draw_playing :: proc() {
     rl.ClearBackground(rl.BLANK)
     rl.BeginMode2D(g_camera^)
     draw_tilemap()
+    draw_player_contact_shadow(w)
     if g_playing_state == .Hub {
         draw_hub_world(w)
     }
@@ -360,6 +372,7 @@ draw_playing :: proc() {
     rl.BeginMode2D(g_camera^)
     draw_mutation_workbench_world(w)
     draw_stash_world(w)
+    draw_ability_vendor_world(w)
     draw_enemy_mutation_auras(w)
     draw_water_puddles()
     draw_fire_patches()
@@ -367,6 +380,8 @@ draw_playing :: proc() {
     draw_status_effects(w)
     draw_ground_item_labels(w)
     draw_explosions()
+    draw_grenades_and_clouds(w)
+    draw_traps(w)
     update_draw_dmg_numbers(rl.GetFrameTime())
     if !g_editor_mode { draw_stealth_indicators(w) }
     rl.EndMode2D()
@@ -379,26 +394,26 @@ draw_playing :: proc() {
         draw_raid_timer()
         draw_hud(w)
 
-        // Hub HUD persists while LevelSelect panel is open (world stays .Hub).
+
         if g_playing_state == .Hub {
             draw_hub_hud(w)
         }
 
-        // World-state overlays that are not managed by UIManager.
+
         switch g_playing_state {
         case .ExtractScreen:
             draw_extract_screen(w)
         case .DeathScreen:
             draw_death_screen(w)
         case .Gameplay, .Hub, .Editor:
-            // no extra overlay
+
         }
 
         draw_levelup_flash()
         draw_loot_filter_hud()
     }
-    // NOTE: ui_draw() is called from the main loop (not here) so it runs
-    // in all app states and fades work across main-menu and playing alike.
+
+
     draw_lighting_widget()
 }
 
@@ -504,10 +519,11 @@ main :: proc() {
         defer free_all(context.temp_allocator)
 
         update_clay_input()
-        input_begin_frame()   // resets consumption, derives mode from ui_any()
+        input_begin_frame()
         update_audio()
         update_fade(dt)
         update_console(dt)
+        update_anim_editor(dt)
 
         switch g_app_state {
         case .MainMenu:
@@ -518,9 +534,7 @@ main :: proc() {
             update_playing(dt)
         }
 
-        // Universal ESC: close topmost UI layer in any app state.
-        // Per-panel updates above run first so they can consume the key
-        // (e.g. cancelling a rebind-listen) before this handler sees it.
+
         if ui_any() && input_pressed(rl.KeyboardKey(g_binds.ui.close_panel)) {
             ui_close_top()
         }
@@ -538,8 +552,7 @@ main :: proc() {
             draw_playing()
         }
 
-        // UI panels are rendered last (on top of everything) across all
-        // app states so Settings/Keybinds work from the main menu too.
+
         {
             ui_w := (^cw.World)(nil)
             if g_app_state == .Playing && g_sim_alive {
@@ -548,6 +561,7 @@ main :: proc() {
             ui_draw(ui_w)
         }
 
+        draw_anim_editor()
         draw_fade()
         draw_console()
         rl.EndDrawing()

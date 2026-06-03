@@ -4,7 +4,6 @@ import rl   "vendor:raylib"
 import      "core:math"
 import cw   "clockwork"
 
-// ── Panel state ───────────────────────────────────────────────────────────────
 
 g_phonograph_panel_id:        u8  = 0
 g_phonograph_panel_entity_id: int = cw.INVALID_ENTITY
@@ -15,7 +14,6 @@ ui_open_phonograph :: proc(recording_id: u8, entity_id: int = cw.INVALID_ENTITY)
     ui_open(.Phonograph)
 }
 
-// ── Draw ──────────────────────────────────────────────────────────────────────
 
 draw_phonograph_panel :: proc() {
     sw := f32(rl.GetScreenWidth())
@@ -26,7 +24,7 @@ draw_phonograph_panel :: proc() {
         return
     }
 
-    // Resolve live play state from ECS entity
+
     is_playing := false
     play_timer := f32(0)
     w := &g_sim.world
@@ -39,7 +37,7 @@ draw_phonograph_panel :: proc() {
 
     rec, rec_ok := lore_get_recording(g_phonograph_panel_id)
 
-    // Close automatically when playback ends
+
     if rec_ok && !is_playing && g_phonograph_panel_entity_id != cw.INVALID_ENTITY {
         ui_close(.Phonograph)
         return
@@ -52,7 +50,7 @@ draw_phonograph_panel :: proc() {
     px  := (sw - PW) * 0.5
     py  := (sh - PH) * 0.5
 
-    // ── Panel background — mahogany cabinet ───────────────────────────────────
+
     rl.DrawRectangleRec({px + uis(5), py + uis(5), PW, PH}, rl.Color{0, 0, 0, 90})
     rl.DrawRectangleRec({px, py, PW, PH}, rl.Color{38, 18, 8, 252})
     for i in 0..<8 {
@@ -63,18 +61,18 @@ draw_phonograph_panel :: proc() {
     rl.DrawRectangleRec({px, py + PH - uis(5), PW, uis(5)}, rl.Color{120,  96, 28, 200})
     rl.DrawRectangleLinesEx({px, py, PW, PH}, uis(2), rl.Color{140, 110, 42, 230})
 
-    // ── Machine illustration (left half) ─────────────────────────────────────
+
     mach_cx := px + PW * 0.28
     mach_cy := py + PH * 0.48
     t_anim   := f32(rl.GetTime())
 
-    // Cabinet body
+
     rl.DrawRectangleRec({mach_cx - uis(45), mach_cy + uis(14), uis(90), uis(40)},
         rl.Color{50, 24, 10, 255})
     rl.DrawRectangleLinesEx({mach_cx - uis(45), mach_cy + uis(14), uis(90), uis(40)},
         uis(1.5), rl.Color{100, 78, 30, 200})
 
-    // Wax cylinder (rotating when playing)
+
     cyl_angle := t_anim * 180 if is_playing else f32(0)
     cyl_rx    := uis(28)
     cyl_ry    := uis(10)
@@ -82,7 +80,7 @@ draw_phonograph_panel :: proc() {
         rl.Color{20, 8, 4, 120})
     rl.DrawEllipse(i32(mach_cx), i32(mach_cy), cyl_rx, cyl_ry,
         rl.Color{210, 180, 100, 240})
-    // Rotating grooves
+
     for ring in 0..<5 {
         ang := (cyl_angle + f32(ring) * 36) * math.PI / 180
         sy  := math.sin(ang) * cyl_ry * 0.7
@@ -93,7 +91,7 @@ draw_phonograph_panel :: proc() {
     rl.DrawEllipseLines(i32(mach_cx), i32(mach_cy), cyl_rx, cyl_ry,
         rl.Color{160, 130, 50, 200})
 
-    // Tone arm + needle
+
     rl.DrawLineEx(
         {mach_cx - uis(12), mach_cy - uis(4)},
         {mach_cx + uis(18), mach_cy + uis(8)},
@@ -101,7 +99,7 @@ draw_phonograph_panel :: proc() {
     rl.DrawCircleV({mach_cx + uis(18), mach_cy + uis(8)}, uis(3),
         rl.Color{200, 170, 60, 240})
 
-    // Horn / bell
+
     horn_tip := rl.Vector2{mach_cx + uis(72), mach_cy - uis(44)}
     horn_base_t := rl.Vector2{mach_cx + uis(16), mach_cy - uis(2)}
     horn_base_b := rl.Vector2{horn_base_t.x, horn_base_t.y + uis(6)}
@@ -111,7 +109,7 @@ draw_phonograph_panel :: proc() {
     rl.DrawEllipseLines(i32(horn_tip.x), i32(horn_tip.y), uis(12), uis(18),
         rl.Color{200, 165, 55, 200})
 
-    // Sound waves when playing
+
     if is_playing {
         pulse := u8(math.sin(t_anim * 5) * 40 + 80)
         for wi in 1..=3 {
@@ -120,7 +118,7 @@ draw_phonograph_panel :: proc() {
         }
     }
 
-    // ── Text area (right half) ────────────────────────────────────────────────
+
     tx_x := px + PW * 0.52
     tx_w := PW * 0.44
 
@@ -131,7 +129,7 @@ draw_phonograph_panel :: proc() {
             {tx_x + tx_w*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
             uis(11), 1, COL_MUTED)
     } else {
-        // Title
+
         title    := loc_lookup(cstring(&rec.title[0]))
         title_fs := uis(13)
         ty       := py + uis(30)
@@ -142,13 +140,13 @@ draw_phonograph_panel :: proc() {
             rl.Color{130, 100, 38, 100})
         ty += uis(8)
 
-        // Status
+
         status  := cstring("▶  PLAYING")      if is_playing else cstring("◼  STOPPED")
         st_col  := rl.Color{80, 200, 80, 220}  if is_playing else rl.Color{180, 120, 40, 180}
         rl.DrawTextEx(g_font, status, {tx_x, ty}, uis(9), 0.5, st_col)
         ty += uis(16)
 
-        // Progress bar
+
         if rec.duration > 0 {
             progress := f32(0)
             if is_playing && play_timer > 0 {
@@ -164,7 +162,7 @@ draw_phonograph_panel :: proc() {
             ty += bar_h + uis(12)
         }
 
-        // Transcript
+
         trans_str := string(loc_lookup(cstring(&rec.transcript[0])))
         if len(trans_str) > 0 {
             rl.DrawTextEx(g_font, "— Transcript —", {tx_x, ty}, uis(9), 0.5,
@@ -175,7 +173,7 @@ draw_phonograph_panel :: proc() {
         }
     }
 
-    // Footer
+
     hint := cstring("[ ESC to close ]")
     hsz  := rl.MeasureTextEx(g_font, hint, uis(9), 0.5)
     rl.DrawTextEx(g_font, hint,

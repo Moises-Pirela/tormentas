@@ -5,26 +5,20 @@ import "core:fmt"
 import rl  "vendor:raylib"
 import cw  "clockwork"
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
-MAX_SHOP_STOCK   :: 6    // max items any shopkeeper stocks at once
-GOLD_DROP_MIN    :: 3    // min coins per enemy kill
-GOLD_DROP_MAX    :: 18   // max coins per enemy kill
-// Base sell price = buy price × SELL_RATIO
+MAX_SHOP_STOCK   :: 6
+GOLD_DROP_MIN    :: 3
+GOLD_DROP_MAX    :: 18
+
 SELL_RATIO :: f32(0.4)
 
-// ---------------------------------------------------------------------------
-// Shop catalogue — defines what shopkeepers can stock and at what base price.
-// ---------------------------------------------------------------------------
 
 ShopEntry :: struct {
-    item_name:  string, // matches LootDef.name in g_loot_table
-    base_price: int,    // gold cost at rarity Normal; multiplied by rarity
+    item_name:  string,
+    base_price: int,
 }
 
-// Rarity price multipliers
+
 RARITY_PRICE_MULT := [cw.ItemRarity]int{
     .Normal    = 1,
     .Rare      = 2,
@@ -33,8 +27,7 @@ RARITY_PRICE_MULT := [cw.ItemRarity]int{
     .Unique    = 16,
 }
 
-// SHOP_CATALOGUE lists every item a shopkeeper might carry.
-// item_name must match a LootDef.name in g_loot_table (loaded from loot_table.csv).
+
 @(private = "file")
 SHOP_CATALOGUE := [?]ShopEntry{
     { item_name = "ITEM_CORRUPTED_RELIQUARY_NAME", base_price = 30 },
@@ -54,35 +47,22 @@ SHOP_CATALOGUE := [?]ShopEntry{
     { item_name = "ITEM_NECROTIC_SERUM3_NAME",     base_price = 55 },
 }
 
-// ---------------------------------------------------------------------------
-// Per-shopkeeper stock (rolled at level load, stored on the main package side)
-// ---------------------------------------------------------------------------
 
-// MAX_NPC_ENTITIES is a generous upper bound for the per-NPC stock table.
 MAX_NPC_ENTITIES :: 32
 
 StockSlot :: struct {
-    item_entity: int,    // entity ID of the item-for-sale (INVALID_ENTITY = sold out)
-    price:       int,    // gold cost after rarity multiplier
+    item_entity: int,
+    price:       int,
 }
 
-// g_shop_stock holds the stock for each NPC (indexed by entity ID mod MAX_NPC_ENTITIES).
-// Populated by shop_roll_stock; consumed by the buy logic.
+
 g_shop_stock:     [MAX_NPC_ENTITIES][MAX_SHOP_STOCK]StockSlot
 g_shop_stk_count: [MAX_NPC_ENTITIES]int
 
-// ---------------------------------------------------------------------------
-// UI state (render-only; not part of the lockstep sim)
-// ---------------------------------------------------------------------------
 
 g_shop_npc_id:  int = cw.INVALID_ENTITY
 
-// ---------------------------------------------------------------------------
-// Gold drop
-// ---------------------------------------------------------------------------
 
-// spawn_gold_drop creates a ground coin pile at world_pos.
-// amount is pre-computed deterministically by the caller (damage_system).
 spawn_gold_drop :: proc(w: ^cw.World, world_pos: [3]f32, amount: int) {
     if amount <= 0 { return }
     id := cw.world_create_entity(w)
@@ -92,7 +72,7 @@ spawn_gold_drop :: proc(w: ^cw.World, world_pos: [3]f32, amount: int) {
     cw.world_set_fog_of_war(w, id)
 }
 
-// gold_drop_amount returns a deterministic coin count for a dying enemy.
+
 gold_drop_amount :: proc(tick: u64, entity_id: int) -> int {
     seed   := loot_seed(tick, entity_id) ~ 0x1234567890abcdef
     rstate := rand.create(seed)
@@ -100,12 +80,7 @@ gold_drop_amount :: proc(tick: u64, entity_id: int) -> int {
     return GOLD_DROP_MIN + rand.int_max(GOLD_DROP_MAX - GOLD_DROP_MIN + 1)
 }
 
-// ---------------------------------------------------------------------------
-// Stock generation (called from level_apply — deterministic)
-// ---------------------------------------------------------------------------
 
-// shop_roll_stock generates stock for a shopkeeper NPC.
-// seed = loot_seed(level_num, npc_entity_id) — identical on both instances.
 shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
     g_shop_stk_count[slot_idx] = 0
@@ -114,10 +89,10 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
     rstate := rand.create(seed)
     context.random_generator = rand.default_random_generator(&rstate)
 
-    // Pick MAX_SHOP_STOCK unique entries from the catalogue
+
     cat_copy: [len(SHOP_CATALOGUE)]int
     for i in 0..<len(SHOP_CATALOGUE) { cat_copy[i] = i }
-    // Partial Fisher-Yates
+
     n := min(MAX_SHOP_STOCK, len(SHOP_CATALOGUE))
     for i in 0..<n {
         j      := i + rand.int_max(len(SHOP_CATALOGUE) - i)
@@ -129,9 +104,9 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
         def := loot_find_by_name(cat.item_name)
         if def == nil { continue }
 
-        // Spawn the item entity (not as GroundItem — it lives in the shop)
+
         item_id := cw.world_create_entity(w)
-        cw.world_set_transform(w, item_id, cw.TransformComp{})   // no world pos needed
+        cw.world_set_transform(w, item_id, cw.TransformComp{})
 
         item_comp := cw.item_empty()
         item_comp.slot               = def.slot
@@ -177,7 +152,7 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
     }
 }
 
-// shop_clear_stock destroys item entities and resets the stock table for a slot.
+
 shop_clear_stock :: proc(w: ^cw.World, npc_id: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
     n := g_shop_stk_count[slot_idx]
@@ -191,15 +166,10 @@ shop_clear_stock :: proc(w: ^cw.World, npc_id: int) {
     g_shop_stk_count[slot_idx] = 0
 }
 
-// ---------------------------------------------------------------------------
-// UI update / draw
-// ---------------------------------------------------------------------------
 
-SHOP_INTERACT_PROMPT_DIST :: f32(85)   // show "E: shop" prompt within this range
+SHOP_INTERACT_PROMPT_DIST :: f32(85)
 
-// update_shop handles keyboard interaction with the shop UI.
-// In Shop substate: processes panel input.
-// In Gameplay substate: checks proximity and opens on [E].
+
 update_shop :: proc(w: ^cw.World) {
     pid := w.player_id
     if !cw.world_is_valid(w, pid) { return }
@@ -212,7 +182,7 @@ update_shop :: proc(w: ^cw.World) {
     }
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
 
-    // Proximity check — open on E
+
     npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
     defer delete(npc_ids)
     for nid in npc_ids {
@@ -231,8 +201,7 @@ update_shop :: proc(w: ^cw.World) {
     }
 }
 
-// draw_shop renders the shop panel and the world-space "E: shop" prompt.
-// Call from draw_playing — the panel part should be outside BeginMode2D.
+
 draw_shop_world :: proc(w: ^cw.World) {
     if !cw.world_has_component(w, w.player_id, .Transform) { return }
     player_pos := cw.world_get_transform(w, w.player_id).position
@@ -243,13 +212,13 @@ draw_shop_world :: proc(w: ^cw.World) {
     for nid in npc_ids {
         npc := cw.world_get_npc(w, nid)
         if npc.npc_type != .Shopkeeper { continue }
-        
+
         nt  := cw.world_get_transform(w, nid)
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
 
-        // Name tag
+
         pos := world_to_iso_xy(nt.position[0], nt.position[1])
         rc   := cw.world_get_render_config(w, nid)
         name := loc_lookup(cw.render_config_name_cstr(rc))
@@ -259,13 +228,13 @@ draw_shop_world :: proc(w: ^cw.World) {
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
             nfs, 0.5, rl.Color{ 240, 215, 120, 220 })
 
-        // "E: Shop" prompt when nearby
+
         if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
             prompt    := t(.SHOP_INTERACT)
             pfs       := f32(9)
             psz       := rl.MeasureTextEx(g_font, prompt, pfs, 0.5)
             t_now     := f32(rl.GetTime())
-            pulse     := u8(180 + 60 * (t_now - f32(int(t_now))))   // 180-240 flicker
+            pulse     := u8(180 + 60 * (t_now - f32(int(t_now))))
             rl.DrawTextEx(g_font, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
                 pfs, 0.5, rl.Color{ 255, 230, 100, pulse })
@@ -273,7 +242,7 @@ draw_shop_world :: proc(w: ^cw.World) {
     }
 }
 
-// draw_shop_hud draws the full shop panel (call outside BeginMode2D).
+
 draw_shop_hud :: proc(w: ^cw.World) {
     if !ui_has(.Shop) { return }
     if !cw.world_is_valid(w, g_shop_npc_id) {
@@ -286,12 +255,12 @@ draw_shop_hud :: proc(w: ^cw.World) {
     PH      := i32(uis(520))
     px, py  := shop_panel_origin()
 
-    // Backdrop
+
     rl.DrawRectangle(px, py, PW, PH, rl.Color{ 8, 6, 4, 252 })
     rl.DrawRectangle(px, py, PW, i32(uis(3)), COL_BRASS)
     rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
 
-    // Title
+
     rc       := cw.world_get_render_config(w, g_shop_npc_id)
     npc_name := loc_lookup(cw.render_config_name_cstr(rc))
     title_fs := uis(20)
@@ -309,7 +278,7 @@ draw_shop_hud :: proc(w: ^cw.World) {
         { f32(px) + uis(16), f32(py) + uis(56) },
         { f32(px + PW) - uis(16), f32(py) + uis(56) }, 1, COL_RULE)
 
-    // Player wallet
+
     wallet_gold := 0
     pid := w.player_id
     if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Wallet) {
@@ -322,7 +291,7 @@ draw_shop_hud :: proc(w: ^cw.World) {
           f32(py) + uis(12) },
         gfs, 1, rl.Color{ 255, 215, 50, 255 })
 
-    // Stock items
+
     slot_idx := g_shop_npc_id % MAX_NPC_ENTITIES
     n        := g_shop_stk_count[slot_idx]
     item_h   := i32(uis(60))
@@ -332,7 +301,7 @@ draw_shop_hud :: proc(w: ^cw.World) {
     for i in 0..<n {
         ss := &g_shop_stock[slot_idx][i]
         if ss.item_entity == cw.INVALID_ENTITY {
-            // Sold-out slot
+
             iy := start_y + i32(i) * (item_h + item_pad)
             rl.DrawRectangle(px + i32(uis(12)), iy, PW - i32(uis(24)), item_h,
                 rl.Color{ 12, 10, 8, 180 })
@@ -362,7 +331,7 @@ draw_shop_hud :: proc(w: ^cw.World) {
         rl.DrawRectangleRec(row_r, bg)
         rl.DrawRectangleLinesEx(row_r, 1, rc_border if is_hot else COL_RULE)
 
-        // Icon placeholder
+
         icon_r := f32(uis(18))
         rl.DrawRectangle(
             i32(row_r.x + uis(8)), i32(row_r.y + f32(item_h)*0.5 - icon_r),
@@ -371,19 +340,19 @@ draw_shop_hud :: proc(w: ^cw.World) {
             { row_r.x + uis(8), row_r.y + f32(item_h)*0.5 - icon_r, icon_r*2, icon_r*2 },
             1, rc_col)
 
-        // Name + rarity
+
         name_fs := uis(12)
         name_x  := row_r.x + icon_r*2 + uis(18)
         name_col := rarity_color(item.rarity)
         rl.DrawTextEx(g_font, loc_lookup(cw.render_config_name_cstr(irc)),
             { name_x, row_r.y + uis(8) }, name_fs, 0.5, name_col)
 
-        // Description
+
         desc_fs := uis(9)
         rl.DrawTextEx(g_font, loc_lookup(cw.render_config_desc_cstr(irc)),
             { name_x, row_r.y + uis(8) + name_fs + uis(3) }, desc_fs, 0.5, COL_MUTED)
 
-        // Price
+
         price_buf: [24]u8
         price_str := fmt.bprintf(price_buf[:23], "%d g", ss.price)
         price_buf[len(price_str)] = 0
@@ -396,13 +365,13 @@ draw_shop_hud :: proc(w: ^cw.World) {
               row_r.y + f32(item_h)*0.5 - price_fs*0.5 },
             price_fs, 1, price_col)
 
-        // Buy on click
+
         if is_hot && rl.IsMouseButtonPressed(.LEFT) && can_afford {
             _shop_buy(w, i)
         }
     }
 
-    // Sell section header
+
     sell_y := start_y + i32(n) * (item_h + item_pad) + i32(uis(8))
     rl.DrawLineEx(
         { f32(px) + uis(16), f32(sell_y) },
@@ -411,7 +380,7 @@ draw_shop_hud :: proc(w: ^cw.World) {
     rl.DrawTextEx(g_font, t(.SHOP_SELL),
         { f32(px) + uis(16), f32(sell_y) + uis(5) }, sell_hdr_fs, 0.5, COL_MUTED)
 
-    // Close hint
+
     close_fs := uis(10)
     close_cs := t(.SHOP_ESC_CLOSE)
     rl.DrawTextEx(g_font, close_cs,
@@ -420,15 +389,11 @@ draw_shop_hud :: proc(w: ^cw.World) {
         close_fs, 0.5, COL_MUTED)
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 @(private = "file")
 _update_shop_panel :: proc(w: ^cw.World) {
-    // Selling: player can right-click items in their inventory while shop is open.
-    // The inventory draw procs handle the click; this is the execution side.
-    // (Handled via g_sell_item_id set by inventory UI, consumed here.)
+
+
     if g_sell_item_id != cw.INVALID_ENTITY {
         _shop_sell(w, g_sell_item_id)
         g_sell_item_id = cw.INVALID_ENTITY
@@ -469,7 +434,7 @@ _shop_buy :: proc(w: ^cw.World, stock_i: int) {
     }
 }
 
-// Sell price = buy price × SELL_RATIO (at least 1 gold)
+
 shop_sell_price :: proc(item: ^cw.ItemComp, base_price: int) -> int {
     p := int(f32(base_price * RARITY_PRICE_MULT[item.rarity]) * SELL_RATIO)
     return max(p, 1)
@@ -500,8 +465,8 @@ _shop_sell :: proc(w: ^cw.World, item_id: int) {
     inv  := cw.world_get_inventory(w, pid)
     item := cw.world_get_item(w, item_id)
 
-    // Find the base price from the catalogue by matching slot + is_melee flags
-    base_price := 25   // fallback
+
+    base_price := 25
     for ce in SHOP_CATALOGUE {
         def := loot_find_by_name(ce.item_name)
         if def == nil { continue }
@@ -513,9 +478,9 @@ _shop_sell :: proc(w: ^cw.World, item_id: int) {
 
     sell_val := shop_sell_price(item, base_price)
 
-    // Remove from backpack
+
     backpack_remove(inv, item)
-    // Remove from equipped slots
+
     for &slot in inv.equipped {
         if slot == item_id { slot = cw.INVALID_ENTITY }
     }
@@ -531,6 +496,5 @@ _shop_sell :: proc(w: ^cw.World, item_id: int) {
     save_player(w, pid)
 }
 
-// g_sell_item_id is set by the inventory UI when the player right-clicks an item
-// while the shop is open.  Consumed by _update_shop_panel each frame.
+
 g_sell_item_id: int = cw.INVALID_ENTITY

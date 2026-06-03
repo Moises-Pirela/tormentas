@@ -32,20 +32,32 @@ EditorBrush :: enum u8 {
     PlayerStart = 11,
     Light       = 12,
     Erase       = 13,
-    // Hazard tiles (Environment)
-    Oil         = 14,   // TileOverlay.Oil — flammable floor overlay
-    Fire        = 15,   // TileOverlay.Fire — permanent fire-pit overlay
-    // Hazard entities (Entities)
-    FireBarrel  = 16,   // exploding fire barrel
-    WaterBarrel = 17,   // water-splash barrel
-    // Interactive objects (v7)
-    Door        = 18,   // door; target_level low-byte = link_id
-    SwitchLever = 19,   // toggle lever; target_level low-byte = link_id
-    Chest       = 20,   // locked/unlocked chest container
-    Crate       = 21,   // breakable crate
-    LoreItem    = 22,   // readable document; target_level low-byte = lore_id
-    Phonograph  = 23,   // wax-cylinder phonograph; target_level low-byte = recording_id
-    KeyPickup   = 24,   // dropped key; target_level low-byte = key_id
+
+    Oil         = 14,
+    Fire        = 15,
+
+    FireBarrel  = 16,
+    WaterBarrel = 17,
+
+    Door        = 18,
+    SwitchLever = 19,
+    Chest       = 20,
+    Crate       = 21,
+    LoreItem    = 22,
+    Phonograph  = 23,
+    KeyPickup   = 24,
+    Pillar      = 25,
+    SpawnSpider = 26,
+
+    Floor1      = 27,
+    Floor2      = 28,
+    Floor3      = 29,
+    Floor4      = 30,
+    Wall1       = 31,
+    Wall2       = 32,
+    Wall3       = 33,
+    Pillar1     = 34,
+    Pillar2     = 35,
 }
 
 EditorCategory :: enum u8 { Environment, Entities, Interactive }
@@ -55,7 +67,7 @@ PaletteEntry :: struct {
     brush:    EditorBrush,
     category: EditorCategory,
     label:    cstring,
-    key:      cstring,  
+    key:      cstring,
     bg:       rl.Color,
 }
 
@@ -66,9 +78,9 @@ ED_PAL_HOTKEYS :: [14]cstring{"1","2","3","4","5","6","7","8","9","0","","","","
 
 @(private = "file") g_ed_palette:        [40]PaletteEntry
 @(private = "file") g_ed_palette_n:      int
-@(private = "file") g_ed_pal_scroll:     f32      
+@(private = "file") g_ed_pal_scroll:     f32
 @(private = "file") g_ed_cat_collapsed:  [3]bool
-@(private = "file") g_ed_key_id:         int = 0   // high-byte param for Door (key_id) and future uses
+@(private = "file") g_ed_key_id:         int = 0
 
 @(private = "file") g_ed_brush:          EditorBrush = .Floor
 @(private = "file") g_ed_zoom:           f32 = 1.0
@@ -79,8 +91,8 @@ ED_PAL_HOTKEYS :: [14]cstring{"1","2","3","4","5","6","7","8","9","0","","","","
 @(private = "file") g_ed_panel_anim:     f32
 @(private = "file") g_ed_name_editing:   bool
 @(private = "file") g_ed_meta_loaded:    bool
-@(private = "file") g_ed_level_names:    [ED_MAX_LEVELS+1][ED_NAME_LEN]u8 
-@(private = "file") g_ed_level_exists:   [ED_MAX_LEVELS+1]bool            
+@(private = "file") g_ed_level_names:    [ED_MAX_LEVELS+1][ED_NAME_LEN]u8
+@(private = "file") g_ed_level_exists:   [ED_MAX_LEVELS+1]bool
 @(private = "file") g_ed_list_scroll:    int
 @(private = "file") g_ed_filtered:       [ED_MAX_LEVELS+1]int
 @(private = "file") g_ed_filtered_count: int
@@ -112,20 +124,35 @@ ed_build_palette :: proc() {
 
     for tt in TileType {
         #partial switch tt {
-        case .Floor: add(.Floor, .Environment, "Floor", {26, 24, 20, 255}, &ki)
-        case .Wall:  add(.Wall,  .Environment, "Wall",  {52, 46, 38, 255}, &ki)
-        case .Water: add(.Water, .Environment, "Water", {18, 42, 80,  255}, &ki)
+        case .Floor:  add(.Floor,  .Environment, "Floor",  {26, 24, 20, 255}, &ki)
+        case .Wall:   add(.Wall,   .Environment, "Wall",   {52, 46, 38, 255}, &ki)
+        case .Water:  add(.Water,  .Environment, "Water",  {18, 42, 80,  255}, &ki)
+        case .Pillar: add(.Pillar, .Environment, "Pillar", {62, 54, 44, 255}, &ki)
         }
     }
-    // Oil and Fire are TileOverlay values that stack on top of Floor tiles
+
+    n_floors := g_tile_variant_count[int(TileType.Floor)]
+    if n_floors >= 1 { add(.Floor1, .Environment, "Flr-1", {34, 30, 24, 255}, &ki) }
+    if n_floors >= 2 { add(.Floor2, .Environment, "Flr-2", {40, 36, 28, 255}, &ki) }
+    if n_floors >= 3 { add(.Floor3, .Environment, "Flr-3", {46, 40, 32, 255}, &ki) }
+    if n_floors >= 4 { add(.Floor4, .Environment, "Flr-4", {52, 46, 36, 255}, &ki) }
+
+    n_walls := g_tile_variant_count[int(TileType.Wall)]
+    if n_walls >= 1 { add(.Wall1, .Environment, "Wll-1", {62, 54, 44, 255}, &ki) }
+    if n_walls >= 2 { add(.Wall2, .Environment, "Wll-2", {70, 60, 48, 255}, &ki) }
+    if n_walls >= 3 { add(.Wall3, .Environment, "Wll-3", {78, 66, 52, 255}, &ki) }
+
+    n_pillars := g_tile_variant_count[int(TileType.Pillar)]
+    if n_pillars >= 1 { add(.Pillar1, .Environment, "Pil-1", {72, 64, 52, 255}, &ki) }
+    if n_pillars >= 2 { add(.Pillar2, .Environment, "Pil-2", {80, 70, 56, 255}, &ki) }
+
     add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
     add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
 
-    // entity_to_brush maps entity def names to editor palette entries.
-    // Returns the brush, label, background colour, palette category, and ok.
-    // Enemies go to .Entities; env_* objects go to .Interactive.
+
     entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, cat: EditorCategory, ok: bool) {
         switch name {
+        case "enemy_spider":   return .SpawnSpider, "Spider", {20, 60, 20, 255}, .Entities,    true
         case "enemy_melee":    return .SpawnMelee,  "Melee",  {80, 28, 20, 255}, .Entities,    true
         case "enemy_brute":    return .SpawnBrute,  "Brute",  {60, 12, 12, 255}, .Entities,    true
         case "enemy_hunter":   return .SpawnHunter, "Hunter", {48, 24, 80, 255}, .Entities,    true
@@ -231,14 +258,8 @@ ed_meta_load :: proc() {
 editor_toggle :: proc() {
     if !g_is_host { return }
     if g_playing_state == .Editor {
-        // Reload the level that was active before the editor was opened so that
-        // any level navigation done inside the editor (which calls level_load for
-        // arbitrary levels) does not leave a foreign tilemap / overlay_map behind.
-        // fire_system_reset must come first: it clears the live fire-patch array
-        // (g_fire[]) so that patches spawned from Fire overlays during the editor
-        // session do not persist into gameplay.  level_load then repopulates
-        // g_overlay_map from disk, and fire_patch_system will re-spawn patches for
-        // any Fire-overlay tiles on the next tick.
+
+
         restore_n := 0 if g_hub_active else max(g_current_raid_level, 1)
         fire_system_reset()
         level_load(restore_n)
@@ -423,11 +444,11 @@ update_editor :: proc(dt: f32) {
         }
 
         if rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL) {
-            // Ctrl+[ / Ctrl+] adjusts key_id (for Door lock / KeyPickup pairing)
+
             if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_key_id > 0  { g_ed_key_id -= 1 }
             if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_key_id < 63 { g_ed_key_id += 1 }
         } else {
-            // [ / ] adjusts link_id or item ID (target_level low byte)
+
             if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_target_level > 0  { g_ed_target_level -= 1 }
             if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_target_level < 99 { g_ed_target_level += 1 }
         }
@@ -514,12 +535,12 @@ update_editor :: proc(dt: f32) {
         tx, ty   := world_to_tile(world_mp.x, world_mp.y)
         if rl.IsMouseButtonDown(.LEFT)  { ed_paint(tx, ty) }
         if rl.IsMouseButtonPressed(.RIGHT) {
-            // RMB: select entity at tile, or erase entity data only (tiles preserved)
+
             if !ed_try_select_at(tx, ty) {
                 ed_erase_objects(tx, ty)
             }
         } else if rl.IsMouseButtonDown(.RIGHT) && !ed_insp_has_selection() {
-            // Holding RMB while no selection → drag-erase entities only
+
             ed_erase_objects(tx, ty)
         }
     }
@@ -544,8 +565,8 @@ update_editor :: proc(dt: f32) {
 
 @(private = "file")
 ed_paint :: proc(tx, ty: int) {
-    // For Door: low byte = link_id, high byte = key_id.
-    // For all others: target_level carries the ID in the low byte.
+
+
     tl_val := u16(g_ed_target_level & 0xFF)
     if EditorBrush(g_ed_brush) == .Door {
         tl_val |= u16(g_ed_key_id & 0xFF) << 8
@@ -579,12 +600,19 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
     switch op.action {
     case .Paint:
         switch EditorBrush(op.brush) {
-        case .Floor:
-            g_tilemap[[2]int{tx, ty}] = .Floor
-        case .Wall:
-            g_tilemap[[2]int{tx, ty}] = .Wall
-        case .Water:
-            g_tilemap[[2]int{tx, ty}] = .Water
+        case .Floor:   g_tilemap[[2]int{tx, ty}] = .Floor;   delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Wall:    g_tilemap[[2]int{tx, ty}] = .Wall;    delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Water:   g_tilemap[[2]int{tx, ty}] = .Water;   delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Pillar:  g_tilemap[[2]int{tx, ty}] = .Pillar;  delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Floor1:  g_tilemap[[2]int{tx, ty}] = .Floor1;  delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Floor2:  g_tilemap[[2]int{tx, ty}] = .Floor2;  delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Floor3:  g_tilemap[[2]int{tx, ty}] = .Floor3;  delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Floor4:  g_tilemap[[2]int{tx, ty}] = .Floor4;  delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Wall1:   g_tilemap[[2]int{tx, ty}] = .Wall1;   delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Wall2:   g_tilemap[[2]int{tx, ty}] = .Wall2;   delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Wall3:   g_tilemap[[2]int{tx, ty}] = .Wall3;   delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Pillar1: g_tilemap[[2]int{tx, ty}] = .Pillar1; delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Pillar2: g_tilemap[[2]int{tx, ty}] = .Pillar2; delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Oil:
             g_tilemap[[2]int{tx, ty}] = .Floor
             g_overlay_map[[2]int{tx, ty}] = .Oil
@@ -602,7 +630,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
             append(&g_level_data.barrels, LevelBarrel{
                 tx = i16(tx), ty = i16(ty), btype = btype,
             })
-        case .SpawnMelee, .SpawnBrute, .SpawnHunter, .SpawnRanged, .SpawnSniper:
+        case .SpawnMelee, .SpawnBrute, .SpawnHunter, .SpawnRanged, .SpawnSniper, .SpawnSpider:
             et := brush_to_spawn_type(EditorBrush(op.brush))
             for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
                 sp := g_level_data.spawns[i]
@@ -658,22 +686,22 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
                 radius = 120.0, intensity = 1.0,
             })
         case .Door:
-            link_id := u8(op.target_level & 0xFF)   // low byte = link_id
-            key_id  := u8(op.target_level >> 8)      // high byte = key_id (0 = no lock)
+            link_id := u8(op.target_level & 0xFF)
+            key_id  := u8(op.target_level >> 8)
             for i := len(g_level_data.doors) - 1; i >= 0; i -= 1 {
                 d := g_level_data.doors[i]
                 if int(d.tx) == tx && int(d.ty) == ty {
                     unordered_remove(&g_level_data.doors, i)
                 }
             }
-            // Also place a Wall tile so the door visually blocks
+
             g_tilemap[[2]int{tx, ty}] = .Wall
             append(&g_level_data.doors, LevelDoor{
                 tx = i16(tx), ty = i16(ty),
                 link_id = link_id, key_id = key_id,
             })
         case .SwitchLever:
-            param := u8(op.target_level & 0xFF)  // link_id
+            param := u8(op.target_level & 0xFF)
             for i := len(g_level_data.switches) - 1; i >= 0; i -= 1 {
                 s := g_level_data.switches[i]
                 if int(s.tx) == tx && int(s.ty) == ty {
@@ -682,7 +710,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
             }
             append(&g_level_data.switches, LevelSwitch{
                 tx = i16(tx), ty = i16(ty),
-                link_id = param, flags = 0x01,  // is_toggle=true
+                link_id = param, flags = 0x01,
             })
         case .Chest:
             for i := len(g_level_data.containers) - 1; i >= 0; i -= 1 {
@@ -768,9 +796,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
     g_wall_mask_dirty = true
 }
 
-// _erase_objects removes all entity-layer data at (tx, ty) without touching
-// the tilemap or overlay_map.  Called by both ed_apply_erase (which adds tile
-// deletion on top) and the EraseObjects op (RMB — preserves floor/wall).
+
 @(private = "file")
 _erase_objects :: proc(tx, ty: int) {
     for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
@@ -841,8 +867,7 @@ _erase_objects :: proc(tx, ty: int) {
     }
 }
 
-// ed_apply_erase removes the tile, the overlay AND all entity data at (tx, ty).
-// Used by the Erase brush (LMB with Erase selected) and the full .Erase op.
+
 @(private = "file")
 ed_apply_erase :: proc(tx, ty: int) {
     delete_key(&g_tilemap,    [2]int{tx, ty})
@@ -850,8 +875,7 @@ ed_apply_erase :: proc(tx, ty: int) {
     _erase_objects(tx, ty)
 }
 
-// ed_erase_objects sends an EraseObjects op that removes entity data only —
-// floor/wall tiles are left intact.  Used by RMB.
+
 @(private = "file")
 ed_erase_objects :: proc(tx, ty: int) {
     op := p2p.EditorOp{
@@ -871,6 +895,7 @@ brush_to_spawn_type :: proc(b: EditorBrush) -> EnemySpawnType {
     case .SpawnHunter: return .Hunter
     case .SpawnRanged: return .Ranged
     case .SpawnSniper: return .Sniper
+    case .SpawnSpider: return .Spider
     }
     return .Melee
 }
@@ -922,7 +947,7 @@ draw_editor_world :: proc() {
     EXIT_COL :: rl.Color{50, 200, 90, 180}
     for ex in g_level_data.exits {
         center, top, right, bottom, left := iso_tile_bounds(int(ex.tx), int(ex.ty))
-        iso_draw_shadow_diamond(center, ISO_TILE_W, ISO_TILE_H, rl.Color{30, 140, 60, 80})
+        iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{30, 140, 60, 80})
         rl.DrawLineEx(top, right, lw * 2.5, EXIT_COL)
         rl.DrawLineEx(right, bottom, lw * 2.5, EXIT_COL)
         rl.DrawLineEx(bottom, left, lw * 2.5, EXIT_COL)
@@ -959,7 +984,7 @@ draw_editor_world :: proc() {
         wx := f32(int(lt.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(lt.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        // Soft glow circle showing radius
+
         rl.DrawCircleV(ip, cr * 1.2, rl.Color{lt.r, lt.g, lt.b, 60})
         rl.DrawCircleV(ip, cr * 0.7, LIGHT_COL)
         rl.DrawCircleLinesV(ip, cr * 1.2, rl.Color{255, 220, 100, 160})
@@ -978,10 +1003,10 @@ draw_editor_world :: proc() {
         ring_col  := rl.Color{240, 120,  30, 200} if is_fire else rl.Color{ 70, 160, 255, 200}
         label_cs  := cstring("FB")           if is_fire else cstring("WB")
 
-        // Barrel silhouette: two stacked ellipses (top cap + body)
+
         body_h := ts * 0.24
         body_w := ts * 0.22
-        // Body rectangle
+
         rl.DrawRectangle(
             i32(ip.x - body_w * 0.5), i32(ip.y - body_h * 0.75),
             i32(body_w), i32(body_h),
@@ -989,12 +1014,12 @@ draw_editor_world :: proc() {
         rl.DrawRectangleLinesEx(
             {ip.x - body_w * 0.5, ip.y - body_h * 0.75, body_w, body_h},
             lw * 2.0, body_col)
-        // Top cap ellipse
+
         rl.DrawEllipse(i32(ip.x), i32(ip.y - body_h * 0.75),
             body_w * 0.5, body_h * 0.22, rl.Color{ring_col.r, ring_col.g, ring_col.b, 90})
         rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.75),
             body_w * 0.5, body_h * 0.22, ring_col)
-        // Band ring at mid-height
+
         rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.20),
             body_w * 0.5, body_h * 0.12, ring_col)
 
@@ -1004,7 +1029,7 @@ draw_editor_world :: proc() {
             fs * 0.85, 0.5, rl.Color{255, 240, 220, 240})
     }
 
-    // ── Doors ─────────────────────────────────────────────────────────────────
+
     DOOR_COL :: rl.Color{160, 110, 50, 220}
     for d in g_level_data.doors {
         wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
@@ -1014,7 +1039,7 @@ draw_editor_world :: proc() {
             lw * 2.5, DOOR_COL)
         rl.DrawRectangleRec({ip.x - ts*0.16, ip.y - ts*0.35, ts*0.32, ts*0.38},
             rl.Color{DOOR_COL.r, DOOR_COL.g, DOOR_COL.b, 40})
-        // Keyhole dot
+
         rl.DrawCircleV({ip.x, ip.y - ts*0.08}, ts*0.04, DOOR_COL)
         if d.link_id != 0 {
             buf: [8]u8
@@ -1034,7 +1059,7 @@ draw_editor_world :: proc() {
                 {ip.x - lsz.x*0.5, ip.y - ts*0.32},
                 fs * 0.8, 0.5, rl.Color{220, 80, 80, 220})
         }
-        // Open-type badge (top-right corner of door glyph)
+
         switch d.open_type {
         case .LeverSwitch:
             badge := cstring("[LV]")
@@ -1050,25 +1075,25 @@ draw_editor_world :: proc() {
                 fs * 0.65, 0.5, rl.Color{230, 160, 60, 230})
         case .None:
         }
-        // Locked indicator (small red dot at door centre when starts locked)
+
         if d.is_locked {
             rl.DrawCircleV({ip.x + ts*0.14, ip.y - ts*0.08}, ts*0.035,
                 rl.Color{220, 55, 55, 210})
         }
     }
 
-    // ── Switches / Levers ────────────────────────────────────────────────────
+
     LEVER_COL :: rl.Color{60, 180, 60, 220}
     for s in g_level_data.switches {
         wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        // Base plate
+
         rl.DrawRectangleRec({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
             rl.Color{LEVER_COL.r, LEVER_COL.g, LEVER_COL.b, 60})
         rl.DrawRectangleLinesEx({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
             lw * 2, LEVER_COL)
-        // Lever arm
+
         rl.DrawLineEx({ip.x, ip.y + ts*0.08}, {ip.x + ts*0.12, ip.y - ts*0.18},
             lw * 3, LEVER_COL)
         rl.DrawCircleV({ip.x + ts*0.12, ip.y - ts*0.18}, ts * 0.05, LEVER_COL)
@@ -1083,7 +1108,7 @@ draw_editor_world :: proc() {
         }
     }
 
-    // ── Containers ───────────────────────────────────────────────────────────
+
     for c in g_level_data.containers {
         wx := f32(int(c.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(c.ty) * TILE_SIZE + TILE_SIZE / 2)
@@ -1102,7 +1127,7 @@ draw_editor_world :: proc() {
             rl.Color{col.r, col.g, col.b, 45})
         rl.DrawRectangleLinesEx({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
             lw * 2.5, col)
-        // Lid line
+
         rl.DrawLineEx({ip.x - box_w*0.5, ip.y - box_h*0.22},
                       {ip.x + box_w*0.5, ip.y - box_h*0.22},
                       lw * 1.5, rl.Color{col.r, col.g, col.b, 160})
@@ -1112,24 +1137,24 @@ draw_editor_world :: proc() {
             fs * 0.85, 0.5, col)
     }
 
-    // ── Lore items ────────────────────────────────────────────────────────────
+
     LORE_COL :: rl.Color{80, 160, 220, 220}
     for li in g_level_data.lore_items {
         wx := f32(int(li.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(li.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        // Paper icon: rectangle with folded corner
+
         pw := ts * 0.22
         ph := ts * 0.28
         rl.DrawRectangleRec({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
             rl.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 40})
         rl.DrawRectangleLinesEx({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
             lw * 2, LORE_COL)
-        // Folded corner
+
         rl.DrawLineEx({ip.x + pw*0.5 - pw*0.25, ip.y - ph*0.7},
                       {ip.x + pw*0.5, ip.y - ph*0.7 + ph*0.25},
                       lw * 1.5, LORE_COL)
-        // Text lines
+
         for row in 0..<3 {
             lx0 := ip.x - pw*0.35
             lx1 := ip.x + pw*0.35 * (0.7 if row == 2 else 1.0)
@@ -1145,16 +1170,16 @@ draw_editor_world :: proc() {
             fs * 0.75, 0.5, rl.Color{120, 200, 255, 220})
     }
 
-    // ── Phonographs ───────────────────────────────────────────────────────────
+
     PHONO_COL :: rl.Color{180, 80, 200, 220}
     for ph in g_level_data.phonographs {
         wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        // Cylinder
+
         rl.DrawEllipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, rl.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
         rl.DrawEllipseLines(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, PHONO_COL)
-        // Horn triangle
+
         rl.DrawTriangle(
             {ip.x + ts*0.22, ip.y - ts*0.26},
             {ip.x + ts*0.10, ip.y - ts*0.02},
@@ -1172,24 +1197,24 @@ draw_editor_world :: proc() {
             fs * 0.75, 0.5, rl.Color{220, 120, 240, 220})
     }
 
-    // ── Key pickups ───────────────────────────────────────────────────────────
+
     KEY_COL :: rl.Color{245, 210, 30, 230}
     for kp in g_level_data.key_pickups {
         wx := f32(int(kp.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        // Key head (circle)
+
         rl.DrawCircleV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10,
             rl.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 50})
         rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10, KEY_COL)
-        // Key hole
+
         rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.04,
             rl.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 180})
-        // Key shaft
+
         rl.DrawLineEx({ip.x - ts*0.06 + ts*0.10, ip.y - ts*0.10},
                       {ip.x + ts*0.20, ip.y - ts*0.10},
                       lw * 2.5, KEY_COL)
-        // Key teeth
+
         rl.DrawLineEx({ip.x + ts*0.14, ip.y - ts*0.10},
                       {ip.x + ts*0.14, ip.y - ts*0.03},
                       lw * 2, KEY_COL)
@@ -1209,7 +1234,7 @@ draw_editor_world :: proc() {
     if ps[0] != 0 || ps[1] != 0 {
         ptx, pty := world_to_tile(ps[0], ps[1])
         center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
-        iso_draw_shadow_diamond(center, ISO_TILE_W, ISO_TILE_H, rl.Color{200, 160, 30, 70})
+        iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{200, 160, 30, 70})
         rl.DrawLineEx(top, right, lw * 2.5, rl.Color{255, 200, 50, 220})
         rl.DrawLineEx(right, bottom, lw * 2.5, rl.Color{255, 200, 50, 220})
         rl.DrawLineEx(bottom, left, lw * 2.5, rl.Color{255, 200, 50, 220})
@@ -1220,7 +1245,7 @@ draw_editor_world :: proc() {
             fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
     }
 
-    // Selection highlight (drawn over entities, under cursor)
+
     ed_insp_draw_selection_highlight()
 
     mp       := rl.GetMousePosition()
@@ -1229,7 +1254,7 @@ draw_editor_world :: proc() {
     center, top, right, bottom, left := iso_tile_bounds(ctx, cty)
 
     fill_col, brd_col := ed_brush_colors(g_ed_brush)
-    iso_draw_shadow_diamond(center, ISO_TILE_W, ISO_TILE_H, fill_col)
+    iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, fill_col)
     rl.DrawLineEx(top, right, lw * 2, brd_col)
     rl.DrawLineEx(right, bottom, lw * 2, brd_col)
     rl.DrawLineEx(bottom, left, lw * 2, brd_col)
@@ -1242,8 +1267,9 @@ spawn_marker_color :: proc(et: EnemySpawnType) -> rl.Color {
     case .Melee:  return rl.Color{220,  70,  50, 200}
     case .Brute:  return rl.Color{160,  30,  30, 200}
     case .Hunter: return rl.Color{120,  60, 200, 200}
-    case .Ranged: return rl.Color{ 40, 160, 160, 200}
-    case .Sniper: return rl.Color{ 40,  70, 200, 200}
+    case .Ranged:  return rl.Color{ 40, 160, 160, 200}
+    case .Sniper:  return rl.Color{ 40,  70, 200, 200}
+    case .Spider:  return rl.Color{ 30, 160,  30, 200}
     }
     return rl.Color{200, 200, 200, 200}
 }
@@ -1254,8 +1280,9 @@ spawn_marker_label :: proc(et: EnemySpawnType) -> cstring {
     case .Melee:  return "M"
     case .Brute:  return "B"
     case .Hunter: return "H"
-    case .Ranged: return "R"
-    case .Sniper: return "S"
+    case .Ranged:  return "R"
+    case .Sniper:  return "S"
+    case .Spider:  return "Sp"
     }
     return "?"
 }
@@ -1287,6 +1314,17 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     case .LoreItem:    return { 20,  42,  72,  85}, { 60, 120, 200, 210}
     case .Phonograph:  return { 62,  28,  62,  85}, {170,  70, 180, 210}
     case .KeyPickup:   return { 96,  84,  10,  85}, {245, 210,  30, 210}
+    case .Pillar:      return { 80,  70,  56,  85}, {170, 148, 115, 210}
+    case .SpawnSpider: return { 20,  60,  20,  70}, { 50, 180,  50, 210}
+    case .Floor1:      return { 34,  30,  24,  85}, {110,  96,  68, 210}
+    case .Floor2:      return { 40,  36,  28,  85}, {124, 108,  76, 210}
+    case .Floor3:      return { 46,  40,  32,  85}, {138, 120,  84, 210}
+    case .Floor4:      return { 52,  46,  36,  85}, {152, 132,  92, 210}
+    case .Wall1:       return { 62,  54,  44,  85}, {150, 130,  98, 210}
+    case .Wall2:       return { 70,  60,  48,  85}, {165, 143, 107, 210}
+    case .Wall3:       return { 78,  66,  52,  85}, {180, 156, 116, 210}
+    case .Pillar1:     return { 72,  64,  52,  85}, {175, 152, 118, 210}
+    case .Pillar2:     return { 80,  70,  58,  85}, {185, 162, 126, 210}
     case .Erase:       return {170,  45,  45,  85}, {220,  70,  70, 200}
     }
     return {128, 128, 128, 85}, {200, 200, 200, 200}
@@ -1359,7 +1397,7 @@ draw_editor_hud :: proc() {
         entry := &g_ed_palette[i]
 
         if !seen_cat_drw[entry.category] {
-            // Category header
+
             cat_col  := CAT_COLS[entry.category]
             hdr_r    := rl.Rectangle{ pal_r.x, cy, pal_r.width, uis(CAT_H) }
             hdr_bg   := rl.Color{ cat_col.r/2, cat_col.g/2, cat_col.b/2, 220 }
@@ -1391,14 +1429,14 @@ draw_editor_hud :: proc() {
         rl.DrawRectangleRec(row_r, entry.bg)
         rl.DrawRectangleLinesEx(row_r, brd_w, brd_col)
 
-        // Colour swatch
+
         swatch_sz := uis(ITEM_H - 8)
         rl.DrawRectangle(
             i32(row_r.x + uis(4)), i32(cy + (uis(ITEM_H) - swatch_sz)*0.5),
             i32(swatch_sz), i32(swatch_sz),
             rl.Color{entry.bg.r + 30, entry.bg.g + 30, entry.bg.b + 30, 255})
 
-        // Label
+
         name_fs := uis(8.5)
         lsz     := rl.MeasureTextEx(g_font, entry.label, name_fs, 0.5)
         lx      := row_r.x + swatch_sz + uis(10)
@@ -1406,7 +1444,7 @@ draw_editor_hud :: proc() {
             { lx, cy + uis(ITEM_H)*0.5 - lsz.y*0.5 },
             name_fs, 0.5, rl.Color{210, 190, 140, 230})
 
-        // Hotkey badge top-right
+
         if entry.key != nil && (cast([^]u8)entry.key)[0] != 0 {
             rl.DrawTextEx(g_font, entry.key,
                 { row_r.x + row_r.width - uis(12), cy + uis(3) },
@@ -1418,7 +1456,7 @@ draw_editor_hud :: proc() {
 
     rl.EndScissorMode()
 
-    // Status line at bottom of palette panel (above the scissor area)
+
     stat_y := pal_r.y + pal_r.height - uis(26)
     rl.DrawRectangle(i32(pal_r.x), i32(stat_y), i32(pal_r.width), i32(uis(26)),
         rl.Color{8, 6, 4, 220})
@@ -1431,7 +1469,7 @@ draw_editor_hud :: proc() {
     rl.DrawTextEx(g_font, cstring(&lv_buf[0]),
         { pal_r.x + uis(5), stat_y + uis(5) }, uis(8), 0.5, rl.Color{150, 138, 100, 210})
 
-    // Zoom + ID params in banner area (top-left, after palette)
+
     sx := uis(ED_PAL_W) + uis(8)
     zoom_buf: [64]u8
     zoom_s := fmt.bprintf(zoom_buf[:63], "Zoom %.2fx  ID:%d  KeyID:%d",
@@ -1580,6 +1618,6 @@ draw_editor_hud :: proc() {
             {28, 44, 28, 220}, {36, 60, 36, 220}, {60, 160, 70, 200}, {100, 220, 110, 230})
     }
 
-    // Inspector panel (slides up from bottom)
+
     ed_insp_draw_panel()
 }

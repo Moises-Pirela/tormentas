@@ -1,39 +1,11 @@
 package main
 
-// =============================================================================
-// ui_inventory.odin — Clay-based equipment & backpack panel
-//
-// Replaces render.odin's draw_inventory + update_inventory.
-// Input handling is merged into draw_inventory so that the draw phase is the
-// single source of truth for the panel; update_inventory is no longer called
-// from main.odin.
-//
-// Layout (Clay, floating right edge, full screen height):
-//
-//   ─── GOLD BAR (2 px) ───────────────────────────────────────────────────
-//   E Q U I P M E N T
-//   ─────────────────────────────────────────────────────────────────────────
-//   ARMOR
-//     [HEAD  ──── item name                                                ]
-//     [CHEST ──── item name                                                ]
-//     [BOOTS ──── item name                                                ]
-//   WEAPONS
-//     [  WEAPON I  ] [ OFFHAND MOD ]
-//   ABILITIES
-//     [ Q ][ E ][ F ][ G ]
-//   B A C K P A C K
-//     raw Raylib 10×4 cell grid (origin queried via clay.GetElementData)
-//   ─────────────────────────────────────────────────────────────────────────
-//   [I]  Close
-//
-// =============================================================================
 
+import "core:fmt"
 import rl   "vendor:raylib"
 import clay "../clay"
 import cw   "clockwork"
 
-// ── Drag-and-drop state ───────────────────────────────────────────────────
-// These replace the @(private="file") globals that were in render.odin.
 
 g_drag_item_id:      int          = -1
 g_drag_origin_x:     int          = -1
@@ -44,23 +16,23 @@ g_drag_origin_equip: cw.EquipSlot = {}
 g_hover_item_id:     int          = cw.INVALID_ENTITY
 g_inv_backpack_bb:   clay.BoundingBox
 
-// Clay element IDs for each equip slot (indexed by cw.EquipSlot).
-// Consumable (index 5) has an empty string → not shown in the panel.
+
 @(private = "file")
 _SLOT_CLAY_ID := [cw.EQUIP_SLOT_COUNT]string{
-    "InvSlotHead",   // 0 .Head
-    "InvSlotChest",  // 1 .Chest
-    "InvSlotBoots",  // 2 .Boots
-    "InvSlotWep1",   // 3 .WeaponPrimary
-    "InvSlotWep2",   // 4 .WeaponOffhand
-    "",              // 5 .Consumable  (not shown)
-    "InvSlotAbil1",  // 6 .Ability1
-    "InvSlotAbil2",  // 7 .Ability2
-    "InvSlotAbil3",  // 8 .Ability3
-    "InvSlotAbil4",  // 9 .Ability4
+    "InvSlotHead",
+    "InvSlotChest",
+    "InvSlotBoots",
+    "InvSlotWep1",
+    "InvSlotWep2",
+    "",
+    "InvSlotAbil1",
+    "InvSlotAbil2",
+    "InvSlotAbil3",
+    "InvSlotAbil4",
+    "InvSlotFlask1",
+    "InvSlotFlask2",
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
 
 @(private = "file")
 _item_fits_slot :: proc(item_slot: cw.EquipSlot, target: cw.EquipSlot) -> bool {
@@ -74,10 +46,19 @@ _item_fits_slot :: proc(item_slot: cw.EquipSlot, target: cw.EquipSlot) -> bool {
                     target   == .Ability3 || target   == .Ability4
     if is_ab_item { return is_ab_target }
 
+
+    is_flask_item   := item_slot == .Flask1 || item_slot == .Flask2
+    is_flask_target := target   == .Flask1 || target   == .Flask2
+    if is_flask_item { return item_slot == target }
+    if is_flask_target { return false }
+
     return item_slot == target
 }
 
+
 @(private = "file")
+_flask_name_buf: [48]u8
+
 _inv_slot_name :: proc(w: ^cw.World, inv: ^cw.InventoryComp, slot: cw.EquipSlot) -> (cstring, bool) {
     if inv == nil { return t(.INV_UNEQUIPPED), false }
     eid := inv.equipped[int(slot)]
@@ -85,21 +66,27 @@ _inv_slot_name :: proc(w: ^cw.World, inv: ^cw.InventoryComp, slot: cw.EquipSlot)
     if cw.world_has_component(w, eid, .RenderConfig) {
         return loc_lookup(cw.render_config_name_cstr(cw.world_get_render_config(w, eid))), true
     }
+
+    if cw.world_has_component(w, eid, .Flask) {
+        fc := cw.world_get_flask(w, eid)
+        size_names := [cw.FlaskSize]string{ .Small="Small", .Medium="Medium", .Large="Large" }
+        kind_names := [cw.FlaskKind]string{ .Health="Health", .Energy="Energy" }
+        s := fmt.bprintf(_flask_name_buf[:47], "%s %s Flask",
+            size_names[fc.size], kind_names[fc.kind])
+        _flask_name_buf[len(s)] = 0
+        return cstring(&_flask_name_buf[0]), true
+    }
     return "???", true
 }
 
-// _inv_is_target returns true when: a drag is active, the dragged item fits
-// 'slot', and the slot is currently empty.  This is used to highlight all
-// valid drop targets during a drag (same UX as the original raw-Raylib code).
+
 @(private = "file")
 _inv_is_target :: proc(inv: ^cw.InventoryComp, drag_slot: cw.EquipSlot, target: cw.EquipSlot) -> bool {
     if inv == nil || g_drag_item_id == -1 { return false }
-    if !_item_fits_slot(drag_slot, target)           { return false }
-    return inv.equipped[int(target)] == cw.INVALID_ENTITY
+    return _item_fits_slot(drag_slot, target)
 }
 
-// _inv_mouse_to_cell converts a mouse position to a backpack grid cell using
-// the bounding box reported by Clay after layout.
+
 @(private = "file")
 _inv_mouse_to_cell :: proc(grid_bb: clay.BoundingBox, mx, my: f32) -> (col, row: int, ok: bool) {
     if grid_bb.width == 0 { return 0, 0, false }
@@ -110,10 +97,7 @@ _inv_mouse_to_cell :: proc(grid_bb: clay.BoundingBox, mx, my: f32) -> (col, row:
     return c, r, true
 }
 
-// ── Backpack grid drawing ─────────────────────────────────────────────────
 
-// draw_item_glyph is package-level (not private) so draw_item_tooltip in
-// render.odin can call it for the icon displayed inside tooltips.
 draw_item_glyph :: proc(slot: cw.EquipSlot, x, y, sz: i32, tint: rl.Color) {
     cx  := f32(x) + f32(sz) * 0.5
     cy  := f32(y) + f32(sz) * 0.5
@@ -176,6 +160,22 @@ draw_item_glyph :: proc(slot: cw.EquipSlot, x, y, sz: i32, tint: rl.Color) {
         hw := i32(r * 0.28)
         rl.DrawRectangle(x + sz/2 - hw/2, y + sz/4,    hw, i32(r * 0.6), col)
         rl.DrawRectangle(x + sz/2,        y + sz/2 - 2, hw, i32(r * 0.6), dim)
+
+    case .Flask1, .Flask2:
+
+        neck_w := i32(r * 0.22)
+        body_w := i32(r * 0.54)
+        neck_h := i32(r * 0.30)
+        body_h := i32(r * 0.70)
+        nx := x + (sz - neck_w) / 2
+        ny := y + i32(r * 0.14)
+        bx := x + (sz - body_w) / 2
+        by := ny + neck_h
+        rl.DrawRectangle(nx, ny, neck_w, neck_h, col)
+        rl.DrawRectangle(bx, by, body_w, body_h, dim)
+        rl.DrawRectangle(bx + 2, by + 2, body_w - 4, body_h - 4, col)
+
+        rl.DrawRectangle(nx - 2, ny - i32(r * 0.12), neck_w + 4, i32(r * 0.12), col)
     }
 }
 
@@ -186,7 +186,7 @@ _draw_backpack_raw :: proc(w: ^cw.World, inv: ^cw.InventoryComp, grid_bb: clay.B
     gy := i32(grid_bb.y)
     cs := g_inv.cell_sz
 
-    // Cell background grid
+
     for r in 0..<i32(cw.BACKPACK_ROWS) {
         for c in 0..<i32(cw.BACKPACK_COLS) {
             cx := gx + c * cs
@@ -200,7 +200,7 @@ _draw_backpack_raw :: proc(w: ^cw.World, inv: ^cw.InventoryComp, grid_bb: clay.B
         }
     }
 
-    // Grid lines
+
     grid_w := i32(cw.BACKPACK_COLS) * cs
     grid_h := i32(cw.BACKPACK_ROWS) * cs
     for c in 0..=i32(cw.BACKPACK_COLS) {
@@ -214,7 +214,7 @@ _draw_backpack_raw :: proc(w: ^cw.World, inv: ^cw.InventoryComp, grid_bb: clay.B
 
     if inv == nil { return }
 
-    // Place drag highlight
+
     if g_drag_item_id != -1 && cw.world_is_valid(w, g_drag_item_id) {
         mp            := rl.GetMousePosition()
         drag_item     := cw.world_get_item(w, g_drag_item_id)
@@ -235,7 +235,7 @@ _draw_backpack_raw :: proc(w: ^cw.World, inv: ^cw.InventoryComp, grid_bb: clay.B
         }
     }
 
-    // Draw items in backpack
+
     for row in 0..<cw.BACKPACK_ROWS {
         for col in 0..<cw.BACKPACK_COLS {
             cell_id := inv.backpack[row * cw.BACKPACK_COLS + col]
@@ -334,7 +334,6 @@ _draw_drag_item :: proc(w: ^cw.World) {
     }
 }
 
-// ── Input handling ────────────────────────────────────────────────────────
 
 @(private = "file")
 _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: clay.BoundingBox) {
@@ -344,7 +343,7 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
     inv := cw.world_get_inventory(w, w.player_id)
     mp  := rl.GetMousePosition()
 
-    // Right-click in shop/stash: sell or deposit carried items.
+
     if (ui_has(.Shop) || ui_has(.Stash)) && rl.IsMouseButtonPressed(.RIGHT) && g_drag_item_id == -1 {
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
@@ -372,9 +371,9 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
         }
     }
 
-    // Left-click: pick up item (start drag)
+
     if rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
-        // Try backpack first
+
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
             cell_id := inv.backpack[row * cw.BACKPACK_COLS + col]
@@ -387,7 +386,7 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
                 g_drag_item_id    = cell_id
             }
         }
-        // Try equip slots
+
         if g_drag_item_id == -1 {
             for i in 0..<cw.EQUIP_SLOT_COUNT {
                 eid  := inv.equipped[i]
@@ -405,27 +404,27 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
         }
     }
 
-    // Left-release: place dragged item
+
     if rl.IsMouseButtonReleased(.LEFT) && g_drag_item_id != -1 {
         item   := cw.world_get_item(w, g_drag_item_id)
         placed := false
 
-        // Try equip slots
+
         for i in 0..<cw.EQUIP_SLOT_COUNT {
             slot := cw.EquipSlot(i)
-            if !_item_fits_slot(item.slot, slot)     { continue }
-            if inv.equipped[i] != cw.INVALID_ENTITY  { continue }
+            if !_item_fits_slot(item.slot, slot) { continue }
             bb := slot_bbs[i]
-            if bb.width == 0                         { continue }
+            if bb.width == 0                     { continue }
             if !rl.CheckCollisionPointRec(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
-            // Stat requirement check
+
+
             if cw.world_has_component(w, w.player_id, .Stats) {
                 st := cw.world_get_stats(w, w.player_id)
                 if item.req_str > 0 && st.strength  < int(item.req_str) { break }
                 if item.req_dex > 0 && st.dexterity < int(item.req_dex) { break }
                 if item.req_sci > 0 && st.science   < int(item.req_sci) { break }
             }
-            // Two-handed blocking
+
             if slot == .WeaponPrimary && item.is_two_handed {
                 if inv.equipped[int(cw.EquipSlot.WeaponOffhand)] != cw.INVALID_ENTITY { break }
             }
@@ -435,6 +434,16 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
                    cw.world_has_component(w, prim_id, .Item) &&
                    cw.world_get_item(w, prim_id).is_two_handed { break }
             }
+
+
+            if inv.equipped[i] != cw.INVALID_ENTITY {
+                displaced    := inv.equipped[i]
+                dis_item     := cw.world_get_item(w, displaced)
+                dc, dr, dfit := backpack_find_free(inv, dis_item)
+                if !dfit { break }
+                backpack_place(inv, dis_item, displaced, dc, dr)
+            }
+
             inv.equipped[i] = g_drag_item_id
             item.pack_x     = -1
             item.pack_y     = -1
@@ -443,7 +452,7 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
             break
         }
 
-        // Try backpack
+
         if !placed {
             col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
             if hit && backpack_can_place(inv, item, col, row) {
@@ -452,14 +461,14 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
             }
         }
 
-        // Try stash grid
+
         if !placed && ui_has(.Stash) {
             if stash_place_dragged_at_mouse(w, g_drag_item_id) {
                 placed = true
             }
         }
 
-        // Fallback: return to origin
+
         if !placed {
             if g_drag_from_stash {
                 if stash_return_dragged_to_origin(w, g_drag_item_id) {
@@ -491,7 +500,7 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
         g_drag_from_stash = false
     }
 
-    // Hover detection (for tooltip)
+
     if g_drag_item_id == -1 {
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
@@ -514,7 +523,6 @@ _inv_handle_input :: proc(w: ^cw.World, slot_bbs: []clay.BoundingBox, grid_bb: c
     }
 }
 
-// ── Main draw entry point ─────────────────────────────────────────────────
 
 draw_inventory :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
@@ -524,14 +532,14 @@ draw_inventory :: proc(w: ^cw.World) {
         var_inv = cw.world_get_inventory(w, w.player_id)
     }
 
-    // Drag item slot type (used for is_target checks)
+
     drag_item_slot: cw.EquipSlot
     has_drag := g_drag_item_id != -1 && cw.world_is_valid(w, g_drag_item_id)
     if has_drag && cw.world_has_component(w, g_drag_item_id, .Item) {
         drag_item_slot = cw.world_get_item(w, g_drag_item_id).slot
     }
 
-    // Two-handed check: offhand slot blocked?
+
     offhand_blocked := false
     if var_inv != nil {
         prim_id := var_inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
@@ -540,23 +548,20 @@ draw_inventory :: proc(w: ^cw.World) {
         }
     }
 
-    // ── Layout constants ──────────────────────────────────────────────────
-    // g_inv values are already pre-scaled by uis() in update_clay_input.
-    // Do NOT apply uis() again here — that would double-scale at non-720p.
-    // Raw uis() is only correct for constants that are NOT in g_inv.
-    HPAD      := u16(g_inv.pad)                                  // pre-scaled
-    VPAD      := u16(uis(8))                                     // raw constant
-    VGAP      := u16(uis(6))                                     // raw constant
-    SLOT_H    := f32(g_inv.slot_h)                               // pre-scaled
-    WEP_H     := f32(g_inv.wep_h)                               // pre-scaled
-    ABIL_H    := f32(g_inv.ability_h)                            // pre-scaled
-    WGAP      := u16(g_inv.col_gap)                              // pre-scaled
-    GRID_W    := f32(cw.BACKPACK_COLS) * f32(g_inv.cell_sz)      // pre-scaled
-    GRID_H    := f32(cw.BACKPACK_ROWS) * f32(g_inv.cell_sz)      // pre-scaled
-    PANEL_W   := f32(g_inv.panel_w)                              // pre-scaled
+
+    HPAD      := u16(g_inv.pad)
+    VPAD      := u16(uis(8))
+    VGAP      := u16(uis(6))
+    SLOT_H    := f32(g_inv.slot_h)
+    WEP_H     := f32(g_inv.wep_h)
+    ABIL_H    := f32(g_inv.ability_h)
+    WGAP      := u16(g_inv.col_gap)
+    GRID_W    := f32(cw.BACKPACK_COLS) * f32(g_inv.cell_sz)
+    GRID_H    := f32(cw.BACKPACK_ROWS) * f32(g_inv.cell_sz)
+    PANEL_W   := f32(g_inv.panel_w)
     PANEL_H   := f32(rl.GetScreenHeight())
 
-    // ── Build Clay layout ─────────────────────────────────────────────────
+
     ui_frame_reset()
     clay.BeginLayout()
 
@@ -574,13 +579,13 @@ draw_inventory :: proc(w: ^cw.World) {
         border          = { color = { 90, 68, 28, 210 }, width = { 0, 0, 0, 2, 0 } },
     }) {
 
-        // Gold top bar
+
         if clay.UI(clay.ID("InvGoldBar"))({
             layout          = { sizing = { clay.SizingGrow(), clay.SizingFixed(uis(2)) } },
             backgroundColor = ui_clay_color(COL_BRASS),
         }) {}
 
-        // Content area with padding
+
         if clay.UI(clay.ID("InvContent"))({
             layout = {
                 layoutDirection = .TopToBottom,
@@ -592,7 +597,7 @@ draw_inventory :: proc(w: ^cw.World) {
             },
         }) {
 
-            // Title
+
             if clay.UI(clay.ID("InvTitle"))({
                 layout = {
                     sizing         = { clay.SizingGrow(), clay.SizingFit() },
@@ -609,7 +614,7 @@ draw_inventory :: proc(w: ^cw.World) {
             ui_divider("InvDiv0")
             ui_section("InvSecArmor", string(t(.INV_ARMOR)))
 
-            // Armor slots
+
             armor_slots  := [3]cw.EquipSlot{ .Head, .Chest, .Boots }
             armor_labels := [3]cstring{ t(.INV_SLOT_HEAD), t(.INV_SLOT_CHEST), t(.INV_SLOT_BOOTS) }
             for i in 0..<3 {
@@ -636,7 +641,7 @@ draw_inventory :: proc(w: ^cw.World) {
             ui_divider("InvDiv1")
             ui_section("InvSecWep", string(t(.INV_WEAPONS)))
 
-            // Weapon row
+
             if clay.UI(clay.ID("InvWepRow"))({
                 layout = {
                     layoutDirection = .LeftToRight,
@@ -647,7 +652,7 @@ draw_inventory :: proc(w: ^cw.World) {
                 wep_slots  := [2]cw.EquipSlot{ .WeaponPrimary, .WeaponOffhand }
                 wep_types  := [2]cstring{ t(.INV_SLOT_WEAPON), t(.INV_SLOT_OFFHAND) }
 
-                // Primary weapon label: use actual equipped weapon name if any
+
                 wep_label1_buf: [12]u8
                 wep_label1 := string(t(.INV_SLOT_WEAPON))
                 if cw.world_has_component(w, w.player_id, .Equipment) {
@@ -659,7 +664,7 @@ draw_inventory :: proc(w: ^cw.World) {
                         wep_label1 = string(rc_name)
                     }
                 }
-                _ = wep_label1_buf // suppress unused warning
+                _ = wep_label1_buf
 
                 for i in 0..<2 {
                     slot  := wep_slots[i]
@@ -671,14 +676,14 @@ draw_inventory :: proc(w: ^cw.World) {
                     d.wep_slot.is_blocked = blocked
                     d.wep_slot.is_target  = !blocked && _inv_is_target(var_inv, drag_item_slot, slot)
 
-                    // Type label
+
                     tl_src := string(wep_types[i])
                     if i == 0 { tl_src = wep_label1 }
                     tl_bytes := transmute([]u8)tl_src
                     tl_n     := min(len(tl_bytes), 11)
                     copy(d.wep_slot.type_label[:], tl_bytes[:tl_n])
                     d.wep_slot.type_label[tl_n] = 0
-                    // Item name
+
                     n_bytes := transmute([]u8)string(n)
                     nc      := min(len(n_bytes), 23)
                     copy(d.wep_slot.item_name[:], n_bytes[:nc])
@@ -694,7 +699,7 @@ draw_inventory :: proc(w: ^cw.World) {
             ui_divider("InvDiv2")
             ui_section("InvSecAbil", string(t(.INV_ABILITIES)))
 
-            // Ability row
+
             if clay.UI(clay.ID("InvAbilRow"))({
                 layout = {
                     layoutDirection = .LeftToRight,
@@ -713,20 +718,22 @@ draw_inventory :: proc(w: ^cw.World) {
                     d.inv_abil.has_item  = has
                     d.inv_abil.is_target = _inv_is_target(var_inv, drag_item_slot, slot)
 
-                    // Key label
+
                     kl_bytes := transmute([]u8)ab_keys[i]
                     copy(d.inv_abil.key_label[:min(len(kl_bytes), 3)], kl_bytes[:min(len(kl_bytes), 3)])
                     d.inv_abil.key_label[min(len(kl_bytes), 3)] = 0
 
-                    // Ability name + rarity + passive flag
+
                     if has && var_inv != nil {
                         eid := var_inv.equipped[int(slot)]
                         if cw.world_is_valid(w, eid) && cw.world_has_component(w, eid, .Item) {
                             aitem := cw.world_get_item(w, eid)
                             d.inv_abil.rarity_col = rarity_color(aitem.rarity)
-                            if aitem.ability_type != .None {
+                            d.inv_abil.level      = max(1, aitem.ability_level)
+                            if aitem.ability_type != .None &&
+                               int(aitem.ability_type) < len(ABILITY_DEFS) {
                                 def := &ABILITY_DEFS[aitem.ability_type]
-                                d.inv_abil.is_passive = def.is_passive
+                                d.inv_abil.trait_col  = ability_trait_color(def.trait)
                             }
                         }
                     }
@@ -744,22 +751,68 @@ draw_inventory :: proc(w: ^cw.World) {
                 }
             }
 
+
             ui_divider("InvDiv3")
+            ui_section("InvSecFlask", "FLASKS")
+
+            flask_slots    := [2]cw.EquipSlot{ .Flask1, .Flask2 }
+            flask_labels   := [2]string{ "[1] Health", "[2] Energy" }
+            FLASK_H        := uis(34)
+
+            for fi in 0..<2 {
+                slot := flask_slots[fi]
+                n, has := _inv_slot_name(w, var_inv, slot)
+                d := UICustomData{ kind = .InvSlot }
+                d.inv_slot.has_item  = has
+                d.inv_slot.is_target = _inv_is_target(var_inv, drag_item_slot, slot)
+                lbl_bytes := transmute([]u8)flask_labels[fi]
+                lbl_n     := min(len(lbl_bytes), 7)
+                copy(d.inv_slot.label[:], lbl_bytes[:lbl_n])
+                d.inv_slot.label[lbl_n] = 0
+                n_bytes := transmute([]u8)string(n)
+                nc      := min(len(n_bytes), 23)
+                copy(d.inv_slot.item_name[:], n_bytes[:nc])
+                d.inv_slot.item_name[nc] = 0
+
+
+                if has && var_inv != nil {
+                    fid := var_inv.equipped[int(slot)]
+                    if cw.world_is_valid(w, fid) && cw.world_has_component(w, fid, .Flask) {
+                        fc    := cw.world_get_flask(w, fid)
+                        chg_s := fmt.bprintf(_flask_name_buf[:47], "%d/%d charges",
+                            fc.charges, fc.max_charges)
+                        _flask_name_buf[len(chg_s)] = 0
+
+                        suffix  := fmt.tprintf("  (%d/%d)", fc.charges, fc.max_charges)
+                        sb := transmute([]u8)suffix
+                        sb_n := min(len(sb), 23 - nc)
+                        copy(d.inv_slot.item_name[nc:], sb[:sb_n])
+                        d.inv_slot.item_name[nc + sb_n] = 0
+                    }
+                }
+
+                if clay.UI(clay.ID(_SLOT_CLAY_ID[int(slot)]))({
+                    layout = { sizing = { clay.SizingGrow(), clay.SizingFixed(FLASK_H) } },
+                    custom = { customData = ui_push_custom(d) },
+                }) {}
+            }
+
+            ui_divider("InvDiv4")
             ui_section("InvSecBag", string(t(.INV_BACKPACK)))
 
-            // Backpack grid placeholder — actual drawing happens via raw Raylib
+
             if clay.UI(clay.ID("InvBackpackGrid"))({
                 layout = {
                     sizing = { clay.SizingFixed(GRID_W), clay.SizingFixed(GRID_H) },
                 },
             }) {}
 
-            // Push close hint to bottom of panel
+
             if clay.UI(clay.ID("InvSpacer"))({
                 layout = { sizing = { clay.SizingGrow(), clay.SizingGrow() } },
             }) {}
 
-            // Close hint
+
             if clay.UI(clay.ID("InvCloseHint"))({
                 layout = {
                     sizing         = { clay.SizingGrow(), clay.SizingFit() },
@@ -773,12 +826,12 @@ draw_inventory :: proc(w: ^cw.World) {
                 }))
             }
 
-        } // InvContent
-    } // InvPanel
+        }
+    }
 
     cmds := clay.EndLayout()
 
-    // ── Query element positions after layout ──────────────────────────────
+
     slot_bbs: [cw.EQUIP_SLOT_COUNT]clay.BoundingBox
     for i in 0..<cw.EQUIP_SLOT_COUNT {
         id_str := _SLOT_CLAY_ID[i]
@@ -791,19 +844,19 @@ draw_inventory :: proc(w: ^cw.World) {
     if grid_el.found { grid_bb = grid_el.boundingBox }
     g_inv_backpack_bb = grid_bb
 
-    // ── Input (merged from update_inventory) ─────────────────────────────
+
     _inv_handle_input(w, slot_bbs[:], grid_bb)
 
-    // ── Render Clay layout ────────────────────────────────────────────────
+
     clay_raylib_render(&cmds)
 
-    // ── Raw Raylib overlay: backpack grid + items ─────────────────────────
+
     _draw_backpack_raw(w, var_inv, grid_bb)
 
-    // Drag item ghost
+
     _draw_drag_item(w)
 
-    // Tooltip
+
     if g_hover_item_id != cw.INVALID_ENTITY && g_drag_item_id == -1 {
         mp2 := rl.GetMousePosition()
         draw_item_tooltip_or_compare(w, g_hover_item_id, mp2.x, mp2.y)

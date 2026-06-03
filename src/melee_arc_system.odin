@@ -12,7 +12,7 @@ melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     for arc_id in arc_ids {
         arc := cw.world_get_melee_arc(w, arc_id)
         if arc.hit_applied        { continue }
-        if arc.owner_faction == 0 { continue }   
+        if arc.owner_faction == 0 { continue }
 
         at := cw.world_get_transform(w, arc_id)
 
@@ -57,7 +57,7 @@ melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             cw.world_push_damage(w, pid, arc.damage, arc.owner_id)
             arc.hit_applied = true
-            break   
+            break
         }
     }
 
@@ -67,14 +67,14 @@ melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     for arc_id in arc_ids {
         arc := cw.world_get_melee_arc(w, arc_id)
         if arc.hit_applied        { continue }
-        if arc.owner_faction != 0 { continue }   
+        if arc.owner_faction != 0 { continue }
 
         at := cw.world_get_transform(w, arc_id)
 
         hit_count := 0
         for eid in enemy_ids {
             col := cw.world_get_collider(w, eid)
-            if col.faction == 0 { continue }   
+            if col.faction == 0 { continue }
 
             et   := cw.world_get_transform(w, eid)
             dx   := et.position[0] - at.position[0]

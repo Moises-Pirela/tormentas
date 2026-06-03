@@ -5,13 +5,13 @@ import      "core:fmt"
 import      "core:math"
 import cw   "clockwork"
 
-// ── panel geometry constants (base px, scaled by uis) ─────────────────────
+
 MUT_PANEL_W  :: f32(680)
 MUT_PANEL_H  :: f32(560)
 MUT_CARD_H   :: f32(105)
 MUT_CARD_GAP :: f32(8)
 
-// ── palette ────────────────────────────────────────────────────────────────
+
 @(private="file") MUT_BG       :: rl.Color{  10,  8, 16, 252 }
 @(private="file") MUT_BORDER   :: rl.Color{ 140, 60,200, 220 }
 @(private="file") MUT_HEADER   :: rl.Color{ 210,160,255, 255 }
@@ -21,11 +21,11 @@ MUT_CARD_GAP :: f32(8)
 @(private="file") MUT_CANGET   :: rl.Color{ 180, 80,255, 220 }
 @(private="file") MUT_LOCKED   :: rl.Color{  70, 50, 90, 160 }
 
-// ── per-screen state ───────────────────────────────────────────────────────
+
 @(private="file") g_mut_tab:    MutationBranch = .Corpus
 @(private="file") g_mut_scroll: f32
 
-// ── helpers ────────────────────────────────────────────────────────────────
+
 @(private="file")
 mut_panel_rect :: proc() -> (px, py, pw, ph: f32) {
     sw := f32(rl.GetScreenWidth())
@@ -57,7 +57,7 @@ mut_count_in_branch :: proc(branch: MutationBranch) -> int {
     return n
 }
 
-// content_geometry returns the scrollable-area rectangle and the max scroll.
+
 @(private="file")
 mut_content_geo :: proc(px, py, pw, ph: f32) -> (cx, cy, cw_, ch, max_scroll: f32) {
     pad      := uis(12)
@@ -79,7 +79,6 @@ mut_content_geo :: proc(px, py, pw, ph: f32) -> (cx, cy, cw_, ch, max_scroll: f3
     return
 }
 
-// ── workbench interaction ──────────────────────────────────────────────────
 
 @(private="file")
 find_nearby_mutation_workbench :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, ok: bool) {
@@ -133,7 +132,6 @@ draw_mutation_workbench_world :: proc(w: ^cw.World) {
         fs, 0.5, rl.Color{ 220, 170, 255, pulse })
 }
 
-// ── update ─────────────────────────────────────────────────────────────────
 
 update_mutation_tree :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
@@ -147,13 +145,13 @@ update_mutation_tree :: proc(w: ^cw.World) {
     px, py, pw, ph := mut_panel_rect()
     pad     := uis(12)
     tab_h   := uis(28)
-    tab_top := py + pad + uis(32) + uis(6)   // matches draw layout
+    tab_top := py + pad + uis(32) + uis(6)
 
     cx, cy, cw_, ch, max_scroll := mut_content_geo(px, py, pw, ph)
 
     mp := rl.GetMousePosition()
 
-    // ── Tab click ──────────────────────────────────────────────────────────
+
     tab_count := len(MutationBranch)
     tab_w     := (pw - pad*2) / f32(tab_count)
     for branch in MutationBranch {
@@ -163,13 +161,13 @@ update_mutation_tree :: proc(w: ^cw.World) {
             if g_mut_tab != branch {
                 g_mut_tab    = branch
                 g_mut_scroll = 0
-                // recompute max_scroll for new tab
+
                 _, _, _, _, max_scroll = mut_content_geo(px, py, pw, ph)
             }
         }
     }
 
-    // ── Scroll wheel ───────────────────────────────────────────────────────
+
     if rl.CheckCollisionPointRec(mp, rl.Rectangle{px, py, pw, ph}) {
         wh := rl.GetMouseWheelMove()
         if wh != 0 {
@@ -177,7 +175,7 @@ update_mutation_tree :: proc(w: ^cw.World) {
         }
     }
 
-    // ── Card click ─────────────────────────────────────────────────────────
+
     if rl.IsMouseButtonPressed(.LEFT) {
         clip_rec := rl.Rectangle{ cx, cy, cw_, ch }
         card_h   := uis(MUT_CARD_H)
@@ -199,7 +197,7 @@ update_mutation_tree :: proc(w: ^cw.World) {
         }
     }
 
-    // ── Reset-all button click ──────────────────────────────────────────────
+
     if rl.IsMouseButtonPressed(.LEFT) {
         footer_y    := py + ph - uis(24)
         footer_fs   := uis(8)
@@ -215,7 +213,6 @@ update_mutation_tree :: proc(w: ^cw.World) {
     }
 }
 
-// ── draw ───────────────────────────────────────────────────────────────────
 
 draw_mutation_tree :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
@@ -234,13 +231,13 @@ draw_mutation_tree :: proc(w: ^cw.World) {
     card_gap := uis(MUT_CARD_GAP)
     scroll_w := uis(6)
 
-    // ── Panel background ───────────────────────────────────────────────────
+
     rl.DrawRectangleRounded({px, py, pw, ph}, 0.04, 8, MUT_BG)
     rl.DrawRectangleLinesEx({px, py, pw, ph}, uis(1.5), MUT_BORDER)
 
     mc := cw.world_get_mutation(w, w.player_id)
 
-    // ── Header ─────────────────────────────────────────────────────────────
+
     header_fs := uis(14)
     body_fs   := uis(9)
 
@@ -253,12 +250,12 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         {px + pw - serum_sz.x - uis(14), py + uis(12)},
         body_fs, 0.5, MUT_OWNED)
 
-    // divider under header
+
     div_y := py + pad + header_h - uis(4)
     rl.DrawRectangle(i32(px + pad), i32(div_y), i32(pw - pad*2), i32(uis(1)),
         rl.Color{100, 50, 160, 120})
 
-    // ── Tabs ───────────────────────────────────────────────────────────────
+
     tab_count := len(MutationBranch)
     tab_w     := (pw - pad*2) / f32(tab_count)
     tab_top   := py + pad + header_h + uis(6)
@@ -282,10 +279,10 @@ draw_mutation_tree :: proc(w: ^cw.World) {
             body_fs, 0.5, tx_col)
     }
 
-    // ── Scrollable card area ───────────────────────────────────────────────
+
     cx, cy, cw_, ch, max_scroll := mut_content_geo(px, py, pw, ph)
 
-    // recompute total height for scrollbar
+
     n       := mut_count_in_branch(g_mut_tab)
     total_h := f32(n)*(card_h + card_gap) - (card_gap if n > 0 else 0)
 
@@ -358,7 +355,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
 
     rl.EndScissorMode()
 
-    // ── Scrollbar ──────────────────────────────────────────────────────────
+
     if max_scroll > 0 {
         track_x := px + pw - scroll_w - uis(4)
         track_h := ch
@@ -372,7 +369,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
             rl.Color{160, 80, 240, 200})
     }
 
-    // ── Footer ─────────────────────────────────────────────────────────────
+
     footer_fs := uis(8)
     hint      := t(.MUT_FOOTER)
     hint_sz   := rl.MeasureTextEx(g_font, hint, footer_fs, 0.4)
@@ -381,7 +378,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         {px + pw*0.5 - hint_sz.x*0.5, footer_y + uis(5)},
         footer_fs, 0.4, rl.Color{90, 70, 110, 180})
 
-    // ── Reset-all button ───────────────────────────────────────────────────
+
     reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
     reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
     reset_x     := px + pw - reset_sz.x - uis(14)

@@ -6,8 +6,8 @@ MutationBranch :: enum u8 { Corpus, Shadow, Venom }
 
 MutationDef :: struct {
     name:       string,
-    lore:       string,     
-    effect:     string,     
+    lore:       string,
+    effect:     string,
     branch:     MutationBranch,
     serum_cost: int,
     conflicts:  [2]cw.MutationType,
@@ -16,7 +16,7 @@ MutationDef :: struct {
 MUTATION_DEFS := [cw.MutationType]MutationDef{
     .None = {},
 
-    // ── CORPUS ───────────────────────────────────────────────────────────────
+
     .SerratedHands = {
         name       = "Serrated Hands",
         lore       = "Bone fused with iron. Weapons are for the weak.",
@@ -55,7 +55,7 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
         conflicts  = { .DeadmansTrigger, .None },
     },
 
-    // ── SHADOW ───────────────────────────────────────────────────────────────
+
     .GlassCannon = {
         name       = "Glass Cannon",
         lore       = "Abandon the body. Become the bullet.",
@@ -94,7 +94,7 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
         conflicts  = { .LivingBomb, .None },
     },
 
-    // ── VENOM ────────────────────────────────────────────────────────────────
+
     .BloodFrenzy = {
         name       = "Blood Frenzy",
         lore       = "The body feeds on death. Stop killing, start dying.",
@@ -133,7 +133,7 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
         serum_cost = 6,
     },
 
-    // ── CORPUS FLAGSHIP ──────────────────────────────────────────────────────
+
     .HeartCage = {
         name       = "Heart Cage",
         lore       = "A second heart grows outside the body. Feed it well.",
@@ -149,7 +149,7 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
         serum_cost = 5,
     },
 
-    // ── SHADOW FLAGSHIP ──────────────────────────────────────────────────────
+
     .CarrionCrown = {
         name       = "Carrion Crown",
         lore       = "Death is not the end. It is a recruitment.",
@@ -165,7 +165,7 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
         serum_cost = 5,
     },
 
-    // ── VENOM FLAGSHIP ───────────────────────────────────────────────────────
+
     .BlackLung = {
         name       = "Black Lung",
         lore       = "Breathe in the black. Let it build. Release it.",
@@ -216,7 +216,7 @@ mutation_template_name :: proc(mt: cw.MutationType) -> string {
     case .CorpseTide: return "mut_corpse_tide"
     case .DeadmansTrigger: return "mut_deadmans_trigger"
     case .Metamorphosis: return "mut_metamorphosis"
-    // Flagship mutations — built entirely from code, no JSON template
+
     case .HeartCage:    return ""
     case .ThornPact:    return ""
     case .CarrionCrown: return ""
@@ -288,7 +288,7 @@ mutation_init_components :: proc(w: ^cw.World, player_id: int, eid: int, mt: cw.
             max_hp = cw.world_get_health(w, player_id).max * 0.6
         }
         heart_id := _spawn_heart_entity(w, player_id, max_hp)
-        // Stagger starting angle so each session feels different.
+
         init_angle := f32(player_id % 7) * 0.9
         cw.world_set_mut_heart_cage(w, eid, cw.MutHeartCageComp{
             heart_id    = heart_id,
@@ -310,7 +310,7 @@ mutation_init_components :: proc(w: ^cw.World, player_id: int, eid: int, mt: cw.
     case .FalseSaint:
         cw.world_set_mut_false_saint(w, eid, cw.MutFalseSaintComp{
             aura_radius   = 200.0,
-            slow_mult     = 0.60,   // 60 % of normal speed = 40 % slower
+            slow_mult     = 0.60,
             beacon_radius = 400.0,
         })
 
@@ -341,8 +341,7 @@ mutation_init_components :: proc(w: ^cw.World, player_id: int, eid: int, mt: cw.
     }
 }
 
-// mutation_unlock acquires a mutation: deducts serums, spawns the child
-// entity, and applies any immediate side effects.
+
 mutation_restore_direct :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) {
     if mt == .None { return }
     if !cw.world_has_component(w, player_id, .MutationContainer) { return }
@@ -371,8 +370,7 @@ mutation_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bo
     mc := cw.world_get_mutation(w, player_id)
     mc.serums -= MUTATION_DEFS[mt].serum_cost
 
-    // Spawn the invisible mutation entity. Newer mutations come from entity
-    // templates so their effect components live in data rather than code.
+
     tname := mutation_template_name(mt)
     eid   := cw.INVALID_ENTITY
     if tname != "" {
@@ -384,19 +382,17 @@ mutation_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bo
     cw.world_set_mut(w, eid, cw.MutComp{ type_id = mt })
     mutation_init_components(w, player_id, eid, mt)
 
-    // Re-fetch mc after entity creation may have resized arrays
+
     mc = cw.world_get_mutation(w, player_id)
     mc.entities[mc.entity_count] = eid
     mc.entity_count += 1
     return true
 }
 
-// Cost in serums to wipe the slate clean.
+
 MUT_CLEAR_COST :: 3
 
-// mutation_clear_all destroys every active mutation entity, handles per-type
-// cleanup (HeartCage heart, CarrionCrown servants), and resets the container.
-// Returns true if cleared; false if the player can't afford it or has nothing.
+
 mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
     if !cw.world_has_component(w, player_id, .MutationContainer) { return false }
     mc := cw.world_get_mutation(w, player_id)
@@ -405,7 +401,7 @@ mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
 
     mc.serums -= MUT_CLEAR_COST
 
-    // Snapshot IDs before any world mutations that could resize component arrays.
+
     n    := mc.entity_count
     eids : [cw.MAX_MUTATION_SLOTS]int
     for i in 0..<n { eids[i] = mc.entities[i] }
@@ -414,7 +410,7 @@ mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
         eid := eids[i]
         if !cw.world_is_valid(w, eid) { continue }
 
-        // HeartCage: remove the orbiting heart so it doesn't linger in the world.
+
         if cw.world_has_component(w, eid, .MutHeartCage) {
             hc := cw.world_get_mut_heart_cage(w, eid)
             if cw.world_is_valid(w, hc.heart_id) {
@@ -422,7 +418,7 @@ mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
             }
         }
 
-        // CarrionCrown: destroy reanimated servants (they were enemy entities).
+
         if cw.world_has_component(w, eid, .MutCarrionCrown) {
             cc := cw.world_get_mut_carrion_crown(w, eid)
             for si in 0..<cw.CARRION_MAX_SERVANTS {
@@ -436,15 +432,13 @@ mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
         cw.world_destroy_entity(w, eid)
     }
 
-    // Re-fetch pointer (prior destroys may have compacted arrays) and zero count.
+
     mc = cw.world_get_mutation(w, player_id)
     mc.entity_count = 0
     return true
 }
 
-// mutation_name_to_type resolves a mutation template name (e.g. "mut_living_bomb")
-// to its MutationType enum value — used by spawn_from_def to apply mutations listed
-// in entity definitions.
+
 mutation_name_to_type :: proc(template_name: string) -> cw.MutationType {
     for mt in cw.MutationType {
         if mt == .None { continue }

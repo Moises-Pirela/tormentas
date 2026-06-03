@@ -3,9 +3,9 @@ package p2p
 import "core:fmt"
 
 TickResult :: enum {
-    Ready,    
-    Stalled,  
-    Offline,  
+    Ready,
+    Stalled,
+    Offline,
 }
 
 HistoryBuf :: struct {

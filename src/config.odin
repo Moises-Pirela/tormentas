@@ -1,19 +1,5 @@
 package main
 
-// =============================================================================
-// config.odin — Keybindings and persistent settings
-//
-// Bindings are split by InputMode so each mode owns exactly the keys it needs.
-// Adding a new input mode in the future means:
-//   1. Add a new XxxBinds struct with its fields.
-//   2. Add it as a field in Bindings.
-//   3. Add defaults in default_binds().
-//   4. Add xxx_bind_rows() for the keybinds screen.
-//   5. Add the section to _bind_section_y() / draw_keybinds_screen().
-//
-// JSON layout on disk:
-//   { "gameplay": { "move_up": 87, … }, "ui": { "close_panel": 256 } }
-// =============================================================================
 
 import "core:encoding/json"
 import "core:os"
@@ -21,55 +7,44 @@ import rl "vendor:raylib"
 
 CONFIG_PATH :: "data/config.json"
 
-// ---------------------------------------------------------------------------
-// Per-mode bind structs
-// ---------------------------------------------------------------------------
 
-// GameplayBinds — keys consumed only while input_mode == .Gameplay.
 GameplayBinds :: struct {
-    move_up:        i32,  // W
-    move_down:      i32,  // S
-    move_left:      i32,  // A
-    move_right:     i32,  // D
-    reload:         i32,  // R
-    dodge:          i32,  // Space
-    skill1:         i32,  // Q
-    skill2:         i32,  // E
-    skill3:         i32,  // F
-    skill4:         i32,  // G
-    interact:       i32,  // E  — open shop / craft / use portal
-    loot_filter:    i32,  // Z  — cycle loot rarity filter
-    open_inventory: i32,  // I
-    open_stats:     i32,  // C
-    open_abilities: i32,  // A  — (future)
-    pause:          i32,  // Escape — open PauseMenu
+    move_up:        i32,
+    move_down:      i32,
+    move_left:      i32,
+    move_right:     i32,
+    reload:         i32,
+    dodge:          i32,
+    skill1:         i32,
+    skill2:         i32,
+    skill3:         i32,
+    skill4:         i32,
+    interact:       i32,
+    loot_filter:    i32,
+    open_inventory: i32,
+    open_stats:     i32,
+    open_abilities: i32,
+    pause:          i32,
 }
 
-// UIBinds — keys consumed only while input_mode == .UI (a panel is open).
+
 UIBinds :: struct {
-    close_panel:     i32,  // Escape — close the active panel
-    compare_tooltip: i32,  // Left Alt — show equipped item comparison
+    close_panel:     i32,
+    compare_tooltip: i32,
 }
 
-// Bindings is the top-level config container written to / read from disk.
-// Each InputMode maps to exactly one sub-struct.
+
 Bindings :: struct {
-    language: u8,            // 0=EN 1=ES 2=PT — persisted as "language" in JSON
+    language: u8,
     gameplay: GameplayBinds,
     ui:       UIBinds,
 }
 
-// ---------------------------------------------------------------------------
-// Counts (needed by the keybinds screen)
-// ---------------------------------------------------------------------------
 
 GAMEPLAY_BIND_COUNT :: 16
 UI_BIND_COUNT       :: 2
 TOTAL_BIND_COUNT    :: GAMEPLAY_BIND_COUNT + UI_BIND_COUNT
 
-// ---------------------------------------------------------------------------
-// Global and defaults
-// ---------------------------------------------------------------------------
 
 g_binds: Bindings
 
@@ -100,9 +75,6 @@ default_binds :: proc() -> Bindings {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Serialisation
-// ---------------------------------------------------------------------------
 
 load_config :: proc() {
     g_binds = default_binds()
@@ -120,9 +92,6 @@ save_config :: proc() {
     os.write_entire_file(CONFIG_PATH, data)
 }
 
-// ---------------------------------------------------------------------------
-// Bind rows — one proc per mode, used by the keybinds screen
-// ---------------------------------------------------------------------------
 
 BindRow :: struct {
     label: cstring,
@@ -157,9 +126,7 @@ ui_bind_rows :: proc() -> [UI_BIND_COUNT]BindRow {
     }
 }
 
-// all_bind_rows returns every rebindable row in section order
-// (gameplay first, then ui).  The keybinds screen indexes into this flat
-// array; sections are rendered with visual headers but no extra indices.
+
 all_bind_rows :: proc() -> [TOTAL_BIND_COUNT]BindRow {
     g := gameplay_bind_rows()
     u := ui_bind_rows()
@@ -169,9 +136,6 @@ all_bind_rows :: proc() -> [TOTAL_BIND_COUNT]BindRow {
     return out
 }
 
-// ---------------------------------------------------------------------------
-// key_name — display string for a keyboard key
-// ---------------------------------------------------------------------------
 
 key_name :: proc(k: rl.KeyboardKey, buf: []u8) -> cstring {
     s: string

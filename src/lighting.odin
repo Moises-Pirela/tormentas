@@ -42,11 +42,6 @@ g_light_sprite_diffuse:        f32 = 0.70
 g_light_sprite_rim:            f32 = 0.45
 g_light_sprite_shadow_response:f32 = 0.65
 
-// ─── Per-level lighting configuration ────────────────────────────────────────
-//
-// All 35 runtime lighting globals packed into one struct so they can be
-// written to / read from the level binary file.  The widget (F2) modifies the
-// globals directly; capture/apply move values between the struct and globals.
 
 LevelLightingConfig :: struct #packed {
     sun_dir_x:              f32,
@@ -124,7 +119,7 @@ LIGHTING_CONFIG_DEFAULT :: LevelLightingConfig{
     fog_scatter            = 1.35,
 }
 
-// lighting_config_capture snapshots the current globals into a struct.
+
 lighting_config_capture :: proc() -> LevelLightingConfig {
     return LevelLightingConfig{
         sun_dir_x              = g_light_sun_dir_x,
@@ -165,7 +160,7 @@ lighting_config_capture :: proc() -> LevelLightingConfig {
     }
 }
 
-// lighting_config_apply pushes a config struct back into the globals.
+
 lighting_config_apply :: proc(c: LevelLightingConfig) {
     g_light_sun_dir_x              = c.sun_dir_x
     g_light_sun_dir_y              = c.sun_dir_y
@@ -306,8 +301,8 @@ g_sprite_rt: rl.RenderTexture2D
 
 g_wall_mask:       rl.RenderTexture2D
 g_wall_mask_dirty: bool = true
-@(private = "file") g_wall_mask_origin: [2]f32   // world-space origin of tile (0,0) in the mask
-@(private = "file") g_wall_mask_size:   [2]f32   // size in tiles (width, height)
+@(private = "file") g_wall_mask_origin: [2]f32
+@(private = "file") g_wall_mask_size:   [2]f32
 
 @(private = "file") g_directional_shader: rl.Shader
 @(private = "file") g_directional_locs: struct {
@@ -445,7 +440,7 @@ rebuild_wall_mask :: proc() {
     rl.BeginTextureMode(g_wall_mask)
     rl.ClearBackground(rl.BLACK)
     for k, v in g_tilemap {
-        if v != .Wall { continue }
+        if tile_base(v) != .Wall { continue }
         px := i32(k[0] - min_tx)
         py := i32(k[1] - min_ty)
         rl.DrawPixel(px, py, rl.WHITE)
@@ -472,9 +467,9 @@ ensure_lighting_render_targets :: proc() {
 
 MAX_POINT_LIGHTS :: 32
 
-g_fog_color:   [3]f32 = { 8, 10, 14 }    
-g_fog_density: f32    = 0.55             
-g_fog_scatter: f32    = 1.35             
+g_fog_color:   [3]f32 = { 8, 10, 14 }
+g_fog_density: f32    = 0.55
+g_fog_scatter: f32    = 1.35
 
 @(private = "file") g_foglight_shader: rl.Shader
 @(private = "file") g_foglight_locs: struct {
@@ -497,7 +492,7 @@ g_fog_scatter: f32    = 1.35
     wall_origin:      c.int,
     wall_size:        c.int,
     tile_size:        c.int,
-    pass:             c.int, // 0 = fog (BLEND_ALPHA), 1 = light halos (BLEND_ADDITIVE)
+    pass:             c.int,
 }
 
 init_foglight_shader :: proc() {
@@ -588,7 +583,7 @@ draw_wall_sun_shadows :: proc() {
     min_x, min_y, max_x, max_y := world_view_bounds(f32(TILE_SIZE) * 2)
 
     for k, v in g_tilemap {
-        if v != .Wall { continue }
+        if tile_base(v) != .Wall { continue }
 
         x := f32(k[0] * TILE_SIZE)
         y := f32(k[1] * TILE_SIZE)
@@ -601,9 +596,30 @@ draw_wall_sun_shadows :: proc() {
             off := shadow_len * t
             a   := u8(clamp(72 * (1.0 - t), 0, 255))
             center := world_to_iso_xy(x + f32(TILE_SIZE) * 0.5 + dir[0] * off, y + f32(TILE_SIZE) * 0.5 + dir[1] * off)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * (1.0 + t * 0.08), ISO_TILE_H * (1.0 + t * 0.04), rl.Color{ 10, 10, 10, a })
+            iso_draw_shadow_diamond(center, ISO_TILE_W * 2 * (1.0 + t * 0.08), ISO_TILE_H * 2 * (1.0 + t * 0.04), rl.Color{ 10, 10, 10, a })
         }
     }
+}
+
+
+draw_player_contact_shadow :: proc(w: ^cw.World) {
+    pid := w.player_id
+    if !cw.world_is_valid(w, pid) { return }
+    if !cw.world_has_component(w, pid, .Transform) { return }
+
+    tr  := cw.world_get_transform(w, pid)
+    pos := rl.Vector2{ tr.position[0], tr.position[1] }
+
+    vis := draw_entity_visual_info(w, pid)
+    if !vis.ok { return }
+
+    radius := vis.world_size * 0.30
+    ipos   := world_to_iso_v(pos)
+
+
+    rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 1.1, max(radius * 0.42, 2), rl.Color{ 4, 4, 2, 60  })
+    rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 0.8, max(radius * 0.32, 2), rl.Color{ 4, 4, 2, 110 })
+    rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 0.5, max(radius * 0.20, 1), rl.Color{ 4, 4, 2, 160 })
 }
 
 draw_entity_sprite_shadows :: proc(w: ^cw.World) {
@@ -616,6 +632,7 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
         if cw.world_has_component(w, id, .MeleeArc)      { continue }
         if cw.world_has_component(w, id, .GroundItem)    { continue }
         if cw.world_has_component(w, id, .PointLight)    { continue }
+        if is_fog_hidden(w, id)                           { continue }
 
         tr := cw.world_get_transform(w, id)
         pos := rl.Vector2{ tr.position[0], tr.position[1] }
@@ -631,6 +648,8 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
            cw.world_get_respawn(w, id).timer > 0 {
             continue
         }
+
+        if is_player_entity(w, id) { continue }
 
         contact_offset := radius * 0.6
         for ci in 0..<4 {
@@ -653,6 +672,14 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
         src := anim_source_rect(w, id, entry.src, stem) if !entry.from_rt else entry.src
         world_size := vis.world_size
 
+        anchor := [2]f32{ 0.5, 1.0 }
+        if def, aok := get_or_load_anim_def(stem); aok && def.frame_width > 0 && def.frame_height > 0 {
+            anchor = {
+                f32(def.anchor_px_x) / f32(def.frame_width),
+                f32(def.anchor_px_y) / f32(def.frame_height),
+            }
+        }
+
         for i in 0..<4 {
             t_frac := f32(i) / 3.0
             offset := radius * (0.45 + t_frac * 0.95)
@@ -662,7 +689,7 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
                 pos.x + dir[0] * offset,
                 pos.y + dir[1] * offset,
             }
-            draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, rl.Color{ 8, 10, 6, a })
+            draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, rl.Color{ 8, 10, 6, a }, ISO_SPRITE_Y, anchor)
         }
     }
 }
@@ -882,11 +909,7 @@ draw_fog_and_lights :: proc(w: ^cw.World) {
         rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_intensity, &intensities, .FLOAT, c.int(count))
     }
 
-    // ── Pass 0: fog layer (BLEND_ALPHA) ──────────────────────────────────────
-    // Dark overlay where the player has no vision.  Point lights and the
-    // player's own vision radius carve transparent holes.  Alpha = fog only;
-    // lights do NOT contribute to alpha, so sprites are never hidden by an
-    // opaque coloured quad.
+
     pass := c.int(0)
     rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
     rl.BeginShaderMode(g_foglight_shader)
@@ -896,11 +919,7 @@ draw_fog_and_lights :: proc(w: ^cw.World) {
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
     rl.EndShaderMode()
 
-    // ── Pass 1: additive light halos (BLEND_ADDITIVE) ─────────────────────
-    // Warm glow on ground tiles and through the fog.  Drawn additively so it
-    // only ever brightens — never hides — whatever is already composited.
-    // Sprites inside lights are already tinted by sprite_light.fs, so the
-    // halo contribution is kept dim (see shader's combined scale).
+
     if count > 0 {
         pass = c.int(1)
         rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
@@ -968,7 +987,7 @@ draw_lighting_widget :: proc() {
     py  := uis(18)
     pw  := uis(320)
     sh  := f32(rl.GetScreenHeight())
-    ph  := sh - py * 2                    
+    ph  := sh - py * 2
     panel := rl.Rectangle{ px, py, pw, ph }
 
     mp := rl.GetMousePosition()
@@ -979,7 +998,7 @@ draw_lighting_widget :: proc() {
 
     gap := uis(27)
     content_h := gap * 31 + uis(60)
-    view_h    := ph - uis(56)              
+    view_h    := ph - uis(56)
     max_scroll := max(content_h - view_h, 0)
     g_light_widget_scroll = clamp(g_light_widget_scroll, 0, max_scroll)
 

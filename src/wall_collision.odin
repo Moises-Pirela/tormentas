@@ -27,7 +27,7 @@ projectile_wall_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if cw.world_tag_is_destroy(w, id) { continue }
         t      := cw.world_get_transform(w, id)
         tx, ty := world_to_tile(t.position[0], t.position[1])
-        if tile_at(tx, ty) != .Floor {
+        if tile_base(tile_at(tx, ty)) != .Floor {
             cw.world_tag_destroy(w, id)
         }
     }
@@ -45,7 +45,7 @@ resolve_wall_overlap :: proc(t: ^cw.TransformComp, radius: f32) {
         for dx in -2..=2 {
             wx := ctx + dx
             wy := cty + dy
-            if tile_at(wx, wy) == .Floor { continue }  // only floor is walkable
+            if tile_base(tile_at(wx, wy)) == .Floor { continue }
 
             tile_x := f32(wx * TILE_SIZE)
             tile_y := f32(wy * TILE_SIZE)

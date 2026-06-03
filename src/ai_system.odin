@@ -9,9 +9,8 @@ ARC_SPREAD   :: f32(math.PI / 2.8)
 
 RANGED_SPAWN_OFFSET :: f32(20)
 
-// Max random aim offset applied to ranged enemies when their target is at full speed.
-// Scales linearly with target speed down to 0 when standing still.
-AI_AIM_DEVIATION_MAX :: f32(math.PI / 6.0)   // 30° at full sprint
+
+AI_AIM_DEVIATION_MAX :: f32(math.PI / 6.0)
 
 @(private)
 nearest_player_pos :: proc(w: ^cw.World, origin: [3]f32) -> (pos: [3]f32, target_id: int, found: bool) {
@@ -34,7 +33,7 @@ nearest_player_pos :: proc(w: ^cw.World, origin: [3]f32) -> (pos: [3]f32, target
     }
     if best_id < 0 { return {}, -1, false }
 
-    // HeartCage: direct enemies toward the heart's position while it lives.
+
     if cw.world_has_component(w, best_id, .MutationContainer) {
         mc := cw.world_get_mutation(w, best_id)
         for mi in 0..<mc.entity_count {
@@ -73,7 +72,7 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         player_pos, target_pid, has_player := nearest_player_pos(w, t.position)
 
-        // Direction / distance to the actual player
+
         pdx, pdy, pdist: f32
         pndx, pndy: f32
         if has_player {
@@ -86,22 +85,22 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        // Direction / distance to the last known position (used by Searching state)
+
         lkdx  := ai.last_known_pos[0] - t.position[0]
         lkdy  := ai.last_known_pos[1] - t.position[1]
         lkdist := math.sqrt(lkdx*lkdx + lkdy*lkdy)
 
         switch ai.state {
 
-        // ── Idle / Suspicious — stand still, stealth_system drives transitions ──
+
         case AI_STATE_IDLE, AI_STATE_SUSPICIOUS:
             v.value = {}
-            // In Suspicious state, slowly face the last-heard direction
+
             if ai.state == AI_STATE_SUSPICIOUS && lkdist > 0.5 {
                 t.rotation = math.atan2(lkdy, lkdx)
             }
 
-        // ── Searching — navigate toward last known position ───────────────────
+
         case AI_STATE_SEARCHING:
             if lkdist > 12 {
                 lknx  := lkdx / lkdist
@@ -118,23 +117,23 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     v.value = { lknx * spd * 0.8, lkny * spd * 0.8, 0 }
                 }
             } else {
-                v.value = {}  // reached last known pos; stealth_system will time out
+                v.value = {}
             }
 
-        // ── Chase / Attack — full aggro behaviour ────────────────────────────
+
         case AI_STATE_CHASE, AI_STATE_ATTACK:
             if !has_player {
                 v.value = {}
                 continue
             }
 
-            // Face the player while in chase/attack
+
             if pdist > 0.5 {
                 t.rotation = math.atan2(pndy, pndx)
             }
 
             if pdist <= ai.attack_range {
-                // ── Attack ────────────────────────────────────────────────────
+
                 ai.state = AI_STATE_ATTACK
                 v.value  = {}
 
@@ -186,8 +185,7 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         pellets := ai_snap.pellet_count if ai_snap.pellet_count > 0 else 5
                         spread  := ai_snap.spread_angle if ai_snap.spread_angle > 0 else (math.PI / 6)
 
-                        // Aim deviation — scales with how fast the target is moving.
-                        // Seed is deterministic so both peers in lockstep agree.
+
                         aim_deviation: f32 = 0
                         if target_pid >= 0 && cw.world_has_component(w, target_pid, .Velocity) {
                             tv  := cw.world_get_velocity(w, target_pid).value
@@ -244,7 +242,7 @@ ai_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
 
             } else {
-                // ── Chase — navigate toward player ────────────────────────────
+
                 ai.state = AI_STATE_CHASE
                 spd := ai.speed if ai.speed > 0 else 80
                 steer := ai_navigate(id,

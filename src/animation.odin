@@ -32,6 +32,8 @@ AnimSheetDef :: struct {
     columns:      int,
     clips:        [ANIM_STATE_COUNT]AnimClipDef,
     has_clip:     [ANIM_STATE_COUNT]bool,
+    anchor_px_x:  int,
+    anchor_px_y:  int,
 }
 
 @(private = "file")
@@ -48,7 +50,6 @@ shutdown_anim_cache :: proc() {
     delete(g_anim_def_cache)
 }
 
-@(private = "file")
 ANIM_STATE_NAMES := [ANIM_STATE_COUNT]string{ "idle", "walk", "dodge", "attack", "death" }
 
 get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
@@ -97,6 +98,16 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
         return {}, false
     }
 
+
+    result.anchor_px_x = result.frame_width  / 2
+    result.anchor_px_y = result.frame_height
+    if v, vok := root["anchor"]; vok {
+        if arr, aok := v.(json.Array); aok && len(arr) >= 2 {
+            result.anchor_px_x = int(json_f32(arr[0]))
+            result.anchor_px_y = int(json_f32(arr[1]))
+        }
+    }
+
     if states_obj, sok := root["states"].(json.Object); sok {
         for si in cw.AnimStateName {
             name := ANIM_STATE_NAMES[si]
@@ -123,6 +134,11 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
     owned := strings.clone(stem)
     g_anim_def_cache[owned] = result
     return result, true
+}
+
+
+anim_def_cache_evict :: proc(stem: string) {
+    delete_key(&g_anim_def_cache, stem)
 }
 
 ANIM_WALK_SPEED_THRESH :: f32(8.0)
@@ -188,13 +204,22 @@ animation_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 }
 
 @(private = "file")
-PLAYER_STEM  :: "player_wanderer"
-@(private = "file")
 ENEMY_STEM   :: "enemy_melee"
 @(private = "file")
 NPC_STEM     :: "npc_shopkeeper"
 @(private = "file")
 WORKBENCH_STEM :: "mutation_workbench"
+
+
+PLAYER_STEMS :: [?]string{
+    "player_nurse",
+    "player_pr1s",
+    "player_sheriff",
+    "player_srbrain",
+}
+
+
+g_player_stem: string = PLAYER_STEMS[2]
 
 get_entity_sprite_stem :: proc(w: ^cw.World, id: int) -> string {
     if cw.world_has_component(w, id, .RenderConfig) {
@@ -205,7 +230,7 @@ get_entity_sprite_stem :: proc(w: ^cw.World, id: int) -> string {
     }
 
     for slot in 0..<cw.MAX_PLAYERS {
-        if id == w.player_ids[slot] { return PLAYER_STEM }
+        if id == w.player_ids[slot] { return g_player_stem }
     }
     if cw.world_has_component(w, id, .AIAgent) {
         ai := cw.world_get_ai(w, id)

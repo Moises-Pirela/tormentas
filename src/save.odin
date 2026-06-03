@@ -4,10 +4,10 @@ import "core:os"
 import "core:mem"
 import cw "clockwork"
 
-SAVE_PATH        :: "save/player.bin"    // legacy — migration only
+SAVE_PATH        :: "save/player.bin"
 CHAR_SAVE_PATH   :: "save/characters.bin"
 SAVE_MAGIC       :: u32(0x544F524D)
-SAVE_VERSION     :: u16(5)
+SAVE_VERSION     :: u16(6)
 SAVE_MAX_ITEMS   :: 64
 CHAR_SAVE_MAGIC  :: u32(0x544F524E)
 CHAR_SAVE_VER    :: u16(2)
@@ -40,6 +40,8 @@ SavedItem :: struct #packed {
     rarity:             u8,
     mutation_type:      u8,
     ability_type:       u8,
+    ability_level:      u8,
+    _ability_pad:       [2]u8,
     serum_value:        i32,
     grid_w:             u8,
     grid_h:             u8,
@@ -74,7 +76,7 @@ SavedItem :: struct #packed {
 PlayerSaveFile :: struct #packed {
     magic:          u32,
     version:        u16,
-    _pad:           u16,
+    character:      u16,
 
     level:          i32,
     xp:             f32,
@@ -312,8 +314,26 @@ strip_player_carried :: proc(w: ^cw.World, pid: int) {
     if !cw.world_has_component(w, pid, .Inventory) { return }
 
     inv := cw.world_get_inventory(w, pid)
-    for &slot in inv.equipped { slot = cw.INVALID_ENTITY }
-    for &cell in inv.backpack  { cell = cw.INVALID_ENTITY }
+
+    for slot_idx in 0..<cw.EQUIP_SLOT_COUNT {
+        slot := cw.EquipSlot(slot_idx)
+        eid  := inv.equipped[slot_idx]
+
+
+        if (slot == .Flask1 || slot == .Flask2) &&
+            cw.world_is_valid(w, eid) &&
+            cw.world_has_component(w, eid, .Item) &&
+            cw.world_get_item(w, eid).rarity == .Normal &&
+            cw.world_has_component(w, eid, .Flask) {
+            fc         := cw.world_get_flask(w, eid)
+            fc.charges  = fc.max_charges
+            continue
+        }
+
+        inv.equipped[slot_idx] = cw.INVALID_ENTITY
+    }
+
+    for &cell in inv.backpack { cell = cw.INVALID_ENTITY }
 
     if cw.world_has_component(w, pid, .Wallet) {
         cw.world_get_wallet(w, pid).gold = 0
@@ -352,9 +372,16 @@ save_player :: proc(w: ^cw.World, pid: int) {
     if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return }
 
     save: PlayerSaveFile
-    save.magic    = SAVE_MAGIC
-    save.version  = SAVE_VERSION
-    save.lifetime = g_lifetime_stats
+    save.magic      = SAVE_MAGIC
+    save.version    = SAVE_VERSION
+    save.lifetime   = g_lifetime_stats
+
+    char_idx := 0
+    stems_sv := PLAYER_STEMS
+    for i in 0..<len(stems_sv) {
+        if stems_sv[i] == g_player_stem { char_idx = i; break }
+    }
+    save.character = u16(char_idx)
 
     if cw.world_has_component(w, pid, .Stats) {
         st              := cw.world_get_stats(w, pid)
@@ -430,6 +457,9 @@ save_player :: proc(w: ^cw.World, pid: int) {
             if cw.world_has_component(w, eid, .RenderConfig) {
                 _save_fill_render(rec, cw.world_get_render_config(w, eid))
             }
+            if cw.world_has_component(w, eid, .Flask) {
+                _save_fill_flask(rec, cw.world_get_flask(w, eid))
+            }
         }
 
         seen: map[int]bool
@@ -451,6 +481,9 @@ save_player :: proc(w: ^cw.World, pid: int) {
             if cw.world_has_component(w, cell, .RenderConfig) {
                 _save_fill_render(rec, cw.world_get_render_config(w, cell))
             }
+            if cw.world_has_component(w, cell, .Flask) {
+                _save_fill_flask(rec, cw.world_get_flask(w, cell))
+            }
         }
     }
 
@@ -471,6 +504,12 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
     save := slot.player
     if save.magic   != SAVE_MAGIC   { return false }
     if save.version != SAVE_VERSION { return false }
+
+
+    char_idx  := int(save.character)
+    stems_ld  := PLAYER_STEMS
+    if char_idx < 0 || char_idx >= len(stems_ld) { char_idx = 0 }
+    g_player_stem = stems_ld[char_idx]
 
     g_lifetime_stats = save.lifetime
 
@@ -536,7 +575,20 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
         if rec.is_equipped == 1 {
             slot_idx := int(rec.equip_slot_idx)
             if slot_idx >= 0 && slot_idx < cw.EQUIP_SLOT_COUNT {
-                inv.equipped[slot_idx] = item_id
+                slot := cw.EquipSlot(slot_idx)
+                item_comp := cw.world_get_item(w, item_id)
+
+
+                is_ab_slot := slot >= .Ability1 && slot <= .Ability4
+                if is_ab_slot && item_comp.ability_type == .None {
+                    if col, row, ok := backpack_find_free(inv, item_comp); ok {
+                        backpack_place(inv, item_comp, item_id, col, row)
+                    }
+
+
+                } else {
+                    inv.equipped[slot_idx] = item_id
+                }
             }
         } else {
             item_comp := cw.world_get_item(w, item_id)
@@ -556,7 +608,12 @@ _load_spawn_saved_item :: proc(w: ^cw.World, rec: ^SavedItem) -> int {
     item.slot               = cw.EquipSlot(rec.slot)
     item.rarity             = cw.ItemRarity(rec.rarity)
     item.mutation_type      = cw.MutationType(rec.mutation_type)
-    item.ability_type       = cw.AbilityType(rec.ability_type)
+
+
+    raw_at := rec.ability_type
+    if int(raw_at) >= len(ABILITY_DEFS) { raw_at = 0 }
+    item.ability_type       = cw.AbilityType(raw_at)
+    item.ability_level      = max(1, rec.ability_level)
     item.serum_value        = int(rec.serum_value)
     item.grid_w             = int(rec.grid_w)
     item.grid_h             = int(rec.grid_h)
@@ -586,6 +643,12 @@ _load_spawn_saved_item :: proc(w: ^cw.World, rec: ^SavedItem) -> int {
     }
     cw.world_set_item(w, item_id, item)
 
+
+    if item.slot == .Flask1 || item.slot == .Flask2 {
+        fc := flask_comp_from_save(item.slot, cw.FlaskSize(rec.req_str), item.rarity, int(rec.req_dex))
+        cw.world_set_flask(w, item_id, fc)
+    }
+
     rc: cw.RenderConfigComp
     rc.name_len = rec.name_len
     copy(rc.display_name[:], rec.name[:])
@@ -604,6 +667,7 @@ _save_fill_item :: proc(rec: ^SavedItem, item: ^cw.ItemComp) {
     rec.rarity             = u8(item.rarity)
     rec.mutation_type      = u8(item.mutation_type)
     rec.ability_type       = u8(item.ability_type)
+    rec.ability_level      = item.ability_level
     rec.serum_value        = i32(item.serum_value)
     rec.grid_w             = u8(item.grid_w)
     rec.grid_h             = u8(item.grid_h)
@@ -633,6 +697,13 @@ _save_fill_item :: proc(rec: ^SavedItem, item: ^cw.ItemComp) {
             value      = item.affixes[i].value,
         }
     }
+}
+
+
+@(private = "file")
+_save_fill_flask :: proc(rec: ^SavedItem, fc: ^cw.FlaskComp) {
+    rec.req_str = u8(fc.size)
+    rec.req_dex = u8(min(fc.charges, 255))
 }
 
 @(private = "file")

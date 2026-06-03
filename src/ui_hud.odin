@@ -1,29 +1,11 @@
 package main
 
-// =============================================================================
-// ui_hud.odin — Diablo 2–style bottom HUD
-//
-// Replaces the three separate draw procs that were in render.odin:
-//   draw_hud_clay   (HP/EN/XP bars)
-//   draw_ability_hud (Q/E/F/G chips, top-right)
-//   draw_ammo_ring   (radial ammo ring, bottom-left)
-//
-// New layout (anchored bottom-centre via Clay floating):
-//
-//   [HP ORB]  [AMMO]  [ Q ][ E ][ F ][ G ]  [EN ORB]
-//                     [══════ XP bar ══════]
-//
-// Everything goes through one Clay frame so layout is consistent at any res.
-// =============================================================================
 
 import rl   "vendor:raylib"
 import cw   "clockwork"
 import clay "../clay"
 import      "core:fmt"
 
-// ── Status-effect display tables ─────────────────────────────────────────────
-// Indexed by cw.StatusEffectType ordinal.  Keep in sync with the enum order:
-//   Slow(0), Poison(1), Burn(2), Stun(3), Root(4), Oiled(5), Wet(6)
 
 @(private = "file")
 STATUS_EFFECT_LABELS := [len(cw.StatusEffectType)]string{
@@ -32,17 +14,16 @@ STATUS_EFFECT_LABELS := [len(cw.StatusEffectType)]string{
 
 @(private = "file")
 STATUS_EFFECT_COLORS := [len(cw.StatusEffectType)]rl.Color{
-    {  80, 160, 220, 255 }, // Slow  — icy blue
-    {  80, 205,  80, 255 }, // Poison — green
-    { 240, 120,  30, 255 }, // Burn  — orange
-    { 255, 220,  40, 255 }, // Stun  — yellow
-    { 145, 100,  45, 255 }, // Root  — bark brown
-    { 130,  95,  40, 255 }, // Oiled — dark amber
-    { 100, 185, 240, 255 }, // Wet   — sky blue
+    {  80, 160, 220, 255 },
+    {  80, 205,  80, 255 },
+    { 240, 120,  30, 255 },
+    { 255, 220,  40, 255 },
+    { 145, 100,  45, 255 },
+    { 130,  95,  40, 255 },
+    { 100, 185, 240, 255 },
 }
 
-// draw_hud is the single entry point called from main.odin's draw_playing.
-// It supersedes draw_hud_clay + draw_ammo_ring + draw_ability_hud.
+
 draw_hud :: proc(w: ^cw.World) {
     clay.BeginLayout()
 
@@ -52,7 +33,7 @@ draw_hud :: proc(w: ^cw.World) {
         hp_ratio := clamp(h.current / h.max, 0, 1) if h.max > 0 else f32(0)
         en_ratio := clamp(h.energy / h.max_energy, 0, 1) if h.max_energy > 0 else f32(0)
 
-        // Shield ring on HP orb
+
         shield_ratio := f32(0)
         xp_ratio     := f32(0)
         if cw.world_has_component(w, w.player_id, .Stats) {
@@ -65,9 +46,7 @@ draw_hud :: proc(w: ^cw.World) {
             }
         }
 
-        // ── Build custom draw data ─────────────────────────────────────────
 
-        // HP orb
         hp_val_buf: [8]u8
         hp_val_s := fmt.bprintf(hp_val_buf[:7], "%.0f", h.current)
         hp_val_buf[len(hp_val_s)] = 0
@@ -80,7 +59,7 @@ draw_hud :: proc(w: ^cw.World) {
         }}
         copy(hp_orb.orb.value_text[:], hp_val_buf[:])
 
-        // Energy orb
+
         en_val_buf: [8]u8
         en_val_s := fmt.bprintf(en_val_buf[:7], "%.0f", h.energy)
         en_val_buf[len(en_val_s)] = 0
@@ -92,15 +71,15 @@ draw_hud :: proc(w: ^cw.World) {
         }}
         copy(en_orb.orb.value_text[:], en_val_buf[:])
 
-        // Ammo chip
+
         ammo_data := UICustomData{ kind = .AmmoChip }
         _hud_fill_ammo_chip(w, &ammo_data.ammo)
 
-        // 4 ability chips (Q / E / F / G)
+
         chip_data: [cw.ABILITY_SLOT_COUNT]UICustomData
         _hud_fill_ability_chips(w, &chip_data)
 
-        // Active status effects on the player
+
         HUDStatusInfo :: struct { label: string, color: rl.Color, duration: f32 }
         se_buf: [len(cw.StatusEffectType)]HUDStatusInfo
         se_n   := 0
@@ -118,7 +97,7 @@ draw_hud :: proc(w: ^cw.World) {
             }
         }
 
-        // ── Clay layout ───────────────────────────────────────────────────
+
         ORB_SZ   := uis(80)
         CHIP_SZ  := uis(54)
         CHIP_GAP := u16(uis(6))
@@ -126,11 +105,11 @@ draw_hud :: proc(w: ^cw.World) {
         VPAD     := u16(uis(5))
         HPAD     := u16(uis(6))
 
-        // Reset arena once per Clay frame
+
         ui_frame_reset()
 
-        // Compute center column width = (n chips × size) + ((n-1) × gap)
-        n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)   // +1 for ammo chip
+
+        n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)
         center_w := CHIP_SZ * n_chips + f32(CHIP_GAP) * (n_chips - 1)
 
         if clay.UI(clay.ID("HUDRoot"))({
@@ -153,14 +132,14 @@ draw_hud :: proc(w: ^cw.World) {
                                 width = { 1, 1, 1, 1, 0 } },
         }) {
 
-            // HP globe (left)
+
             if clay.UI(clay.ID("HPOrb"))({
                 layout = { sizing = { clay.SizingFixed(ORB_SZ),
                                       clay.SizingFixed(ORB_SZ) } },
                 custom = { customData = ui_push_custom(hp_orb) },
             }) {}
 
-            // Centre column: status row (conditional) + chip row + XP bar
+
             if clay.UI(clay.ID("HUDCenter"))({
                 layout = {
                     layoutDirection = .TopToBottom,
@@ -171,7 +150,7 @@ draw_hud :: proc(w: ^cw.World) {
                 },
             }) {
 
-                // Status-effect indicators (only when at least one is active)
+
                 if se_n > 0 {
                     SCHIP_W  := uis(36)
                     SCHIP_H  := uis(28)
@@ -211,20 +190,20 @@ draw_hud :: proc(w: ^cw.World) {
                                                     width = { 1, 1, 1, 1, 0 } },
                             }) {
                                 clay.TextDynamic(se.label, clay.TextConfig({
-                                    fontSize  = u16(uis(10)),
+                                    fontSize  = u16(uis(12)),
                                     textColor = ui_clay_color(se.color),
                                 }))
                                 clay.TextDynamic(dur_s, clay.TextConfig({
-                                    fontSize  = u16(uis(8)),
+                                    fontSize  = u16(uis(10)),
                                     textColor = ui_clay_color(
                                         rl.Color{ 175, 165, 145, 190 }),
                                 }))
                             }
                         }
-                    } // StatusRow
+                    }
                 }
 
-                // Chip row: ammo + 4 ability slots
+
                 if clay.UI(clay.ID("ChipRow"))({
                     layout = {
                         layoutDirection = .LeftToRight,
@@ -233,14 +212,14 @@ draw_hud :: proc(w: ^cw.World) {
                         sizing          = { clay.SizingFit(), clay.SizingFit() },
                     },
                 }) {
-                    // Ammo / weapon chip
+
                     if clay.UI(clay.ID("AmmoChip"))({
                         layout = { sizing = { clay.SizingFixed(CHIP_SZ),
                                               clay.SizingFixed(CHIP_SZ) } },
                         custom = { customData = ui_push_custom(ammo_data) },
                     }) {}
 
-                    // Q / E / F / G
+
                     chip_ids := [cw.ABILITY_SLOT_COUNT]string{
                         "ChipQ", "ChipE", "ChipF", "ChipG" }
                     for i in 0..<cw.ABILITY_SLOT_COUNT {
@@ -250,35 +229,37 @@ draw_hud :: proc(w: ^cw.World) {
                             custom = { customData = ui_push_custom(chip_data[i]) },
                         }) {}
                     }
-                } // ChipRow
+                }
 
-                // XP bar
+
                 ui_hbar("HUDXP", xp_ratio,
                     rl.Color{ 180, 148, 36, 255 },
                     rl.Color{  28,  22, 10, 255 },
                     XP_H)
 
-            } // HUDCenter
+            }
 
-            // Energy globe (right)
+
             if clay.UI(clay.ID("ENOrb"))({
                 layout = { sizing = { clay.SizingFixed(ORB_SZ),
                                       clay.SizingFixed(ORB_SZ) } },
                 custom = { customData = ui_push_custom(en_orb) },
             }) {}
 
-        } // HUDRoot
+        }
     }
 
     cmds := clay.EndLayout()
     clay_raylib_render(&cmds)
 
-    // ── Interaction prompt (screen-space, above HUD) ───────────────────────────
+
+    _draw_flask_charges(w)
+
+
     draw_interact_prompt(w)
 }
 
-// draw_interact_prompt draws the "[E] Prompt" hint when the player is near an
-// interactable entity.  Called from draw_hud (screen-space, no BeginMode2D).
+
 @(private = "file")
 draw_interact_prompt :: proc(w: ^cw.World) {
     if g_interact_focused_id == cw.INVALID_ENTITY { return }
@@ -297,16 +278,16 @@ draw_interact_prompt :: proc(w: ^cw.World) {
     px := sw * 0.5 - psz.x * 0.5
     py := sh * 0.60 - psz.y
 
-    // Shadow
+
     rl.DrawTextEx(g_font, prompt_cs, {px + uis(1.5), py + uis(1.5)},
         prompt_fs, 1, rl.Color{0, 0, 0, 180})
-    // Text
+
     rl.DrawTextEx(g_font, prompt_cs, {px, py},
         prompt_fs, 1, rl.Color{255, 235, 160, 240})
 
-    // [E] key hint below the prompt
+
     key_cs  := cstring("[E]")
-    key_fs  := uis(10)
+    key_fs  := uis(13)
     ksz     := rl.MeasureTextEx(g_font, key_cs, key_fs, 0.5)
     kx      := sw * 0.5 - ksz.x * 0.5
     ky      := py + psz.y + uis(3)
@@ -316,7 +297,6 @@ draw_interact_prompt :: proc(w: ^cw.World) {
         rl.Color{190, 190, 190, 210})
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
 
 @(private = "file")
 _hud_fill_ammo_chip :: proc(w: ^cw.World, chip: ^UICustomAmmo) {
@@ -327,7 +307,7 @@ _hud_fill_ammo_chip :: proc(w: ^cw.World, chip: ^UICustomAmmo) {
     wid   := equip.weapon_entity_id
     if !cw.world_is_valid(w, wid) { return }
 
-    // Weapon display name
+
     if cw.world_has_component(w, wid, .RenderConfig) {
         rc         := cw.world_get_render_config(w, wid)
         translated := string(loc_lookup(cw.render_config_name_cstr(rc)))
@@ -339,7 +319,7 @@ _hud_fill_ammo_chip :: proc(w: ^cw.World, chip: ^UICustomAmmo) {
     if !cw.world_has_component(w, wid, .Weapon) { return }
     wp := cw.world_get_weapon_data(w, wid)
 
-    // Melee / infinite-ammo weapons
+
     if wp.ammo_max <= 0 {
         chip.is_melee  = true
         chip.ammo_text[0] = 'M'
@@ -386,14 +366,110 @@ _hud_fill_ability_chips :: proc(w: ^cw.World, chips: ^[cw.ABILITY_SLOT_COUNT]UIC
             st_ab := ab.slots[i]
 
             chip.cd_ratio    = clamp(st_ab.cooldown / def.cd_max, 0, 1) if def.cd_max > 0 else 0
-            chip.charge_glow = ab_type == .DeathShot   && st_ab.charging
-            chip.dance_glow  = ab_type == .DevilsDance && st_ab.dance_ready
+            chip.charge_glow = false
+            chip.dance_glow  = false
 
-            // Copy up to 23 chars of the ability name
+
             name_bytes := transmute([]u8)def.name
             n_copy     := min(len(name_bytes), 23)
             copy(chip.name_label[:], name_bytes[:n_copy])
             chip.name_label[n_copy] = 0
         }
+    }
+}
+
+
+@(private = "file")
+_draw_flask_charges :: proc(w: ^cw.World) {
+    pid := w.player_id
+    if !cw.world_is_valid(w, pid)                  { return }
+    if !cw.world_has_component(w, pid, .Inventory) { return }
+
+    inv := cw.world_get_inventory(w, pid)
+
+    sw := f32(rl.GetScreenWidth())
+    sh := f32(rl.GetScreenHeight())
+
+
+    ORB_SZ   := uis(80)
+    CHIP_SZ  := uis(54)
+    CHIP_GAP := uis(6)
+    HPAD     := uis(6)
+    VPAD     := uis(5)
+
+    n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)
+    center_w := CHIP_SZ * n_chips + CHIP_GAP * (n_chips - 1)
+    hud_w    := ORB_SZ * 2 + center_w + CHIP_GAP * 2 + HPAD * 2
+
+    hud_left  := sw * 0.5 - hud_w * 0.5
+    hud_bot   := sh - 4
+    _ = hud_bot - (ORB_SZ + VPAD * 2)
+
+    pip_r     := uis(5)
+    pip_gap   := uis(3)
+
+
+    pip_y     := hud_bot - (ORB_SZ + VPAD * 2) - pip_r * 2 - uis(4)
+
+
+    _draw_flask_pip_row(w, inv, .Flask1, pid,
+        hud_left + HPAD, pip_y,
+        pip_r, pip_gap, ORB_SZ,
+        rl.Color{ 180, 40,  40,  255 },
+        rl.Color{ 100, 20,  20,  160 },
+        "[1]")
+
+
+    en_orb_left := hud_left + HPAD + ORB_SZ + CHIP_GAP + center_w + CHIP_GAP
+    _draw_flask_pip_row(w, inv, .Flask2, pid,
+        en_orb_left, pip_y,
+        pip_r, pip_gap, ORB_SZ,
+        rl.Color{ 50,  90,  210, 255 },
+        rl.Color{ 15,  25,  80,  160 },
+        "[2]")
+}
+
+@(private = "file")
+_draw_flask_pip_row :: proc(
+    w: ^cw.World, inv: ^cw.InventoryComp,
+    slot: cw.EquipSlot, pid: int,
+    px, py, pip_r, pip_gap, orb_w: f32,
+    col_filled, col_empty: rl.Color,
+    key_label: cstring,
+) {
+    fid := inv.equipped[int(slot)]
+
+    key_fs  := uis(11)
+    rl.DrawTextEx(g_font, key_label, { px, py }, key_fs, 0.5,
+        rl.Color{ 160, 150, 130, 180 })
+
+
+    if !cw.world_is_valid(w, fid) || !cw.world_has_component(w, fid, .Flask) {
+        rl.DrawTextEx(g_font, "empty", { px + uis(20), py }, key_fs, 0.5,
+            rl.Color{ 80, 70, 60, 120 })
+        return
+    }
+
+    fc := cw.world_get_flask(w, fid)
+
+
+    active_glow := false
+    if cw.world_has_component(w, pid, .FlaskEffect) {
+        fe := cw.world_get_flask_effect(w, pid)
+        if fc.kind == .Health  && fe.heal_per_sec   > 0 { active_glow = true }
+        if fc.kind == .Energy  && fe.energy_per_sec > 0 { active_glow = true }
+    }
+
+    dot_x := px + uis(22)
+    for i in 0..<int(fc.max_charges) {
+        cx := dot_x + f32(i) * (pip_r * 2 + pip_gap) + pip_r
+        c  := col_filled if i < int(fc.charges) else col_empty
+        if active_glow && i < int(fc.charges) {
+
+            c.a = u8(180 + 75 * 0.5 * (1 + rl.GetTime() * 4))
+        }
+        rl.DrawCircleV({ cx, py + pip_r + uis(1) }, pip_r, c)
+        rl.DrawCircleLines(i32(cx), i32(py + pip_r + uis(1)), pip_r,
+            rl.Color{ c.r, c.g, c.b, 200 })
     }
 }

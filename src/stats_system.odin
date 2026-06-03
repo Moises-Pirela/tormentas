@@ -38,7 +38,7 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             slot = cw.world_get_player(w, id).slot
         }
 
-        stationary := status_is_stationary(w, id, slot)
+        _ = status_is_stationary(w, id, slot)
 
         affix_hp_pct          := f32(0)
         affix_armor           := f32(0)
@@ -54,8 +54,20 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         affix_melee_dmg_pct   := f32(0)
         affix_melee_range_pct := f32(0)
         affix_melee_speed_pct := f32(0)
-        base_armor_sum        := f32(0)  // sum of ItemComp.base_armor across equipped slots
-        base_shield_sum       := f32(0)  // sum of ItemComp.base_shield across equipped slots
+        base_armor_sum        := f32(0)
+        base_shield_sum       := f32(0)
+
+        affix_str_bonus        := f32(0)
+        affix_dex_bonus        := f32(0)
+        affix_sci_bonus        := f32(0)
+        affix_energy_regen     := f32(0)
+        affix_energy_cost_pct  := f32(0)
+
+        affix_res_physical     := f32(0)
+        affix_res_necrotic     := f32(0)
+        affix_res_fire         := f32(0)
+        affix_res_galvanic     := f32(0)
+        affix_res_poison       := f32(0)
 
         if cw.world_has_component(w, id, .Inventory) {
             inv := cw.world_get_inventory(w, id)
@@ -85,6 +97,16 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     case .BonusMeleeDamage: affix_melee_dmg_pct   += a.value
                     case .BonusMeleeRange:  affix_melee_range_pct += a.value
                     case .BonusMeleeSpeed:  affix_melee_speed_pct += a.value
+                    case .BonusStrength:    affix_str_bonus        += a.value
+                    case .BonusDexterity:   affix_dex_bonus        += a.value
+                    case .BonusScience:     affix_sci_bonus        += a.value
+                    case .BonusEnergyRegen: affix_energy_regen     += a.value
+                    case .ReduceEnergyCost: affix_energy_cost_pct  += a.value
+                    case .ResistPhysical:   affix_res_physical     += a.value
+                    case .ResistNecrotic:   affix_res_necrotic     += a.value
+                    case .ResistFire:       affix_res_fire         += a.value
+                    case .ResistGalvanic:   affix_res_galvanic     += a.value
+                    case .ResistPoison:     affix_res_poison       += a.value
                     case .None:
                     }
                 }
@@ -108,8 +130,30 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         missing_hp_damage_mult := f32(1.0)
         move_speed_mult        := f32(1.0)
 
-        // Tick mutation runtime state first so the resolved snapshot sees the
-        // latest timers/cooldowns for this frame.
+
+        if cw.world_has_component(w, id, .OverchargeBuff) {
+            ob := cw.world_get_overcharge_buff(w, id)
+            ob.timer += dt
+            if ob.timer >= ob.duration {
+                cw.world_clear_overcharge_buff(w, id)
+            } else {
+                mut_damage_mult  *= ob.damage_mult
+                move_speed_mult  *= ob.speed_mult
+
+
+            }
+        }
+
+
+        if cw.world_has_component(w, id, .KillHeal) {
+            kh := cw.world_get_kill_heal(w, id)
+            kh.timer += dt
+            if kh.timer >= kh.duration {
+                cw.world_clear_kill_heal(w, id)
+            }
+        }
+
+
         if cw.world_has_component(w, id, .MutationContainer) {
             mc := cw.world_get_mutation(w, id)
             for i in 0..<mc.entity_count {
@@ -190,18 +234,17 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        str_mult      := 1.0 + f32(st.strength - 1) * 0.15
-        dex_mult      := 1.0 + f32(st.dexterity - 1) * 0.08
-        sci_hp_mult   := 1.0 + f32(st.science  - 1) * 0.12
-        sci_cd_mult   := 1.0 + f32(st.science  - 1) * 0.05
-        crit_chance   := clamp(0.05 + f32(st.dexterity - 1) * 0.025, 0.05, 0.75)
+
+        eff_str := st.strength  + int(affix_str_bonus)
+        eff_dex := st.dexterity + int(affix_dex_bonus)
+        eff_sci := st.science   + int(affix_sci_bonus)
+
+        str_mult      := 1.0 + f32(eff_str - 1) * 0.15
+        dex_mult      := 1.0 + f32(eff_dex - 1) * 0.08
+        sci_hp_mult   := 1.0 + f32(eff_sci - 1) * 0.12
+        sci_cd_mult   := 1.0 + f32(eff_sci - 1) * 0.05
+        crit_chance   := clamp(0.05 + f32(eff_dex - 1) * 0.025, 0.05, 0.75)
         damage_mult   := 1.0 + affix_damage_pct
-        if player_has_ability(w, id, .SteadyAim) && stationary {
-            damage_mult += f32(ABILITY_DEFS[.SteadyAim].param1 * passive_power)
-        }
-        if player_has_ability(w, id, .Deathwish) && h.max > 0 && h.current / h.max <= 0.30 {
-            damage_mult *= 1.0 + f32(ABILITY_DEFS[.Deathwish].param1 * passive_power)
-        }
         damage_mult *= mut_damage_mult
         damage_mult *= missing_hp_damage_mult
 
@@ -213,25 +256,48 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             projectile_speed_mult *= root_proj_speed_mult
         }
 
-        if player_has_ability(w, id, .EagleEye) {
-            crit_chance += f32(ABILITY_DEFS[.EagleEye].param2 * passive_power)
+
+        overcharge_fire_rate := f32(1.0)
+        overcharge_reload    := f32(1.0)
+        if cw.world_has_component(w, id, .OverchargeBuff) {
+            ob := cw.world_get_overcharge_buff(w, id)
+            overcharge_fire_rate = ob.fire_rate_mult
+            overcharge_reload    = ob.fire_rate_mult
         }
 
         st.max_hp_mult              = str_mult * (1.0 + affix_hp_pct)
         st.max_energy_mult          = sci_hp_mult * (1.0 + affix_energy_pct)
         st.move_speed               = st.base_speed * dex_mult * (1.0 + affix_speed_pct) * move_speed_mult
         st.damage_mult              = damage_mult
-        st.fire_rate_mult           = dex_mult * (1.0 + affix_fire_rate_pct)
-        st.reload_speed_mult        = dex_mult * (1.0 + affix_reload_spd_pct)
+        st.fire_rate_mult           = dex_mult * (1.0 + affix_fire_rate_pct) * overcharge_fire_rate
+        st.reload_speed_mult        = dex_mult * (1.0 + affix_reload_spd_pct) * overcharge_reload
         st.projectile_speed_mult    = projectile_speed_mult
         st.armor                    = clamp(affix_armor + base_armor_sum, 0, 0.75)
         st.hp_regen_pct             = affix_hp_regen
         st.crit_chance              = clamp(crit_chance, 0, 0.95)
-        st.special_ability_crit     = f32(ABILITY_DEFS[.EagleEye].param2 * passive_power) if player_has_ability(w, id, .EagleEye) else 0
-        st.dodge_cooldown_reduction = f32(ABILITY_DEFS[.HuntersReflex].param1 * passive_power) if player_has_ability(w, id, .HuntersReflex) else 0
-        st.vision_bonus             = f32(ABILITY_DEFS[.EagleEye].param1 * passive_power) if player_has_ability(w, id, .EagleEye) else 0
+        st.special_ability_crit     = 0
+        st.dodge_cooldown_reduction = 0
+        st.vision_bonus             = 0
         st.ability_cooldown_mult    = sci_cd_mult
         st.deadman_early_death_pct  = early_death_pct
+
+        st.energy_regen             = 8.0 + f32(max(0, eff_sci - 1)) * 1.5 + affix_energy_regen
+
+        st.energy_cost_mult         = max(0.10, 1.0 - affix_energy_cost_pct)
+
+
+        if affix_res_physical > 0 || affix_res_necrotic > 0 || affix_res_fire > 0 ||
+           affix_res_galvanic > 0 || affix_res_poison > 0 {
+            cw.world_set_resistance(w, id, cw.ResistanceComp{
+                physical = affix_res_physical,
+                necrotic = affix_res_necrotic,
+                fire     = affix_res_fire,
+                galvanic = affix_res_galvanic,
+                poison   = affix_res_poison,
+            })
+        } else if cw.world_has_component(w, id, .Resistance) {
+            cw.world_clear_resistance(w, id)
+        }
         st.movement_blocked         = movement_blocked
         st.healing_blocked          = mut_healing_blocked
         st.pickup_healing_blocked   = mut_pickup_heal_blocked
@@ -246,11 +312,11 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         st.melee_range_mult         = 1.0 + affix_melee_range_pct
         st.melee_speed_mult         = 1.0 + affix_melee_speed_pct
 
-        // Shield: update max from equipped items; fill any newly added capacity.
+
         old_shield_max := st.shield_max
         st.shield_max   = base_shield_sum
         if st.shield_max > old_shield_max {
-            // Equipping a new shield item fills the added portion.
+
             h.shield = clamp(h.shield + (st.shield_max - old_shield_max), 0, st.shield_max)
         } else {
             h.shield = clamp(h.shield, 0, st.shield_max)
@@ -279,9 +345,25 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             h.current = 1
         }
 
-        // Apply HP regeneration from affixes (fraction of max HP per second).
+
         if st.hp_regen_pct > 0 && !st.healing_blocked && h.current < h.max && h.current > 0 {
             h.current = min(h.current + st.hp_regen_pct * h.max * dt, h.max)
+        }
+
+
+        if st.energy_regen > 0 && h.energy < h.max_energy {
+            h.energy = min(h.energy + st.energy_regen * dt, h.max_energy)
+        }
+    }
+
+
+    da_ids := cw.world_query(w, cw.query_mask(.DamageAmp))
+    defer delete(da_ids)
+    for eid in da_ids {
+        da := cw.world_get_damage_amp(w, eid)
+        da.timer -= dt
+        if da.timer <= 0 {
+            cw.world_clear_damage_amp(w, eid)
         }
     }
 }

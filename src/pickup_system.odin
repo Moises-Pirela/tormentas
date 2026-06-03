@@ -3,7 +3,7 @@ package main
 import "core:math"
 import cw "clockwork"
 
-PICKUP_RADIUS :: f32(32)  
+PICKUP_RADIUS :: f32(32)
 
 pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if event != .Update { return }
@@ -59,7 +59,7 @@ pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         inv        := cw.world_get_inventory(w, pid)
 
         for gid in ground_ids {
-            if !cw.world_has_component(w, gid, .GroundItem) { continue }  // already picked up this tick
+            if !cw.world_has_component(w, gid, .GroundItem) { continue }
 
             t  := cw.world_get_transform(w, gid)
             dx := t.position[0] - player_pos[0]
@@ -89,7 +89,7 @@ pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 continue
             }
 
-            // Skip auto-pickup if item rarity is below the current loot filter.
+
             if item.rarity < g_loot_filter_rarity { continue }
 
             col, row, ok := backpack_find_free(inv, item)

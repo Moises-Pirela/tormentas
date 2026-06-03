@@ -3,76 +3,58 @@ package p2p
 import "core:net"
 import "core:fmt"
 
-// =============================================================================
-// Session — UDP peer-to-peer session using Odin's core:net.
-// No external C library required.
-//
-// Handshake (simple stop-and-wait over UDP):
-//   Host:   bind → wait for Hello → send HelloAck → Connected
-//   Client: send Hello (retry every 0.5 s) → recv HelloAck → send Ready → Connected
-//
-// Once Connected, both sides exchange InputBundles every sim tick.
-// =============================================================================
 
 RECV_BUF_SIZE        :: 2048
 HANDSHAKE_RESEND_SEC :: f32(0.5)
-BUNDLE_HISTORY       :: 3         // past frames bundled per send for redundancy
-MAX_STALL_SEC        :: f32(0.1)  // stall warning threshold (seconds)
-DISCONNECT_TIMEOUT   :: f32(6.0)  // seconds of silence before declaring disconnect
+BUNDLE_HISTORY       :: 3
+MAX_STALL_SEC        :: f32(0.1)
+DISCONNECT_TIMEOUT   :: f32(6.0)
 
 MsgType :: enum u8 {
-    Hello        = 1,   // client → host
-    HelloAck     = 2,   // host   → client
-    Ready        = 3,   // client → host (after HelloAck)
-    InputBundle  = 4,   // both   → both (unreliable, frequent)
-    EditorOp     = 5,   // both   → both (unreliable, editor tile delta)
-    LevelLoad    = 6,   // both   → both (unreliable, load level N from disk)
-    EditorModOp  = 7,   // both   → both (unreliable, inspector field edit)
+    Hello        = 1,
+    HelloAck     = 2,
+    Ready        = 3,
+    InputBundle  = 4,
+    EditorOp     = 5,
+    LevelLoad    = 6,
+    EditorModOp  = 7,
 }
 
 SessionState :: enum {
     Offline,
-    Hosting,      // bound; waiting for Hello
-    Connecting,   // sending Hello; waiting for HelloAck
+    Hosting,
+    Connecting,
     Connected,
-    Disconnected, // peer went silent; triggers return to menu
+    Disconnected,
 }
 
-// NAME_SIZE is the fixed wire-length of the player-name field in Hello/HelloAck.
-// Matches PLAYER_NAME_MAX+1 from the main package.
+
 NAME_SIZE :: 25
 
 Session :: struct {
     state:        SessionState,
     socket:       net.UDP_Socket,
-    peer_ep:      net.Endpoint,   // remote address + port (filled on connect)
-    local_slot:   int,            // 0 = host, 1 = client
-    peer_ready:   bool,           // remote sent Ready
-    resend_timer: f32,            // seconds since last Hello resend
+    peer_ep:      net.Endpoint,
+    local_slot:   int,
+    peer_ready:   bool,
+    resend_timer: f32,
     buf:          InputBuffer,
     cur_tick:     u32,
 
-    // Player names — set local_name before handshaking; remote_name is filled
-    // once the peer's Hello/HelloAck is received.
+
     local_name:  [NAME_SIZE]u8,
     remote_name: [NAME_SIZE]u8,
 
-    // Editor sync queues — filled by _handle, drained by session_drain_editor*.
+
     editor_ops:          [dynamic]EditorOp,
     editor_mod_ops:      [dynamic]EditorModOp,
-    pending_level_load:  int,     // 0 = none; > 0 = level number to load
+    pending_level_load:  int,
 
-    // Disconnect detection: time since any packet was last received.
-    // Reset to 0 on every _handle call; if it exceeds DISCONNECT_TIMEOUT
-    // while Connected, state transitions to Disconnected.
+
     no_recv_timer: f32,
 }
 
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
 
-// Bind to 0.0.0.0:port and wait for an incoming client.
 session_host :: proc(s: ^Session, port: int) -> bool {
     sock, err := net.make_unbound_udp_socket(.IP4)
     if err != nil {
@@ -97,7 +79,7 @@ session_host :: proc(s: ^Session, port: int) -> bool {
     return true
 }
 
-// Create an unbound socket and start sending Hello to host_ip:port.
+
 session_join :: proc(s: ^Session, host_ip: string, port: int) -> bool {
     addr := net.parse_address(host_ip)
     if addr == nil {
@@ -118,7 +100,7 @@ session_join :: proc(s: ^Session, host_ip: string, port: int) -> bool {
     s.peer_ep    = net.Endpoint{ address = addr, port = port }
     s.local_slot = 1
     s.state      = .Connecting
-    _send_hello(s)   // immediate first Hello (carries local_name)
+    _send_hello(s)
     fmt.printf("[net] connecting to %s:%d\n", host_ip, port)
     return true
 }
@@ -142,7 +124,7 @@ session_poll :: proc(s: ^Session, dt: f32) {
         }
     }
 
-    // Drain receive buffer
+
     buf: [RECV_BUF_SIZE]u8
     for {
         n, from_ep, err := net.recv_udp(s.socket, buf[:])
@@ -206,7 +188,7 @@ _prefill_delay :: proc(s: ^Session) {
 @(private)
 _handle :: proc(s: ^Session, data: []u8, from: net.Endpoint) {
     if len(data) == 0 { return }
-    s.no_recv_timer = 0   // any packet resets the disconnect watchdog
+    s.no_recv_timer = 0
     switch MsgType(data[0]) {
     case .Hello:
         if s.state == .Hosting {
@@ -216,7 +198,7 @@ _handle :: proc(s: ^Session, data: []u8, from: net.Endpoint) {
             }
             s.state = .Connected
             _prefill_delay(s)
-            _send_hello_ack(s)   
+            _send_hello_ack(s)
             fmt.println("[net] peer connected, sent HelloAck")
         }
     case .HelloAck:

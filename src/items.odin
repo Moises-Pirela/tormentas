@@ -1,19 +1,7 @@
 package main
 
-// =============================================================================
-// ITEMS — Backpack grid helpers and loot drop spawning
-//
-// Backpack grid rules:
-//   • Items occupy a rectangular footprint of (grid_w × grid_h) cells.
-//   • Every cell in that footprint stores the item's entity ID.
-//   • Empty cells store INVALID_ENTITY (-1).
-//   • pack_x / pack_y on ItemComp record the top-left cell of the placed item.
-//     Both are -1 when the item is not in the backpack.
-//
-// Pointer safety: spawn_loot_drop calls world_create_entity which may resize
-// backing arrays.  Callers must not hold live component pointers across a call.
-// =============================================================================
 
+import "core:math"
 import "core:math/rand"
 import "core:os"
 import "core:strconv"
@@ -35,20 +23,130 @@ affix_count_for_rarity :: proc(r: cw.ItemRarity) -> int {
 @(private = "file")
 affix_value_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
     switch r {
-    case .Normal:    return 0.01 + rand.float32() * 0.05 // 1-5%
-    case .Rare:      return 0.06 + rand.float32() * 0.06   // 6–12%
-    case .Epic:      return 0.10 + rand.float32() * 0.07   // 10–17%
-    case .Legendary: return 0.15 + rand.float32() * 0.08   // 15–23%
-    case .Unique:    return 0.22 + rand.float32() * 0.08   // 22–30%
+    case .Normal:    return 0.01 + rand.float32() * 0.05
+    case .Rare:      return 0.06 + rand.float32() * 0.06
+    case .Epic:      return 0.10 + rand.float32() * 0.07
+    case .Legendary: return 0.15 + rand.float32() * 0.08
+    case .Unique:    return 0.22 + rand.float32() * 0.08
     }
     return 0
+}
+
+
+@(private = "file")
+affix_stat_bonus_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+    switch r {
+    case .Normal:    return 1
+    case .Rare:      return 1 + f32(rand.int_max(2))
+    case .Epic:      return 2 + f32(rand.int_max(2))
+    case .Legendary: return 3 + f32(rand.int_max(2))
+    case .Unique:    return 4 + f32(rand.int_max(2))
+    }
+    return 1
+}
+
+
+@(private = "file")
+affix_energy_regen_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+    switch r {
+    case .Normal:    return 1 + rand.float32() * 2
+    case .Rare:      return 3 + rand.float32() * 2
+    case .Epic:      return 5 + rand.float32() * 3
+    case .Legendary: return 7 + rand.float32() * 4
+    case .Unique:    return 10 + rand.float32() * 4
+    }
+    return 1
+}
+
+
+@(private = "file")
+affix_resist_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+    switch r {
+    case .Normal:    return 0.05 + rand.float32() * 0.05
+    case .Rare:      return 0.10 + rand.float32() * 0.07
+    case .Epic:      return 0.15 + rand.float32() * 0.08
+    case .Legendary: return 0.20 + rand.float32() * 0.10
+    case .Unique:    return 0.25 + rand.float32() * 0.10
+    }
+    return 0.05
+}
+
+
+@(private = "file")
+FLASK_STATS := [cw.FlaskKind][cw.FlaskSize][2][3]f32{
+
+    .Health = {
+        .Small  = { {  60, 4, 3 }, { 100, 4, 3 } },
+        .Medium = { { 140, 5, 2 }, { 220, 5, 2 } },
+        .Large  = { { 280, 6, 1 }, { 450, 6, 1 } },
+    },
+
+    .Energy = {
+        .Small  = { {  35, 3, 3 }, {  55, 3, 3 } },
+        .Medium = { {  80, 4, 2 }, { 125, 4, 2 } },
+        .Large  = { { 160, 5, 1 }, { 250, 5, 1 } },
+    },
+}
+
+@(private = "file")
+FLASK_SIZE_NAMES := [cw.FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
+@(private = "file")
+FLASK_KIND_NAMES := [cw.FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
+
+
+create_flask_item :: proc(w: ^cw.World, kind: cw.FlaskKind, size: cw.FlaskSize, rarity: cw.ItemRarity) -> int {
+    r := rarity if rarity <= .Rare else cw.ItemRarity.Rare
+    ri := int(r)
+    stats := FLASK_STATS[kind][size][ri]
+    recover_amount   := stats[0]
+    recover_duration := stats[1]
+    max_charges      := i32(stats[2])
+
+    flask_slot := cw.EquipSlot.Flask1 if kind == .Health else cw.EquipSlot.Flask2
+
+    id := cw.world_create_entity(w)
+    cw.world_set_item(w, id, cw.ItemComp{
+        slot      = flask_slot,
+        rarity    = r,
+        grid_w    = 1,
+        grid_h    = 2,
+        pack_x    = -1,
+        pack_y    = -1,
+    })
+    cw.world_set_flask(w, id, cw.FlaskComp{
+        kind             = kind,
+        size             = size,
+        recover_amount   = recover_amount,
+        recover_duration = recover_duration,
+        charges          = max_charges,
+        max_charges      = max_charges,
+    })
+    return id
+}
+
+
+flask_comp_from_save :: proc(slot: cw.EquipSlot, size: cw.FlaskSize, rarity: cw.ItemRarity, saved_charges: int) -> cw.FlaskComp {
+    kind := cw.FlaskKind.Health if slot == .Flask1 else cw.FlaskKind.Energy
+    ri   := min(int(rarity), 1)
+    si   := clamp(int(size), 0, 2)
+    stats  := FLASK_STATS[kind][cw.FlaskSize(si)][ri]
+    max_ch := i32(stats[2])
+    ch     := i32(saved_charges)
+    if ch <= 0 || ch > max_ch { ch = max_ch }
+    return cw.FlaskComp{
+        kind             = kind,
+        size             = cw.FlaskSize(si),
+        recover_amount   = stats[0],
+        recover_duration = stats[1],
+        charges          = ch,
+        max_charges      = max_ch,
+    }
 }
 
 roll_affixes :: proc(item: ^cw.ItemComp) {
     if item == nil { return }
 
-    // Slots 0..base_count hold fixed base affixes already loaded from LootDef.
-    // Do NOT reset them. Clear only the slots above.
+
     base_count := int(item.affix_count)
     for i in base_count..<len(item.affixes) { item.affixes[i] = {} }
 
@@ -56,17 +154,24 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
     to_add := max(0, target - base_count)
     if to_add == 0 || base_count >= len(item.affixes) { return }
 
-    // Build the random affix pool for this slot type.
+
     armor_pool  := [?]cw.AffixType{
         .BonusHP, .Armor, .BonusMoveSpeed, .BonusEnergy, .HealthRegen,
+        .BonusStrength, .BonusDexterity, .BonusScience,
+        .BonusEnergyRegen, .ReduceEnergyCost,
+        .ResistPhysical, .ResistNecrotic, .ResistFire, .ResistGalvanic, .ResistPoison,
     }
     weapon_pool := [?]cw.AffixType{
         .BonusDamage, .BonusFireRate, .BonusReloadSpeed,
         .BonusProjSpeed, .BonusPierce, .BonusAmmo,
+        .BonusDexterity, .BonusScience, .ReduceEnergyCost,
+        .ResistPhysical, .ResistFire, .ResistPoison,
     }
     melee_pool  := [?]cw.AffixType{
         .BonusDamage, .BonusMoveSpeed, .BonusHP,
         .BonusMeleeDamage, .BonusMeleeRange, .BonusMeleeSpeed,
+        .BonusStrength, .BonusDexterity, .ReduceEnergyCost,
+        .ResistPhysical, .ResistNecrotic, .ResistGalvanic,
     }
 
     pool_slice: []cw.AffixType
@@ -74,12 +179,13 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
     case .Head, .Chest, .Boots:             pool_slice = armor_pool[:]
     case .WeaponPrimary, .WeaponOffhand:
         pool_slice = melee_pool[:] if item.is_melee else weapon_pool[:]
-    case .Consumable, .Ability1, .Ability2, .Ability3, .Ability4:
+    case .Consumable, .Ability1, .Ability2, .Ability3, .Ability4,
+         .Flask1, .Flask2:
         return
     }
     if len(pool_slice) == 0 { return }
 
-    // Filter out types already present in base affixes so we don't double-dip.
+
     pool_copy := make([]cw.AffixType, len(pool_slice), context.temp_allocator)
     pool_len  := 0
     for at in pool_slice {
@@ -91,7 +197,7 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
     }
     pool_copy = pool_copy[:pool_len]
 
-    // Fisher-Yates shuffle.
+
     for i := len(pool_copy) - 1; i > 0; i -= 1 {
         j := rand.int_max(i + 1)
         pool_copy[i], pool_copy[j] = pool_copy[j], pool_copy[i]
@@ -99,9 +205,21 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
 
     n := min(to_add, len(pool_copy), len(item.affixes) - base_count)
     for i in 0..<n {
-        at := pool_copy[i]
-        // Pierce is a flat count (1 per affix), not a percentage.
-        val := f32(1.0) if at == .BonusPierce else affix_value_for_rarity(item.rarity)
+        at  := pool_copy[i]
+        val : f32
+        #partial switch at {
+        case .BonusPierce:
+            val = 1.0
+        case .BonusStrength, .BonusDexterity, .BonusScience:
+            val = affix_stat_bonus_for_rarity(item.rarity)
+        case .BonusEnergyRegen:
+            val = affix_energy_regen_for_rarity(item.rarity)
+        case .ResistPhysical, .ResistNecrotic, .ResistFire, .ResistGalvanic, .ResistPoison:
+
+            val = affix_resist_for_rarity(item.rarity)
+        case:
+            val = affix_value_for_rarity(item.rarity)
+        }
         item.affixes[base_count + i] = cw.Affix{ type = at, value = val }
     }
     item.affix_count = u8(base_count + n)
@@ -172,10 +290,10 @@ backpack_find_free :: proc(inv: ^cw.InventoryComp, item: ^cw.ItemComp) -> (col, 
     return 0, 0, false
 }
 
-// LootRaritySet is the set of rarities an item is allowed to appear as.
+
 LootRaritySet :: bit_set[cw.ItemRarity]
 
-// Maximum base affixes a LootDef may specify in the CSV.
+
 MAX_BASE_AFFIXES :: 4
 
 LootDef :: struct {
@@ -194,27 +312,27 @@ LootDef :: struct {
     is_melee:           bool,
     melee_damage:       f32,
     melee_range:        f32,
-    melee_spread:       f32,   // half-angle in radians
+    melee_spread:       f32,
     melee_cooldown_max: f32,
-    rarities:           LootRaritySet,                // allowed rarities for this item
-    roll_weight:        int,                          // relative drop weight
-    base_affixes:       [MAX_BASE_AFFIXES]cw.Affix,  // fixed affixes always on the item
+    rarities:           LootRaritySet,
+    roll_weight:        int,
+    base_affixes:       [MAX_BASE_AFFIXES]cw.Affix,
     base_affix_count:   u8,
     weapon_archetype:   cw.WeaponArchetype,
 
-    // Explicit per-item base combat stats (populated from CSV columns 20-26)
+
     base_damage:      f32,
     base_fire_rate:   f32,
     base_ammo_max:    u8,
     base_reload_time: f32,
     base_proj_speed:  f32,
-    base_armor:       f32,   // flat damage reduction (additive with Armor affixes)
-    base_shield:      f32,   // max shield HP granted by this item
+    base_armor:       f32,
+    base_shield:      f32,
 }
 
-// Runtime loot table — loaded from data/loot_table.csv at startup.
+
 g_loot_table:      [dynamic]LootDef
-g_loot_file_data:  []u8   // keeps raw CSV bytes alive so string slices remain valid
+g_loot_file_data:  []u8
 
 loot_table_load :: proc(path: string) -> bool {
     data, ok := os.read_entire_file(path)
@@ -226,7 +344,7 @@ loot_table_load :: proc(path: string) -> bool {
 
     text  := string(data)
     start := 0
-    first := true   // skip header row
+    first := true
     fields: [dynamic]string
     defer delete(fields)
 
@@ -306,7 +424,7 @@ loot_table_destroy :: proc() {
     }
 }
 
-// loot_find_by_name returns a pointer into g_loot_table, or nil if not found.
+
 loot_find_by_name :: proc(name: string) -> ^LootDef {
     for &def in g_loot_table {
         if def.name == name { return &def }
@@ -314,15 +432,16 @@ loot_find_by_name :: proc(name: string) -> ^LootDef {
     return nil
 }
 
-// roll_rarity_allowed picks a rarity from the allowed set using the same
-// weights as roll_rarity(), restricted and renormalised to the set.
+
 roll_rarity_allowed :: proc(mask: LootRaritySet) -> cw.ItemRarity {
+
+
     WEIGHTS := [cw.ItemRarity]int{
-        .Normal    = 50,
-        .Rare      = 25,
-        .Epic      = 15,
-        .Legendary = 8,
-        .Unique    = 2,
+        .Normal    = 750,
+        .Rare      = 220,
+        .Epic      = 8,
+        .Legendary = 2,
+        .Unique    = 1,
     }
     total := 0
     for r in cw.ItemRarity { if r in mask { total += WEIGHTS[r] } }
@@ -337,9 +456,6 @@ roll_rarity_allowed :: proc(mask: LootRaritySet) -> cw.ItemRarity {
     return .Normal
 }
 
-// ---------------------------------------------------------------------------
-// Internal CSV helpers
-// ---------------------------------------------------------------------------
 
 @(private = "file")
 _csv_parse_line :: proc(line: string, fields: ^[dynamic]string) {
@@ -355,7 +471,7 @@ _csv_parse_line :: proc(line: string, fields: ^[dynamic]string) {
             start := i
             for i < len(line) && line[i] != '"' { i += 1 }
             append(fields, line[start:i])
-            if i < len(line) { i += 1 } // closing quote
+            if i < len(line) { i += 1 }
         } else {
             start := i
             for i < len(line) && line[i] != ',' { i += 1 }
@@ -425,6 +541,16 @@ _parse_affix_type :: proc(s: string) -> cw.AffixType {
     case "BonusMeleeDamage": return .BonusMeleeDamage
     case "BonusMeleeRange":  return .BonusMeleeRange
     case "BonusMeleeSpeed":  return .BonusMeleeSpeed
+    case "BonusStrength":    return .BonusStrength
+    case "BonusDexterity":   return .BonusDexterity
+    case "BonusScience":     return .BonusScience
+    case "BonusEnergyRegen": return .BonusEnergyRegen
+    case "ReduceEnergyCost": return .ReduceEnergyCost
+    case "ResistPhysical":   return .ResistPhysical
+    case "ResistNecrotic":   return .ResistNecrotic
+    case "ResistFire":       return .ResistFire
+    case "ResistGalvanic":   return .ResistGalvanic
+    case "ResistPoison":     return .ResistPoison
     }
     return .None
 }
@@ -442,8 +568,7 @@ _parse_weapon_archetype :: proc(s: string) -> cw.WeaponArchetype {
     return .None
 }
 
-// _parse_affix_list parses "AffixType:value;AffixType:value;..." into out[].
-// Returns the number of affixes written.
+
 @(private = "file")
 _parse_affix_list :: proc(s: string, out: []cw.Affix) -> u8 {
     count := 0
@@ -453,7 +578,7 @@ _parse_affix_list :: proc(s: string, out: []cw.Affix) -> u8 {
             entry := s[entry_start:i]
             entry_start = i + 1
             if len(entry) == 0 { continue }
-            // Split on ':'
+
             colon := -1
             for j in 0..<len(entry) {
                 if entry[j] == ':' { colon = j; break }
@@ -471,20 +596,35 @@ _parse_affix_list :: proc(s: string, out: []cw.Affix) -> u8 {
     return u8(count)
 }
 
-spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
+
+spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64, forced_rarity: Maybe(cw.ItemRarity) = nil) {
     if len(g_loot_table) == 0 { return }
+
+
+    pos: [3]f32 = world_pos
+    {
+        h := seed ~ (seed >> 30)
+        h  = h * 0xbf58476d1ce4e5b9
+        h ~= h >> 27
+        h  = h * 0x94d049bb133111eb
+        h ~= h >> 31
+        angle := f32(h & 0xffff) / 65535.0 * 6.2832
+        dist  := 6.0 + f32((h >> 16) & 0xffff) / 65535.0 * 18.0
+        pos[0] += math.cos(angle) * dist
+        pos[1] += math.sin(angle) * dist
+    }
 
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
 
-    // Build total weight over non-consumable entries.
+
     total_weight := 0
     for &d in g_loot_table {
         if d.serum_value == 0 { total_weight += d.roll_weight }
     }
     if total_weight == 0 { return }
 
-    // Weighted pick.
+
     pick := rand.int_max(total_weight)
     acc  := 0
     def: ^LootDef
@@ -496,11 +636,15 @@ spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     if def == nil { return }
 
     item_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, item_id, cw.TransformComp{ position = world_pos })
+    cw.world_set_transform(w, item_id, cw.TransformComp{ position = pos })
 
     item_comp := cw.item_empty()
     item_comp.slot               = def.slot
-    item_comp.rarity             = roll_rarity_allowed(def.rarities)
+    if fr, ok := forced_rarity.?; ok {
+        item_comp.rarity = fr
+    } else {
+        item_comp.rarity = roll_rarity_allowed(def.rarities)
+    }
     item_comp.mutation_type      = def.mutation_type
     item_comp.serum_value        = def.serum_value
     item_comp.grid_w             = def.grid_w
@@ -522,7 +666,7 @@ spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     item_comp.base_proj_speed    = def.base_proj_speed
     item_comp.base_armor         = def.base_armor
     item_comp.base_shield        = def.base_shield
-    // Load base affixes (fixed stats defined in CSV) before rolling random ones.
+
     item_comp.affix_count = def.base_affix_count
     for i in 0..<int(def.base_affix_count) { item_comp.affixes[i] = def.base_affixes[i] }
     roll_affixes(&item_comp)
@@ -538,15 +682,21 @@ spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     cw.world_set_fog_of_war(w, item_id)
 }
 
-// SERUM_DROP_CHANCE is the per-kill probability of a bonus serum drop
-// (independent of the regular weapon/gear loot roll).
-SERUM_DROP_CHANCE :: f32(0.35)
+
+SERUM_DROP_CHANCE :: f32(0.005)
+
+
+ITEM_DROP_CHANCE_UNIQUE    :: f32(0.0015)
+ITEM_DROP_CHANCE_LEGENDARY :: f32(0.0030)
+ITEM_DROP_CHANCE_EPIC      :: f32(0.0080)
+ITEM_DROP_CHANCE_RARE      :: f32(0.1300)
+ITEM_DROP_CHANCE_NORMAL    :: f32(0.6300)
 
 spawn_serum_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
 
-    // Find x1 and x3 serum entries by serum_value — no hardcoded indices.
+
     serum1, serum3: ^LootDef
     for &d in g_loot_table {
         if d.serum_value == 1 && serum1 == nil { serum1 = &d }
@@ -577,23 +727,22 @@ spawn_serum_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     cw.world_set_fog_of_war(w, item_id)
 }
 
-// =============================================================================
-// ABILITY ITEMS — abilities drop as 1×1 loot, socket into ability slots
-// =============================================================================
 
-// All spawnable ability types (excludes .None).
 ABILITY_DROP_POOL :: [?]cw.AbilityType{
-    .QuickDraw, .FanTheHammer, .BulletRain, .DoubleTap, .MagDump,
-    .LastStand,  .Deadeye, .HeavyCalibur, .DeathShot, .CorruptRound,
-    .MarkedTarget, .Execute, .Headshot, .TrickShot, .IronWill,
-    .InstinctReload, .DevilsDance,
-    .SteadyAim, .HuntersReflex, .Deathwish, .EagleEye,
+
+    .CadavericSpasm, .OsseousSlam, .NecroticSurge, .CrushingGrip,
+
+    .RapidDischarge, .DeliberateRound, .EtherVial, .Indexed,
+
+    .VetriolFlask, .CarbolicSpray, .Contagion, .Exothermic,
+
+    .LaTormenta, .Overcharged, .InductionCoil, .GalvanicShock,
 }
 
-// Per-kill probability for a regular enemy to drop an ability item.
-ABILITY_DROP_CHANCE :: f32(0.06)
 
-// spawn_ability_drop picks a random ability and spawns it at world_pos.
+ABILITY_DROP_CHANCE :: f32(0.02)
+
+
 spawn_ability_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
@@ -605,27 +754,56 @@ spawn_ability_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
 @(private = "file")
 _spawn_ability_item :: proc(w: ^cw.World, world_pos: [3]f32, at: cw.AbilityType) {
     if at == .None { return }
-    def := ABILITY_DEFS[at]   // defined in ability_system.odin (same package)
+    if int(at) >= len(ABILITY_DEFS) { return }
+    def := ABILITY_DEFS[at]
 
     item_id := cw.world_create_entity(w)
     cw.world_set_transform(w, item_id, cw.TransformComp{ position = world_pos })
 
-    item              := cw.item_empty()
-    item.slot          = .Ability1   // item_fits_slot treats all Ability1-4 as interchangeable
-    item.ability_type  = at
-    item.grid_w        = 1
-    item.grid_h        = 1
-    item.rarity        = .Legendary if def.is_passive else .Epic
+    item               := cw.item_empty()
+    item.slot           = .Ability1
+    item.ability_type   = at
+    item.ability_level  = 1
+    item.grid_w         = 1
+    item.grid_h         = 1
+    item.rarity         = .Epic
     cw.world_set_item(w, item_id, item)
 
     rc: cw.RenderConfigComp
     cw.render_config_set_name(&rc, def.name)
-    cw.render_config_set_icon(&rc, "ability_passive" if def.is_passive else "ability_active")
+    cw.render_config_set_icon(&rc, "ability_active")
     cw.render_config_set_desc(&rc, def.desc)
     cw.world_set_render_config(w, item_id, rc)
 
     cw.world_set_ground_item(w, item_id)
     cw.world_set_fog_of_war(w, item_id)
+}
+
+
+create_ability_item :: proc(w: ^cw.World, at: cw.AbilityType) -> int {
+    if at == .None                   { return cw.INVALID_ENTITY }
+    if int(at) >= len(ABILITY_DEFS)  { return cw.INVALID_ENTITY }
+    def := ABILITY_DEFS[at]
+
+    item_id := cw.world_create_entity(w)
+    cw.world_set_transform(w, item_id, cw.TransformComp{})
+
+    item              := cw.item_empty()
+    item.slot          = .Ability1
+    item.ability_type  = at
+    item.ability_level = 1
+    item.grid_w        = 1
+    item.grid_h        = 1
+    item.rarity        = .Epic
+    cw.world_set_item(w, item_id, item)
+
+    rc: cw.RenderConfigComp
+    cw.render_config_set_name(&rc, def.name)
+    cw.render_config_set_icon(&rc, "ability_active")
+    cw.render_config_set_desc(&rc, def.desc)
+    cw.world_set_render_config(w, item_id, rc)
+
+    return item_id
 }
 
 loot_seed :: proc(tick: u64, entity_id: int) -> u64 {
@@ -636,4 +814,66 @@ loot_seed :: proc(tick: u64, entity_id: int) -> u64 {
     return h
 }
 
+
+give_starter_items :: proc(w: ^cw.World, pid: int) {
+    if !cw.world_has_component(w, pid, .Inventory) { return }
+    inv := cw.world_get_inventory(w, pid)
+
+
+    hf_id := create_flask_item(w, .Health, .Small, .Normal)
+    if cw.world_is_valid(w, hf_id) {
+        inv = cw.world_get_inventory(w, pid)
+        inv.equipped[int(cw.EquipSlot.Flask1)] = hf_id
+    }
+
+
+    ef_id := create_flask_item(w, .Energy, .Small, .Normal)
+    if cw.world_is_valid(w, ef_id) {
+        inv = cw.world_get_inventory(w, pid)
+        inv.equipped[int(cw.EquipSlot.Flask2)] = ef_id
+    }
+
+
+    for &d in g_loot_table {
+        if d.slot != .WeaponPrimary          { continue }
+        if d.weapon_archetype != .Pistol     { continue }
+        if .Normal not_in d.rarities         { continue }
+
+        wep_id := cw.world_create_entity(w)
+        if !cw.world_is_valid(w, wep_id)    { break }
+
+        item_comp                  := cw.item_empty()
+        item_comp.slot              = .WeaponPrimary
+        item_comp.rarity            = .Normal
+        item_comp.grid_w            = d.grid_w
+        item_comp.grid_h            = d.grid_h
+        item_comp.req_str           = d.req_str
+        item_comp.req_dex           = d.req_dex
+        item_comp.req_sci           = d.req_sci
+        item_comp.is_two_handed     = d.is_two_handed
+        item_comp.is_melee          = d.is_melee
+        item_comp.weapon_archetype  = d.weapon_archetype
+        item_comp.base_damage       = d.base_damage
+        item_comp.base_fire_rate    = d.base_fire_rate
+        item_comp.base_ammo_max     = d.base_ammo_max
+        item_comp.base_reload_time  = d.base_reload_time
+        item_comp.base_proj_speed   = d.base_proj_speed
+        item_comp.base_armor        = d.base_armor
+        item_comp.base_shield       = d.base_shield
+        item_comp.affix_count       = d.base_affix_count
+        for i in 0..<int(d.base_affix_count) { item_comp.affixes[i] = d.base_affixes[i] }
+        roll_affixes(&item_comp)
+        cw.world_set_item(w, wep_id, item_comp)
+
+        rc: cw.RenderConfigComp
+        cw.render_config_set_name(&rc, d.name)
+        cw.render_config_set_icon(&rc, d.icon)
+        cw.render_config_set_desc(&rc, d.desc)
+        cw.world_set_render_config(w, wep_id, rc)
+
+        inv = cw.world_get_inventory(w, pid)
+        inv.equipped[int(cw.EquipSlot.WeaponPrimary)] = wep_id
+        break
+    }
+}
 

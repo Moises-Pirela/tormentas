@@ -2,7 +2,6 @@ package main
 
 import rl   "vendor:raylib"
 
-// ── Panel state ───────────────────────────────────────────────────────────────
 
 g_lore_panel_id: u8 = 0
 
@@ -11,19 +10,18 @@ ui_open_lore :: proc(lore_id: u8) {
     ui_open(.Lore)
 }
 
-// ── Draw ──────────────────────────────────────────────────────────────────────
 
 draw_lore_panel :: proc() {
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
 
-    // Close on Escape
+
     if rl.IsKeyPressed(.ESCAPE) {
         ui_close(.Lore)
         return
     }
 
-    // Dim the world behind the panel
+
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 160})
 
     page, ok := lore_get_page(g_lore_panel_id)
@@ -33,18 +31,17 @@ draw_lore_panel :: proc() {
     px  := (sw - PW) * 0.5
     py  := (sh - PH) * 0.5
 
-    // ── Parchment background ─────────────────────────────────────────────────
-    // Shadow
+
     rl.DrawRectangleRec({px + uis(6), py + uis(6), PW, PH},
         rl.Color{0, 0, 0, 100})
-    // Paper body — layered for aged depth
+
     rl.DrawRectangleRec({px, py, PW, PH},
         rl.Color{198, 178, 128, 252})
     rl.DrawRectangleRec({px, py, PW, uis(4)},
         rl.Color{160, 138, 90, 200})
     rl.DrawRectangleRec({px, py + PH - uis(4), PW, uis(4)},
         rl.Color{148, 126, 82, 200})
-    // Vignette edges (left/right darkening strips)
+
     for i in 0..<6 {
         fi := f32(i)
         a  := u8(28 - i * 4)
@@ -53,13 +50,13 @@ draw_lore_panel :: proc() {
         rl.DrawRectangleRec({px + PW - fi * uis(3) - uis(3), py, uis(3), PH},
             rl.Color{60, 40, 18, a})
     }
-    // Border rule
+
     rl.DrawRectangleLinesEx({px, py, PW, PH}, uis(2),
         rl.Color{110, 82, 36, 200})
     rl.DrawRectangleLinesEx({px + uis(8), py + uis(8), PW - uis(16), PH - uis(16)},
         uis(1), rl.Color{140, 110, 55, 100})
 
-    // ── Decorative corner flourish (simple cross marks) ───────────────────────
+
     CORN := uis(14)
     corners := [4][2]f32{
         {px + uis(12), py + uis(12)},
@@ -75,14 +72,14 @@ draw_lore_panel :: proc() {
     }
 
     if !ok {
-        // Unknown lore id — show placeholder
+
         msg := cstring("[ Document not found ]")
         msz := rl.MeasureTextEx(g_font, msg, uis(12), 1)
         rl.DrawTextEx(g_font, msg,
             {px + PW*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
             uis(12), 1, rl.Color{100, 80, 50, 180})
     } else {
-        // ── Title ────────────────────────────────────────────────────────────
+
         title := loc_lookup(cstring(&page.title[0]))
         title_fs := uis(16)
         tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
@@ -90,13 +87,13 @@ draw_lore_panel :: proc() {
             {px + PW*0.5 - tsz.x*0.5, py + uis(28)},
             title_fs, 1, rl.Color{80, 52, 18, 230})
 
-        // Rule under title
+
         rl.DrawLineEx(
             {px + uis(32), py + uis(28) + title_fs + uis(4)},
             {px + PW - uis(32), py + uis(28) + title_fs + uis(4)},
             uis(1), rl.Color{110, 80, 32, 140})
 
-        // ── Body text with word-wrap ──────────────────────────────────────────
+
         body_x   := px + uis(36)
         body_y   := py + uis(28) + title_fs + uis(18)
         body_w   := PW - uis(72)
@@ -109,14 +106,14 @@ draw_lore_panel :: proc() {
         lore_draw_wrapped(body_str, body_x, body_y, body_w, body_fs, line_h, body_col)
     }
 
-    // ── Close hint ────────────────────────────────────────────────────────────
+
     hint := cstring("[ ESC to close ]")
     hsz  := rl.MeasureTextEx(g_font, hint, uis(9), 0.5)
     rl.DrawTextEx(g_font, hint,
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(22)},
         uis(9), 0.5, rl.Color{90, 68, 32, 160})
 
-    // Click outside to close
+
     mp := rl.GetMousePosition()
     if rl.IsMouseButtonPressed(.LEFT) &&
        !rl.CheckCollisionPointRec(mp, {px, py, PW, PH}) {
@@ -124,8 +121,7 @@ draw_lore_panel :: proc() {
     }
 }
 
-// lore_draw_wrapped draws text with soft word-wrap inside max_w.
-// Shared by ui_lore.odin and ui_phonograph.odin.
+
 lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: rl.Color) {
     if len(text) == 0 { return }
 
@@ -160,7 +156,7 @@ lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: rl.Co
         is_sep := is_end || text[i] == ' ' || text[i] == '\n'
         if is_sep && i > start {
             word := text[start:i]
-            // Handle paragraph breaks
+
             if i > 0 && text[i-1] == '\n' {
                 flush_word(word, &cur_x, &cur_y, line_h * 0.6, x, max_w, fs, col)
                 cur_y += line_h

@@ -21,8 +21,8 @@ set_audio_listener :: proc(pos: [3]f32) {
     g_listener_pos = pos
 }
 
-@(private = "file") g_sfx_cache:      map[string]rl.Sound  // stem → Sound
-@(private = "file") g_voice_cache:    map[string]rl.Sound  // stem → Sound
+@(private = "file") g_sfx_cache:      map[string]rl.Sound
+@(private = "file") g_voice_cache:    map[string]rl.Sound
 @(private = "file") g_music_stream:   rl.Music
 @(private = "file") g_music_loaded:   bool
 @(private = "file") g_amb_stream:     rl.Music
@@ -64,7 +64,6 @@ apply_bus_volumes :: proc() {
 }
 
 
-//data/sounds/sfx/<stem>.wav
 play_sfx :: proc(stem: string) {
     s, cached := g_sfx_cache[stem]
     if !cached {
@@ -74,8 +73,8 @@ play_sfx :: proc(stem: string) {
         s = rl.LoadSound(cstring(&path_buf[0]))
         g_sfx_cache[stem] = s
     }
-    if s.frameCount == 0 { return }  
-    rl.SetSoundPan(s, 0.5)           
+    if s.frameCount == 0 { return }
+    rl.SetSoundPan(s, 0.5)
     rl.SetSoundVolume(s, clamp(g_vol_master * g_vol_sfx, 0, 1))
     rl.PlaySound(s)
 }
@@ -105,7 +104,7 @@ play_sfx_at :: proc(stem: string, world_pos: [3]f32) {
     rl.PlaySound(s)
 }
 
-// data/sounds/music/<stem>.ogg
+
 play_music :: proc(stem: string) {
     if g_music_loaded {
         rl.StopMusicStream(g_music_stream)
@@ -128,7 +127,7 @@ stop_music :: proc() {
     if g_music_loaded { rl.StopMusicStream(g_music_stream) }
 }
 
-//data/sounds/ambience/<stem>.ogg
+
 play_ambience :: proc(stem: string) {
     if g_amb_loaded {
         rl.StopMusicStream(g_amb_stream)
@@ -151,7 +150,7 @@ stop_ambience :: proc() {
     if g_amb_loaded { rl.StopMusicStream(g_amb_stream) }
 }
 
-//data/sounds/voice/<stem>.wav
+
 play_voice :: proc(stem: string) {
     s, cached := g_voice_cache[stem]
     if !cached {

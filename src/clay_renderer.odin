@@ -1,23 +1,11 @@
 package main
 
-// =============================================================================
-// clay_renderer.odin — Raylib backend for Clay render commands
-//
-// clay_raylib_render() iterates the Clay command list and dispatches:
-//   .Rectangle  → DrawRectangle / DrawRectangleRounded
-//   .Border     → DrawRectangle (four edges)
-//   .ScissorStart / .ScissorEnd
-//   .Text       → DrawTextEx (multi-line aware)
-//   .Custom     → UICustomData dispatch:
-//                   .Orb         → _draw_orb
-//                   .AbilityChip → _draw_ability_chip
-//                   .AmmoChip    → _draw_ammo_chip
-// =============================================================================
 
 import clay "../clay"
 import rl   "vendor:raylib"
 import      "core:math"
 import      "core:strings"
+import      "core:fmt"
 
 clay_color :: #force_inline proc(c: clay.Color) -> rl.Color {
     return { u8(c[0]), u8(c[1]), u8(c[2]), u8(c[3]) }
@@ -106,9 +94,6 @@ clay_raylib_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
     }
 }
 
-// ── Orb ───────────────────────────────────────────────────────────────────
-// Draws a circular health/energy globe with a liquid-fill level effect.
-// The shield_ratio > 0 adds a thin arc ring around the outside.
 
 @(private = "file")
 _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
@@ -116,10 +101,10 @@ _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
     cy := i32(math.round(bb.y + bb.height * 0.5))
     radius := bb.width * 0.5
 
-    // Dark background circle
+
     rl.DrawCircle(cx, cy, radius, orb.bg_col)
 
-    // Liquid fill — scissor-clip to the bottom fill_ratio of the bounding box
+
     fill_ratio := clamp(orb.fill_ratio, 0, 1)
     if fill_ratio > 0 {
         fill_h := bb.height * fill_ratio
@@ -132,7 +117,7 @@ _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
         }
     }
 
-    // Shield ring — thin arc around the orb, sweeping clockwise from the top
+
     if orb.shield_ratio > 0 {
         sr         := clamp(orb.shield_ratio, 0, 1)
         ring_inner := radius + 2
@@ -145,11 +130,11 @@ _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
             COL_SHIELD)
     }
 
-    // Inner rim ring (gives the globe a sense of depth)
+
     rl.DrawCircleLines(cx, cy, radius,     rl.Color{ 60,  46, 28, 180 })
     rl.DrawCircleLines(cx, cy, radius - 1, rl.Color{ 40,  30, 16, 120 })
 
-    // Value text — current HP / Energy centred in the orb
+
     if orb.value_text[0] != 0 {
         val_cs := cstring(&orb.value_text[0])
         val_fs := uis(13)
@@ -160,35 +145,33 @@ _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
     }
 }
 
-// ── Ability chip ──────────────────────────────────────────────────────────
-// One Q/E/F/G slot: background, cooldown overlay, glow, key label, name.
 
 @(private = "file")
 _draw_ability_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAbility) {
     bx := i32(bb.x); by := i32(bb.y)
     bw := i32(bb.width); bh := i32(bb.height)
 
-    // Background
+
     bg_col := rl.Color{ 10, 7, 5, 220 } if chip.has_ability else rl.Color{ 8, 6, 4, 160 }
     rl.DrawRectangle(bx, by, bw, bh, bg_col)
 
-    // Cooldown overlay — fills from the bottom, drains upward as CD expires
+
     if chip.has_ability && chip.cd_ratio > 0 {
         overlay_h := i32(f32(bh) * clamp(chip.cd_ratio, 0, 1))
         rl.DrawRectangle(bx, by + bh - overlay_h, bw, overlay_h, rl.Color{ 0, 0, 0, 160 })
     }
 
-    // Special-state glow overlays
+
     if chip.charge_glow { rl.DrawRectangle(bx, by, bw, bh, rl.Color{ 200,  40,  20, 70 }) }
     if chip.dance_glow  { rl.DrawRectangle(bx, by, bw, bh, rl.Color{  20, 200, 200, 65 }) }
 
-    // Border — brass when ready or glowing, muted otherwise
+
     ready   := chip.has_ability && chip.cd_ratio <= 0
     glow    := chip.charge_glow || chip.dance_glow
     bdr_col := COL_BRASS if (ready || glow) else COL_RULE
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, bdr_col)
 
-    // Text colour
+
     key_col: rl.Color
     switch {
     case glow:             key_col = COL_PARCH
@@ -197,14 +180,14 @@ _draw_ability_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAbility) {
     case:                  key_col = rl.Color{ 55, 50, 40, 140 }
     }
 
-    // Key label (top-left corner)
+
     if chip.key_label[0] != 0 {
         rl.DrawTextEx(g_font, cstring(&chip.key_label[0]),
             { bb.x + uis(5), bb.y + uis(4) },
             uis(16), 1, key_col)
     }
 
-    // Ability name (bottom-centre)
+
     if chip.has_ability && chip.name_label[0] != 0 {
         name_fs := uis(10)
         name_cs := cstring(&chip.name_label[0])
@@ -215,9 +198,6 @@ _draw_ability_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAbility) {
     }
 }
 
-// ── Ammo chip ─────────────────────────────────────────────────────────────
-// Shows the equipped weapon's current ammo count (or reload progress).
-// Melee / infinite-ammo weapons show a simple "M" symbol.
 
 @(private = "file")
 _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
@@ -227,7 +207,7 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
     rl.DrawRectangle(bx, by, bw, bh, rl.Color{ 12, 9, 6, 220 })
 
     if !chip.is_melee {
-        // Ammo strip — thin bar at the very bottom of the chip
+
         strip_h := max(i32(uis(4)), 2)
         strip_y := by + bh - strip_h
         rl.DrawRectangle(bx, strip_y, bw, strip_h, rl.Color{ 40, 34, 24, 255 })
@@ -236,7 +216,7 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
             rl.DrawRectangle(bx, strip_y, i32(f32(bw) * chip.ammo_ratio), strip_h, ammo_col)
         }
 
-        // Reload overlay — sweeps across when reloading
+
         if chip.is_reloading && chip.reload_ratio > 0 {
             rl.DrawRectangle(bx, by, bw, bh - strip_h, rl.Color{ 0, 0, 0, 100 })
             rl.DrawRectangle(bx, by,
@@ -245,7 +225,7 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
         }
     }
 
-    // Ammo count / state label (centred)
+
     if chip.ammo_text[0] != 0 {
         val_fs   := uis(18)
         val_cs   := cstring(&chip.ammo_text[0])
@@ -257,7 +237,7 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
             val_fs, 1, text_col)
     }
 
-    // Weapon name (tiny, top-centre)
+
     if chip.wep_name[0] != 0 {
         name_fs := uis(8)
         name_cs := cstring(&chip.wep_name[0])
@@ -267,12 +247,10 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
             name_fs, 0.4, COL_MUTED)
     }
 
-    // Border
+
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, COL_RULE)
 }
 
-// ── Inventory equip slot (armor) ──────────────────────────────────────────
-// Draws a labelled row: "HEAD │ item name" with optional drop-target glow.
 
 @(private = "file")
 _draw_inv_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomInvSlot) {
@@ -288,7 +266,7 @@ _draw_inv_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomInvSlot) {
             { bb.x + uis(14), label_y }, fs, 1, COL_BRASS)
     }
 
-    // Vertical divider between label column and item-name column
+
     div_x := bb.x + uis(122)
     rl.DrawLineEx({ div_x, bb.y + uis(8) }, { div_x, bb.y + bb.height - uis(8) }, 1, COL_RULE)
 
@@ -299,13 +277,13 @@ _draw_inv_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomInvSlot) {
     }
 
     if slot.is_target {
-        rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2,
-            rl.Color{ 215, 175, 28, 200 })
+
+        glow := rl.Color{ 215, 175, 28, 200 } if !slot.has_item \
+                else rl.Color{ 235, 120, 20, 200 }
+        rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2, glow)
     }
 }
 
-// ── Inventory weapon slot ─────────────────────────────────────────────────
-// Draws a two-line box: type label on top, item name below (or 2H lock).
 
 @(private = "file")
 _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
@@ -344,13 +322,12 @@ _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
     }
 
     if slot.is_target {
-        rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2,
-            rl.Color{ 215, 175, 28, 200 })
+        glow := rl.Color{ 215, 175, 28, 200 } if !slot.has_item \
+                else rl.Color{ 235, 120, 20, 200 }
+        rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2, glow)
     }
 }
 
-// ── Inventory ability slot ────────────────────────────────────────────────
-// Draws an ability slot with rarity-tinted background and Active/Passive badge.
 
 @(private = "file")
 _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
@@ -362,13 +339,13 @@ _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
     rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height), bg_col)
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, bdr_col)
 
-    // Key label (Q / E / F / G) — top-left
+
     if slot.key_label[0] != 0 {
         rl.DrawTextEx(g_font, cstring(&slot.key_label[0]),
             { bb.x + uis(5), bb.y + uis(4) }, uis(13), 1, COL_BRASS)
     }
 
-    // Ability name — below the key label
+
     name_col := COL_PARCH if slot.has_item else rl.Color{ 80, 74, 58, 130 }
     if slot.name[0] != 0 {
         rl.DrawTextEx(g_font, cstring(&slot.name[0]),
@@ -378,19 +355,35 @@ _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
             { bb.x + uis(5), bb.y + uis(22) }, uis(11), 0.5, name_col)
     }
 
-    // Active / Passive badge (top-right corner)
+
     if slot.has_item {
-        badge     := cstring("P") if slot.is_passive else cstring("A")
-        badge_col := rl.Color{ 180, 150,  80, 210 } if slot.is_passive \
-                     else rl.Color{ 100, 200, 255, 210 }
-        bfs := uis(10)
-        bsz := rl.MeasureTextEx(g_font, badge, bfs, 0.5)
-        rl.DrawTextEx(g_font, badge,
-            { bb.x + bb.width - bsz.x - uis(5), bb.y + uis(4) }, bfs, 0.5, badge_col)
+        right_x := bb.x + bb.width - uis(5)
+
+
+        if slot.level > 0 {
+            lv_buf: [8]u8
+            lv_str := fmt.bprintf(lv_buf[:], "Lv%d", slot.level)
+            lv_buf[len(lv_str)] = 0
+            lfs  := uis(9)
+            lsz  := rl.MeasureTextEx(g_font, cstring(&lv_buf[0]), lfs, 0.5)
+            rl.DrawTextEx(g_font, cstring(&lv_buf[0]),
+                { right_x - lsz.x, bb.y + bb.height - lsz.y - uis(4) },
+                lfs, 0.5, rl.Color{ 200, 175, 60, 200 })
+            right_x -= lsz.x + uis(4)
+        }
+
+
+        if slot.trait_col.a > 0 {
+            dot_r := uis(4)
+            dot_x := bb.x + bb.width - dot_r*2 - uis(5)
+            dot_y := bb.y + uis(4) + dot_r
+            rl.DrawCircle(i32(dot_x + dot_r), i32(dot_y), dot_r, slot.trait_col)
+        }
     }
 
     if slot.is_target {
-        rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2,
-            rl.Color{ 215, 175, 28, 200 })
+        glow := rl.Color{ 215, 175, 28, 200 } if !slot.has_item \
+                else rl.Color{ 235, 120, 20, 200 }
+        rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2, glow)
     }
 }

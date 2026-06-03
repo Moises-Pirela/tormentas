@@ -2,8 +2,8 @@ package main
 
 import cw "clockwork"
 
-FOG_VISION_RADIUS :: f32(260)   
-FOG_FADE_WIDTH    :: f32(160)   
+FOG_VISION_RADIUS :: f32(260)
+FOG_FADE_WIDTH    :: f32(160)
 
 is_fog_hidden :: proc(w: ^cw.World, id: int) -> bool {
     if !cw.world_has_component(w, id, .FogOfWar)          { return false }

@@ -1,67 +1,35 @@
 package main
 
-// =============================================================================
-// WEAPON SYSTEM
-//
-// Runs each Update tick for every entity that has Equipment + InputState:
-//   1. Ticks down cooldowns and reload timers on all live weapon entities.
-//      When a reload timer expires the magazine is fully replenished.
-//   2. Ticks melee_cooldown on any melee weapon item in an equip slot.
-//   3. Syncs the WeaponComp's base stats to the equipped item's archetype,
-//      so switching from a Pistol to a Rifle immediately changes fire rate,
-//      damage, ammo capacity, and projectile properties.
-//   4. On R key: starts a reload if the weapon is not already reloading and
-//      the magazine is not already full.
-//   5. On fire input:
-//      a. If WeaponPrimary slot holds a melee item: spawn a MeleeArcComp
-//         centred on the shooter's facing angle; skip ranged fire.
-//      b. Otherwise: checks ammo, reloading state, and cooldown.
-//         - If ammo_max > 0 and ammo is empty: auto-starts reload instead.
-//         - If ranged + cooldown ready + not reloading: spawns projectiles.
-//           Shotgun archetype fires a pellet spread; Pistol and Rifle fire
-//           a single projectile.  Ammo decremented once per trigger pull.
-//
-// Pointer safety: all component data is snapshot-copied into locals before
-// world_create_entity is called, since that may resize the backing arrays.
-// The weapon pointer is re-fetched after all spawns for write-back.
-// =============================================================================
 
 import "core:math"
 import cw "clockwork"
 
-// ---------------------------------------------------------------------------
-// Per-archetype base weapon parameters.
-// Applied to the player's WeaponComp entity each frame so that equipping
-// a different weapon type takes effect immediately.
-// Melee archetypes get type=.Melee; their attack stats live on ItemComp.
-// ---------------------------------------------------------------------------
 
 @(private = "file")
 ArchetypeWeaponParams :: struct {
     wep_type:         cw.WeaponType,
     damage:           f32,
-    fire_rate:        f32,   // shots per second (cooldown = 1/fire_rate)
+    fire_rate:        f32,
     projectile_speed: f32,
     projectile_life:  f32,
-    ammo_max:         int,   // 0 = unlimited
+    ammo_max:         int,
     reload_time:      f32,
 }
 
 @(private = "file")
 ARCHETYPE_WEP_PARAMS := [cw.WeaponArchetype]ArchetypeWeaponParams{
-    // Ranged
+
     .None    = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
     .Pistol  = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
     .Rifle   = { .Ranged, 50,  0.8, 720, 2.4,  5, 3.2 },
-    .Shotgun = { .Ranged, 22,  1.2, 380, 0.5,  6, 2.5 }, // per pellet
-    // Melee — ranged stats irrelevant; attack is driven by ItemComp fields
+    .Shotgun = { .Ranged, 22,  1.2, 380, 0.5,  6, 2.5 },
+
     .Axe     = { .Melee,   0,  0,     0, 0,    0, 0   },
     .Knife   = { .Melee,   0,  0,     0, 0,    0, 0   },
     .Sword   = { .Melee,   0,  0,     0, 0,    0, 0   },
 }
 
-// archetype_pellets returns the projectile count and half-spread angle (rad)
-// for a single trigger pull.
+
 @(private = "file")
 archetype_pellets :: proc(a: cw.WeaponArchetype) -> (count: int, spread: f32) {
     #partial switch a {
@@ -70,8 +38,7 @@ archetype_pellets :: proc(a: cw.WeaponArchetype) -> (count: int, spread: f32) {
     return 1, 0
 }
 
-// equipped_primary_archetype returns the WeaponArchetype of the item currently
-// in the entity's WeaponPrimary equip slot, or .None if the slot is empty.
+
 @(private = "file")
 equipped_primary_archetype :: proc(w: ^cw.World, holder_id: int) -> cw.WeaponArchetype {
     if !cw.world_has_component(w, holder_id, .Inventory) { return .None }
@@ -85,7 +52,7 @@ equipped_primary_archetype :: proc(w: ^cw.World, holder_id: int) -> cw.WeaponArc
 weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    // 1. Tick cooldowns + reload timers on weapon entities
+
     wep_ids := cw.world_query(w, cw.query_mask(.Weapon))
     defer delete(wep_ids)
     for id in wep_ids {
@@ -97,7 +64,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 wp.reload_timer  = 0
                 wp.is_reloading  = false
                 wp.ammo_current  = wp.ammo_max
-                // Only play reload_done for the player's weapon (AI weapons don't reload)
+
                 if cw.world_has_component(w, w.player_id, .Equipment) {
                     if cw.world_get_equipment(w, w.player_id).weapon_entity_id == id {
                         play_sfx("reload_done")
@@ -107,7 +74,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
     }
 
-    // 2. Tick melee_cooldown on equipped melee items
+
     inv_ids := cw.world_query(w, cw.query_mask(.Inventory))
     defer delete(inv_ids)
     for holder_id in inv_ids {
@@ -122,18 +89,17 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
     }
 
-    // 3. Process fire / reload input
+
     fire_ids := cw.world_query(w, cw.query_mask(.Equipment, .InputState, .Transform))
     defer delete(fire_ids)
 
     for shooter_id in fire_ids {
+
+        if cw.world_has_component(w, shooter_id, .AimLock) { continue }
+
         input := cw.world_get_input(w, shooter_id)^
 
-        // ----------------------------------------------------------------
-        // 3a. Resolve equipped item archetype and sync WeaponComp base stats.
-        //     Only affects entities with Inventory (i.e. players, not AI).
-        //     AI weapon entities are set up by the spawn director and left alone.
-        // ----------------------------------------------------------------
+
         archetype := equipped_primary_archetype(w, shooter_id)
 
         equip_snap := cw.world_get_equipment(w, shooter_id)^
@@ -141,7 +107,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if cw.world_is_valid(w, wid) && cw.world_has_component(w, wid, .Weapon) &&
            cw.world_has_component(w, shooter_id, .Inventory) {
             p  := ARCHETYPE_WEP_PARAMS[archetype]
-            // Override archetype defaults with per-item base stats when explicitly set.
+
             {
                 inv  := cw.world_get_inventory(w, shooter_id)
                 peid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
@@ -161,7 +127,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             wp.projectile_speed = p.projectile_speed
             wp.projectile_life  = p.projectile_life
             wp.reload_time      = p.reload_time
-            // Apply bonus ammo from equipped item affixes.
+
             bonus_ammo_pct := f32(0)
             if cw.world_has_component(w, shooter_id, .Stats) {
                 bonus_ammo_pct = cw.world_get_stats(w, shooter_id).bonus_ammo_pct
@@ -175,10 +141,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        // ----------------------------------------------------------------
-        // 3b. Melee weapon override — if WeaponPrimary slot holds a melee
-        //     item, LMB fires a melee arc and ranged fire is suppressed.
-        // ----------------------------------------------------------------
+
         melee_handled := false
         if cw.world_has_component(w, shooter_id, .Inventory) {
             inv          := cw.world_get_inventory(w, shooter_id)
@@ -189,7 +152,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if mi.is_melee {
                     melee_handled = true
                     if input.fire_pressed && mi.melee_cooldown <= 0 {
-                        // Snapshot needed data before potential array resize
+
                         t_snap       := cw.world_get_transform(w, shooter_id)^
                         arc_angle    := t_snap.rotation
                         arc_pos      := t_snap.position
@@ -229,8 +192,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         })
                         cw.world_set_self_destruct(w, arc_id, cw.SelfDestructComp{ timer = 0.18 })
 
-                        // Re-fetch item pointer after potential resize and reset cooldown.
-                        // melee_speed_mult > 1 reduces effective cooldown.
+
                         mi_fresh := cw.world_get_item(w, melee_item_id)
                         mi_fresh.melee_cooldown = m_cd_max / melee_speed_mult
                     }
@@ -239,9 +201,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
         if melee_handled { continue }
 
-        // ----------------------------------------------------------------
-        // 3c. Ranged weapon fire
-        // ----------------------------------------------------------------
+
         equip := cw.world_get_equipment(w, shooter_id)^
         wid    = equip.weapon_entity_id
         if !cw.world_is_valid(w, wid)               { continue }
@@ -288,7 +248,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         if ranged_blocked { continue }
 
-        // Snapshot everything before world_create_entity may resize arrays
+
         wp_snap := wp^
         t_snap  := cw.world_get_transform(w, shooter_id)^
 
@@ -302,18 +262,18 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             pierce_rem = i8(clamp(cw.world_get_stats(w, shooter_id).bonus_pierce, 0, 10))
         }
 
-        // Timelock: root + projectile speed/damage mods
+
         if rof := player_get_root_on_fire(w, shooter_id); rof != nil {
             rof.timer = rof.duration
         }
 
-        // Determine pellet count and angular spread from archetype.
+
         pellet_count, pellet_spread := archetype_pellets(archetype)
 
         spawn_offset :: PLAYER_RADIUS + 6
 
         for p in 0..<pellet_count {
-            // Spread pellets evenly across the arc.  Single pellet → no offset.
+
             angle_offset := f32(0)
             if pellet_count > 1 {
                 t_ratio      := f32(p) / f32(pellet_count - 1)
@@ -355,19 +315,19 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         play_sfx("shoot")
 
-        // Alert nearby enemies — gunshots are loud regardless of light level.
+
         emit_noise(
             { t_snap.position[0], t_snap.position[1], 0 },
-            280,                   // audible radius in world units
-            STEALTH_NOISE_LOUD,    // instant full suspicion for any AI that hears it
+            280,
+            STEALTH_NOISE_LOUD,
         )
 
-        // Re-fetch weapon after all spawns (backing arrays may have been resized).
+
         wfresh := cw.world_get_weapon_data(w, wid)
         if wp_snap.fire_rate > 0 {
             wfresh.cooldown = 1.0 / (wp_snap.fire_rate * fire_rate_mult)
         }
-        // Ammo decrements once per trigger pull regardless of pellet count.
+
         if wp_snap.ammo_max > 0 {
             wfresh.ammo_current -= 1
             if wfresh.ammo_current <= 0 {

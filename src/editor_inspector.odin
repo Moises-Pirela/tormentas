@@ -6,21 +6,6 @@ import     "core:math"
 import cw  "clockwork"
 import p2p "p2p"
 
-// =============================================================================
-// editor_inspector.odin — Entity inspector / config panel
-//
-// Selection:
-//   RMB on a tile that has a placeable entity → selects it (instead of erase)
-//   RMB on an empty tile                      → erase (original behaviour)
-//   Escape                                    → deselect
-//
-// Inspector panel:
-//   Slides up from the bottom when an entity is selected.
-//   Shows editable fields for the selected entity type.
-//   Edits mutate g_level_data directly and broadcast via EditorModOp.
-// =============================================================================
-
-// ── Selection types ───────────────────────────────────────────────────────────
 
 EditorSelKind :: enum u8 {
     None       = 0,
@@ -43,32 +28,28 @@ EditorSelection :: struct {
     ty:   i16,
 }
 
-// ── Panel constants ───────────────────────────────────────────────────────────
 
-INSP_H     :: f32(206)   // panel height in logical pixels
-INSP_SPD   :: f32(14)    // slide-in speed
-INSP_ROW_H :: f32(24)    // row height
-INSP_PAD_X :: f32(10)    // horizontal padding inside panel
-INSP_LBL_W :: f32(112)   // label column width
-INSP_VAL_W :: f32(52)    // value box width
-INSP_BTN_S :: f32(18)    // +/- button size
+INSP_H     :: f32(206)
+INSP_SPD   :: f32(14)
+INSP_ROW_H :: f32(24)
+INSP_PAD_X :: f32(10)
+INSP_LBL_W :: f32(112)
+INSP_VAL_W :: f32(52)
+INSP_BTN_S :: f32(18)
 
-// ── Module state ──────────────────────────────────────────────────────────────
 
 @(private = "file") g_ed_sel:              EditorSelection
-@(private = "file") g_ed_insp_anim:        f32   // 0 = closed, 1 = fully open
-@(private = "file") g_ed_insp_text_active: bool  // true while a text-entry field has focus
-@(private = "file") g_ed_insp_text_fid:    u8    // field-ID (= mf_base) of the active field
+@(private = "file") g_ed_insp_anim:        f32
+@(private = "file") g_ed_insp_text_active: bool
+@(private = "file") g_ed_insp_text_fid:    u8
 
-// ── Public API ────────────────────────────────────────────────────────────────
 
 ed_insp_deselect :: proc() {
     g_ed_sel               = {}
     g_ed_insp_text_active  = false
 }
 
-// ed_insp_is_text_active returns true while a text entry field has keyboard focus.
-// editor.odin uses this to suppress WASD / bracket key handling during text input.
+
 ed_insp_is_text_active :: proc() -> bool {
     return g_ed_insp_text_active
 }
@@ -77,15 +58,14 @@ ed_insp_has_selection :: proc() -> bool {
     return g_ed_sel.kind != .None
 }
 
-// Update slide animation — called from update_editor with delta time.
+
 ed_insp_update_anim :: proc(dt: f32) {
     target := f32(1) if g_ed_sel.kind != .None else f32(0)
     g_ed_insp_anim += (target - g_ed_insp_anim) * min(dt * INSP_SPD, 1.0)
     if g_ed_insp_anim < 0.005 { g_ed_insp_anim = 0 }
 }
 
-// ed_try_select_at scans every entity list for something at tile (tx, ty).
-// Returns true and sets g_ed_sel if found.
+
 ed_try_select_at :: proc(tx, ty: int) -> bool {
     itx, ity := i16(tx), i16(ty)
     for d  in g_level_data.doors       { if d.tx  == itx && d.ty  == ity { g_ed_sel = {.Door,       itx, ity}; return true } }
@@ -102,20 +82,19 @@ ed_try_select_at :: proc(tx, ty: int) -> bool {
     return false
 }
 
-// ed_insp_validate clears the selection if the selected entity no longer exists
-// (e.g. after an erase was applied).
+
 ed_insp_validate :: proc() {
     if g_ed_sel.kind == .None { return }
     if !_insp_sel_exists() { g_ed_sel = {} }
 }
 
-// Returns true if the mouse is over the inspector panel (for over_ui guard).
+
 ed_insp_over_ui :: proc() -> bool {
     if g_ed_insp_anim < 0.05 { return false }
     return rl.CheckCollisionPointRec(rl.GetMousePosition(), ed_insp_panel_rect())
 }
 
-// ed_insp_panel_rect returns the current panel rectangle (accounts for anim).
+
 ed_insp_panel_rect :: proc() -> rl.Rectangle {
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
@@ -128,9 +107,7 @@ ed_insp_panel_rect :: proc() -> rl.Rectangle {
     }
 }
 
-// ── World-space selection highlight ──────────────────────────────────────────
 
-// Call from draw_editor_world (inside BeginMode2D / EndMode2D).
 ed_insp_draw_selection_highlight :: proc() {
     if g_ed_sel.kind == .None { return }
     tx := int(g_ed_sel.tx)
@@ -141,13 +118,13 @@ ed_insp_draw_selection_highlight :: proc() {
     alpha := u8(130 + u8(90.0 * pulse))
     lw    := 2.2 / g_camera.zoom
 
-    // Soft fill
+
     rl.DrawTriangle(top, right, center,    rl.Color{60, 160, 240, 20})
     rl.DrawTriangle(right, bottom, center, rl.Color{60, 160, 240, 20})
     rl.DrawTriangle(bottom, left, center,  rl.Color{60, 160, 240, 20})
     rl.DrawTriangle(left, top, center,     rl.Color{60, 160, 240, 20})
 
-    // Pulsing outline
+
     col := rl.Color{80, 200, 255, alpha}
     rl.DrawLineEx(top,    right,  lw * 2.5, col)
     rl.DrawLineEx(right,  bottom, lw * 2.5, col)
@@ -155,17 +132,14 @@ ed_insp_draw_selection_highlight :: proc() {
     rl.DrawLineEx(left,   top,    lw * 2.5, col)
 }
 
-// ── Panel draw + interact ─────────────────────────────────────────────────────
 
-// ed_insp_draw_panel draws the inspector panel and handles all widget input.
-// Call from draw_editor_hud (screen-space, outside BeginMode2D).
 ed_insp_draw_panel :: proc() {
     if g_ed_insp_anim < 0.005 { return }
 
     r  := ed_insp_panel_rect()
     mp := rl.GetMousePosition()
 
-    // Background + borders
+
     rl.DrawRectangleRec(r, rl.Color{10, 8, 7, 248})
     rl.DrawRectangle(i32(r.x), i32(r.y), i32(r.width), i32(uis(2)),
         rl.Color{70, 170, 220, 210})
@@ -173,7 +147,7 @@ ed_insp_draw_panel :: proc() {
 
     if g_ed_sel.kind == .None { return }
 
-    // ── Header ────────────────────────────────────────────────────────────────
+
     kind_cs := _insp_kind_name(g_ed_sel.kind)
     rl.DrawTextEx(g_font, kind_cs,
         {r.x + uis(INSP_PAD_X), r.y + uis(5)},
@@ -187,7 +161,7 @@ ed_insp_draw_panel :: proc() {
         {r.x + uis(INSP_PAD_X) + km_sz.x, r.y + uis(7)},
         uis(9), 0.5, rl.Color{110, 140, 165, 200})
 
-    // Close button
+
     close_sz := uis(20)
     close_r  := rl.Rectangle{r.x + r.width - close_sz - uis(5), r.y + uis(3), close_sz, close_sz}
     hov_x    := rl.CheckCollisionPointRec(mp, close_r)
@@ -203,12 +177,12 @@ ed_insp_draw_panel :: proc() {
         return
     }
 
-    // Separator
+
     sep_y := r.y + uis(28)
     rl.DrawRectangle(i32(r.x + uis(INSP_PAD_X)), i32(sep_y),
         i32(r.width - uis(INSP_PAD_X) * 2), 1, rl.Color{55, 95, 125, 120})
 
-    // ── Content area (scissored) ──────────────────────────────────────────────
+
     cont_y0 := sep_y + uis(4)
     cont_x  := r.x + uis(INSP_PAD_X)
     cont_w  := r.width - uis(INSP_PAD_X) * 2
@@ -217,7 +191,7 @@ ed_insp_draw_panel :: proc() {
 
     cy := cont_y0
 
-    // ── Entity ID row (read-only) ─────────────────────────────────────────────
+
     eid := _insp_find_entity_id(g_ed_sel.tx, g_ed_sel.ty)
     eid_buf: [24]u8
     if eid != cw.INVALID_ENTITY {
@@ -230,7 +204,7 @@ ed_insp_draw_panel :: proc() {
     rl.DrawTextEx(g_font, cstring(&eid_buf[0]),
         {cont_x, cy + uis(INSP_ROW_H) * 0.5 - uis(4.5)},
         uis(9), 0.5, rl.Color{80, 110, 90, 185})
-    // Dim separator below
+
     cy_sep := cy + uis(INSP_ROW_H) * 0.85
     rl.DrawRectangle(i32(cont_x), i32(cy_sep), i32(cont_w), 1,
         rl.Color{50, 70, 55, 80})
@@ -254,10 +228,7 @@ ed_insp_draw_panel :: proc() {
     rl.EndScissorMode()
 }
 
-// ── Widget helpers ────────────────────────────────────────────────────────────
 
-// _insp_spin_u8 draws a labelled +/- spinner for a u8 value.
-// Mutates *val directly on click and sends a P2P ModOp.
 @(private = "file")
 _insp_spin_u8 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
                       label: cstring, val: ^u8, lo, hi: u8,
@@ -266,14 +237,14 @@ _insp_spin_u8 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     y  := cy^
     rx := x + w
 
-    // Label
+
     rl.DrawTextEx(g_font, label, {x, y + h * 0.5 - uis(4.5)},
         uis(9), 0.5, rl.Color{158, 155, 148, 215})
 
     bsz := uis(INSP_BTN_S)
     vsz := uis(INSP_VAL_W)
 
-    // minus rect | value box | plus rect  (right-aligned)
+
     pr := rl.Rectangle{rx - bsz,                       y + h*0.5 - bsz*0.5, bsz, bsz}
     mr := rl.Rectangle{rx - bsz*2 - vsz - uis(2),     y + h*0.5 - bsz*0.5, bsz, bsz}
     vr := rl.Rectangle{mr.x + bsz + uis(1),            y + h*0.5 - bsz*0.5, vsz, bsz}
@@ -292,7 +263,7 @@ _insp_spin_u8 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-// _insp_spin_u16 — same as _insp_spin_u8 but for u16.
+
 @(private = "file")
 _insp_spin_u16 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
                        label: cstring, val: ^u16, lo, hi: u16,
@@ -324,7 +295,7 @@ _insp_spin_u16 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-// _insp_spin_f32 — floating-point spinner with a fixed step.
+
 @(private = "file")
 _insp_spin_f32 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
                        label: cstring, val: ^f32, lo, hi, step: f32,
@@ -356,7 +327,7 @@ _insp_spin_f32 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-// _insp_dropdown — cycle through named options with < > buttons.
+
 @(private = "file")
 _insp_dropdown :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
                        label: cstring, val: ^u8, names: []cstring,
@@ -392,7 +363,7 @@ _insp_dropdown :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-// _insp_toggle — ON/OFF button for a single bit in a flags byte.
+
 @(private = "file")
 _insp_toggle :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
                      label: cstring, flags: ^u8, bit: u8,
@@ -429,10 +400,7 @@ _insp_toggle :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-// _insp_text_field — single-line text entry for a [24]u8 NUL-terminated label.
-// Clicking the box gives it keyboard focus; Enter / Escape / click-away commits.
-// On commit the full 24-byte label is broadcast as 6 consecutive EditorModOps
-// with fields mf_base … mf_base+5 (4 bytes each, little-endian in the u32).
+
 @(private = "file")
 _insp_text_field :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
                          label: cstring, buf: ^[24]u8,
@@ -455,7 +423,7 @@ _insp_text_field :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     rl.DrawRectangleRec(box_r, bg)
     rl.DrawRectangleLinesEx(box_r, uis(1), brd)
 
-    // Measure current text length
+
     text_len := 0
     for i in 0..<24 { if buf[i] == 0 { text_len = i; break } else { text_len = i + 1 } }
 
@@ -475,7 +443,7 @@ _insp_text_field :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
             {tx_draw, ty_draw}, fs, 0.5, rl.Color{215, 195, 150, 240})
     }
 
-    // Mouse: click box to focus, click elsewhere to commit
+
     if rl.IsMouseButtonPressed(.LEFT) {
         if hov && !editing {
             g_ed_insp_text_active = true
@@ -486,7 +454,7 @@ _insp_text_field :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
         }
     }
 
-    // Keyboard when active
+
     if editing {
         for {
             ch := rl.GetCharPressed()
@@ -510,8 +478,7 @@ _insp_text_field :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-// _insp_mod_label broadcasts a 24-byte label as 6 consecutive EditorModOps.
-// Fields mf_base..mf_base+5 each carry 4 bytes (little-endian).
+
 @(private = "file")
 _insp_mod_label :: proc(mk: u8, mf_base: u8, lbl: [24]u8) {
     for chunk: u8 = 0; chunk < 6; chunk += 1 {
@@ -521,7 +488,6 @@ _insp_mod_label :: proc(mk: u8, mf_base: u8, lbl: [24]u8) {
     }
 }
 
-// ── Low-level draw helpers ────────────────────────────────────────────────────
 
 @(private = "file")
 _insp_draw_btn :: proc(r: rl.Rectangle, label: cstring, fg: rl.Color, hov: bool) {
@@ -546,10 +512,7 @@ _insp_draw_val_box :: proc(r: rl.Rectangle, val: string) {
         uis(9), 0.5, rl.Color{215, 195, 150, 240})
 }
 
-// ── P2P broadcast ─────────────────────────────────────────────────────────────
 
-// _insp_mod sends a P2P EditorModOp for the current selection.
-// The local data has already been mutated by the widget via pointer.
 @(private = "file")
 _insp_mod :: proc(kind: u8, field: u8, value: u32) {
     op := p2p.EditorModOp{
@@ -562,8 +525,7 @@ _insp_mod :: proc(kind: u8, field: u8, value: u32) {
     p2p.session_send_editor_mod_op(&g_session, op)
 }
 
-// ed_apply_mod_op patches g_level_data to match a received EditorModOp.
-// Called from update_editor for remote ops.
+
 ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
     tx, ty := op.tx, op.ty
     switch EditorSelKind(op.kind) {
@@ -577,7 +539,7 @@ ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
                 case 2: d.open_type = DoorOpenType(clamp(int(op.value), 0, 2))
                 case 3: d.is_locked = op.value != 0
                 case 4, 5, 6, 7, 8, 9:
-                    // Label: each field carries 4 bytes LE of the [24]u8 label
+
                     base := int(op.field - 4) * 4
                     d.label[base]   = u8(op.value)
                     d.label[base+1] = u8(op.value >> 8)
@@ -659,13 +621,12 @@ ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
     }
 }
 
-// ── Per-kind inspector panels ─────────────────────────────────────────────────
 
 @(private = "file")
 _insp_door :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
     for &d in g_level_data.doors {
         if d.tx == g_ed_sel.tx && d.ty == g_ed_sel.ty {
-            // Prompt label shown to player (e.g. "Opens elsewhere", "Needs infirmary key")
+
             _insp_text_field(mp, x, cy, w, "Prompt text", &d.label, u8(EditorSelKind.Door), 4)
 
             ot_val   := u8(d.open_type)
@@ -771,8 +732,8 @@ _insp_npc :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
     for &npc in g_level_data.npcs {
         if npc.tx == g_ed_sel.tx && npc.ty == g_ed_sel.ty {
             nt_val   := u8(npc.npc_type)
-            nt_names := []cstring{"Shopkeeper", "Mutator", "Stash"}
-            _insp_dropdown(mp, x, cy, w, "NPC Type", &nt_val, nt_names, 0, 2, u8(EditorSelKind.NPC), 0)
+            nt_names := []cstring{"Shopkeeper", "Mutator", "Stash", "AbilityVendor"}
+            _insp_dropdown(mp, x, cy, w, "NPC Type", &nt_val, nt_names, 0, 3, u8(EditorSelKind.NPC), 0)
             npc.npc_type = cw.NPCType(nt_val)
             return
         }
@@ -806,11 +767,7 @@ _insp_barrel :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
     }
 }
 
-// ── Entity ID lookup ──────────────────────────────────────────────────────────
 
-// _insp_find_entity_id scans the live ECS world for an active entity whose
-// Transform position matches the tile centre.  Returns INVALID_ENTITY if the
-// level has not been applied yet or the tile is empty.
 @(private = "file")
 _insp_find_entity_id :: proc(tx, ty: i16) -> int {
     if !g_sim_alive { return cw.INVALID_ENTITY }
@@ -828,7 +785,6 @@ _insp_find_entity_id :: proc(tx, ty: i16) -> int {
     return cw.INVALID_ENTITY
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
 
 @(private = "file")
 _insp_sel_exists :: proc() -> bool {

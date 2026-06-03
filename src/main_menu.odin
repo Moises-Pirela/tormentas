@@ -20,6 +20,7 @@ g_mm: struct {
     show_join:      bool,
     ip:             [64]u8,
     conn_timer:     f32,
+    new_char:       int,
 }
 
 CONN_TIMEOUT :: f32(15.0)
@@ -61,13 +62,11 @@ _on_black_to_menu :: proc() {
     fade_from_black()
 }
 
-// ── top-level dispatchers ─────────────────────────────────────────────────
 
 update_main_menu :: proc(dt: f32) {
     if g_disconnect_msg_timer > 0 { g_disconnect_msg_timer -= dt }
 
-    // When any panel is open, route input to the topmost one.
-    // Universal ESC (main loop) handles closing; we only do per-panel logic.
+
     if ui_any() {
         top, ok := ui_top()
         if ok {
@@ -76,9 +75,9 @@ update_main_menu :: proc(dt: f32) {
                 update_settings_overlay()
             case .Keybinds:
                 update_keybinds_screen()
-            case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .PauseMenu, .LevelSelect,
-                 .Lore, .Phonograph:
-                // not opened from the main menu
+            case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor, .PauseMenu,
+                 .LevelSelect, .Lore, .Phonograph:
+
             }
         }
         return
@@ -103,7 +102,7 @@ draw_main_menu :: proc() {
         title_fs, 0.8, rl.Color{200, 178, 108, 255})
 
     sub    := t(.MENU_SUBTITLE)
-    sub_fs := uis(11)
+    sub_fs := uis(16)
     ssz    := rl.MeasureTextEx(g_font, sub, sub_fs, 0.5)
     rl.DrawTextEx(g_font, sub,
         {cx - ssz.x * 0.5, sh * 0.12 + title_fs + uis(6)},
@@ -113,7 +112,7 @@ draw_main_menu :: proc() {
         frac := clamp(g_disconnect_msg_timer / DISCONNECT_MSG_DURATION, 0, 1)
         a    := u8(frac * 210)
         msg  := t(.MENU_DISCONNECTED)
-        mfs  := uis(11)
+        mfs  := uis(14)
         msz  := rl.MeasureTextEx(g_font, msg, mfs, 0.5)
         rl.DrawTextEx(g_font, msg,
             {cx - msz.x * 0.5, sh * 0.33},
@@ -125,7 +124,7 @@ draw_main_menu :: proc() {
     case .PlayOptions: _mm_draw_play_options()
     }
 
-    btn_fs  := uis(10)
+    btn_fs  := uis(13)
     btn_bh  := btn_fs + uis(14)
 
     set_lbl := t(.MENU_BTN_SETTINGS)
@@ -164,10 +163,9 @@ draw_main_menu :: proc() {
         g_should_exit = true
     }
 
-    // Settings and Keybinds panels are drawn by ui_draw() in the main loop.
+
 }
 
-// ── CharSelect ────────────────────────────────────────────────────────────
 
 SLOT_CARD_W :: f32(160)
 SLOT_CARD_H :: f32(110)
@@ -178,13 +176,16 @@ _mm_update_char_select :: proc() {
     sw  := f32(rl.GetScreenWidth())
     sh  := f32(rl.GetScreenHeight())
 
-    total_w := SLOT_CARD_W * MAX_CHAR_SLOTS + SLOT_CARD_GAP * (MAX_CHAR_SLOTS - 1)
-    cards_x := sw * 0.5 - total_w * 0.5
-    cards_y := sh * 0.42
+    card_w   := uis(SLOT_CARD_W)
+    card_h   := uis(SLOT_CARD_H)
+    card_gap := uis(SLOT_CARD_GAP)
+    total_w  := card_w * MAX_CHAR_SLOTS + card_gap * (MAX_CHAR_SLOTS - 1)
+    cards_x  := sw * 0.5 - total_w * 0.5
+    cards_y  := sh * 0.42
 
     for i in 0..<MAX_CHAR_SLOTS {
-        cx := cards_x + f32(i) * (SLOT_CARD_W + SLOT_CARD_GAP)
-        r  := rl.Rectangle{cx, cards_y, SLOT_CARD_W, SLOT_CARD_H}
+        cx := cards_x + f32(i) * (card_w + card_gap)
+        r  := rl.Rectangle{cx, cards_y, card_w, card_h}
         if _mm_btn_hit(r) {
             if g_mm.creating_slot >= 0 && g_mm.creating_slot != i {
                 g_mm.creating_slot = -1
@@ -211,12 +212,43 @@ _mm_update_char_select :: proc() {
         }
     }
 
-    btn_y   := cards_y + SLOT_CARD_H + uis(28)
+    btn_y   := cards_y + card_h + uis(28)
     btn_w   := sw * 0.14
     btn_h   := uis(38)
     cx_base := sw * 0.5
 
     if g_mm.creating_slot >= 0 {
+
+        picker_y  := btn_y - uis(52)
+        arrow_w   := uis(28)
+        arrow_h   := uis(28)
+        picker_cx := cx_base
+        left_r  := rl.Rectangle{ picker_cx - uis(90) - arrow_w, picker_y, arrow_w, arrow_h }
+        right_r := rl.Rectangle{ picker_cx + uis(90),            picker_y, arrow_w, arrow_h }
+
+        if _mm_btn_hit(left_r) {
+            g_mm.new_char = (g_mm.new_char - 1 + len(PLAYER_STEMS)) % len(PLAYER_STEMS)
+        }
+        if _mm_btn_hit(right_r) {
+            g_mm.new_char = (g_mm.new_char + 1) % len(PLAYER_STEMS)
+        }
+
+        _mm_btn_draw(left_r,  "<", false)
+        _mm_btn_draw(right_r, ">", false)
+
+        stems  := PLAYER_STEMS
+        stem   := stems[g_mm.new_char]
+
+        dname  := stem[len("player_"):]
+        dname_cs: [32]u8
+        n := copy(dname_cs[:31], dname)
+        dname_cs[n] = 0
+        name_fs := uis(13)
+        nsz     := rl.MeasureTextEx(g_font, cstring(&dname_cs[0]), name_fs, 0.5)
+        rl.DrawTextEx(g_font, cstring(&dname_cs[0]),
+            { picker_cx - nsz.x*0.5, picker_y + (arrow_h - name_fs)*0.5 },
+            name_fs, 0.5, rl.Color{ 210, 200, 180, 255 })
+
         create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
         cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
         if _mm_btn_hit(create_r) { _mm_confirm_create() }
@@ -251,6 +283,10 @@ _mm_update_char_select :: proc() {
 _mm_confirm_create :: proc() {
     if g_mm.new_name[0] == 0 { return }
     idx := g_mm.creating_slot
+
+    ci    := clamp(g_mm.new_char, 0, len(PLAYER_STEMS) - 1)
+    stems := PLAYER_STEMS
+    g_player_stem = stems[ci]
     char_slot_create(idx, g_mm.new_name[:])
     g_mm.creating_slot = -1
     g_mm.focus         = .None
@@ -269,24 +305,27 @@ _mm_draw_char_select :: proc() {
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
 
-    total_w := SLOT_CARD_W * MAX_CHAR_SLOTS + SLOT_CARD_GAP * (MAX_CHAR_SLOTS - 1)
-    cards_x := sw * 0.5 - total_w * 0.5
-    cards_y := sh * 0.42
+    card_w   := uis(SLOT_CARD_W)
+    card_h   := uis(SLOT_CARD_H)
+    card_gap := uis(SLOT_CARD_GAP)
+    total_w  := card_w * MAX_CHAR_SLOTS + card_gap * (MAX_CHAR_SLOTS - 1)
+    cards_x  := sw * 0.5 - total_w * 0.5
+    cards_y  := sh * 0.42
 
     lbl    := t(.MENU_SELECT_CHARACTER)
-    lfs    := uis(10)
+    lfs    := uis(13)
     lsz    := rl.MeasureTextEx(g_font, lbl, lfs, 0.5)
     rl.DrawTextEx(g_font, lbl,
         {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(14)},
         lfs, 0.5, rl.Color{130, 118, 82, 200})
 
     for i in 0..<MAX_CHAR_SLOTS {
-        cx := cards_x + f32(i) * (SLOT_CARD_W + SLOT_CARD_GAP)
-        r  := rl.Rectangle{cx, cards_y, SLOT_CARD_W, SLOT_CARD_H}
+        cx := cards_x + f32(i) * (card_w + card_gap)
+        r  := rl.Rectangle{cx, cards_y, card_w, card_h}
         _mm_draw_slot_card(r, i)
     }
 
-    btn_y   := cards_y + SLOT_CARD_H + uis(28)
+    btn_y   := cards_y + card_h + uis(28)
     btn_w   := sw * 0.14
     btn_h   := uis(38)
     cx_base := sw * 0.5
@@ -295,7 +334,7 @@ _mm_draw_char_select :: proc() {
         name_w := sw * 0.24
         name_r := rl.Rectangle{sw * 0.5 - name_w * 0.5, btn_y - uis(52), name_w, uis(32)}
         n_lbl  := t(.MENU_NAME_CHARACTER)
-        n_lfs  := uis(9)
+        n_lfs  := uis(12)
         n_lsz  := rl.MeasureTextEx(g_font, n_lbl, n_lfs, 0.5)
         rl.DrawTextEx(g_font, n_lbl,
             {sw * 0.5 - n_lsz.x * 0.5, name_r.y - n_lfs - uis(5)},
@@ -335,7 +374,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
 
     if creating {
         lbl := t(.MENU_SLOT_NEW)
-        fs  := uis(11)
+        fs  := uis(13)
         sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
         rl.DrawTextEx(g_font, lbl,
             {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
@@ -345,7 +384,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
 
     if s.exists == 0 {
         lbl := t(.MENU_SLOT_EMPTY)
-        fs  := uis(10)
+        fs  := uis(13)
         sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
         rl.DrawTextEx(g_font, lbl,
             {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
@@ -354,7 +393,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     }
 
     name_cs := cstring(&s.name[0])
-    nfs     := uis(12)
+    nfs     := uis(14)
     nsz     := rl.MeasureTextEx(g_font, name_cs, nfs, 0.5)
     rl.DrawTextEx(g_font, name_cs,
         {r.x + (r.width - nsz.x) * 0.5, r.y + uis(18)},
@@ -363,7 +402,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     num_buf: [32]u8
     lv_s   := fmt.bprintf(num_buf[:], "Lv. %d", s.level)
     num_buf[len(lv_s)] = 0
-    lv_fs  := uis(10)
+    lv_fs  := uis(12)
     lv_sz  := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), lv_fs, 0.5)
     rl.DrawTextEx(g_font, cstring(&num_buf[0]),
         {r.x + (r.width - lv_sz.x) * 0.5, r.y + uis(42)},
@@ -371,7 +410,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
 
     raid_s := fmt.bprintf(num_buf[:], "%d raids", s.raids_done)
     num_buf[len(raid_s)] = 0
-    rd_fs  := uis(9)
+    rd_fs  := uis(11)
     rd_sz  := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), rd_fs, 0.5)
     rl.DrawTextEx(g_font, cstring(&num_buf[0]),
         {r.x + (r.width - rd_sz.x) * 0.5, r.y + uis(62)},
@@ -380,7 +419,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     if s.deaths > 0 {
         death_s := fmt.bprintf(num_buf[:], "%d deaths", s.deaths)
         num_buf[len(death_s)] = 0
-        dt_fs := uis(9)
+        dt_fs := uis(11)
         dt_sz := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), dt_fs, 0.5)
         rl.DrawTextEx(g_font, cstring(&num_buf[0]),
             {r.x + (r.width - dt_sz.x) * 0.5, r.y + uis(80)},
@@ -388,7 +427,6 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     }
 }
 
-// ── PlayOptions ───────────────────────────────────────────────────────────
 
 @(private = "file")
 _mm_update_play_options :: proc() {
@@ -480,7 +518,7 @@ _mm_draw_play_options :: proc() {
         num_buf: [64]u8
         sub_s  := fmt.bprintf(num_buf[:], "Playing as: %s  |  Lv. %d", name_s, s.level)
         num_buf[len(sub_s)] = 0
-        sfs    := uis(10)
+        sfs    := uis(13)
         ssz    := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), sfs, 0.5)
         rl.DrawTextEx(g_font, cstring(&num_buf[0]),
             {cx - ssz.x * 0.5, sh * 0.40},
@@ -506,7 +544,7 @@ _mm_draw_play_options :: proc() {
     if g_mm.show_join {
         field_w := sw * 0.28
         ip_lbl    := t(.MENU_HOST_IP_LABEL)
-        ip_lbl_fs := uis(10)
+        ip_lbl_fs := uis(12)
         ilsz      := rl.MeasureTextEx(g_font, ip_lbl, ip_lbl_fs, 0.5)
         ip_r      := rl.Rectangle{cx - field_w * 0.5, sh * 0.68, field_w, uis(34)}
         rl.DrawTextEx(g_font, ip_lbl,
@@ -523,7 +561,6 @@ _mm_draw_play_options :: proc() {
     _mm_btn_draw(back_r, t(.MENU_BTN_BACK), false)
 }
 
-// ── Connecting screen ─────────────────────────────────────────────────────
 
 update_connecting :: proc(dt: f32) {
     g_mm.conn_timer += dt
@@ -564,7 +601,7 @@ draw_connecting :: proc() {
         msg_cs = tf(.MENU_CONNECTING, ip_raw)
     }
 
-    mfs := uis(18)
+    mfs := uis(22)
     msz := rl.MeasureTextEx(g_font, msg_cs, mfs, 0.5)
     rl.DrawTextEx(g_font, msg_cs,
         {cx - msz.x * 0.5, sh * 0.40},
@@ -579,14 +616,13 @@ draw_connecting :: proc() {
         rl.Color{140, 118, 60, 200})
 
     cancel := t(.MENU_ESC_CANCEL)
-    cfs    := uis(10)
+    cfs    := uis(13)
     csz    := rl.MeasureTextEx(g_font, cancel, cfs, 0.5)
     rl.DrawTextEx(g_font, cancel,
         {cx - csz.x * 0.5, sh * 0.58},
         cfs, 0.5, rl.Color{110, 100, 72, 180})
 }
 
-// ── shared helpers ────────────────────────────────────────────────────────
 
 @(private = "file")
 _mm_btn_hit :: proc(r: rl.Rectangle) -> bool {
@@ -605,7 +641,7 @@ _mm_btn_draw :: proc(r: rl.Rectangle, label: cstring, active: bool) {
     rl.DrawRectangleRec(r, bg)
     rl.DrawRectangleLinesEx(r, 1, border)
 
-    fs  := uis(11)
+    fs  := uis(14)
     tsz := rl.MeasureTextEx(g_font, label, fs, 0.5)
     col := rl.Color{235, 215, 145, 255} if hot else rl.Color{165, 152, 102, 215}
     rl.DrawTextEx(g_font, label,
@@ -622,7 +658,7 @@ _mm_field_draw :: proc(r: rl.Rectangle, buf: []u8, focused: bool, placeholder: c
 
     cstr  := cstring(&buf[0])
     empty := buf[0] == 0
-    fs    := uis(12)
+    fs    := uis(14)
     tx    := r.x + uis(10)
     ty    := r.y + (r.height - fs) * 0.5
 

@@ -8,9 +8,7 @@ BOSS_MIN_DIST       :: f32(520)
 BOSS_WARNING_LEAD   :: f32(18.0)
 DIRECTOR_BUDGET_CAP :: f32(24.0)
 
-// MAX_DIRECTOR_LEVELS is the compile-time size of the director config arrays.
-// Levels beyond this cap are clamped to the last defined config entry.
-// Increase this (and add matching entries below) to support more difficulty tiers.
+
 MAX_DIRECTOR_LEVELS :: 3
 
 DirectorConfig :: struct {
@@ -34,28 +32,28 @@ DirectorEnemy :: struct {
 }
 
 DIRECTOR_ROSTER := [?]DirectorEnemy{
-    { "enemy_melee",  1 },
-    { "enemy_hunter", 2 },
-    { "enemy_brute",  3 },
-    { "enemy_ranged", 3 },
-    { "enemy_sniper", 4 },
+    { "enemy_melee",   1 },
+    { "enemy_spider",  1.5 },
+    { "enemy_hunter",  2 },
+    { "enemy_brute",   3 },
+    { "enemy_ranged",  3 },
+    { "enemy_sniper",  4 },
 }
 
-// Mutations the director can randomly assign to spawned enemies.
-// Only mutations whose runtime effects are faction-aware (work correctly for enemies).
+
 ENEMY_MUTATION_POOL :: [?]cw.MutationType{
-    .LivingBomb,   // on-death AoE explosion — damages nearby players
-    .ToxicFlesh,   // proximity poison aura  — targets players when owner is enemy
-    .ThornPact,    // reflects 40% of incoming damage back to the attacker
-    .BlackLung,    // pressure-buildup aura  — targets players when owner is enemy
+    .LivingBomb,
+    .ToxicFlesh,
+    .ThornPact,
+    .BlackLung,
 }
 
-// Probability that a newly spawned enemy receives a mutation, per raid level.
+
 ENEMY_MUTATION_CHANCE :: [MAX_DIRECTOR_LEVELS + 1]f32{
-    0 = 0.00,  // level 0 — unused
-    1 = 0.00,  // level 1 — clean intro, no random mutations
-    2 = 0.10,  // level 2 — 1-in-10 enemies is mutated
-    3 = 0.22,  // level 3 — ~1-in-4 enemies is mutated
+    0 = 0.00,
+    1 = 0.00,
+    2 = 0.10,
+    3 = 0.22,
 }
 
 SpawnDirector :: struct {
@@ -88,15 +86,13 @@ spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     _director_tick_spawns(w, cfg, dt)
 }
 
-// _director_mutate_enemy randomly assigns one mutation from ENEMY_MUTATION_POOL
-// to a freshly spawned enemy based on the current raid level.
-// The RNG is seeded by (tick XOR id) so all peers in a lockstep session agree.
+
 @(private = "file")
 _director_mutate_enemy :: proc(w: ^cw.World, id: int) {
     if id == cw.INVALID_ENTITY { return }
 
     idx     := clamp(g_current_raid_level, 0, MAX_DIRECTOR_LEVELS)
-    chances := ENEMY_MUTATION_CHANCE   // snapshot into addressable local
+    chances := ENEMY_MUTATION_CHANCE
     chance  := chances[idx]
     if chance <= 0 { return }
 
@@ -105,10 +101,10 @@ _director_mutate_enemy :: proc(w: ^cw.World, id: int) {
 
     if rand.float32() > chance { return }
 
-    pool := ENEMY_MUTATION_POOL        // snapshot into addressable local
+    pool := ENEMY_MUTATION_POOL
     mt   := pool[rand.int_max(len(pool))]
 
-    // Skip if the entity already carries this mutation (e.g. boss has LivingBomb from JSON).
+
     if cw.world_has_component(w, id, .MutationContainer) {
         mc := cw.world_get_mutation(w, id)
         for i in 0..<mc.entity_count {
@@ -239,7 +235,7 @@ _director_pick_anchor :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
     candidates: [dynamic][2]int
     defer delete(candidates)
     for pos, tt in g_tilemap {
-        if tt != .Floor { continue }
+        if tile_base(tt) != .Floor { continue }
         cx  := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
         cy  := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
         ddx := cx - player_pos[0]
@@ -284,7 +280,7 @@ _find_boss_tile :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
     defer delete(candidates)
 
     for pos, tt in g_tilemap {
-        if tt != .Floor { continue }
+        if tile_base(tt) != .Floor { continue }
         if !_tile_open_3x3(pos[0], pos[1]) { continue }
         cx  := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
         cy  := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
@@ -307,7 +303,7 @@ _find_boss_tile :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
 _tile_open_3x3 :: proc(tx, ty: int) -> bool {
     for dy in -1..=1 {
         for dx in -1..=1 {
-            if tile_at(tx + dx, ty + dy) != .Floor { return false }
+            if tile_base(tile_at(tx + dx, ty + dy)) != .Floor { return false }
         }
     }
     return true

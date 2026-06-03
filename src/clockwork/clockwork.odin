@@ -2,9 +2,9 @@ package clockwork
 
 
 CHUNK_SIZE      :: 256
-MAX_COMPONENTS  :: 128  // u128 bitfield ceiling
+MAX_COMPONENTS  :: 128
 INVALID_ENTITY  :: -1
-MAX_PLAYERS     :: 4    // maximum simultaneous player slots
+MAX_PLAYERS     :: 4
 
 ComponentType :: enum u8 {
     Transform,
@@ -18,42 +18,42 @@ ComponentType :: enum u8 {
     Projectile,
     SelfDestruct,
     AIAgent,
-    ProjectileTag,  
-    Weapon,         
-    Equipment,      
-    DodgeState,     
-    RenderConfig,   
-    MeleeArc,       
-    Respawn,        
-    Inventory,      
-    Item,           
-    GroundItem,     
-    Ability,           
-    Stats,             
-    FogOfWar,          
-    Extraction,        
-    Mut,               
-    Player,            
-    Wallet,            
-    Gold,              
-    NPC,               
-    MutDamageMult,     
-    MutLockHpToOne,    
-    MutRootOnFire,     
+    ProjectileTag,
+    Weapon,
+    Equipment,
+    DodgeState,
+    RenderConfig,
+    MeleeArc,
+    Respawn,
+    Inventory,
+    Item,
+    GroundItem,
+    Ability,
+    Stats,
+    FogOfWar,
+    Extraction,
+    Mut,
+    Player,
+    Wallet,
+    Gold,
+    NPC,
+    MutDamageMult,
+    MutLockHpToOne,
+    MutRootOnFire,
     MutTimedSelfDamage,
-    MutBlockHealing,   
-    MutMoveSpeedMult,  
-    MutBlockRanged,    
+    MutBlockHealing,
+    MutMoveSpeedMult,
+    MutBlockRanged,
     MutBlockPickupHeal,
-    MutSerumGainMult,  
-    MutBlockPickups,   
-    MutNonlethalShots, 
-    MutDisableActives, 
+    MutSerumGainMult,
+    MutBlockPickups,
+    MutNonlethalShots,
+    MutDisableActives,
     MutEarlyDeathThreshold,
     MutMissingHealthDamage,
     MutPassivePower,
-    PointLight,     
-    AnimState,      
+    PointLight,
+    AnimState,
     MutKillHeal,
     MutLifesteal,
     MutProximityDamage,
@@ -75,7 +75,7 @@ ComponentType :: enum u8 {
     StatusEffect,
     Flammable,
     Organic,
-    // ── Environmental interaction ─────────────────────────
+
     Interactable,
     Openable,
     Lockable,
@@ -86,6 +86,21 @@ ComponentType :: enum u8 {
     KeyRing,
     LoreItem,
     Phonograph,
+    Grenade,
+    PoisonCloud,
+    AimLock,
+
+    DamageAmp,
+    DamageAmpOnHit,
+    Homing,
+    ProximityTrigger,
+    OverchargeBuff,
+    KillHeal,
+    ContagionTag,
+
+    Flask,
+    FlaskEffect,
+    Resistance,
 }
 
 COMPONENT_COUNT :: len(ComponentType)
@@ -136,12 +151,12 @@ StatusEffect :: struct {
     stack_behavior: EffectStackPolicy,
     stacks: int,
     duration: f32,
-    strength: f32, 
+    strength: f32,
     acumulator: f32,
     source_id: int,
 }
 
-MAX_STATUS_EFFECTS :: 8   
+MAX_STATUS_EFFECTS :: 8
 
 OrganicComp :: struct {
 }
@@ -150,11 +165,7 @@ FlammableComp :: struct {
     isImmune : bool
 }
 
-// ── Environmental interaction components ──────────────────────────────────────
 
-// InteractableComp — any world object the player can press E to use.
-// prompt is a null-terminated display string; leave zeroed to derive from
-// the entity's other components at render time.
 InteractableComp :: struct {
     radius:       f32,
     prompt:       [48]u8,
@@ -163,9 +174,7 @@ InteractableComp :: struct {
     cooldown_max: f32,
 }
 
-// OpenableComp — binary open/closed state.  Owns one tile-space blocker.
-// When is_open=false the door_system writes 'tile' into g_door_blockers so
-// both wall_collision and A* treat it as impassable.
+
 OpenableComp :: struct {
     is_open:      bool,
     tile:         [2]int,
@@ -173,66 +182,146 @@ OpenableComp :: struct {
     blocks_sight: bool,
 }
 
-// LockableComp — key-gated gate; composes onto Interactable+Openable or Container.
+
 LockableComp :: struct {
-    key_id:    u8,   // which KeyRing bit must be set; 0 = no lock
+    key_id:    u8,
     is_locked: bool,
 }
 
-// SignalEmitterComp — lever / switch / pressure plate.
-// Broadcasts link_id to all SignalReceiverComp with the same link_id.
+
 SignalEmitterComp :: struct {
     link_id:       u8,
     is_on:         bool,
-    is_toggle:     bool,   // flip each press; false = one-shot
-    needs_weight:  bool,   // true = pressure plate, triggered by proximity not E
+    is_toggle:     bool,
+    needs_weight:  bool,
     weight_radius: f32,
 }
 
-// SignalReceiverComp — door or mechanism that reacts to a broadcast link_id.
+
 SignalReceiverComp :: struct {
     link_id: u8,
-    invert:  bool,   // open when signal is OFF
+    invert:  bool,
 }
 
 ContainerKind :: enum u8 { Chest, Crate, Locker, Cabinet }
 
-// ContainerComp — chest (interact to open) or crate (shoot to break, uses Health).
+
 ContainerComp :: struct {
     kind:          ContainerKind,
     is_open:       bool,
     loot_table_id: u8,
     gold_min:      u16,
     gold_max:      u16,
-    emits_signal:  bool,   // opening broadcasts link_id
+    emits_signal:  bool,
     link_id:       u8,
 }
 
-// KeyPickupComp — world-space key object; picked up into player's KeyRingComp.
+
 KeyPickupComp :: struct {
     key_id: u8,
-    label:  [40]u8,   // null-terminated: "Warden's Key"
+    label:  [40]u8,
 }
 
-// KeyRingComp — player-side key storage (bit 0-63 = key_id 0-63).
+
 KeyRingComp :: struct {
     held: bit_set[0..<64; u64],
 }
 
-// LoreItemComp — readable document; indexes into g_lore_db.
+
 LoreItemComp :: struct {
     lore_id: u8,
     is_read: bool,
 }
 
-// PhonographComp — wax cylinder audio log; indexes into g_recording_db.
+
 PhonographComp :: struct {
     recording_id: u8,
     is_playing:   bool,
     play_timer:   f32,
 }
 
-// ── End environmental interaction components ──────────────────────────────────
+
+AimLockComp :: struct {}
+
+
+DamageAmpComp :: struct {
+    mult:  f32,
+    timer: f32,
+}
+
+
+DamageAmpOnHitComp :: struct {
+    mult: f32,
+    dur:  f32,
+}
+
+
+HomingComp :: struct {
+    turn_rate:  f32,
+    seek_range: f32,
+    owner_id:   int,
+}
+
+
+ProximityTriggerComp :: struct {
+    arm_timer:    f32,
+    radius:       f32,
+    damage:       f32,
+    owner_id:     int,
+    status:       StatusEffectType,
+    status_dur:   f32,
+    status_str:   f32,
+    er, eg, eb:   u8,
+}
+
+
+OverchargeBuffComp :: struct {
+    speed_mult:     f32,
+    fire_rate_mult: f32,
+    damage_mult:    f32,
+    duration:       f32,
+    timer:          f32,
+}
+
+
+KillHealComp :: struct {
+    amount:   f32,
+    duration: f32,
+    timer:    f32,
+}
+
+
+ContagionTagComp :: struct {}
+
+
+GrenadeComp :: struct {
+    owner_id:       int,
+    target:         [3]f32,
+    speed:          f32,
+    fuse_timer:     f32,
+    damage:         f32,
+    blast_radius:   f32,
+    cloud_radius:   f32,
+    cloud_duration: f32,
+    cloud_dps:      f32,
+    cloud_status:   StatusEffectType,
+    cloud_status_dur: f32,
+    blink_on_land:  bool,
+    er, eg, eb:     u8,
+}
+
+
+PoisonCloudComp :: struct {
+    owner_id:       int,
+    radius:         f32,
+    dps:            f32,
+    duration:       f32,
+    tick_timer:     f32,
+    tick_interval:  f32,
+    cloud_status:   StatusEffectType,
+    cloud_status_dur: f32,
+    er, eg, eb:     u8,
+}
 
 StatusEffectComp :: struct {
     effects: [len(StatusEffectType)]StatusEffect,
@@ -270,11 +359,11 @@ InputStateComp :: struct {
 }
 
 WeaponSlotComp :: struct {
-    weapon_id: int,     
+    weapon_id: int,
     cooldown:  f32,
 }
 
-MAX_MUTATION_SLOTS :: 15   
+MAX_MUTATION_SLOTS :: 15
 
 MutationContainerComp :: struct {
     entities:     [MAX_MUTATION_SLOTS]int,
@@ -353,16 +442,16 @@ MutLifestealComp :: struct {
 }
 
 MutProximityDamageComp :: struct {
-    radius:          f32,   // aura radius in world units
-    // Direct damage (scaled by dt each tick)
-    dps:             f32,   // damage per second; 0 = disabled
-    self_fraction:   f32,   // fraction of dps applied back to owner
-    // Status-effect application
-    effect_type:     StatusEffectType,  // Slow, Poison, Burn, Stun, Root
-    effect_strength: f32,   // effect strength parameter; 0 = disabled
-    effect_duration: f32,   // how long the status lasts on the target
-    // Optional point light
-    light_color:     [3]f32,  // RGB 0-255; all zero = no light
+    radius:          f32,
+
+    dps:             f32,
+    self_fraction:   f32,
+
+    effect_type:     StatusEffectType,
+    effect_strength: f32,
+    effect_duration: f32,
+
+    light_color:     [3]f32,
     light_radius:    f32,
     light_intensity: f32,
 }
@@ -414,56 +503,54 @@ MutUnseenDamageMultComp :: struct {
     vision_radius: f32,
 }
 
-HEART_CAGE_ORBIT_RADIUS :: f32(80.0)   // world-space pixels from player centre
-HEART_CAGE_ORBIT_SPEED  :: f32(0.9)    // radians per second
+HEART_CAGE_ORBIT_RADIUS :: f32(80.0)
+HEART_CAGE_ORBIT_SPEED  :: f32(0.9)
 CARRION_MAX_SERVANTS    :: 3
 
-// HeartCage: an external heart that orbits the player.  While it lives,
-// enemies target it and the player is immune to all damage.  When the
-// heart is destroyed the player dies — no respawn.
+
 MutHeartCageComp :: struct {
-    heart_id:    int,   // entity whose Transform + Health track the heart
-    max_hp_pct:  f32,   // heart max_hp = player.max * max_hp_pct (stored for respawn)
-    orbit_angle: f32,   // current angle in radians (advances each tick)
+    heart_id:    int,
+    max_hp_pct:  f32,
+    orbit_angle: f32,
 }
 
-// CarrionCrown: tracks reanimated servant entity IDs.
+
 MutCarrionCrownComp :: struct {
     servant_ids: [CARRION_MAX_SERVANTS]int,
 }
 
-// Reanimated: tag applied to servant entities created by CarrionCrown.
+
 ReanimatedComp :: struct {
     owner_id: int,
 }
 
-// BlackLung: pressure builds on every hit; releases as area DPS.
+
 MutBlackLungComp :: struct {
-    pressure:     f32,   // 0..100
-    regen_rate:   f32,   // pressure decay per second (when not hit)
-    gain_per_hit: f32,   // pressure gained per incoming hit
-    dps_max:      f32,   // damage/s at pressure == 100
-    radius:       f32,   // aura radius in world units
+    pressure:     f32,
+    regen_rate:   f32,
+    gain_per_hit: f32,
+    dps_max:      f32,
+    radius:       f32,
 }
 
-// ThornPact: reflects incoming damage; reduces all healing.
+
 MutThornPactComp :: struct {
-    reflect_pct:   f32,   // fraction of damage reflected to attacker
-    slow_heal_mult: f32,  // multiplier on any incoming heal (0.5 = 50%)
+    reflect_pct:   f32,
+    slow_heal_mult: f32,
 }
 
-// FalseSaint: slow aura + idle-enemy beacon.
+
 MutFalseSaintComp :: struct {
-    aura_radius:   f32,   // enemies inside are slowed
-    slow_mult:     f32,   // velocity multiplier (< 1 = slower)
-    beacon_radius: f32,   // idle enemies inside are forced to aggro
+    aura_radius:   f32,
+    slow_mult:     f32,
+    beacon_radius: f32,
 }
 
 
 PointLightComp :: struct {
-    color:     [3]f32,  // RGB 0..255
-    radius:    f32,     // falloff radius in world units
-    intensity: f32,     // multiplier (1.0 = normal)
+    color:     [3]f32,
+    radius:    f32,
+    intensity: f32,
 }
 
 AnimStateName :: enum u8 { Idle, Walk, Dodge, Attack, Death }
@@ -476,13 +563,13 @@ AnimStateComp :: struct {
 
 ExtractionComp :: struct {
     interact_radius: f32,
-    activate_time:   f32,   // seconds player must hold interact key
-    timer:           f32,   // runtime: how long player has been holding
+    activate_time:   f32,
+    timer:           f32,
     activated:       bool,
 }
 
 PlayerComp :: struct {
-    slot: int,   // 0..MAX_PLAYERS-1
+    slot: int,
 }
 
 WalletComp :: struct {
@@ -497,6 +584,7 @@ NPCType :: enum u8 {
     Shopkeeper,
     MutationWorkbench,
     Stash,
+    AbilityVendor,
 }
 
 NPCComp :: struct {
@@ -512,7 +600,7 @@ MeshRendererComp :: struct {
 
 ColliderComp :: struct {
     radius:    f32,
-    faction:   u8,   // 0 = player, 1 = enemy, 2 = neutral
+    faction:   u8,
     is_trigger: bool,
 }
 
@@ -521,13 +609,13 @@ ProjectileVisual :: enum u8 { Standard, Smoke }
 ProjectileComp :: struct {
     direction:        [3]f32,
     speed:            f32,
-    lifetime:         f32,     
-    max_lifetime:     f32,     
+    lifetime:         f32,
+    max_lifetime:     f32,
     damage:           f32,
-    owner_id:         int,   
+    owner_id:         int,
     owner_faction:    u8,
     visual:           ProjectileVisual,
-    pierce_remaining: i8,    
+    pierce_remaining: i8,
 }
 
 SelfDestructComp :: struct {
@@ -537,47 +625,86 @@ SelfDestructComp :: struct {
 AIType :: enum u8 { Melee, Ranged }
 
 AIAgentComp :: struct {
-    state:        u8,    // AI_STATE_* constants defined in stealth_system.odin
+    state:        u8,
     target_id:    int,
     cooldown:     f32,
 
-    // config (from JSON, never mutated during play)
+
     aggro_range:  f32,
     attack_range: f32,
     cooldown_max: f32,
     speed:        f32,
     damage:       f32,
-    ai_type:      AIType,  // .Melee = arc swing, .Ranged = shotgun burst
+    ai_type:      AIType,
     pellet_count: int,
     spread_angle: f32,
 
-    // stealth detection (runtime; zero-initialised on spawn, never saved to level)
-    suspicion:      f32,      // 0.0–1.0 suspicion meter
-    last_known_pos: [3]f32,   // world pos where noise/sight last detected
-    search_timer:   f32,      // countdown before giving up search and returning to idle
+
+    suspicion:      f32,
+    last_known_pos: [3]f32,
+    search_timer:   f32,
 }
 
 MeleeArcComp :: struct {
-    angle:         f32,   
-    arc_spread:    f32,   
-    radius:        f32,   
+    angle:         f32,
+    arc_spread:    f32,
+    radius:        f32,
     damage:        f32,
-    owner_id:      int,   
+    owner_id:      int,
     owner_faction: u8,
     hit_applied:   bool,
-    lifetime:      f32,   
+    lifetime:      f32,
+}
+
+DamageKind :: enum u8 {
+    Physical,
+    Necrotic,
+    Fire,
+    Galvanic,
+    Poison,
 }
 
 DamageEvent :: struct {
     target_id: int,
     amount:    f32,
-    source_id: int,  
+    source_id: int,
+    kind:      DamageKind,
 }
 
 RespawnComp :: struct {
     spawn_pos: [3]f32,
-    delay:     f32,  
-    timer:     f32,  
+    delay:     f32,
+    timer:     f32,
+}
+
+
+FlaskKind :: enum u8 { Health, Energy }
+FlaskSize :: enum u8 { Small, Medium, Large }
+
+
+FlaskComp :: struct {
+    kind:             FlaskKind,
+    size:             FlaskSize,
+    recover_amount:   f32,
+    recover_duration: f32,
+    charges:          i32,
+    max_charges:      i32,
+}
+
+
+FlaskEffectComp :: struct {
+    heal_per_sec:   f32,
+    energy_per_sec: f32,
+    remaining:      f32,
+}
+
+
+ResistanceComp :: struct {
+    physical:  f32,
+    necrotic:  f32,
+    fire:      f32,
+    galvanic:  f32,
+    poison:    f32,
 }
 
 EquipSlot :: enum u8 {
@@ -591,6 +718,8 @@ EquipSlot :: enum u8 {
     Ability2,
     Ability3,
     Ability4,
+    Flask1,
+    Flask2,
 }
 
 EQUIP_SLOT_COUNT :: len(EquipSlot)
@@ -614,25 +743,25 @@ ItemRarity :: enum u8 { Normal, Rare, Epic, Legendary, Unique }
 
 MutationType :: enum u8 {
     None,
-    // Corpus
-    SerratedHands,   
-    HollowBones,     
-    Exoskeleton,     
-    Symbiote,        
-    LivingBomb,      
-    // Shadow
-    GlassCannon,     
-    BlindFire,       
-    Timelock,        
-    SpectralForm,    
-    DeadmansTrigger, 
-    // Venom
-    BloodFrenzy,     
-    ToxicFlesh,      
-    ParasiteKing,    
-    CorpseTide,      
+
+    SerratedHands,
+    HollowBones,
+    Exoskeleton,
+    Symbiote,
+    LivingBomb,
+
+    GlassCannon,
+    BlindFire,
+    Timelock,
+    SpectralForm,
+    DeadmansTrigger,
+
+    BloodFrenzy,
+    ToxicFlesh,
+    ParasiteKing,
+    CorpseTide,
     Metamorphosis,
-    // Flagship
+
     HeartCage,
     ThornPact,
     CarrionCrown,
@@ -644,61 +773,72 @@ MAX_AFFIXES :: 6
 
 AbilityType :: enum u8 {
     None,
-    //Active abiities
-    QuickDraw,      
-    FanTheHammer,   
-    BulletRain,     
-    DoubleTap,      
-    MagDump,        
-    LastStand,      
-    Deadeye,        
-    HeavyCalibur,   
-    DeathShot,      
-    CorruptRound,   
-    MarkedTarget,   
-    Execute,        
-    Headshot,       
-    TrickShot,      
-    IronWill,       
-    InstinctReload, 
-    DevilsDance,    
-    //Passive abilities 
-    SteadyAim,      
-    HuntersReflex,  
-    Deathwish,      
-    EagleEye,       
+
+    CadavericSpasm,
+    OsseousSlam,
+    NecroticSurge,
+    CrushingGrip,
+
+    RapidDischarge,
+    DeliberateRound,
+    EtherVial,
+    Indexed,
+
+    VetriolFlask,
+    CarbolicSpray,
+    Contagion,
+    Exothermic,
+
+    LaTormenta,
+    Overcharged,
+    InductionCoil,
+    GalvanicShock,
 }
 
 AffixType :: enum u8 {
     None,
-    BonusHP,          // +X% max HP
-    Armor,            // +X% incoming damage reduction (capped at 75%)
-    BonusMoveSpeed,   // +X% move speed
-    BonusEnergy,      // +X% max energy
-    BonusDamage,      // +X% weapon damage (ranged + melee)
-    BonusFireRate,    // +X% fire rate
-    BonusReloadSpeed, // +X% reload speed
-    HealthRegen,      // +X% of max HP regenerated per second
-    // Ranged-specific
-    BonusProjSpeed,   // +X% projectile speed
-    BonusPierce,      // +1 enemies pierced per projectile (flat; value always 1.0)
-    BonusAmmo,        // +X% magazine capacity
-    // Melee-specific
-    BonusMeleeDamage, // +X% melee damage (stacks with BonusDamage)
-    BonusMeleeRange,  // +X% melee arc radius
-    BonusMeleeSpeed,  // +X% attack speed (reduces cooldown)
+    BonusHP,
+    Armor,
+    BonusMoveSpeed,
+    BonusEnergy,
+    BonusDamage,
+    BonusFireRate,
+    BonusReloadSpeed,
+    HealthRegen,
+
+    BonusProjSpeed,
+    BonusPierce,
+    BonusAmmo,
+
+    BonusMeleeDamage,
+    BonusMeleeRange,
+    BonusMeleeSpeed,
+
+    BonusStrength,
+    BonusDexterity,
+    BonusScience,
+
+    BonusEnergyRegen,
+    ReduceEnergyCost,
+
+    ResistPhysical,
+    ResistNecrotic,
+    ResistFire,
+    ResistGalvanic,
+    ResistPoison,
 }
 
 Affix :: struct {
     type:  AffixType,
-    value: f32,  
+    value: f32,
 }
 
 ItemComp :: struct {
     slot:          EquipSlot,
     rarity:        ItemRarity,
     mutation_type: MutationType,
-    ability_type:  AbilityType,  
+    ability_type:  AbilityType,
+    ability_level: u8,
     serum_value:   int,
     grid_w:        int,
     grid_h:        int,
@@ -722,14 +862,14 @@ ItemComp :: struct {
 
     weapon_archetype: WeaponArchetype,
 
-    // Explicit per-item base combat stats (0 = unset; weapon_system falls back to archetype defaults)
-    base_damage:      f32,   // ranged: damage per shot; melee uses melee_damage
-    base_fire_rate:   f32,   // ranged: shots per second
-    base_ammo_max:    u8,    // ranged: magazine capacity
-    base_reload_time: f32,   // ranged: reload duration in seconds
-    base_proj_speed:  f32,   // ranged: projectile speed
-    base_armor:       f32,   // flat damage reduction fraction (additive with Armor affixes)
-    base_shield:      f32,   // max shield HP granted by this item
+
+    base_damage:      f32,
+    base_fire_rate:   f32,
+    base_ammo_max:    u8,
+    base_reload_time: f32,
+    base_proj_speed:  f32,
+    base_armor:       f32,
+    base_shield:      f32,
 }
 
 item_empty :: proc() -> ItemComp {
@@ -755,20 +895,20 @@ WeaponArchetype :: enum u8 {
 WeaponType :: enum u8 { Melee, Ranged }
 
 WeaponComp :: struct {
-    // static config
+
     type:             WeaponType,
     damage:           f32,
-    fire_rate:        f32,    
-    projectile_speed: f32,    
-    projectile_life:  f32,    
-    range:            f32,    
-    ammo_max:         int,    
-    reload_time:      f32,    
+    fire_rate:        f32,
+    projectile_speed: f32,
+    projectile_life:  f32,
+    range:            f32,
+    ammo_max:         int,
+    reload_time:      f32,
 
-    //runtime state
-    cooldown:         f32,    
-    ammo_current:     int,    
-    reload_timer:     f32,    
+
+    cooldown:         f32,
+    ammo_current:     int,
+    reload_timer:     f32,
     is_reloading:     bool,
 }
 
@@ -777,25 +917,40 @@ EquipmentComp :: struct {
 }
 
 DodgeComp :: struct {
-    // runtime state
-    active:       bool,
-    direction:    [2]f32,   
-    timer:        f32,      
-    cooldown:     f32,      
 
-    // config
-    duration:     f32,      
-    speed:        f32,      
-    cooldown_max: f32,      
+    active:       bool,
+    direction:    [2]f32,
+    timer:        f32,
+    cooldown:     f32,
+
+
+    duration:     f32,
+    speed:        f32,
+    cooldown_max: f32,
 }
 
 AbilitySlotState :: struct {
-    cooldown:     f32,  
-    burst_shots:  int,  
-    burst_timer:  f32,  
-    charging:     bool, 
-    charge_timer: f32,  
-    dance_ready:  bool, 
+    cooldown:      f32,
+
+
+    burst_shots:   int,
+    burst_timer:   f32,
+    burst_dmg:     f32,
+    burst_pierce:  i8,
+
+
+    charging:      bool,
+    charge_timer:  f32,
+    charge_dmg:    f32,
+
+
+    primed:        bool,
+    primed_count:  int,
+    primed_dmg:    f32,
+
+
+    buff_timer:    f32,
+    buff_value:    f32,
 }
 
 ABILITY_SLOT_COUNT :: 4
@@ -805,9 +960,9 @@ AbilityComp :: struct {
 }
 
 RENDER_NAME_CAP :: 48
-RENDER_ICON_CAP :: 48   
-RENDER_SPRITE_CAP :: 48 
-RENDER_DESC_CAP :: 128  
+RENDER_ICON_CAP :: 48
+RENDER_SPRITE_CAP :: 48
+RENDER_DESC_CAP :: 128
 
 RenderLayer :: enum u8 {
     None,
@@ -877,7 +1032,7 @@ render_config_desc_cstr :: proc(c: ^RenderConfigComp) -> cstring {
 
 
 World :: struct {
-    // Entity slots
+
     entities:     [dynamic]Entity,
     next_id:      int,
     recycled_ids: [dynamic]int,
@@ -955,7 +1110,7 @@ World :: struct {
     status_effects:         [dynamic]StatusEffectComp,
     flammbles:              [dynamic]FlammableComp,
     organics:               [dynamic]OrganicComp,
-    // ── Environmental interaction ─────────────────────────
+
     interactables:          [dynamic]InteractableComp,
     openables:              [dynamic]OpenableComp,
     lockables:              [dynamic]LockableComp,
@@ -966,6 +1121,20 @@ World :: struct {
     key_rings:              [dynamic]KeyRingComp,
     lore_items:             [dynamic]LoreItemComp,
     phonographs:            [dynamic]PhonographComp,
+    grenades:               [dynamic]GrenadeComp,
+    poison_clouds:          [dynamic]PoisonCloudComp,
+    aim_locks:              [dynamic]AimLockComp,
+
+    damage_amps:            [dynamic]DamageAmpComp,
+    damage_amp_on_hits:     [dynamic]DamageAmpOnHitComp,
+    homings:                [dynamic]HomingComp,
+    proximity_triggers:     [dynamic]ProximityTriggerComp,
+    overcharge_buffs:       [dynamic]OverchargeBuffComp,
+    kill_heals:             [dynamic]KillHealComp,
+    contagion_tags:         [dynamic]ContagionTagComp,
+    flasks:                 [dynamic]FlaskComp,
+    flask_effects:          [dynamic]FlaskEffectComp,
+    resistances:            [dynamic]ResistanceComp,
 
     damage_events:   [dynamic]DamageEvent,
 
@@ -1059,6 +1228,19 @@ make_world :: proc() -> World {
     resize(&w.key_rings,              CHUNK_SIZE)
     resize(&w.lore_items,             CHUNK_SIZE)
     resize(&w.phonographs,            CHUNK_SIZE)
+    resize(&w.grenades,               CHUNK_SIZE)
+    resize(&w.poison_clouds,          CHUNK_SIZE)
+    resize(&w.aim_locks,              CHUNK_SIZE)
+    resize(&w.damage_amps,            CHUNK_SIZE)
+    resize(&w.damage_amp_on_hits,     CHUNK_SIZE)
+    resize(&w.homings,                CHUNK_SIZE)
+    resize(&w.proximity_triggers,     CHUNK_SIZE)
+    resize(&w.overcharge_buffs,       CHUNK_SIZE)
+    resize(&w.kill_heals,             CHUNK_SIZE)
+    resize(&w.contagion_tags,         CHUNK_SIZE)
+    resize(&w.flasks,                 CHUNK_SIZE)
+    resize(&w.flask_effects,          CHUNK_SIZE)
+    resize(&w.resistances,            CHUNK_SIZE)
     for i in 0..<CHUNK_SIZE {
         w.entities[i] = entity_empty()
     }
@@ -1148,6 +1330,19 @@ destroy_world :: proc(w: ^World) {
     delete(w.key_rings)
     delete(w.lore_items)
     delete(w.phonographs)
+    delete(w.grenades)
+    delete(w.poison_clouds)
+    delete(w.aim_locks)
+    delete(w.damage_amps)
+    delete(w.damage_amp_on_hits)
+    delete(w.homings)
+    delete(w.proximity_triggers)
+    delete(w.overcharge_buffs)
+    delete(w.kill_heals)
+    delete(w.contagion_tags)
+    delete(w.flasks)
+    delete(w.flask_effects)
+    delete(w.resistances)
 }
 
 world_create_entity :: proc(w: ^World) -> int {
@@ -1257,6 +1452,19 @@ world_destroy_entity :: proc(w: ^World, id: int) {
     w.key_rings[id]              = {}
     w.lore_items[id]             = {}
     w.phonographs[id]            = {}
+    w.grenades[id]               = {}
+    w.poison_clouds[id]          = {}
+    w.aim_locks[id]              = {}
+    w.damage_amps[id]            = {}
+    w.damage_amp_on_hits[id]     = {}
+    w.homings[id]                = {}
+    w.proximity_triggers[id]     = {}
+    w.overcharge_buffs[id]       = {}
+    w.kill_heals[id]             = {}
+    w.contagion_tags[id]         = {}
+    w.flasks[id]                 = {}
+    w.flask_effects[id]          = {}
+    w.resistances[id]            = {}
     append(&w.recycled_ids, id)
 }
 
@@ -1366,6 +1574,19 @@ world_ensure_capacity :: proc(w: ^World, id: int) {
     resize(&w.key_rings,              target)
     resize(&w.lore_items,             target)
     resize(&w.phonographs,            target)
+    resize(&w.grenades,               target)
+    resize(&w.poison_clouds,          target)
+    resize(&w.aim_locks,              target)
+    resize(&w.damage_amps,            target)
+    resize(&w.damage_amp_on_hits,     target)
+    resize(&w.homings,                target)
+    resize(&w.proximity_triggers,     target)
+    resize(&w.overcharge_buffs,       target)
+    resize(&w.kill_heals,             target)
+    resize(&w.contagion_tags,         target)
+    resize(&w.flasks,                 target)
+    resize(&w.flask_effects,          target)
+    resize(&w.resistances,            target)
 }
 
 world_set_transform :: proc(w: ^World, id: int, c: TransformComp) {
@@ -1433,7 +1654,6 @@ world_get_organic :: proc(w: ^World, id: int) -> ^OrganicComp {
     return &w.organics[id]
 }
 
-// ── Environmental interaction get/set ─────────────────────────────────────────
 
 world_set_interactable :: proc(w: ^World, id: int, c: InteractableComp) {
     w.interactables[id] = c
@@ -1515,7 +1735,144 @@ world_get_phonograph :: proc(w: ^World, id: int) -> ^PhonographComp {
     return &w.phonographs[id]
 }
 
-// ── End environmental interaction get/set ────────────────────────────────────
+world_set_grenade :: proc(w: ^World, id: int, c: GrenadeComp) {
+    w.grenades[id] = c
+    entity_sig_set(&w.entities[id].signature, .Grenade)
+}
+world_get_grenade :: proc(w: ^World, id: int) -> ^GrenadeComp {
+    return &w.grenades[id]
+}
+
+world_set_poison_cloud :: proc(w: ^World, id: int, c: PoisonCloudComp) {
+    w.poison_clouds[id] = c
+    entity_sig_set(&w.entities[id].signature, .PoisonCloud)
+}
+world_get_poison_cloud :: proc(w: ^World, id: int) -> ^PoisonCloudComp {
+    return &w.poison_clouds[id]
+}
+
+
+world_set_aim_lock :: proc(w: ^World, id: int) {
+    w.aim_locks[id] = {}
+    entity_sig_set(&w.entities[id].signature, .AimLock)
+}
+
+
+world_clear_aim_lock :: proc(w: ^World, id: int) {
+    w.aim_locks[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .AimLock)
+}
+
+
+world_set_damage_amp :: proc(w: ^World, id: int, c: DamageAmpComp) {
+    w.damage_amps[id] = c
+    entity_sig_set(&w.entities[id].signature, .DamageAmp)
+}
+world_get_damage_amp :: proc(w: ^World, id: int) -> ^DamageAmpComp {
+    return &w.damage_amps[id]
+}
+world_clear_damage_amp :: proc(w: ^World, id: int) {
+    w.damage_amps[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .DamageAmp)
+}
+
+world_set_damage_amp_on_hit :: proc(w: ^World, id: int, c: DamageAmpOnHitComp) {
+    w.damage_amp_on_hits[id] = c
+    entity_sig_set(&w.entities[id].signature, .DamageAmpOnHit)
+}
+world_get_damage_amp_on_hit :: proc(w: ^World, id: int) -> ^DamageAmpOnHitComp {
+    return &w.damage_amp_on_hits[id]
+}
+world_clear_damage_amp_on_hit :: proc(w: ^World, id: int) {
+    w.damage_amp_on_hits[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .DamageAmpOnHit)
+}
+
+world_set_homing :: proc(w: ^World, id: int, c: HomingComp) {
+    w.homings[id] = c
+    entity_sig_set(&w.entities[id].signature, .Homing)
+}
+world_get_homing :: proc(w: ^World, id: int) -> ^HomingComp {
+    return &w.homings[id]
+}
+
+world_set_proximity_trigger :: proc(w: ^World, id: int, c: ProximityTriggerComp) {
+    w.proximity_triggers[id] = c
+    entity_sig_set(&w.entities[id].signature, .ProximityTrigger)
+}
+world_get_proximity_trigger :: proc(w: ^World, id: int) -> ^ProximityTriggerComp {
+    return &w.proximity_triggers[id]
+}
+
+world_set_overcharge_buff :: proc(w: ^World, id: int, c: OverchargeBuffComp) {
+    w.overcharge_buffs[id] = c
+    entity_sig_set(&w.entities[id].signature, .OverchargeBuff)
+}
+world_get_overcharge_buff :: proc(w: ^World, id: int) -> ^OverchargeBuffComp {
+    return &w.overcharge_buffs[id]
+}
+world_clear_overcharge_buff :: proc(w: ^World, id: int) {
+    w.overcharge_buffs[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .OverchargeBuff)
+}
+
+world_set_kill_heal :: proc(w: ^World, id: int, c: KillHealComp) {
+    w.kill_heals[id] = c
+    entity_sig_set(&w.entities[id].signature, .KillHeal)
+}
+world_get_kill_heal :: proc(w: ^World, id: int) -> ^KillHealComp {
+    return &w.kill_heals[id]
+}
+world_clear_kill_heal :: proc(w: ^World, id: int) {
+    w.kill_heals[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .KillHeal)
+}
+
+world_set_contagion_tag :: proc(w: ^World, id: int) {
+    w.contagion_tags[id] = {}
+    entity_sig_set(&w.entities[id].signature, .ContagionTag)
+}
+world_clear_contagion_tag :: proc(w: ^World, id: int) {
+    w.contagion_tags[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .ContagionTag)
+}
+
+world_set_flask :: proc(w: ^World, id: int, c: FlaskComp) {
+    w.flasks[id] = c
+    entity_sig_set(&w.entities[id].signature, .Flask)
+}
+world_get_flask :: proc(w: ^World, id: int) -> ^FlaskComp {
+    return &w.flasks[id]
+}
+world_clear_flask :: proc(w: ^World, id: int) {
+    w.flasks[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .Flask)
+}
+
+world_set_flask_effect :: proc(w: ^World, id: int, c: FlaskEffectComp) {
+    w.flask_effects[id] = c
+    entity_sig_set(&w.entities[id].signature, .FlaskEffect)
+}
+world_get_flask_effect :: proc(w: ^World, id: int) -> ^FlaskEffectComp {
+    return &w.flask_effects[id]
+}
+world_clear_flask_effect :: proc(w: ^World, id: int) {
+    w.flask_effects[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .FlaskEffect)
+}
+
+world_set_resistance :: proc(w: ^World, id: int, c: ResistanceComp) {
+    w.resistances[id] = c
+    entity_sig_set(&w.entities[id].signature, .Resistance)
+}
+world_get_resistance :: proc(w: ^World, id: int) -> ^ResistanceComp {
+    return &w.resistances[id]
+}
+world_clear_resistance :: proc(w: ^World, id: int) {
+    w.resistances[id] = {}
+    entity_sig_clear(&w.entities[id].signature, .Resistance)
+}
+
 
 world_set_extraction :: proc(w: ^World, id: int, c: ExtractionComp) {
     w.extractions[id] = c
@@ -1894,8 +2251,8 @@ world_get_projectile :: proc(w: ^World, id: int) -> ^ProjectileComp {
     return &w.projectiles[id]
 }
 
-world_push_damage :: proc(w: ^World, target_id: int, amount: f32, source_id: int = 0) {
-    append(&w.damage_events, DamageEvent{ target_id = target_id, amount = amount, source_id = source_id })
+world_push_damage :: proc(w: ^World, target_id: int, amount: f32, source_id: int = 0, kind: DamageKind = .Physical) {
+    append(&w.damage_events, DamageEvent{ target_id = target_id, amount = amount, source_id = source_id, kind = kind })
 }
 
 world_push_heal :: proc(w: ^World, target_id: int, amount: f32) {
@@ -1975,9 +2332,9 @@ status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
     sec := world_get_status_effects(w, id)
 
     if effect.type == .Burn || effect.type == .Oiled {
-        if status_effect_is_active(sec, .Wet) { return } // Wet blocks fire
+        if status_effect_is_active(sec, .Wet) { return }
     }
-    
+
     if effect.type == .Wet {
         if status_effect_is_active(sec, .Burn) {
             sec.effects[int(StatusEffectType.Burn)].duration = 0
@@ -1987,7 +2344,7 @@ status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
 
     et := int(effect.type)
     current := &sec.effects[et]
-    
+
     if current.duration <= 0 {
         current^ = effect
         current.stacks = 1
@@ -1997,12 +2354,12 @@ status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
         case .Flat, .Percent:
             current.strength += effect.strength
         case .Base:
-            current.strength = effect.strength 
+            current.strength = effect.strength
         }
-        
+
         switch effect.stack_behavior {
         case .Stack:
-            current.duration = effect.duration // Refresh duration
+            current.duration = effect.duration
             current.stacks += 1
         case .Refresh:
             current.duration = max(current.duration, effect.duration)
@@ -2043,7 +2400,7 @@ StatsComp :: struct {
     reload_speed_mult:          f32,
     projectile_speed_mult:      f32,
     armor:                      f32,
-    hp_regen_pct:               f32,   // fraction of max HP regenerated per second (from affixes)
+    hp_regen_pct:               f32,
     crit_chance:                f32,
     special_ability_crit:       f32,
     dodge_cooldown_reduction:   f32,
@@ -2059,17 +2416,23 @@ StatsComp :: struct {
     nonlethal_shots:            bool,
     hp_locked_to_one:           bool,
 
-    // Ranged-weapon affix stats (computed each frame from equipped item affixes)
-    bonus_ammo_pct:  f32,  // fractional bonus to ammo_max (0.20 = +20%)
-    bonus_pierce:    int,  // extra enemies each projectile passes through
 
-    // Melee-weapon affix stats (computed each frame from equipped item affixes)
-    melee_damage_mult: f32,  // multiplicative bonus on top of damage_mult
-    melee_range_mult:  f32,  // scales arc radius
-    melee_speed_mult:  f32,  // divides cooldown_max (higher = faster swings)
+    bonus_ammo_pct:  f32,
+    bonus_pierce:    int,
 
-    // Shield resource (computed each frame from equipped items' base_shield)
-    shield_max: f32,  // max shield HP; 0 when no shield items equipped
+
+    melee_damage_mult: f32,
+    melee_range_mult:  f32,
+    melee_speed_mult:  f32,
+
+
+    shield_max: f32,
+
+
+    energy_regen: f32,
+
+
+    energy_cost_mult: f32,
 }
 
 world_set_ability :: proc(w: ^World, id: int, c: AbilityComp) {
@@ -2203,7 +2566,7 @@ movement_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     for id in ids {
         t := world_get_transform(w, id)
         v := world_get_velocity(w, id)
-        
+
         vel_mult := f32(1.0)
         if world_has_component(w, id, .StatusEffect) {
             sec := world_get_status_effects(w, id)
@@ -2212,7 +2575,7 @@ movement_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 vel_mult *= (1.0 - slow.strength)
             }
         }
-        
+
         t.position[0] += v.value[0] * vel_mult * dt
         t.position[1] += v.value[1] * vel_mult * dt
         t.position[2] += v.value[2] * vel_mult * dt

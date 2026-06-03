@@ -15,7 +15,7 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
     defer delete(target_ids)
 
     for proj_id in proj_ids {
-        if cw.world_tag_is_destroy(w, proj_id) { continue }   
+        if cw.world_tag_is_destroy(w, proj_id) { continue }
 
         proj   := cw.world_get_projectile(w, proj_id)
         proj_t := cw.world_get_transform(w, proj_id)
@@ -24,7 +24,7 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
             if target_id == proj_id { continue }
 
             col := cw.world_get_collider(w, target_id)
-            if col.faction == proj.owner_faction { continue }   // same team
+            if col.faction == proj.owner_faction { continue }
 
             target_t := cw.world_get_transform(w, target_id)
             dx := target_t.position[0] - proj_t.position[0]
@@ -33,6 +33,23 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
 
             if dist < PROJ_RADIUS + col.radius {
                 cw.world_push_damage(w, target_id, proj.damage, proj.owner_id)
+
+
+                if cw.world_has_component(w, proj_id, .DamageAmpOnHit) {
+                    dah := cw.world_get_damage_amp_on_hit(w, proj_id)
+                    if cw.world_has_component(w, target_id, .DamageAmp) {
+                        da       := cw.world_get_damage_amp(w, target_id)
+                        da.mult  *= dah.mult
+                        da.timer  = max(da.timer, dah.dur)
+                    } else {
+                        cw.world_set_damage_amp(w, target_id, cw.DamageAmpComp{
+                            mult  = dah.mult,
+                            timer = dah.dur,
+                        })
+                    }
+                    cw.world_clear_damage_amp_on_hit(w, proj_id)
+                }
+
                 if target_id != w.player_id {
                     play_sfx_at("impact", target_t.position)
                 }
@@ -40,7 +57,7 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
                     proj.pierce_remaining -= 1
                 } else {
                     cw.world_tag_destroy(w, proj_id)
-                    break   
+                    break
                 }
             }
         }

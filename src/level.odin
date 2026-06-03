@@ -1,33 +1,5 @@
 package main
 
-// =============================================================================
-// LEVEL — binary level file: tiles, enemy spawns, exits, player start.
-//
-// Binary format  (little-endian, packed):
-//   [4]u8  magic           "TRMT"
-//   u16    version         1
-//   u32    tile_count
-//   tile_count   × { i16 x, i16 y, u8 type }        (5 bytes each)
-//   u32    spawn_count
-//   spawn_count  × { i16 x, i16 y, u8 enemy_type }  (5 bytes each)
-//   u32    exit_count
-//   exit_count   × { i16 x, i16 y, u16 target }     (6 bytes each)
-//   f32    player_start_x
-//   f32    player_start_y
-//
-// Lifecycle:
-//   level_data_init / level_data_destroy  — allocate / free dynamic slices
-//   level_load(n)                         — read file into g_tilemap + g_level_data
-//   level_save(n)                         — write g_tilemap + g_level_data to file
-//   level_apply(w)                        — spawn enemies from g_level_data
-//   level_clear(w)                        — destroy ALL entities (players too)
-//   spawn_players(w)                      — recreate player entities at player_start
-//   level_do_switch(w, n)                 — clear + load(n) + apply + spawn_players
-//
-// Level switching:
-//   level_exit_system (LateUpdate) sets g_pending_level_switch = target_level.
-//   main.odin checks the flag AFTER sim_tick and calls level_do_switch.
-// =============================================================================
 
 import "core:os"
 import "core:fmt"
@@ -37,14 +9,10 @@ import p2p "p2p"
 
 LEVEL_DIR :: "data/levels"
 
-// g_available_levels is the number of raid levels discovered on disk (level01.bin …).
-// Refreshed every time the player enters the hub via level_scan_available().
+
 g_available_levels: int
 
-// level_scan_available probes the filesystem for level01.bin, level02.bin, …
-// Returns the count of consecutive files found starting at index 1.
-// Stops at the first gap so sparse numbering is not supported.
-// Cap of 64 prevents an infinite loop if someone fills the directory.
+
 level_scan_available :: proc() -> int {
     MAX_SCAN :: 64
     for n in 1 ..= MAX_SCAN {
@@ -53,7 +21,6 @@ level_scan_available :: proc() -> int {
     return MAX_SCAN
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 EnemySpawnType :: enum u8 {
     Melee  = 1,
@@ -61,6 +28,7 @@ EnemySpawnType :: enum u8 {
     Hunter = 3,
     Ranged = 4,
     Sniper = 5,
+    Spider = 6,
 }
 
 SpawnPoint :: struct {
@@ -85,34 +53,32 @@ LevelNPC :: struct {
     npc_type: cw.NPCType,
 }
 
-// LevelBarrel stores an editor-placed barrel hazard.
-// btype 0 = Fire barrel, 1 = Water barrel (mirrors BarrelType enum in fire_system.odin).
+
 LevelBarrel :: struct {
     tx, ty: i16,
     btype:  u8,
 }
 
-// v7 interactive-object records (all tile-coordinate based) ──────────────────
 
 DoorOpenType :: enum u8 {
-    None        = 0,  // player presses E to open/close (default)
-    LeverSwitch = 1,  // opened only via linked lever; link_id must be set
-    Key         = 2,  // requires key item with matching key_id
+    None        = 0,
+    LeverSwitch = 1,
+    Key         = 2,
 }
 
 LevelDoor :: struct {
     tx, ty:    i16,
     link_id:   u8,
-    key_id:    u8,           // 0 = no lock
-    open_type: DoorOpenType, // v8+; how the door is opened
-    is_locked: bool,         // v8+; initial locked state
-    label:     [24]u8,       // v9+; designer-written interaction prompt (e.g. "Opens elsewhere")
+    key_id:    u8,
+    open_type: DoorOpenType,
+    is_locked: bool,
+    label:     [24]u8,
 }
 
 LevelSwitch :: struct {
     tx, ty:  i16,
     link_id: u8,
-    flags:   u8,  // bit0 = is_toggle, bit1 = needs_weight (pressure plate)
+    flags:   u8,
 }
 
 LevelContainer :: struct {
@@ -144,7 +110,7 @@ LevelData :: struct {
     lights:       [dynamic]LevelLight,
     npcs:         [dynamic]LevelNPC,
     barrels:      [dynamic]LevelBarrel,
-    // v7 interactive objects
+
     doors:        [dynamic]LevelDoor,
     switches:     [dynamic]LevelSwitch,
     containers:   [dynamic]LevelContainer,
@@ -155,29 +121,23 @@ LevelData :: struct {
     lighting:     LevelLightingConfig,
 }
 
-// ─── Package-level globals ────────────────────────────────────────────────────
 
-// g_entity_defs holds the loaded entity definitions (set in main, used by level_apply).
 g_entity_defs: []EntityDef
 
-// g_level_data is the authoritative runtime level data (spawns, exits, player start).
+
 g_level_data: LevelData
 
-// g_pending_level_switch is set by level_exit_system; main.odin acts on it after sim_tick.
-// 0 = no pending switch; N = switch to level N.
+
 g_pending_level_switch: u16
 
-// ─── Raid timer ───────────────────────────────────────────────────────────────
 
-RAID_TIME      :: f32(30 * 60)           // 30 minutes total per raid
-EXTRACT_RADIUS :: f32(3 * TILE_SIZE)     // 3-tile proximity zone
-EXTRACT_TIME   :: f32(30.0)              // seconds to stand in zone to extract
+RAID_TIME      :: f32(30 * 60)
+EXTRACT_RADIUS :: f32(3 * TILE_SIZE)
+EXTRACT_TIME   :: f32(30.0)
 
-// g_raid_timer counts down from RAID_TIME to 0 during a raid.
-// Zero = time is up = failed run.  Reset to 0 by enter_hub.
+
 g_raid_timer: f32
 
-// ─── Init / destroy ───────────────────────────────────────────────────────────
 
 level_data_init :: proc() {
     g_level_data.spawns       = make([dynamic]SpawnPoint)
@@ -208,14 +168,12 @@ level_data_destroy :: proc() {
     delete(g_level_data.key_pickups)
 }
 
-// ─── File path ────────────────────────────────────────────────────────────────
 
 @(private = "file")
 level_path :: proc(n: int) -> string {
     return fmt.tprintf("%s/level%02d.bin", LEVEL_DIR, n)
 }
 
-// ─── Binary I/O helpers ───────────────────────────────────────────────────────
 
 @(private = "file")
 lv_wb1 :: proc(buf: ^[dynamic]u8, v: u8)  { append(buf, v) }
@@ -265,22 +223,21 @@ lv_rbf32 :: proc(raw: []u8, cur: int) -> (val: f32, next: int, ok: bool) {
     return transmute(f32)v, c, o
 }
 
-// ─── Persistence ─────────────────────────────────────────────────────────────
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
 LEVEL_VERSION :: u16(9)
 
-// level_save writes g_tilemap and g_level_data to data/levels/levelNN.bin.
+
 level_save :: proc(n: int) {
     os.make_directory(LEVEL_DIR)
 
     buf := make([dynamic]u8, 0, 4096, context.temp_allocator)
 
-    // Header
+
     append(&buf, LEVEL_MAGIC[0], LEVEL_MAGIC[1], LEVEL_MAGIC[2], LEVEL_MAGIC[3])
     lv_wb2(&buf, LEVEL_VERSION)
 
-    // Tiles
+
     lv_wb4(&buf, u32(len(g_tilemap)))
     for k, v in g_tilemap {
         lv_wbi16(&buf, i16(k[0]))
@@ -288,7 +245,7 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(v))
     }
 
-    // Spawn points
+
     lv_wb4(&buf, u32(len(g_level_data.spawns)))
     for sp in g_level_data.spawns {
         lv_wbi16(&buf, sp.tx)
@@ -296,7 +253,7 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(sp.enemy_type))
     }
 
-    // Exits
+
     lv_wb4(&buf, u32(len(g_level_data.exits)))
     for ex in g_level_data.exits {
         lv_wbi16(&buf, ex.tx)
@@ -304,11 +261,11 @@ level_save :: proc(n: int) {
         lv_wb2 (&buf, ex.target_level)
     }
 
-    // Player start
+
     lv_wbf32(&buf, g_level_data.player_start[0])
     lv_wbf32(&buf, g_level_data.player_start[1])
 
-    // Authored NPCs (v4+)
+
     lv_wb4(&buf, u32(len(g_level_data.npcs)))
     for npc in g_level_data.npcs {
         lv_wbi16(&buf, npc.tx)
@@ -316,7 +273,7 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(npc.npc_type))
     }
 
-    // Point lights (v2+)
+
     lv_wb4(&buf, u32(len(g_level_data.lights)))
     for lt in g_level_data.lights {
         lv_wbi16(&buf, lt.tx)
@@ -328,7 +285,7 @@ level_save :: proc(n: int) {
         lv_wbf32(&buf, lt.intensity)
     }
 
-    // Lighting config (v3+)
+
     cfg := lighting_config_capture()
     lv_wbf32(&buf, cfg.sun_dir_x)
     lv_wbf32(&buf, cfg.sun_dir_y)
@@ -366,7 +323,7 @@ level_save :: proc(n: int) {
     lv_wbf32(&buf, cfg.fog_density)
     lv_wbf32(&buf, cfg.fog_scatter)
 
-    // Barrels (v5+)
+
     lv_wb4(&buf, u32(len(g_level_data.barrels)))
     for b in g_level_data.barrels {
         lv_wbi16(&buf, b.tx)
@@ -374,7 +331,7 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, b.btype)
     }
 
-    // Overlays (v6+)
+
     lv_wb4(&buf, u32(len(g_overlay_map)))
     for k, v in g_overlay_map {
         lv_wbi16(&buf, i16(k[0]))
@@ -382,19 +339,19 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(v))
     }
 
-    // Doors (v7+, open_type/is_locked added v8, label added v9)
+
     lv_wb4(&buf, u32(len(g_level_data.doors)))
     for d in g_level_data.doors {
         lv_wbi16(&buf, d.tx)
         lv_wbi16(&buf, d.ty)
         lv_wb1  (&buf, d.link_id)
         lv_wb1  (&buf, d.key_id)
-        lv_wb1  (&buf, u8(d.open_type))  // v8+
-        lv_wb1  (&buf, u8(d.is_locked))  // v8+
-        for b in d.label { lv_wb1(&buf, b) }  // v9+: 24 bytes, NUL-terminated string
+        lv_wb1  (&buf, u8(d.open_type))
+        lv_wb1  (&buf, u8(d.is_locked))
+        for b in d.label { lv_wb1(&buf, b) }
     }
 
-    // Switches (v7+)
+
     lv_wb4(&buf, u32(len(g_level_data.switches)))
     for s in g_level_data.switches {
         lv_wbi16(&buf, s.tx)
@@ -403,7 +360,7 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, s.flags)
     }
 
-    // Containers (v7+)
+
     lv_wb4(&buf, u32(len(g_level_data.containers)))
     for c in g_level_data.containers {
         lv_wbi16(&buf, c.tx)
@@ -414,7 +371,7 @@ level_save :: proc(n: int) {
         lv_wb2  (&buf, c.gold_max)
     }
 
-    // Lore items (v7+)
+
     lv_wb4(&buf, u32(len(g_level_data.lore_items)))
     for li in g_level_data.lore_items {
         lv_wbi16(&buf, li.tx)
@@ -422,7 +379,7 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, li.lore_id)
     }
 
-    // Phonographs (v7+)
+
     lv_wb4(&buf, u32(len(g_level_data.phonographs)))
     for ph in g_level_data.phonographs {
         lv_wbi16(&buf, ph.tx)
@@ -430,7 +387,7 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, ph.recording_id)
     }
 
-    // Key pickups (v7+)
+
     lv_wb4(&buf, u32(len(g_level_data.key_pickups)))
     for kp in g_level_data.key_pickups {
         lv_wbi16(&buf, kp.tx)
@@ -465,7 +422,7 @@ level_load :: proc(n: int) {
 
     cur := 0
 
-    // Magic
+
     if raw[0] != 'T' || raw[1] != 'R' || raw[2] != 'M' || raw[3] != 'T' {
         clear(&g_tilemap)
         clear(&g_overlay_map)
@@ -485,7 +442,7 @@ level_load :: proc(n: int) {
     }
     cur = 4
 
-    // Version — accept 1..9
+
     ver, ver_c, ver_ok := lv_rb2(raw, cur)
     if !ver_ok || ver < 1 || ver > 9 {
         clear(&g_tilemap)
@@ -506,7 +463,7 @@ level_load :: proc(n: int) {
     }
     cur = ver_c
 
-    // Tiles
+
     clear(&g_tilemap)
     clear(&g_overlay_map)
     tc, tc_c, tc_ok := lv_rb4(raw, cur)
@@ -518,19 +475,19 @@ level_load :: proc(n: int) {
         t,  tc2, tok  := lv_rb1  (raw, cur);  if !tok  { return };  cur = tc2
         key := [2]int{int(x), int(y)}
         switch t {
-        case 4:  // old TileType.Oil
+        case 4:
             g_tilemap[key]     = .Floor
             g_overlay_map[key] = .Oil
-        case 5:  // old TileType.Fire
+        case 5:
             g_tilemap[key]     = .Floor
             g_overlay_map[key] = .Fire
         case:
-            tt := clamp(int(t), int(TileType.Floor), int(TileType.Water))
+            tt := clamp(int(t), int(TileType.Floor), int(TileType.Pillar2))
             g_tilemap[key] = TileType(tt)
         }
     }
 
-    // Spawn points
+
     clear(&g_level_data.spawns)
     sc, sc_c, sc_ok := lv_rb4(raw, cur)
     if !sc_ok { return }
@@ -542,11 +499,11 @@ level_load :: proc(n: int) {
         append(&g_level_data.spawns, SpawnPoint{
             tx         = x,
             ty         = y,
-            enemy_type = EnemySpawnType(clamp(int(et), 1, 5)),
+            enemy_type = EnemySpawnType(clamp(int(et), 1, 6)),
         })
     }
 
-    // Exits
+
     clear(&g_level_data.exits)
     exc, exc_c, exc_ok := lv_rb4(raw, cur)
     if !exc_ok { return }
@@ -558,7 +515,7 @@ level_load :: proc(n: int) {
         append(&g_level_data.exits, LevelExit{tx = x, ty = y, target_level = tl})
     }
 
-    // Player start
+
     px, pxc, pxok := lv_rbf32(raw, cur)
     if pxok {
         cur = pxc
@@ -578,7 +535,7 @@ level_load :: proc(n: int) {
                 nx, nxc, nxok := lv_rbi16(raw, cur); if !nxok { break }; cur = nxc
                 ny, nyc, nyok := lv_rbi16(raw, cur); if !nyok { break }; cur = nyc
                 nt, ntc, ntok := lv_rb1(raw, cur); if !ntok { break }; cur = ntc
-                npc_type := cw.NPCType(clamp(int(nt), int(cw.NPCType.Shopkeeper), int(cw.NPCType.MutationWorkbench)))
+                npc_type := cw.NPCType(clamp(int(nt), int(cw.NPCType.Shopkeeper), int(cw.NPCType.AbilityVendor)))
                 append(&g_level_data.npcs, LevelNPC{
                     tx = nx,
                     ty = ny,
@@ -588,7 +545,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Point lights (v2+)
+
     clear(&g_level_data.lights)
     if ver >= 2 {
         lc, lc_c, lc_ok := lv_rb4(raw, cur)
@@ -611,7 +568,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Lighting config (v3+)
+
     if ver >= 3 {
         lf :: proc(raw: []u8, cur: int, dst: ^f32) -> (next: int, ok: bool) {
             v, c, o := lv_rbf32(raw, cur)
@@ -657,7 +614,7 @@ level_load :: proc(n: int) {
         cur, ok1 = lf(raw, cur, &c.fog_scatter);            if !ok1 { return }
     }
 
-    // Barrels (v5+)
+
     clear(&g_level_data.barrels)
     if ver >= 5 {
         bc, bc_c, bc_ok := lv_rb4(raw, cur)
@@ -674,8 +631,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Overlays (v6+)
-    // (already cleared alongside g_tilemap above)
+
     if ver >= 6 {
         oc, oc_c, oc_ok := lv_rb4(raw, cur)
         if oc_ok {
@@ -692,7 +648,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Doors (v7+, open_type/is_locked added v8, label added v9)
+
     clear(&g_level_data.doors)
     if ver >= 7 {
         dc, dc_c, dc_ok := lv_rb4(raw, cur)
@@ -728,7 +684,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Switches (v7+)
+
     clear(&g_level_data.switches)
     if ver >= 7 {
         swc, swcc, swcok := lv_rb4(raw, cur)
@@ -746,7 +702,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Containers (v7+)
+
     clear(&g_level_data.containers)
     if ver >= 7 {
         cc, ccc, ccok := lv_rb4(raw, cur)
@@ -770,7 +726,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Lore items (v7+)
+
     clear(&g_level_data.lore_items)
     if ver >= 7 {
         lic, licc, licok := lv_rb4(raw, cur)
@@ -787,7 +743,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Phonographs (v7+)
+
     clear(&g_level_data.phonographs)
     if ver >= 7 {
         phc, phcc, phcok := lv_rb4(raw, cur)
@@ -804,7 +760,7 @@ level_load :: proc(n: int) {
         }
     }
 
-    // Key pickups (v7+)
+
     clear(&g_level_data.key_pickups)
     if ver >= 7 {
         kpc, kpcc, kpcok := lv_rb4(raw, cur)
@@ -836,6 +792,8 @@ level_apply :: proc(w: ^cw.World) {
             def_name = "npc_mutation_workbench"
         case .Stash:
             def_name = "npc_stash"
+        case .AbilityVendor:
+            def_name = "npc_ability_vendor"
         }
         if def_name == "" { return cw.INVALID_ENTITY }
 
@@ -850,6 +808,8 @@ level_apply :: proc(w: ^cw.World) {
             shop_roll_stock(w, id, 0)
         case .MutationWorkbench:
         case .Stash:
+        case .AbilityVendor:
+            ability_vendor_roll_stock(w, id, 0)
         }
         return id
     }
@@ -891,6 +851,8 @@ level_apply :: proc(w: ^cw.World) {
             if id != cw.INVALID_ENTITY && wid != cw.INVALID_ENTITY {
                 cw.world_set_equipment(w, id, cw.EquipmentComp{ weapon_entity_id = wid })
             }
+        case .Spider:
+            spawn_enemy(w, "enemy_spider", wx, wy)
         }
     }
 
@@ -906,14 +868,13 @@ level_apply :: proc(w: ^cw.World) {
         })
     }
 
-    // Spawn editor-placed barrels (BarrelType mirrors LevelBarrel.btype: 0=Fire, 1=Water)
+
     for b in g_level_data.barrels {
         wx := f32(int(b.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
         spawn_barrel(w, wx, wy, BarrelType(b.btype))
     }
 
-    // ── v7: Interactive objects ───────────────────────────────────────────────
 
     for d in g_level_data.doors {
         wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
@@ -922,14 +883,14 @@ level_apply :: proc(w: ^cw.World) {
         if id == cw.INVALID_ENTITY { continue }
         cw.world_get_transform(w, id).position = {wx, wy, 0}
 
-        // Build prompt via loc table; designer label (loc key or literal) overrides
+
         prompt_cs: cstring
         switch d.open_type {
         case .None:        prompt_cs = t(.INTERACT_UNLOCK) if d.key_id != 0 else t(.INTERACT_OPEN)
         case .LeverSwitch: prompt_cs = t(.INTERACT_OPENS_ELSEWHERE)
         case .Key:         prompt_cs = t(.INTERACT_UNLOCK) if d.is_locked else t(.INTERACT_OPEN)
         }
-        lbl := d.label   // local copy — d.label is not addressable in a value for-loop
+        lbl := d.label
         if lbl[0] != 0 { prompt_cs = loc_lookup(cstring(&lbl[0])) }
 
         prompt: [48]u8
@@ -937,7 +898,7 @@ level_apply :: proc(w: ^cw.World) {
         cw.world_set_interactable(w, id, cw.InteractableComp{
             radius = f32(TILE_SIZE) * 1.5,
             prompt = prompt,
-            active = true,   // always interactive; LeverSwitch uses lockable sentinel for budge
+            active = true,
         })
         cw.world_set_openable(w, id, cw.OpenableComp{
             is_open      = false,
@@ -945,15 +906,15 @@ level_apply :: proc(w: ^cw.World) {
             link_id      = d.link_id,
             blocks_sight = true,
         })
-        // LeverSwitch: permanent lever-only lock (key_id=0 sentinel).
-        // dispatch_interaction plays "door_locked" and returns — that IS the budge.
+
+
         if d.open_type == .LeverSwitch {
             cw.world_set_lockable(w, id, cw.LockableComp{
                 key_id    = 0,
                 is_locked = true,
             })
         } else if d.key_id != 0 {
-            // Key lock; v7 backward compat: force locked when open_type==.None
+
             initially_locked := d.is_locked || d.open_type == .None
             cw.world_set_lockable(w, id, cw.LockableComp{
                 key_id    = d.key_id,
@@ -972,7 +933,7 @@ level_apply :: proc(w: ^cw.World) {
         needs_weight := (s.flags & 0x02) != 0
         prompt: [48]u8
         if needs_weight {
-            copy(prompt[:], "")  // weight plates activate on overlap, no prompt
+            copy(prompt[:], "")
         } else {
             copy(prompt[:], string(t(.INTERACT_PULL_LEVER)))
         }
@@ -1105,19 +1066,23 @@ spawn_players :: proc(w: ^cw.World) {
             strength    = 1,  dexterity  = 1, science    = 1,
             level       = 1,  xp         = 0, xp_next    = 100.0,
             stat_points = 0,  base_hp    = 100.0,
-            base_energy = 100.0, base_speed = 150.0,
+            base_energy = 100.0, base_speed = 240.0,
         })
         cw.world_set_player(w, pid, cw.PlayerComp{ slot = slot })
         cw.world_set_wallet(w, pid, cw.WalletComp{ gold = 0 })
         cw.world_set_status_effect(w, pid, cw.StatusEffectComp{})
-        cw.world_set_key_ring(w, pid, cw.KeyRingComp{})   // cleared each raid
+        cw.world_set_key_ring(w, pid, cw.KeyRingComp{})
+
+        if slot == 0 && cw.world_has_component(w, pid, .RenderConfig) {
+            cw.render_config_set_sprite(cw.world_get_render_config(w, pid), g_player_stem)
+        }
         w.player_ids[slot] = pid
     }
 
-    // Sync the local player shortcut; slot is fixed for the whole session.
+
     w.player_id = w.player_ids[w.local_player_slot]
 
-    // Snap camera to spawn area.
+
     if ps[0] != 0 || ps[1] != 0 {
         g_camera.target = { ps[0], ps[1] }
     }
@@ -1134,7 +1099,7 @@ level_clear :: proc(w: ^cw.World) {
     cw.world_reset(w)
 
     if ui_has(.Shop) {
-        ui_close(.Shop)  // _ui_on_close clears g_shop_npc_id
+        ui_close(.Shop)
     } else {
         g_shop_npc_id = cw.INVALID_ENTITY
     }
@@ -1143,6 +1108,11 @@ level_clear :: proc(w: ^cw.World) {
     } else {
         g_stash_npc_id = cw.INVALID_ENTITY
     }
+    if ui_has(.AbilityVendor) {
+        ui_close(.AbilityVendor)
+    } else {
+        g_ability_vendor_npc_id = cw.INVALID_ENTITY
+    }
 }
 
 @(private = "file")
@@ -1150,8 +1120,15 @@ _clear_all_shop_stock :: proc(w: ^cw.World) {
     npc_ids := cw.world_query(w, cw.query_mask(.NPC))
     defer delete(npc_ids)
     for id in npc_ids {
-        if cw.world_is_valid(w, id) {
+        if !cw.world_is_valid(w, id) { continue }
+        npc := cw.world_get_npc(w, id)
+        switch npc.npc_type {
+        case .Shopkeeper:
             shop_clear_stock(w, id)
+        case .AbilityVendor:
+            ability_vendor_clear_stock(w, id)
+        case .MutationWorkbench, .Stash:
+
         }
     }
 }
@@ -1160,6 +1137,7 @@ hub_apply :: proc(w: ^cw.World) {
     has_shopkeeper := false
     has_mutation_workbench := false
     has_stash := false
+    has_ability_vendor := false
     for npc in g_level_data.npcs {
         switch npc.npc_type {
         case .Shopkeeper:
@@ -1168,6 +1146,8 @@ hub_apply :: proc(w: ^cw.World) {
             has_mutation_workbench = true
         case .Stash:
             has_stash = true
+        case .AbilityVendor:
+            has_ability_vendor = true
         }
     }
 
@@ -1195,9 +1175,19 @@ hub_apply :: proc(w: ^cw.World) {
             cw.world_get_transform(w, npc_id).position = HUB_STASH_POS
         }
     }
+
+    if !has_ability_vendor {
+        npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_ability_vendor"))
+        if npc_id != cw.INVALID_ENTITY {
+            if cw.world_has_component(w, npc_id, .Transform) {
+                cw.world_get_transform(w, npc_id).position = HUB_ABILITY_VENDOR_POS
+            }
+            ability_vendor_roll_stock(w, npc_id, 0)
+        }
+    }
 }
 
-// spawn_extraction_at_tile places a timed extraction zone centred on tile (tx, ty).
+
 spawn_extraction_at_tile :: proc(w: ^cw.World, tx, ty: int) {
     ext_id := cw.world_create_entity(w)
     cw.world_set_transform(w, ext_id, cw.TransformComp{
@@ -1209,24 +1199,22 @@ spawn_extraction_at_tile :: proc(w: ^cw.World, tx, ty: int) {
     })
 }
 
-// spawn_extraction_point is the legacy single-zone fallback (tile 12,7).
-// Used only when a level defines no exits with target_level == 0.
+
 spawn_extraction_point :: proc(w: ^cw.World) {
     spawn_extraction_at_tile(w, 12, 7)
 }
 
 level_do_switch :: proc(w: ^cw.World, n: int) {
-    // Reset fire/water/barrel state before level_clear destroys entities —
-    // stale barrel IDs in g_barrel_registry would otherwise dangle.
+
+
     fire_system_reset()
-    level_clear(w)        // destroys everything including players; resets pending flag
+    level_clear(w)
     director_init()
     level_load(n)
-    level_apply(w)        // spawns editor-placed barrels + all other entities
-    door_init_blockers(w) // rebuild door-blocker map from newly spawned doors
+    level_apply(w)
+    door_init_blockers(w)
 
-    // Spawn timed extraction zones from exits with target_level == 0.
-    // Falls back to the legacy hardcoded point if none are defined (old levels).
+
     found_zone := false
     for ex in g_level_data.exits {
         if ex.target_level == 0 {
@@ -1302,15 +1290,13 @@ on_player_extract :: proc(w: ^cw.World) {
     }
     raid_result_gold = gold_earned
 
-    // Serums auto-collect to mc.serums during the raid and never enter the backpack.
-    // Use the delta vs. the baseline captured at raid start so the extract screen shows
-    // only what was earned this run (not the lifetime total).
+
     serums_earned := 0
     if cw.world_has_component(w, w.player_id, .MutationContainer) {
         mc            := cw.world_get_mutation(w, w.player_id)
         serums_earned  = mc.serums - g_raid_serums_start
-        if serums_earned < 0 { serums_earned = 0 }   // player spent some this raid
-        // Sync stash counter so hub header and save file stay consistent with mc.serums.
+        if serums_earned < 0 { serums_earned = 0 }
+
         g_stash.serums = mc.serums
     }
     raid_result_serums = serums_earned
@@ -1347,8 +1333,8 @@ level_exit_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         xPos, yPos := world_to_tile(pos[0], pos[1])
 
         for ex in g_level_data.exits {
-            // target_level == 0 means a timed extraction zone (ExtractionComp),
-            // not an instant step-on exit — skip those here.
+
+
             if ex.target_level == 0 { continue }
             if int(ex.tx) == xPos && int(ex.ty) == yPos {
                 on_player_extract(w)

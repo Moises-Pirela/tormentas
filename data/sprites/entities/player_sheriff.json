@@ -1,0 +1,9 @@
+{
+  "frame_width": 130,
+  "frame_height": 256,
+  "columns": 1,
+  "anchor": [65, 220],
+  "states": {
+    "idle": %!(MISSING CLOSE BRACE)"start_frame": 0, "frame_count": 1, "fps": 6.0, "looping": true }
+  }
+}

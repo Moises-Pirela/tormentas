@@ -166,6 +166,9 @@ facing_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         t     := cw.world_get_transform(w, id)
         input := cw.world_get_input(w, id)
 
+
+        if cw.world_has_component(w, id, .AimLock) { continue }
+
         dx := input.mouse_world[0] - t.position[0]
         dy := input.mouse_world[1] - t.position[1]
         if abs(dx) > 0.01 || abs(dy) > 0.01 {
@@ -176,7 +179,7 @@ facing_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 camera_follow_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
-    if g_editor_mode { return }  // editor pans camera itself via WASD
+    if g_editor_mode { return }
     if !cw.world_is_valid(w, w.player_id) { return }
 
     pos := cw.world_get_transform(w, w.player_id).position

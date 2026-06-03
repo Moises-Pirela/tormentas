@@ -6,12 +6,13 @@ import      "core:math"
 import cw   "clockwork"
 import clay "../clay"
 
-HUB_PORTAL_POS     :: [2]f32{ -300, 0 }
-HUB_PORTAL_RADIUS  :: f32(50)
+HUB_PORTAL_POS     :: [2]f32{ -480, 0 }
+HUB_PORTAL_RADIUS  :: f32(80)
 
-HUB_SHOPKEEPER_POS :: [3]f32{ 200, 0, 0 }
-HUB_MUTATION_WORKBENCH_POS :: [3]f32{ 300, -40, 0 }
-HUB_STASH_POS :: [3]f32{ 105, -95, 0 }
+HUB_SHOPKEEPER_POS         :: [3]f32{  320,    0, 0 }
+HUB_MUTATION_WORKBENCH_POS :: [3]f32{  480,  -64, 0 }
+HUB_STASH_POS              :: [3]f32{  168, -152, 0 }
+HUB_ABILITY_VENDOR_POS     :: [3]f32{  320, -192, 0 }
 
 enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     if save_progress && cw.world_is_valid(w, w.player_id) {
@@ -25,8 +26,10 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     door_init_blockers(w)
     hub_apply(w)
     spawn_players(w)
-    load_player(w, w.player_id)
-    // Full HP on hub entry (safe zone).
+    if !load_player(w, w.player_id) {
+        give_starter_items(w, w.player_id)
+    }
+
     if cw.world_has_component(w, w.player_id, .Health) {
         h := cw.world_get_health(w, w.player_id)
         h.current = h.max
@@ -50,8 +53,7 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     level_apply(w)
     door_init_blockers(w)
 
-    // Spawn timed extraction zones from exits with target_level == 0.
-    // Falls back to the legacy hardcoded point if the level defines none.
+
     found_zone := false
     for ex in g_level_data.exits {
         if ex.target_level == 0 {
@@ -64,13 +66,15 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     }
 
     spawn_players(w)
-    load_player(w, w.player_id)
-    // Full HP at the start of every raid.
+    if !load_player(w, w.player_id) {
+        give_starter_items(w, w.player_id)
+    }
+
     if cw.world_has_component(w, w.player_id, .Health) {
         h := cw.world_get_health(w, w.player_id)
         h.current = h.max
     }
-    // Capture serum baseline so on_player_extract can compute delta.
+
     g_raid_serums_start = 0
     if cw.world_has_component(w, w.player_id, .MutationContainer) {
         g_raid_serums_start = cw.world_get_mutation(w, w.player_id).serums
@@ -146,7 +150,7 @@ draw_level_select :: proc(w: ^cw.World) {
 
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 160})
 
-    n_levels := max(g_available_levels, 1)   // at least one row so the panel isn't empty
+    n_levels := max(g_available_levels, 1)
     pw := uis(360)
     ph := uis(80) + f32(n_levels) * uis(62) + uis(48)
     px := (sw - pw) * 0.5
@@ -184,7 +188,7 @@ draw_level_select :: proc(w: ^cw.World) {
     bx    := px + uis(16)
 
     if g_available_levels == 0 {
-        // No raid levels found — show a hint instead of an empty panel.
+
         msg    := t(.HUB_NO_LEVELS)
         msg_fs := uis(11)
         msz    := rl.MeasureTextEx(g_font, msg, msg_fs, 0.5)
@@ -213,10 +217,8 @@ draw_level_select :: proc(w: ^cw.World) {
             lbl_fs, 0.5, lbl_col)
 
         if hot && rl.IsMouseButtonReleased(.LEFT) {
-            // Do NOT call enter_raid here — this proc runs inside ui_draw's
-            // BeginTextureMode context.  enter_raid calls ui_close_all() which
-            // unloads the active RT mid-render, corrupting the frame.
-            // Defer to the update phase via g_pending_raid_start instead.
+
+
             g_pending_raid_start = i
             ui_close(.LevelSelect)
             return

@@ -3,7 +3,7 @@ package main
 import "core:math"
 
 
-AI_PATH_MAX    :: 64     
+AI_PATH_MAX    :: 64
 AI_PATH_RETICK :: f32(0.35)
 
 SQRT2 :: f32(1.41421356)
@@ -13,7 +13,7 @@ AIPath :: struct {
     len:     int,
     idx:     int,
     timer:   f32,
-    goal:    [2]int, 
+    goal:    [2]int,
 }
 
 @(private="file")

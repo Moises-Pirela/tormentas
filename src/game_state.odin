@@ -5,12 +5,11 @@ import cw "clockwork"
 
 AppState :: enum {
     MainMenu,
-    Connecting,  
+    Connecting,
     Playing,
 }
 
-// World-level substates only.  UI overlay panels are managed by UIManager
-// (g_ui) in ui_manager.odin — see UIPanel enum there.
+
 PlayingSubstate :: enum {
     Gameplay,
     Hub,
@@ -25,9 +24,7 @@ g_hub_active: bool
 
 g_current_raid_level: int
 
-// Set by draw_level_select instead of calling enter_raid directly.
-// Processed in the Hub update phase, safely outside BeginTextureMode.
-// 0 = none pending; positive = level index to start.
+
 g_pending_raid_start: int
 
 
@@ -55,8 +52,7 @@ stash_make_empty :: proc() -> Stash {
 raid_result_gold:   int
 raid_result_serums: int
 
-// g_raid_serums_start is set when a raid begins (after load_player restores mc.serums).
-// on_player_extract subtracts it to compute "serums earned this raid" for the extract screen.
+
 g_raid_serums_start: int
 
 g_paused: bool
@@ -66,8 +62,7 @@ set_playing_state :: proc(next: PlayingSubstate) {
     g_editor_mode   = (next == .Editor)
 }
 
-// Returns true when the local player's keyboard/gamepad input should be
-// forwarded to the sim.  False while any UI panel is visible (mode == .UI).
+
 playing_collects_input :: proc() -> bool {
     return (g_playing_state == .Gameplay || g_playing_state == .Hub) &&
            input_is_gameplay()
@@ -79,8 +74,8 @@ g_is_host: bool
 
 
 PLAYER_NAME_MAX :: 24
-g_player_name:  [PLAYER_NAME_MAX + 1]u8           
-g_player_names: [4][PLAYER_NAME_MAX + 1]u8        
+g_player_name:  [PLAYER_NAME_MAX + 1]u8
+g_player_names: [4][PLAYER_NAME_MAX + 1]u8
 
 
 g_disconnect_msg_timer: f32
@@ -88,8 +83,7 @@ DISCONNECT_MSG_DURATION :: f32(4.0)
 
 g_should_exit: bool
 
-// Loot filter — items below this rarity threshold are hidden and not auto-picked up.
-// Hold ALT to temporarily show all items regardless of the filter.
+
 g_loot_filter_rarity: cw.ItemRarity = .Normal
 
 
@@ -99,10 +93,10 @@ FadePhase :: enum { Idle, FadingOut, Black, FadingIn }
 
 g_fade_phase:    FadePhase
 g_fade_alpha:    f32
-g_fade_callback: proc()  
+g_fade_callback: proc()
 
 fade_to_black :: proc(on_black: proc()) {
-    if g_fade_phase == .FadingOut || g_fade_phase == .Black { return } 
+    if g_fade_phase == .FadingOut || g_fade_phase == .Black { return }
     g_fade_callback = on_black
     g_fade_phase    = .FadingOut
 }

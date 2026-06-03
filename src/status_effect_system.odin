@@ -12,14 +12,13 @@ status_effect_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             sec := cw.world_get_status_effects(w, id)
 
-            // Wet immediately extinguishes Burn and Oiled.
-            // Do this before the tick loop so neither DoT fires this frame.
+
             if cw.status_effect_is_active(sec, .Wet) {
                 sec.effects[int(cw.StatusEffectType.Burn)].duration  = 0
                 sec.effects[int(cw.StatusEffectType.Oiled)].duration = 0
             }
 
-            // Update each status effect type
+
             for et in 0..<len(cw.StatusEffectType) {
                 stype  := cw.StatusEffectType(et)
                 effect := &sec.effects[et]
@@ -28,7 +27,7 @@ status_effect_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
                 effect.duration -= dt
 
-                // Apply ongoing damage for damage-based effects
+
                 #partial switch stype {
                 case .Poison:
                     _apply_poison_damage(w, id, effect, dt)
@@ -45,9 +44,9 @@ _apply_poison_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt
     if !cw.world_has_component(w, id, .Health) { return }
 
     if !cw.world_has_component(w, id, .Organic) { return }
-    
+
     h := cw.world_get_health(w, id)
-    
+
     damage_per_sec := effect.strength * h.max
     damage_this_tick := damage_per_sec * dt
     effect.acumulator += damage_this_tick
@@ -59,11 +58,12 @@ _apply_poison_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt
     }
 
     effect.acumulator -= damage_to_apply
-    
+
     append(&w.damage_events, cw.DamageEvent{
         target_id = id,
         amount    = damage_to_apply,
         source_id = int(effect.source_id),
+        kind      = .Poison,
     })
 }
 
@@ -72,9 +72,9 @@ _apply_burn_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt: 
 
     if !cw.world_has_component(w, id, .Health) { return }
     if !cw.world_has_component(w, id, .Flammable) {return }
-    
+
     h := cw.world_get_health(w, id)
-    
+
     damage_per_sec := effect.strength * h.max
     damage_this_tick := damage_per_sec * dt
     effect.acumulator += damage_this_tick
@@ -85,10 +85,11 @@ _apply_burn_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt: 
     }
 
     effect.acumulator -= damage_to_apply
-    
+
     append(&w.damage_events, cw.DamageEvent{
         target_id = id,
         amount    = damage_to_apply,
         source_id = int(effect.source_id),
+        kind      = .Fire,
     })
 }

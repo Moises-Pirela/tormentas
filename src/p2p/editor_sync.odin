@@ -4,36 +4,35 @@ import "core:mem"
 
 EditorOpAction :: enum u8 {
     Paint         = 1,
-    Erase         = 2,   // removes tile + overlay + all entity data
+    Erase         = 2,
     ClearAll      = 3,
-    EraseObjects  = 4,   // removes entity data only (RMB — preserves floor/wall tile)
+    EraseObjects  = 4,
 }
 
 EditorOp :: struct #packed {
-    action:       EditorOpAction,  // 1 byte
-    brush:        u8,              // 1 byte — EditorBrush cast from main package
-    tx:           i16,             // 2 bytes
-    ty:           i16,             // 2 bytes
-    target_level: u16,             // 2 bytes
-}                                  // 8 bytes total
+    action:       EditorOpAction,
+    brush:        u8,
+    tx:           i16,
+    ty:           i16,
+    target_level: u16,
+}
 
 EDITOR_OP_SIZE :: size_of(EditorOp)
 
-// EditorModOp carries a single field edit for an already-placed entity.
-// Broadcast when the inspector panel modifies a field value.
+
 EditorModOp :: struct #packed {
-    tx:    i16,   // tile x of the entity
-    ty:    i16,   // tile y
-    kind:  u8,    // EditorSelKind cast to u8
-    field: u8,    // field index within that kind (0-based)
-    value: u32,   // new value (u8/u16 in low bytes; f32 reinterpreted as bits)
-}                 // 10 bytes total
+    tx:    i16,
+    ty:    i16,
+    kind:  u8,
+    field: u8,
+    value: u32,
+}
 
 EDITOR_MOD_OP_SIZE :: size_of(EditorModOp)
 
 session_send_editor_op :: proc(s: ^Session, op: EditorOp) {
     if s.state != .Connected { return }
-    op := op   // local copy so we can take address
+    op := op
     pkt: [1 + EDITOR_OP_SIZE]u8
     pkt[0] = u8(MsgType.EditorOp)
     mem.copy(&pkt[1], &op, EDITOR_OP_SIZE)

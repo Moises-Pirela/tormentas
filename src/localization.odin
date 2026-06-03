@@ -7,13 +7,13 @@ import "core:fmt"
 
 Language :: enum u8 { EN, ES, PT }
 
-LANG_COUNT :: 3  // must equal len(Language)
+LANG_COUNT :: 3
 
 g_lang: Language = .EN
 
 
 LocKey :: enum {
-    // ── Main Menu ─────────────────────────────────────────────────
+
     MENU_TITLE,
     MENU_SUBTITLE,
     MENU_DISCONNECTED,
@@ -38,7 +38,7 @@ LocKey :: enum {
     MENU_CHAR_DEFAULT,
     MENU_BTN_SETTINGS,
     MENU_BTN_EXIT,
-    // ── HUD ───────────────────────────────────────────────────────
+
     HUD_EXTRACT,
     HUD_LOOT_FILTER,
     HUD_FILTER_ALL,
@@ -53,12 +53,12 @@ LocKey :: enum {
     HUD_ITEM_PASSIVE,
     HUD_LEVELUP,
     HUD_STATPOINT,
-    // ── Pause Menu ────────────────────────────────────────────────
+
     PAUSE_TITLE,
     PAUSE_BTN_RESUME,
     PAUSE_BTN_KEYBINDS,
     PAUSE_BTN_QUIT,
-    // ── Settings ──────────────────────────────────────────────────
+
     SETTINGS_TITLE,
     SETTINGS_RESOLUTION,
     SETTINGS_WINDOW_MODE,
@@ -73,11 +73,11 @@ LocKey :: enum {
     SETTINGS_BTN_KEYBINDS,
     SETTINGS_BTN_CLOSE,
     SETTINGS_BTN_EXIT,
-    // ── Language names (always in native tongue) ───────────────────
+
     LANG_EN,
     LANG_ES,
     LANG_PT,
-    // ── Keybinds ──────────────────────────────────────────────────
+
     KEYBINDS_TITLE,
     KEYBINDS_SECTION_GAMEPLAY,
     KEYBINDS_SECTION_UI,
@@ -85,7 +85,7 @@ LocKey :: enum {
     KEYBINDS_BTN_RESET,
     KEYBINDS_BTN_CLOSE,
     KEYBINDS_ESC_CANCEL,
-    // ── Inventory ─────────────────────────────────────────────────
+
     INV_TITLE,
     INV_ARMOR,
     INV_SLOT_HEAD,
@@ -98,7 +98,7 @@ LocKey :: enum {
     INV_BACKPACK,
     INV_BTN_CLOSE,
     INV_UNEQUIPPED,
-    // ── Character / Stats ─────────────────────────────────────────
+
     STATS_TITLE,
     STATS_STRENGTH,
     STATS_DEXTERITY,
@@ -113,7 +113,7 @@ LocKey :: enum {
     STATS_DEATHS,
     STATS_BEST_EXTRACT,
     STATS_BTN_CLOSE,
-    // ── Mutations ─────────────────────────────────────────────────
+
     MUT_INTERACT,
     MUT_BRANCH_CORPUS,
     MUT_BRANCH_SHADOW,
@@ -126,38 +126,41 @@ LocKey :: enum {
     MUT_CRAFT_HINT,
     MUT_FOOTER,
     MUT_RESET,
-    // ── Hub ───────────────────────────────────────────────────────
+
     HUB_INTERACT,
     HUB_LABEL,
     HUB_STASH,
     HUB_LEVEL_SELECT,
     HUB_LEVEL_N,
-    HUB_NO_LEVELS,     // shown in the selector when no raid level files are found
+    HUB_NO_LEVELS,
     HUB_ESC_CANCEL,
     HUB_BTN_RETURN,
     HUB_BTN_RETRY,
-    // ── Extract Screen ────────────────────────────────────────────
+
     EXTRACT_TITLE,
     EXTRACT_SUBTITLE,
     EXTRACT_GOLD,
     EXTRACT_SERUMS,
     EXTRACT_STASH_TOTAL,
-    // ── Death Screen ──────────────────────────────────────────────
+
     DEATH_TITLE,
     DEATH_MSG,
     DEATH_STASH,
-    // ── Shop ──────────────────────────────────────────────────────
+
     SHOP_INTERACT,
     SHOP_TITLE,
     SHOP_GOLD,
     SHOP_SOLD_OUT,
     SHOP_SELL,
     SHOP_ESC_CLOSE,
-    // ── Stash UI ──────────────────────────────────────────────────
+
+    ABILITY_VENDOR_INTERACT,
+    ABILITY_VENDOR_SUBTITLE,
+
     STASH_INTERACT,
     STASH_TITLE,
     STASH_DEPOSIT_ALL,
-    // ── Items ─────────────────────────────────────────────────────
+
     ITEM_CORRUPTED_RELIQUARY_NAME,
     ITEM_CORRUPTED_RELIQUARY_DESC,
     ITEM_LEATHER_CARAPACE_NAME,
@@ -188,7 +191,7 @@ LocKey :: enum {
     ITEM_NECROTIC_SERUM_DESC,
     ITEM_NECROTIC_SERUM3_NAME,
     ITEM_NECROTIC_SERUM3_DESC,
-    // ── Interaction prompts ───────────────────────────────────────
+
     INTERACT_OPEN,
     INTERACT_UNLOCK,
     INTERACT_OPENS_ELSEWHERE,
@@ -200,43 +203,37 @@ LocKey :: enum {
     INTERACT_READ_DOCUMENT,
     INTERACT_WIND_PHONOGRAPH,
     INTERACT_TAKE_KEY,
-    // ── Lore pages ────────────────────────────────────────────────
+
     LORE_01_TITLE,
     LORE_01_BODY,
     LORE_02_TITLE,
     LORE_02_BODY,
     LORE_03_TITLE,
     LORE_03_BODY,
-    // ── Phonograph recordings ─────────────────────────────────────
+
     REC_01_TITLE,
     REC_01_TRANSCRIPT,
     REC_02_TITLE,
     REC_02_TRANSCRIPT,
     REC_03_TITLE,
     REC_03_TRANSCRIPT,
-    // ── Sentinel — keep last ──────────────────────────────────────
+
     _LOC_COUNT,
 }
 
 LOC_KEY_COUNT :: int(LocKey._LOC_COUNT)
 
-// ---------------------------------------------------------------------------
-// Storage  (heap-allocated cstrings, valid for the whole app lifetime)
-// ---------------------------------------------------------------------------
 
 @(private = "file")
 g_loc: [LANG_COUNT][LOC_KEY_COUNT]cstring
 
-// ---------------------------------------------------------------------------
-// Init / Destroy
-// ---------------------------------------------------------------------------
 
 loc_init :: proc() {
     data, ok := os.read_entire_file("data/loc.csv")
     if !ok { return }
     defer delete(data)
 
-    // Parse header row to map column index → language ordinal (-1 = skip).
+
     content := string(data)
     lines   := strings.split_lines(content, context.temp_allocator)
     if len(lines) < 2 { return }
@@ -253,7 +250,7 @@ loc_init :: proc() {
         }
     }
 
-    // Parse data rows.
+
     for raw_line in lines[1:] {
         line := strings.trim_space(raw_line)
         if len(line) == 0 || line[0] == '#' { continue }
@@ -270,7 +267,7 @@ loc_init :: proc() {
             if li < 0 { continue }
             txt := strings.trim_space(cols[c])
             if txt == "" { continue }
-            // Free previous value before overwriting (allows hot-reload later).
+
             if g_loc[li][ki] != nil { delete(g_loc[li][ki]) }
             g_loc[li][ki] = strings.clone_to_cstring(txt)
         }
@@ -287,9 +284,8 @@ loc_destroy :: proc() {
         }
     }
 }
-// _loc_csv_split splits a CSV line respecting RFC 4180 double-quote enclosure.
-// Quoted fields may contain commas; embedded double-quotes are not supported
-// (not needed for our content).  Returns slices into the original line string.
+
+
 @(private = "file")
 _loc_csv_split :: proc(line: string, allocator := context.allocator) -> []string {
     result: [dynamic]string
@@ -299,17 +295,17 @@ _loc_csv_split :: proc(line: string, allocator := context.allocator) -> []string
     for {
         if i >= n { break }
         if line[i] == '"' {
-            i += 1          // skip opening quote
+            i += 1
             start := i
             for i < n && line[i] != '"' { i += 1 }
             append(&result, line[start:i])
-            if i < n { i += 1 }                        // skip closing quote
-            if i < n && line[i] == ',' { i += 1 }     // skip comma
+            if i < n { i += 1 }
+            if i < n && line[i] == ',' { i += 1 }
         } else {
             start := i
             for i < n && line[i] != ',' { i += 1 }
             append(&result, line[start:i])
-            if i < n { i += 1 }                        // skip comma
+            if i < n { i += 1 }
         }
     }
     return result[:]
@@ -329,7 +325,7 @@ tf :: proc(key: LocKey, args: ..any) -> cstring {
 @(private = "file")
 _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     switch name {
-    // Main Menu
+
     case "MENU_TITLE":             return .MENU_TITLE, true
     case "MENU_SUBTITLE":          return .MENU_SUBTITLE, true
     case "MENU_DISCONNECTED":      return .MENU_DISCONNECTED, true
@@ -354,7 +350,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "MENU_CHAR_DEFAULT":      return .MENU_CHAR_DEFAULT, true
     case "MENU_BTN_SETTINGS":     return .MENU_BTN_SETTINGS, true
     case "MENU_BTN_EXIT":         return .MENU_BTN_EXIT, true
-    // HUD
+
     case "HUD_EXTRACT":            return .HUD_EXTRACT, true
     case "HUD_LOOT_FILTER":        return .HUD_LOOT_FILTER, true
     case "HUD_FILTER_ALL":         return .HUD_FILTER_ALL, true
@@ -369,12 +365,12 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "HUD_ITEM_PASSIVE":       return .HUD_ITEM_PASSIVE, true
     case "HUD_LEVELUP":            return .HUD_LEVELUP, true
     case "HUD_STATPOINT":          return .HUD_STATPOINT, true
-    // Pause
+
     case "PAUSE_TITLE":            return .PAUSE_TITLE, true
     case "PAUSE_BTN_RESUME":       return .PAUSE_BTN_RESUME, true
     case "PAUSE_BTN_KEYBINDS":     return .PAUSE_BTN_KEYBINDS, true
     case "PAUSE_BTN_QUIT":         return .PAUSE_BTN_QUIT, true
-    // Settings
+
     case "SETTINGS_TITLE":         return .SETTINGS_TITLE, true
     case "SETTINGS_RESOLUTION":    return .SETTINGS_RESOLUTION, true
     case "SETTINGS_WINDOW_MODE":   return .SETTINGS_WINDOW_MODE, true
@@ -389,11 +385,11 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "SETTINGS_BTN_KEYBINDS":  return .SETTINGS_BTN_KEYBINDS, true
     case "SETTINGS_BTN_CLOSE":     return .SETTINGS_BTN_CLOSE, true
     case "SETTINGS_BTN_EXIT":      return .SETTINGS_BTN_EXIT, true
-    // Language names
+
     case "LANG_EN":                return .LANG_EN, true
     case "LANG_ES":                return .LANG_ES, true
     case "LANG_PT":                return .LANG_PT, true
-    // Keybinds
+
     case "KEYBINDS_TITLE":              return .KEYBINDS_TITLE, true
     case "KEYBINDS_SECTION_GAMEPLAY":   return .KEYBINDS_SECTION_GAMEPLAY, true
     case "KEYBINDS_SECTION_UI":         return .KEYBINDS_SECTION_UI, true
@@ -401,7 +397,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "KEYBINDS_BTN_RESET":          return .KEYBINDS_BTN_RESET, true
     case "KEYBINDS_BTN_CLOSE":          return .KEYBINDS_BTN_CLOSE, true
     case "KEYBINDS_ESC_CANCEL":         return .KEYBINDS_ESC_CANCEL, true
-    // Inventory
+
     case "INV_TITLE":              return .INV_TITLE, true
     case "INV_ARMOR":              return .INV_ARMOR, true
     case "INV_SLOT_HEAD":          return .INV_SLOT_HEAD, true
@@ -414,7 +410,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "INV_BACKPACK":           return .INV_BACKPACK, true
     case "INV_BTN_CLOSE":          return .INV_BTN_CLOSE, true
     case "INV_UNEQUIPPED":         return .INV_UNEQUIPPED, true
-    // Stats
+
     case "STATS_TITLE":            return .STATS_TITLE, true
     case "STATS_STRENGTH":         return .STATS_STRENGTH, true
     case "STATS_DEXTERITY":        return .STATS_DEXTERITY, true
@@ -429,7 +425,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "STATS_DEATHS":           return .STATS_DEATHS, true
     case "STATS_BEST_EXTRACT":     return .STATS_BEST_EXTRACT, true
     case "STATS_BTN_CLOSE":        return .STATS_BTN_CLOSE, true
-    // Mutations
+
     case "MUT_INTERACT":           return .MUT_INTERACT, true
     case "MUT_BRANCH_CORPUS":      return .MUT_BRANCH_CORPUS, true
     case "MUT_BRANCH_SHADOW":      return .MUT_BRANCH_SHADOW, true
@@ -442,7 +438,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "MUT_CRAFT_HINT":         return .MUT_CRAFT_HINT, true
     case "MUT_FOOTER":             return .MUT_FOOTER, true
     case "MUT_RESET":              return .MUT_RESET, true
-    // Hub
+
     case "HUB_INTERACT":           return .HUB_INTERACT, true
     case "HUB_LABEL":              return .HUB_LABEL, true
     case "HUB_STASH":              return .HUB_STASH, true
@@ -452,28 +448,31 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "HUB_ESC_CANCEL":         return .HUB_ESC_CANCEL, true
     case "HUB_BTN_RETURN":         return .HUB_BTN_RETURN, true
     case "HUB_BTN_RETRY":          return .HUB_BTN_RETRY, true
-    // Extract
+
     case "EXTRACT_TITLE":          return .EXTRACT_TITLE, true
     case "EXTRACT_SUBTITLE":       return .EXTRACT_SUBTITLE, true
     case "EXTRACT_GOLD":           return .EXTRACT_GOLD, true
     case "EXTRACT_SERUMS":         return .EXTRACT_SERUMS, true
     case "EXTRACT_STASH_TOTAL":    return .EXTRACT_STASH_TOTAL, true
-    // Death
+
     case "DEATH_TITLE":            return .DEATH_TITLE, true
     case "DEATH_MSG":              return .DEATH_MSG, true
     case "DEATH_STASH":            return .DEATH_STASH, true
-    // Shop
+
     case "SHOP_INTERACT":          return .SHOP_INTERACT, true
     case "SHOP_TITLE":             return .SHOP_TITLE, true
     case "SHOP_GOLD":              return .SHOP_GOLD, true
     case "SHOP_SOLD_OUT":          return .SHOP_SOLD_OUT, true
     case "SHOP_SELL":              return .SHOP_SELL, true
     case "SHOP_ESC_CLOSE":         return .SHOP_ESC_CLOSE, true
-    // Stash UI
+
+    case "ABILITY_VENDOR_INTERACT": return .ABILITY_VENDOR_INTERACT, true
+    case "ABILITY_VENDOR_SUBTITLE": return .ABILITY_VENDOR_SUBTITLE, true
+
     case "STASH_INTERACT":         return .STASH_INTERACT, true
     case "STASH_TITLE":            return .STASH_TITLE, true
     case "STASH_DEPOSIT_ALL":      return .STASH_DEPOSIT_ALL, true
-    // Items
+
     case "ITEM_CORRUPTED_RELIQUARY_NAME":  return .ITEM_CORRUPTED_RELIQUARY_NAME, true
     case "ITEM_CORRUPTED_RELIQUARY_DESC":  return .ITEM_CORRUPTED_RELIQUARY_DESC, true
     case "ITEM_LEATHER_CARAPACE_NAME":     return .ITEM_LEATHER_CARAPACE_NAME, true
@@ -504,7 +503,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "ITEM_NECROTIC_SERUM_DESC":       return .ITEM_NECROTIC_SERUM_DESC, true
     case "ITEM_NECROTIC_SERUM3_NAME":      return .ITEM_NECROTIC_SERUM3_NAME, true
     case "ITEM_NECROTIC_SERUM3_DESC":      return .ITEM_NECROTIC_SERUM3_DESC, true
-    // Interaction prompts
+
     case "INTERACT_OPEN":              return .INTERACT_OPEN, true
     case "INTERACT_UNLOCK":            return .INTERACT_UNLOCK, true
     case "INTERACT_OPENS_ELSEWHERE":   return .INTERACT_OPENS_ELSEWHERE, true
@@ -516,14 +515,14 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "INTERACT_READ_DOCUMENT":     return .INTERACT_READ_DOCUMENT, true
     case "INTERACT_WIND_PHONOGRAPH":   return .INTERACT_WIND_PHONOGRAPH, true
     case "INTERACT_TAKE_KEY":          return .INTERACT_TAKE_KEY, true
-    // Lore pages
+
     case "LORE_01_TITLE":             return .LORE_01_TITLE, true
     case "LORE_01_BODY":              return .LORE_01_BODY, true
     case "LORE_02_TITLE":             return .LORE_02_TITLE, true
     case "LORE_02_BODY":              return .LORE_02_BODY, true
     case "LORE_03_TITLE":             return .LORE_03_TITLE, true
     case "LORE_03_BODY":              return .LORE_03_BODY, true
-    // Phonograph recordings
+
     case "REC_01_TITLE":              return .REC_01_TITLE, true
     case "REC_01_TRANSCRIPT":         return .REC_01_TRANSCRIPT, true
     case "REC_02_TITLE":              return .REC_02_TITLE, true
@@ -534,10 +533,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     return {}, false
 }
 
-// loc_lookup translates a cstring that may contain a LocKey name.
-// If the string matches a known key it returns the current-language translation;
-// otherwise it returns the original string unchanged (safe for non-localised
-// strings like enemy names or ability names).
+
 loc_lookup :: proc(raw: cstring) -> cstring {
     if raw == nil || len(raw) == 0 { return raw }
     key, found := _loc_key_from_name(string(raw))
