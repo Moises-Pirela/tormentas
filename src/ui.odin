@@ -25,6 +25,7 @@ UICustomKind :: enum u8 {
     InvSlot,
     WeaponSlot,
     InvAbility,
+    GoldChip,
 }
 
 
@@ -34,6 +35,12 @@ UICustomOrb :: struct {
     fill_col:     rl.Color,
     bg_col:       rl.Color,
     value_text:   [8]u8,
+    // portrait_idx: 0=none, 1=hp heart icon, 2-6=class portrait (g_selected_class_idx+2)
+    portrait_idx: u8,
+}
+
+UICustomGold :: struct {
+    gold_val: i32,
 }
 
 
@@ -93,6 +100,7 @@ UICustomData :: struct {
         inv_slot: UICustomInvSlot,
         wep_slot: UICustomWeaponSlot,
         inv_abil: UICustomInvAbility,
+        gold:     UICustomGold,
     },
 }
 

@@ -15,9 +15,19 @@ import clay     "../clay"
 g_font:      rl.Font
 g_font_body: rl.Font
 
+// HUD sprite textures. Zero-id means asset not found; renderers fall back gracefully.
+g_hud_orb_frame : rl.Texture2D
+g_hud_hp_icon   : rl.Texture2D
+
 @(private = "file")
 FONT_PATH      :: cstring("data/fonts/cinzel.ttf")
 FONT_PATH_BODY :: cstring("data/fonts/body.ttf")
+
+@(private = "file")
+HUD_SPRITE_PATHS :: [?]cstring{
+    "data/sprites/hud/orb_frame.png",
+    "data/sprites/hud/hp_icon.png",
+}
 
 
 g_ui_scale: f32 = 1.0
@@ -471,11 +481,16 @@ init_font :: proc() {
     } else {
         g_font_body = g_font
     }
+
+    if rl.FileExists(HUD_SPRITE_PATHS[0]) { g_hud_orb_frame = rl.LoadTexture(HUD_SPRITE_PATHS[0]) }
+    if rl.FileExists(HUD_SPRITE_PATHS[1]) { g_hud_hp_icon   = rl.LoadTexture(HUD_SPRITE_PATHS[1]) }
 }
 
 shutdown_font :: proc() {
     if rl.FileExists(FONT_PATH)      { rl.UnloadFont(g_font) }
     if rl.FileExists(FONT_PATH_BODY) { rl.UnloadFont(g_font_body) }
+    if g_hud_orb_frame.id != 0 { rl.UnloadTexture(g_hud_orb_frame) }
+    if g_hud_hp_icon.id   != 0 { rl.UnloadTexture(g_hud_hp_icon) }
 }
 
 HIT_FLASH_DURATION :: f32(0.12)

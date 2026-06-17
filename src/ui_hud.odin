@@ -56,6 +56,7 @@ draw_hud :: proc(w: ^cw.World) {
             shield_ratio = shield_ratio,
             fill_col     = rl.Color{ 158, 32, 32, 255 },
             bg_col       = rl.Color{  24,  7,  7, 255 },
+            portrait_idx = 1,  // hp heart icon
         }}
         copy(hp_orb.orb.value_text[:], hp_val_buf[:])
 
@@ -246,10 +247,41 @@ draw_hud :: proc(w: ^cw.World) {
                 custom = { customData = ui_push_custom(en_orb) },
             }) {}
 
+            GOLD_SZ  := uis(44)
+            gold_data := UICustomData{ kind = .GoldChip,
+                gold = UICustomGold{ gold_val = i32(local_stash().gold) } }
+            if clay.UI(clay.ID("GoldChip"))({
+                layout = { sizing = { clay.SizingFixed(GOLD_SZ),
+                                      clay.SizingFixed(GOLD_SZ) } },
+                custom = { customData = ui_push_custom(gold_data) },
+            }) {}
+
         }
     }
 
     cmds := clay.EndLayout()
+
+    // Draw the chip rail behind the Clay elements (Clay renders on top)
+    if cw.world_is_valid(w, w.player_id) {
+        sw     := f32(rl.GetScreenWidth())
+        sh     := f32(rl.GetScreenHeight())
+        CHIP_SZ  := uis(54)
+        CHIP_GAP := uis(6)
+        HPAD     := uis(6)
+        VPAD     := uis(5)
+        n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)
+        center_w := CHIP_SZ * n_chips + CHIP_GAP * (n_chips - 1)
+        rail_h   := uis(10)
+        rail_x   := (sw - center_w) * 0.5 - HPAD
+        rail_y   := sh - VPAD - uis(80)*0.5 - rail_h*0.5 - 4
+        rl.DrawRectangle(i32(rail_x), i32(rail_y),
+            i32(center_w + HPAD * 2), i32(rail_h),
+            rl.Color{ 55, 42, 22, 200 })
+        rl.DrawRectangle(i32(rail_x), i32(rail_y),
+            i32(center_w + HPAD * 2), 1,
+            rl.Color{ 140, 100, 40, 180 })
+    }
+
     clay_raylib_render(&cmds)
 
 
