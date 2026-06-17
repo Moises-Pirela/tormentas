@@ -155,8 +155,8 @@ draw_minimap :: proc(w: ^cw.World) {
     // ── Tab hint ─────────────────────────────────────────────
     hint    := cstring("[Tab]")
     hint_fs := uis(9)
-    hsz     := rl.MeasureTextEx(g_font, hint, hint_fs, 0.5)
-    rl.DrawTextEx(g_font, hint,
+    hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
+    rl.DrawTextEx(g_font_body, hint,
         {panel_x + panel_w - hsz.x, panel_y + panel_h + uis(3)},
         hint_fs, 0.5, rl.Color{80, 72, 50, 130})
 }

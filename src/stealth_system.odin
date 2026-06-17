@@ -211,21 +211,21 @@ draw_stealth_indicators :: proc(w: ^cw.World) {
             rl.DrawRectangleLinesEx({ bx, by, BAR_W, BAR_H }, 0.8,
                 rl.Color{ 120, 100, 30, 140 })
 
-            isz := rl.MeasureTextEx(g_font, "?", ICON_FS, 0.5)
-            rl.DrawTextEx(g_font, "?",
+            isz := rl.MeasureTextEx(g_font_body, "?", ICON_FS, 0.5)
+            rl.DrawTextEx(g_font_body, "?",
                 { iso.x - isz.x * 0.5, by - ICON_FS - 2 },
                 ICON_FS, 0.5,
                 rl.Color{ u8(180 + u32(ai.suspicion * 40)), 185, 40, 230 })
 
         case AI_STATE_SEARCHING:
-            isz := rl.MeasureTextEx(g_font, "!", ICON_FS, 0.5)
-            rl.DrawTextEx(g_font, "!",
+            isz := rl.MeasureTextEx(g_font_body, "!", ICON_FS, 0.5)
+            rl.DrawTextEx(g_font_body, "!",
                 { iso.x - isz.x * 0.5, by - ICON_FS - 2 },
                 ICON_FS, 0.5, rl.Color{ 255, 140, 20, 240 })
 
         case AI_STATE_CHASE:
-            isz := rl.MeasureTextEx(g_font, "!", ICON_FS, 0.5)
-            rl.DrawTextEx(g_font, "!",
+            isz := rl.MeasureTextEx(g_font_body, "!", ICON_FS, 0.5)
+            rl.DrawTextEx(g_font_body, "!",
                 { iso.x - isz.x * 0.5, by - ICON_FS - 2 },
                 ICON_FS, 0.5, rl.Color{ 255, 50, 30, 255 })
         }

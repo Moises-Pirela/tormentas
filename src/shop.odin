@@ -223,8 +223,8 @@ draw_shop_world :: proc(w: ^cw.World) {
         rc   := cw.world_get_render_config(w, nid)
         name := loc_lookup(cw.render_config_name_cstr(rc))
         nfs  := f32(10)
-        nsz  := rl.MeasureTextEx(g_font, name, nfs, 0.5)
-        rl.DrawTextEx(g_font, name,
+        nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.5)
+        rl.DrawTextEx(g_font_body, name,
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
             nfs, 0.5, rl.Color{ 240, 215, 120, 220 })
 
@@ -232,10 +232,10 @@ draw_shop_world :: proc(w: ^cw.World) {
         if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
             prompt    := t(.SHOP_INTERACT)
             pfs       := f32(9)
-            psz       := rl.MeasureTextEx(g_font, prompt, pfs, 0.5)
+            psz       := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
             t_now     := f32(rl.GetTime())
             pulse     := u8(180 + 60 * (t_now - f32(int(t_now))))
-            rl.DrawTextEx(g_font, prompt,
+            rl.DrawTextEx(g_font_body, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
                 pfs, 0.5, rl.Color{ 255, 230, 100, pulse })
         }
@@ -269,8 +269,8 @@ draw_shop_hud :: proc(w: ^cw.World) {
         { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(12) },
         title_fs, 1, COL_PARCH)
     shop_title    := t(.SHOP_TITLE)
-    shop_title_sz := rl.MeasureTextEx(g_font, shop_title, uis(10), 1)
-    rl.DrawTextEx(g_font, shop_title,
+    shop_title_sz := rl.MeasureTextEx(g_font_body, shop_title, uis(10), 1)
+    rl.DrawTextEx(g_font_body, shop_title,
         { f32(px) + f32(PW)*0.5 - shop_title_sz.x*0.5,
           f32(py) + uis(12) + title_fs + uis(2) },
         uis(10), 1, COL_MUTED)
@@ -286,8 +286,8 @@ draw_shop_hud :: proc(w: ^cw.World) {
     }
     gold_cs := tf(.SHOP_GOLD, wallet_gold)
     gfs     := uis(13)
-    rl.DrawTextEx(g_font, gold_cs,
-        { f32(px + PW) - uis(16) - rl.MeasureTextEx(g_font, gold_cs, gfs, 1).x,
+    rl.DrawTextEx(g_font_body, gold_cs,
+        { f32(px + PW) - uis(16) - rl.MeasureTextEx(g_font_body, gold_cs, gfs, 1).x,
           f32(py) + uis(12) },
         gfs, 1, rl.Color{ 255, 215, 50, 255 })
 
@@ -310,8 +310,8 @@ draw_shop_hud :: proc(w: ^cw.World) {
                 1, rl.Color{ 55, 48, 34, 80 })
             so_fs := uis(11)
             so_cs := t(.SHOP_SOLD_OUT)
-            rl.DrawTextEx(g_font, so_cs,
-                { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font, so_cs, so_fs, 0.5).x*0.5,
+            rl.DrawTextEx(g_font_body, so_cs,
+                { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font_body, so_cs, so_fs, 0.5).x*0.5,
                   f32(iy) + f32(item_h)*0.5 - so_fs*0.5 },
                 so_fs, 0.5, COL_MUTED)
             continue
@@ -344,12 +344,12 @@ draw_shop_hud :: proc(w: ^cw.World) {
         name_fs := uis(12)
         name_x  := row_r.x + icon_r*2 + uis(18)
         name_col := rarity_color(item.rarity)
-        rl.DrawTextEx(g_font, loc_lookup(cw.render_config_name_cstr(irc)),
+        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_name_cstr(irc)),
             { name_x, row_r.y + uis(8) }, name_fs, 0.5, name_col)
 
 
         desc_fs := uis(9)
-        rl.DrawTextEx(g_font, loc_lookup(cw.render_config_desc_cstr(irc)),
+        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_desc_cstr(irc)),
             { name_x, row_r.y + uis(8) + name_fs + uis(3) }, desc_fs, 0.5, COL_MUTED)
 
 
@@ -357,10 +357,10 @@ draw_shop_hud :: proc(w: ^cw.World) {
         price_str := fmt.bprintf(price_buf[:23], "%d g", ss.price)
         price_buf[len(price_str)] = 0
         price_fs  := uis(13)
-        psz       := rl.MeasureTextEx(g_font, cstring(&price_buf[0]), price_fs, 1)
+        psz       := rl.MeasureTextEx(g_font_body, cstring(&price_buf[0]), price_fs, 1)
         can_afford := wallet_gold >= ss.price
         price_col  := rl.Color{255, 215, 50, 255} if can_afford else rl.Color{180, 80, 60, 255}
-        rl.DrawTextEx(g_font, cstring(&price_buf[0]),
+        rl.DrawTextEx(g_font_body, cstring(&price_buf[0]),
             { row_r.x + row_r.width - uis(12) - psz.x,
               row_r.y + f32(item_h)*0.5 - price_fs*0.5 },
             price_fs, 1, price_col)
@@ -377,14 +377,14 @@ draw_shop_hud :: proc(w: ^cw.World) {
         { f32(px) + uis(16), f32(sell_y) },
         { f32(px + PW) - uis(16), f32(sell_y) }, 1, COL_RULE)
     sell_hdr_fs := uis(11)
-    rl.DrawTextEx(g_font, t(.SHOP_SELL),
+    rl.DrawTextEx(g_font_body, t(.SHOP_SELL),
         { f32(px) + uis(16), f32(sell_y) + uis(5) }, sell_hdr_fs, 0.5, COL_MUTED)
 
 
     close_fs := uis(10)
     close_cs := t(.SHOP_ESC_CLOSE)
-    rl.DrawTextEx(g_font, close_cs,
-        { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font, close_cs, close_fs, 0.5).x*0.5,
+    rl.DrawTextEx(g_font_body, close_cs,
+        { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font_body, close_cs, close_fs, 0.5).x*0.5,
           f32(py + PH) - close_fs - uis(10) },
         close_fs, 0.5, COL_MUTED)
 }

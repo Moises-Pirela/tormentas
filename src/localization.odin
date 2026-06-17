@@ -246,6 +246,42 @@ LocKey :: enum {
     CLASS_SHERIFF_WEAPON,
     CLASS_SRBRAIN_WEAPON,
 
+    QUEST_BOARD_NPC_NAME,
+    QUEST_BOARD_TITLE,
+    QUEST_BOARD_INTERACT,
+
+    QUEST_SURVIVORS_MARK_TITLE,
+    QUEST_SURVIVORS_MARK_LORE,
+    QUEST_SURVIVORS_MARK_OBJ,
+
+    QUEST_THE_HORDE_TITLE,
+    QUEST_THE_HORDE_LORE,
+    QUEST_THE_HORDE_OBJ,
+
+    QUEST_ABERRATION_TITLE,
+    QUEST_ABERRATION_LORE,
+    QUEST_ABERRATION_OBJ,
+
+    QUEST_BLOODLINES_TITLE,
+    QUEST_BLOODLINES_LORE,
+    QUEST_BLOODLINES_OBJ,
+
+    QUEST_THE_DEEP_RUN_TITLE,
+    QUEST_THE_DEEP_RUN_LORE,
+    QUEST_THE_DEEP_RUN_OBJ,
+
+    QUEST_ELITE_PREDATOR_TITLE,
+    QUEST_ELITE_PREDATOR_LORE,
+    QUEST_ELITE_PREDATOR_OBJ,
+
+    QUEST_PERFECT_RUN_TITLE,
+    QUEST_PERFECT_RUN_LORE,
+    QUEST_PERFECT_RUN_OBJ,
+
+    QUEST_FINAL_FORM_TITLE,
+    QUEST_FINAL_FORM_LORE,
+    QUEST_FINAL_FORM_OBJ,
+
     _LOC_COUNT,
 }
 
@@ -585,6 +621,34 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "CLASS_PR1S_WEAPON":         return .CLASS_PR1S_WEAPON, true
     case "CLASS_SHERIFF_WEAPON":      return .CLASS_SHERIFF_WEAPON, true
     case "CLASS_SRBRAIN_WEAPON":      return .CLASS_SRBRAIN_WEAPON, true
+
+    case "QUEST_BOARD_NPC_NAME":           return .QUEST_BOARD_NPC_NAME, true
+    case "QUEST_BOARD_TITLE":              return .QUEST_BOARD_TITLE, true
+    case "QUEST_BOARD_INTERACT":           return .QUEST_BOARD_INTERACT, true
+    case "QUEST_SURVIVORS_MARK_TITLE":     return .QUEST_SURVIVORS_MARK_TITLE, true
+    case "QUEST_SURVIVORS_MARK_LORE":      return .QUEST_SURVIVORS_MARK_LORE, true
+    case "QUEST_SURVIVORS_MARK_OBJ":       return .QUEST_SURVIVORS_MARK_OBJ, true
+    case "QUEST_THE_HORDE_TITLE":          return .QUEST_THE_HORDE_TITLE, true
+    case "QUEST_THE_HORDE_LORE":           return .QUEST_THE_HORDE_LORE, true
+    case "QUEST_THE_HORDE_OBJ":            return .QUEST_THE_HORDE_OBJ, true
+    case "QUEST_ABERRATION_TITLE":         return .QUEST_ABERRATION_TITLE, true
+    case "QUEST_ABERRATION_LORE":          return .QUEST_ABERRATION_LORE, true
+    case "QUEST_ABERRATION_OBJ":           return .QUEST_ABERRATION_OBJ, true
+    case "QUEST_BLOODLINES_TITLE":         return .QUEST_BLOODLINES_TITLE, true
+    case "QUEST_BLOODLINES_LORE":          return .QUEST_BLOODLINES_LORE, true
+    case "QUEST_BLOODLINES_OBJ":           return .QUEST_BLOODLINES_OBJ, true
+    case "QUEST_THE_DEEP_RUN_TITLE":       return .QUEST_THE_DEEP_RUN_TITLE, true
+    case "QUEST_THE_DEEP_RUN_LORE":        return .QUEST_THE_DEEP_RUN_LORE, true
+    case "QUEST_THE_DEEP_RUN_OBJ":         return .QUEST_THE_DEEP_RUN_OBJ, true
+    case "QUEST_ELITE_PREDATOR_TITLE":     return .QUEST_ELITE_PREDATOR_TITLE, true
+    case "QUEST_ELITE_PREDATOR_LORE":      return .QUEST_ELITE_PREDATOR_LORE, true
+    case "QUEST_ELITE_PREDATOR_OBJ":       return .QUEST_ELITE_PREDATOR_OBJ, true
+    case "QUEST_PERFECT_RUN_TITLE":        return .QUEST_PERFECT_RUN_TITLE, true
+    case "QUEST_PERFECT_RUN_LORE":         return .QUEST_PERFECT_RUN_LORE, true
+    case "QUEST_PERFECT_RUN_OBJ":          return .QUEST_PERFECT_RUN_OBJ, true
+    case "QUEST_FINAL_FORM_TITLE":         return .QUEST_FINAL_FORM_TITLE, true
+    case "QUEST_FINAL_FORM_LORE":          return .QUEST_FINAL_FORM_LORE, true
+    case "QUEST_FINAL_FORM_OBJ":           return .QUEST_FINAL_FORM_OBJ, true
     }
     return {}, false
 }

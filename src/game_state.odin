@@ -1,7 +1,7 @@
 package main
 
-import rl "vendor:raylib"
-import cw "clockwork"
+import rl  "vendor:raylib"
+import cw  "clockwork"
 
 AppState :: enum {
     MainMenu,
@@ -40,7 +40,12 @@ Stash :: struct {
     grid:       [STASH_COLS * STASH_ROWS]int,
 }
 
-g_stash: Stash
+g_stash: [2]Stash
+
+local_stash :: proc() -> ^Stash { return &g_stash[g_session.local_slot] }
+
+g_hub_remote_spawned: bool
+g_hub_remote_loaded:  bool
 
 stash_make_empty :: proc() -> Stash {
     s := Stash{}

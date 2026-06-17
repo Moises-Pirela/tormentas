@@ -122,8 +122,8 @@ draw_ability_vendor_world :: proc(w: ^cw.World) {
         rc   := cw.world_get_render_config(w, nid)
         name := loc_lookup(cw.render_config_name_cstr(rc))
         nfs  := f32(10)
-        nsz  := rl.MeasureTextEx(g_font, name, nfs, 0.5)
-        rl.DrawTextEx(g_font, name,
+        nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.5)
+        rl.DrawTextEx(g_font_body, name,
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
             nfs, 0.5, rl.Color{ 180, 220, 255, 220 })
 
@@ -131,10 +131,10 @@ draw_ability_vendor_world :: proc(w: ^cw.World) {
            dist_sq <= ABILITY_VENDOR_PROMPT_DIST * ABILITY_VENDOR_PROMPT_DIST {
             prompt  := t(.ABILITY_VENDOR_INTERACT)
             pfs     := f32(9)
-            psz     := rl.MeasureTextEx(g_font, prompt, pfs, 0.5)
+            psz     := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
             t_now   := f32(rl.GetTime())
             pulse   := u8(180 + 60 * (t_now - f32(int(t_now))))
-            rl.DrawTextEx(g_font, prompt,
+            rl.DrawTextEx(g_font_body, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
                 pfs, 0.5, rl.Color{ 180, 220, 255, pulse })
         }
@@ -181,8 +181,8 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
         title_fs, 1, COL_PARCH)
 
     sub_cs := t(.ABILITY_VENDOR_SUBTITLE)
-    sub_sz := rl.MeasureTextEx(g_font, sub_cs, uis(10), 1)
-    rl.DrawTextEx(g_font, sub_cs,
+    sub_sz := rl.MeasureTextEx(g_font_body, sub_cs, uis(10), 1)
+    rl.DrawTextEx(g_font_body, sub_cs,
         { f32(px) + f32(PW)*0.5 - sub_sz.x*0.5,
           f32(py) + uis(12) + title_fs + uis(2) },
         uis(10), 1, COL_MUTED)
@@ -200,8 +200,8 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
         s   := fmt.bprintf(buf[:31], "%d serums", player_serums)
         buf[len(s)] = 0
         sfs  := uis(13)
-        ssz  := rl.MeasureTextEx(g_font, cstring(&buf[0]), sfs, 1)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        ssz  := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), sfs, 1)
+        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
             { f32(px + PW) - uis(16) - ssz.x, f32(py) + uis(12) },
             sfs, 1, rl.Color{ 120, 200, 120, 255 })
     }
@@ -228,8 +228,8 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
             rl.DrawRectangleLinesEx(row_r, 1, rl.Color{ 55, 48, 34, 80 })
             so_cs := t(.SHOP_SOLD_OUT)
             so_fs := uis(11)
-            rl.DrawTextEx(g_font, so_cs,
-                { row_r.x + row_r.width*0.5 - rl.MeasureTextEx(g_font, so_cs, so_fs, 0.5).x*0.5,
+            rl.DrawTextEx(g_font_body, so_cs,
+                { row_r.x + row_r.width*0.5 - rl.MeasureTextEx(g_font_body, so_cs, so_fs, 0.5).x*0.5,
                   row_r.y + row_r.height*0.5 - so_fs*0.5 },
                 so_fs, 0.5, COL_MUTED)
             continue
@@ -256,17 +256,17 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
 
         name_fs := uis(13)
         name_x  := row_r.x + icon_r*2 + uis(18)
-        rl.DrawTextEx(g_font, loc_lookup(cw.render_config_name_cstr(irc)),
+        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_name_cstr(irc)),
             { name_x, row_r.y + uis(8) }, name_fs, 0.5, rc_col)
 
 
         desc_fs := uis(9)
-        rl.DrawTextEx(g_font, loc_lookup(cw.render_config_desc_cstr(irc)),
+        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_desc_cstr(irc)),
             { name_x, row_r.y + uis(8) + name_fs + uis(4) }, desc_fs, 0.5, COL_MUTED)
 
 
         rar_fs  := uis(9)
-        rl.DrawTextEx(g_font, "Epic",
+        rl.DrawTextEx(g_font_body, "Epic",
             { name_x, row_r.y + uis(8) + name_fs + uis(4) + desc_fs + uis(3) },
             rar_fs, 0.5, rarity_color(.Epic))
 
@@ -276,9 +276,9 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
         price_str := fmt.bprintf(price_buf[:23], "%d serums", ABILITY_VENDOR_SERUM_COST)
         price_buf[len(price_str)] = 0
         price_fs  := uis(13)
-        psz       := rl.MeasureTextEx(g_font, cstring(&price_buf[0]), price_fs, 1)
+        psz       := rl.MeasureTextEx(g_font_body, cstring(&price_buf[0]), price_fs, 1)
         price_col := rl.Color{ 120, 200, 120, 255 } if can_afford else rl.Color{ 180, 80, 60, 255 }
-        rl.DrawTextEx(g_font, cstring(&price_buf[0]),
+        rl.DrawTextEx(g_font_body, cstring(&price_buf[0]),
             { row_r.x + row_r.width - uis(12) - psz.x,
               row_r.y + row_r.height*0.5 - price_fs*0.5 },
             price_fs, 1, price_col)
@@ -298,9 +298,9 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
 
     close_cs := t(.SHOP_ESC_CLOSE)
     close_fs := uis(10)
-    rl.DrawTextEx(g_font, close_cs,
+    rl.DrawTextEx(g_font_body, close_cs,
         { f32(px) + f32(PW)*0.5 -
-          rl.MeasureTextEx(g_font, close_cs, close_fs, 0.5).x*0.5,
+          rl.MeasureTextEx(g_font_body, close_cs, close_fs, 0.5).x*0.5,
           f32(py + PH) - close_fs - uis(10) },
         close_fs, 0.5, COL_MUTED)
 }

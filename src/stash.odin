@@ -11,12 +11,12 @@ g_stash_npc_id: int = cw.INVALID_ENTITY
 g_stash_grid_bb: rl.Rectangle
 
 stash_has_room :: proc() -> bool {
-    return g_stash.item_count < STASH_MAX_ITEMS
+    return local_stash().item_count < STASH_MAX_ITEMS
 }
 
 stash_index_of :: proc(item_id: int) -> int {
-    for i in 0..<g_stash.item_count {
-        if g_stash.item_ids[i] == item_id { return i }
+    for i in 0..<local_stash().item_count {
+        if local_stash().item_ids[i] == item_id { return i }
     }
     return -1
 }
@@ -29,7 +29,7 @@ stash_can_place :: proc(item: ^cw.ItemComp, col, row: int, except_id := cw.INVAL
 
     for dy in 0..<item.grid_h {
         for dx in 0..<item.grid_w {
-            cell := g_stash.grid[(row + dy) * STASH_COLS + (col + dx)]
+            cell := local_stash().grid[(row + dy) * STASH_COLS + (col + dx)]
             if cell != cw.INVALID_ENTITY && cell != except_id { return false }
         }
     }
@@ -41,7 +41,7 @@ stash_place_existing :: proc(item: ^cw.ItemComp, item_id, col, row: int) {
     item.pack_y = row
     for dy in 0..<item.grid_h {
         for dx in 0..<item.grid_w {
-            g_stash.grid[(row + dy) * STASH_COLS + (col + dx)] = item_id
+            local_stash().grid[(row + dy) * STASH_COLS + (col + dx)] = item_id
         }
     }
 }
@@ -49,22 +49,22 @@ stash_place_existing :: proc(item: ^cw.ItemComp, item_id, col, row: int) {
 stash_add_id :: proc(item_id: int) -> bool {
     if stash_index_of(item_id) >= 0 { return true }
     if !stash_has_room() { return false }
-    g_stash.item_ids[g_stash.item_count] = item_id
-    g_stash.item_count += 1
+    local_stash().item_ids[local_stash().item_count] = item_id
+    local_stash().item_count += 1
     return true
 }
 
 stash_remove_id :: proc(item_id: int) {
     idx := stash_index_of(item_id)
     if idx >= 0 {
-        for i in idx..<(g_stash.item_count - 1) {
-            g_stash.item_ids[i] = g_stash.item_ids[i + 1]
+        for i in idx..<(local_stash().item_count - 1) {
+            local_stash().item_ids[i] = local_stash().item_ids[i + 1]
         }
-        g_stash.item_count -= 1
-        g_stash.item_ids[g_stash.item_count] = cw.INVALID_ENTITY
+        local_stash().item_count -= 1
+        local_stash().item_ids[local_stash().item_count] = cw.INVALID_ENTITY
     }
 
-    for &cell in g_stash.grid {
+    for &cell in local_stash().grid {
         if cell == item_id { cell = cw.INVALID_ENTITY }
     }
 }
@@ -235,10 +235,10 @@ draw_stash_world :: proc(w: ^cw.World) {
 
     prompt := t(.STASH_INTERACT)
     fs := f32(10)
-    sz := rl.MeasureTextEx(g_font, prompt, fs, 0.5)
+    sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
     p := world_to_iso_xy(pos[0], pos[1])
-    rl.DrawTextEx(g_font, prompt,
+    rl.DrawTextEx(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
         fs, 0.5, rl.Color{ 230, 190, 120, pulse })
 }
@@ -284,7 +284,7 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
 
     for row in 0..<STASH_ROWS {
         for col in 0..<STASH_COLS {
-            cell_id := g_stash.grid[row * STASH_COLS + col]
+            cell_id := local_stash().grid[row * STASH_COLS + col]
             if cell_id == cw.INVALID_ENTITY || cell_id == g_drag_item_id { continue }
             if !cw.world_is_valid(w, cell_id) || !cw.world_has_component(w, cell_id, .Item) { continue }
             item := cw.world_get_item(w, cell_id)
@@ -302,7 +302,7 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
             draw_item_glyph(item.slot, ix + (iw - icon_sz) / 2, iy + 3, icon_sz, rc)
             if cw.world_has_component(w, cell_id, .RenderConfig) {
                 name := loc_lookup(cw.render_config_name_cstr(cw.world_get_render_config(w, cell_id)))
-                rl.DrawTextEx(g_font, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
+                rl.DrawTextEx(g_font_body, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
                     uis(10), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
             }
         }
@@ -315,7 +315,7 @@ stash_handle_grid_input :: proc(w: ^cw.World) {
     if rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
-            cell_id := g_stash.grid[row * STASH_COLS + col]
+            cell_id := local_stash().grid[row * STASH_COLS + col]
             if cell_id != cw.INVALID_ENTITY && cw.world_is_valid(w, cell_id) && cw.world_has_component(w, cell_id, .Item) {
                 item := cw.world_get_item(w, cell_id)
                 g_drag_origin_x   = item.pack_x
@@ -333,7 +333,7 @@ stash_handle_grid_input :: proc(w: ^cw.World) {
     if g_drag_item_id == -1 {
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
-            g_hover_item_id = g_stash.grid[row * STASH_COLS + col]
+            g_hover_item_id = local_stash().grid[row * STASH_COLS + col]
         }
     }
 }
@@ -361,11 +361,11 @@ draw_stash_hud :: proc(w: ^cw.World) {
     rl.DrawTextEx(g_font, title, { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(14) }, title_fs, 1, COL_PARCH)
 
     count_buf: [48]u8
-    count_s := fmt.bprintf(count_buf[:47], "%d / %d items", g_stash.item_count, STASH_MAX_ITEMS)
+    count_s := fmt.bprintf(count_buf[:47], "%d / %d items", local_stash().item_count, STASH_MAX_ITEMS)
     count_buf[len(count_s)] = 0
     count_fs := uis(11)
-    count_sz := rl.MeasureTextEx(g_font, cstring(&count_buf[0]), count_fs, 0.5)
-    rl.DrawTextEx(g_font, cstring(&count_buf[0]), { f32(px) + f32(PW)*0.5 - count_sz.x*0.5, f32(py) + uis(42) },
+    count_sz := rl.MeasureTextEx(g_font_body, cstring(&count_buf[0]), count_fs, 0.5)
+    rl.DrawTextEx(g_font_body, cstring(&count_buf[0]), { f32(px) + f32(PW)*0.5 - count_sz.x*0.5, f32(py) + uis(42) },
         count_fs, 0.5, COL_MUTED)
 
     grid_w := STASH_COLS * cs
@@ -387,8 +387,8 @@ draw_stash_hud :: proc(w: ^cw.World) {
     rl.DrawRectangleLinesEx(btn_r, 1, COL_BRASS if hot else COL_RULE)
     btn_lbl := t(.STASH_DEPOSIT_ALL)
     btn_fs := uis(11)
-    btn_sz := rl.MeasureTextEx(g_font, btn_lbl, btn_fs, 0.5)
-    rl.DrawTextEx(g_font, btn_lbl, { btn_r.x + (btn_r.width - btn_sz.x) * 0.5, btn_r.y + (btn_r.height - btn_fs) * 0.5 },
+    btn_sz := rl.MeasureTextEx(g_font_body, btn_lbl, btn_fs, 0.5)
+    rl.DrawTextEx(g_font_body, btn_lbl, { btn_r.x + (btn_r.width - btn_sz.x) * 0.5, btn_r.y + (btn_r.height - btn_fs) * 0.5 },
         btn_fs, 0.5, COL_BRASS if hot else COL_PARCH)
     if hot && rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
         if stash_deposit_all_carried(w) == 0 { play_sfx("ui_deny") }

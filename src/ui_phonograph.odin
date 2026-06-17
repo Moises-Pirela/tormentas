@@ -124,8 +124,8 @@ draw_phonograph_panel :: proc() {
 
     if !rec_ok {
         msg := cstring("[ Recording not found ]")
-        msz := rl.MeasureTextEx(g_font, msg, uis(11), 1)
-        rl.DrawTextEx(g_font, msg,
+        msz := rl.MeasureTextEx(g_font_body, msg, uis(11), 1)
+        rl.DrawTextEx(g_font_body, msg,
             {tx_x + tx_w*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
             uis(11), 1, COL_MUTED)
     } else {
@@ -133,7 +133,7 @@ draw_phonograph_panel :: proc() {
         title    := loc_lookup(cstring(&rec.title[0]))
         title_fs := uis(13)
         ty       := py + uis(30)
-        rl.DrawTextEx(g_font, title, {tx_x, ty}, title_fs, 0.5, COL_BRASS)
+        rl.DrawTextEx(g_font_body, title, {tx_x, ty}, title_fs, 0.5, COL_BRASS)
         ty += title_fs + uis(4)
 
         rl.DrawLineEx({tx_x, ty}, {tx_x + tx_w, ty}, uis(1),
@@ -143,7 +143,7 @@ draw_phonograph_panel :: proc() {
 
         status  := cstring("▶  PLAYING")      if is_playing else cstring("◼  STOPPED")
         st_col  := rl.Color{80, 200, 80, 220}  if is_playing else rl.Color{180, 120, 40, 180}
-        rl.DrawTextEx(g_font, status, {tx_x, ty}, uis(9), 0.5, st_col)
+        rl.DrawTextEx(g_font_body, status, {tx_x, ty}, uis(9), 0.5, st_col)
         ty += uis(16)
 
 
@@ -165,7 +165,7 @@ draw_phonograph_panel :: proc() {
 
         trans_str := string(loc_lookup(cstring(&rec.transcript[0])))
         if len(trans_str) > 0 {
-            rl.DrawTextEx(g_font, "— Transcript —", {tx_x, ty}, uis(9), 0.5,
+            rl.DrawTextEx(g_font_body, "— Transcript —", {tx_x, ty}, uis(9), 0.5,
                 rl.Color{110, 90, 50, 140})
             ty += uis(13)
             lore_draw_wrapped(trans_str, tx_x, ty, tx_w,
@@ -175,8 +175,8 @@ draw_phonograph_panel :: proc() {
 
 
     hint := cstring("[ ESC to close ]")
-    hsz  := rl.MeasureTextEx(g_font, hint, uis(9), 0.5)
-    rl.DrawTextEx(g_font, hint,
+    hsz  := rl.MeasureTextEx(g_font_body, hint, uis(9), 0.5)
+    rl.DrawTextEx(g_font_body, hint,
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(18)},
         uis(9), 0.5, rl.Color{100, 80, 40, 140})
 

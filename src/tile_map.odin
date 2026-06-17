@@ -36,20 +36,38 @@ DEFAULT_LEVEL_ROWS :: 20
 tilemap_fill_default :: proc() {
     clear(&g_tilemap)
     clear(&g_overlay_map)
+    clear(&g_hub_cell_map)
     half_c := DEFAULT_LEVEL_COLS / 2
     half_r := DEFAULT_LEVEL_ROWS / 2
+    scale  := TILE_SIZE / HUB_CELL_RES
     for y in -half_r..<half_r {
         for x in -half_c..<half_c {
             is_border := x == -half_c || y == -half_r ||
                          x == half_c-1 || y == half_r-1
             tt := TileType.Wall if is_border else TileType.Floor
             g_tilemap[[2]int{x, y}] = tt
+            for sy in 0..<scale {
+                for sx in 0..<scale {
+                    g_hub_cell_map[[2]int{x*scale+sx, y*scale+sy}] = tt
+                }
+            }
         }
     }
 }
 
 g_tilemap:     map[[2]int]TileType
 g_overlay_map: map[[2]int]TileOverlay
+
+// Hub cell map at fixed 16-unit resolution, independent of current cell_size.
+// Written by ed_paint_cell at cell granularity; read by the editor overlay.
+// Physics still uses g_tilemap (TILE_SIZE resolution).
+HUB_CELL_RES :: 16
+g_hub_cell_map: map[[2]int]TileType
+
+hub_cell_at :: proc(hx, hy: int) -> TileType {
+    v, _ := g_hub_cell_map[[2]int{hx, hy}]
+    return v
+}
 
 
 g_door_blockers: map[[2]int]int
@@ -159,6 +177,7 @@ _load_tile_variants :: proc(ti: int, stem: string, tt: TileType) {
 tilemap_init :: proc() {
     g_tilemap     = make(map[[2]int]TileType)
     g_overlay_map = make(map[[2]int]TileOverlay)
+    g_hub_cell_map = make(map[[2]int]TileType)
     _load_tile_variants(int(TileType.Floor),  "floor",  .Floor)
     _load_tile_variants(int(TileType.Wall),   "wall",   .Wall)
     _load_tile_variants(int(TileType.Water),  "water",  .Water)
@@ -179,6 +198,7 @@ tilemap_destroy :: proc() {
     }
     delete(g_tilemap)
     delete(g_overlay_map)
+    delete(g_hub_cell_map)
 }
 
 world_to_tile :: proc(wx, wy: f32) -> (tx, ty: int) {

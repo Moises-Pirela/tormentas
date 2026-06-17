@@ -231,3 +231,32 @@ CLASS_NURSE_WEAPON,Pistol,Pistola,Pistola
 CLASS_PR1S_WEAPON,Shotgun,Escopeta,Espingarda
 CLASS_SHERIFF_WEAPON,Pistol (Fast Draw),Pistola (Saque Rápido),Pistola (Saque Rápido)
 CLASS_SRBRAIN_WEAPON,Pistol,Pistola,Pistola
+# ── Quest Board ─────────────────────────────────────────────────────────────
+QUEST_BOARD_NPC_NAME,The Board,El Tablón,O Quadro
+QUEST_BOARD_TITLE,Q U E S T   L O G,B I T Á C O R A,D I Á R I O
+QUEST_BOARD_INTERACT,[E] Quest Log,[E] Misiones,[E] Missões
+# ── Quest entries ────────────────────────────────────────────────────────────
+QUEST_SURVIVORS_MARK_TITLE,Survivor's Mark,Marca del Superviviente,Marca do Sobrevivente
+QUEST_SURVIVORS_MARK_LORE,"The condemned lands take most who enter. You are not most.","Las tierras condenadas se llevan a casi todos. Tú no eres casi todos.","As terras condenadas levam a maioria. Você não é a maioria."
+QUEST_SURVIVORS_MARK_OBJ,Extract from a raid,Extrae de una incursión,Extraia de uma missão
+QUEST_THE_HORDE_TITLE,The Horde,La Horda,A Horda
+QUEST_THE_HORDE_LORE,"They come in waves. You cut through them like a scythe through wheat.","Vienen en oleadas. Los atraviesas como una guadaña a través del trigo.","Eles vêm em ondas. Você os corta como uma foice no trigo."
+QUEST_THE_HORDE_OBJ,Kill 30 enemies,Mata 30 enemigos,Mate 30 inimigos
+QUEST_ABERRATION_TITLE,Aberration,Aberración,Aberração
+QUEST_ABERRATION_LORE,"Something ancient and wrong rules these lands. Bring it down.","Algo antiguo y equivocado gobierna estas tierras. Derrúmbalo.","Algo antigo e errado governa estas terras. Derrube-o."
+QUEST_ABERRATION_OBJ,Kill the raid boss,Mata al jefe de incursión,Mate o chefe da missão
+QUEST_BLOODLINES_TITLE,Bloodlines,Linajes,Linhagens
+QUEST_BLOODLINES_LORE,"The serum rewrites what you are. Let it.","El suero reescribe lo que eres. Déjalo.","O soro reescreve o que você é. Deixe."
+QUEST_BLOODLINES_OBJ,Hold 5 mutations at once,Mantén 5 mutaciones a la vez,Tenha 5 mutações ao mesmo tempo
+QUEST_THE_DEEP_RUN_TITLE,The Deep Run,La Corrida Profunda,A Corrida Profunda
+QUEST_THE_DEEP_RUN_LORE,"Level two. Where the light gives up and the things below grow bolder.","Nivel dos. Donde la luz se rinde y las cosas de abajo se vuelven más audaces.","Nível dois. Onde a luz desiste e as coisas lá embaixo ficam mais ousadas."
+QUEST_THE_DEEP_RUN_OBJ,Extract from level 2 or deeper,Extrae del nivel 2 o más,Extraia do nível 2 ou mais fundo
+QUEST_ELITE_PREDATOR_TITLE,Elite Predator,Depredador de Élite,Predador de Elite
+QUEST_ELITE_PREDATOR_LORE,"The rare ones. The ones that don't go down easy. Hunt them.","Los raros. Los que no caen fácilmente. Cázalos.","Os raros. Os que não caem facilmente. Caçe-os."
+QUEST_ELITE_PREDATOR_OBJ,Kill 10 Legendary enemies,Mata 10 enemigos legendarios,Mate 10 inimigos lendários
+QUEST_PERFECT_RUN_TITLE,Perfect Run,Corrida Perfecta,Corrida Perfeita
+QUEST_PERFECT_RUN_LORE,"In. Out. Rich. No scars. Well — fewer scars.","Entrar. Salir. Rico. Sin cicatrices. Bueno — menos cicatrices.","Entrar. Sair. Rico. Sem cicatrizes. Bem — menos cicatrizes."
+QUEST_PERFECT_RUN_OBJ,Extract with 500+ gold in one run,Extrae con 500+ oro en una corrida,Extraia com 500+ ouro em uma missão
+QUEST_FINAL_FORM_TITLE,Final Form,Forma Final,Forma Final
+QUEST_FINAL_FORM_LORE,"You are no longer what you were. Something new wears your face.","Ya no eres lo que eras. Algo nuevo lleva tu rostro.","Você não é mais o que era. Algo novo usa o seu rosto."
+QUEST_FINAL_FORM_OBJ,Hold 10 mutations at once,Mantén 10 mutaciones a la vez,Tenha 10 mutações ao mesmo tempo

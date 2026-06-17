@@ -119,6 +119,20 @@ LevelData :: struct {
     key_pickups:  [dynamic]LevelKeyPickup,
     player_start: [2]f32,
     lighting:     LevelLightingConfig,
+
+    // Camera clamp bounds in world space [min_x, max_x, min_y, max_y].
+    // All zero = use level-size defaults.
+    cam_lims: [4]f32,
+}
+
+level_effective_cam_lims :: proc() -> (min_x, max_x, min_y, max_y: f32) {
+    l := g_level_data.cam_lims
+    if l[0] == 0 && l[1] == 0 && l[2] == 0 && l[3] == 0 {
+        hw := f32(DEFAULT_LEVEL_COLS / 2 * TILE_SIZE)
+        hh := f32(DEFAULT_LEVEL_ROWS / 2 * TILE_SIZE)
+        return -hw, hw, -hh, hh
+    }
+    return l[0], l[1], l[2], l[3]
 }
 
 
@@ -225,7 +239,7 @@ lv_rbf32 :: proc(raw: []u8, cur: int) -> (val: f32, next: int, ok: bool) {
 
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
-LEVEL_VERSION :: u16(9)
+LEVEL_VERSION :: u16(12)
 
 
 level_save :: proc(n: int) {
@@ -395,6 +409,22 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, kp.key_id)
     }
 
+    // ver 10: hub editor grid settings
+    lv_wb2(&buf, u16(g_ed_cell_size))
+    lv_wb2(&buf, u16(g_ed_grid_cols))
+    lv_wb2(&buf, u16(g_ed_grid_rows))
+
+    // ver 11: camera clamp bounds [min_x, max_x, min_y, max_y]
+    for v in g_level_data.cam_lims { lv_wbf32(&buf, v) }
+
+    // ver 12: hub cell map at HUB_CELL_RES resolution
+    lv_wb4(&buf, u32(len(g_hub_cell_map)))
+    for k, v in g_hub_cell_map {
+        lv_wbi16(&buf, i16(k[0]))
+        lv_wbi16(&buf, i16(k[1]))
+        lv_wb1  (&buf, u8(v))
+    }
+
     os.write_entire_file(level_path(n), buf[:])
 }
 
@@ -444,7 +474,7 @@ level_load :: proc(n: int) {
 
 
     ver, ver_c, ver_ok := lv_rb2(raw, cur)
-    if !ver_ok || ver < 1 || ver > 9 {
+    if !ver_ok || ver < 1 || ver > 12 {
         clear(&g_tilemap)
         clear(&g_overlay_map)
         clear(&g_level_data.spawns)
@@ -474,14 +504,21 @@ level_load :: proc(n: int) {
         y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
         t,  tc2, tok  := lv_rb1  (raw, cur);  if !tok  { return };  cur = tc2
         key := [2]int{int(x), int(y)}
-        switch t {
-        case 4:
-            g_tilemap[key]     = .Floor
-            g_overlay_map[key] = .Oil
-        case 5:
-            g_tilemap[key]     = .Floor
-            g_overlay_map[key] = .Fire
-        case:
+        if ver < 6 {
+            // Pre-v6: Oil and Fire were encoded as tile bytes 4 and 5.
+            // Pillar and Floor variants did not exist yet in that era.
+            switch t {
+            case 4:
+                g_tilemap[key]     = .Floor
+                g_overlay_map[key] = .Oil
+            case 5:
+                g_tilemap[key]     = .Floor
+                g_overlay_map[key] = .Fire
+            case:
+                tt := clamp(int(t), int(TileType.Floor), int(TileType.Pillar))
+                g_tilemap[key] = TileType(tt)
+            }
+        } else {
             tt := clamp(int(t), int(TileType.Floor), int(TileType.Pillar2))
             g_tilemap[key] = TileType(tt)
         }
@@ -777,6 +814,50 @@ level_load :: proc(n: int) {
         }
     }
 
+    // ver 10: hub editor grid settings
+    g_ed_cell_size = TILE_SIZE
+    g_ed_grid_cols = DEFAULT_LEVEL_COLS
+    g_ed_grid_rows = DEFAULT_LEVEL_ROWS
+    if ver >= 10 {
+        cs, csc, csok := lv_rb2(raw, cur); if csok { cur = csc; g_ed_cell_size = max(16, int(cs)) }
+        gc, gcc, gcok := lv_rb2(raw, cur); if gcok { cur = gcc; g_ed_grid_cols = max(1,  int(gc)) }
+        gr, grc, grok := lv_rb2(raw, cur); if grok { cur = grc; g_ed_grid_rows = max(1,  int(gr)) }
+    }
+
+    // ver 11: camera clamp bounds
+    g_level_data.cam_lims = {}
+    if ver >= 11 {
+        for i in 0..<4 {
+            v, vc, vok := lv_rbf32(raw, cur); if !vok { break }
+            g_level_data.cam_lims[i] = v; cur = vc
+        }
+    }
+
+    // ver 12: hub cell map at HUB_CELL_RES resolution
+    clear(&g_hub_cell_map)
+    if ver >= 12 {
+        hc, hcc, hcok := lv_rb4(raw, cur)
+        if hcok {
+            cur = hcc
+            for _ in 0..<hc {
+                hx, hxc, hxok := lv_rbi16(raw, cur); if !hxok { break }; cur = hxc
+                hy, hyc, hyok := lv_rbi16(raw, cur); if !hyok { break }; cur = hyc
+                hv, hvc, hvok := lv_rb1  (raw, cur); if !hvok { break }; cur = hvc
+                g_hub_cell_map[[2]int{int(hx), int(hy)}] = TileType(hv)
+            }
+        }
+    } else {
+        // Derive from g_tilemap at TILE_SIZE resolution for old files
+        scale := TILE_SIZE / HUB_CELL_RES
+        for k, tt in g_tilemap {
+            for sy in 0..<scale {
+                for sx in 0..<scale {
+                    g_hub_cell_map[[2]int{k[0]*scale+sx, k[1]*scale+sy}] = tt
+                }
+            }
+        }
+    }
+
     _ = cur
 
     g_wall_mask_dirty = true
@@ -794,6 +875,12 @@ level_apply :: proc(w: ^cw.World) {
             def_name = "npc_stash"
         case .AbilityVendor:
             def_name = "npc_ability_vendor"
+        case .QuestBoard:
+            def_name = "npc_quest_board"
+        case .Quartermaster:
+            def_name = "npc_quartermaster"
+        case .Surgeon:
+            def_name = "npc_surgeon"
         }
         if def_name == "" { return cw.INVALID_ENTITY }
 
@@ -810,6 +897,7 @@ level_apply :: proc(w: ^cw.World) {
         case .Stash:
         case .AbilityVendor:
             ability_vendor_roll_stock(w, id, 0)
+        case .QuestBoard, .Quartermaster, .Surgeon:
         }
         return id
     }
@@ -1108,17 +1196,18 @@ _clear_all_shop_stock :: proc(w: ^cw.World) {
             shop_clear_stock(w, id)
         case .AbilityVendor:
             ability_vendor_clear_stock(w, id)
-        case .MutationWorkbench, .Stash:
+        case .MutationWorkbench, .Stash, .QuestBoard, .Quartermaster, .Surgeon:
 
         }
     }
 }
 
 hub_apply :: proc(w: ^cw.World) {
-    has_shopkeeper := false
+    has_shopkeeper         := false
     has_mutation_workbench := false
-    has_stash := false
-    has_ability_vendor := false
+    has_stash              := false
+    has_ability_vendor     := false
+    has_quest_board        := false
     for npc in g_level_data.npcs {
         switch npc.npc_type {
         case .Shopkeeper:
@@ -1129,6 +1218,9 @@ hub_apply :: proc(w: ^cw.World) {
             has_stash = true
         case .AbilityVendor:
             has_ability_vendor = true
+        case .QuestBoard:
+            has_quest_board = true
+        case .Quartermaster, .Surgeon:
         }
     }
 
@@ -1164,6 +1256,41 @@ hub_apply :: proc(w: ^cw.World) {
                 cw.world_get_transform(w, npc_id).position = HUB_ABILITY_VENDOR_POS
             }
             ability_vendor_roll_stock(w, npc_id, 0)
+        }
+    }
+
+    if !has_quest_board {
+        npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_quest_board"))
+        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
+            cw.world_get_transform(w, npc_id).position = HUB_QUEST_BOARD_POS
+        }
+    }
+}
+
+hub_apply_quest_npcs :: proc(w: ^cw.World) {
+    has_quartermaster := false
+    has_surgeon       := false
+    npc_ids := cw.world_query(w, cw.query_mask(.NPC))
+    defer delete(npc_ids)
+    for nid in npc_ids {
+        switch cw.world_get_npc(w, nid).npc_type {
+        case .Quartermaster: has_quartermaster = true
+        case .Surgeon:       has_surgeon       = true
+        case .Shopkeeper, .MutationWorkbench, .Stash, .AbilityVendor, .QuestBoard:
+        }
+    }
+
+    if quest_is_done(.Aberration) && !has_quartermaster {
+        npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_quartermaster"))
+        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
+            cw.world_get_transform(w, npc_id).position = HUB_QUARTERMASTER_POS
+        }
+    }
+
+    if quest_is_done(.PerfectRun) && !has_surgeon {
+        npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_surgeon"))
+        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
+            cw.world_get_transform(w, npc_id).position = HUB_SURGEON_POS
         }
     }
 }
@@ -1261,12 +1388,15 @@ on_player_extract :: proc(w: ^cw.World) {
     if extract_val > int(g_lifetime_stats.max_extract_gold) {
         g_lifetime_stats.max_extract_gold = i32(extract_val)
     }
+    if g_current_raid_level >= 2 {
+        g_lifetime_stats.deep_extracts += 1
+    }
 
     gold_earned := 0
     if cw.world_has_component(w, w.player_id, .Wallet) {
         wallet       := cw.world_get_wallet(w, w.player_id)
         gold_earned   = wallet.gold
-        g_stash.gold += gold_earned
+        local_stash().gold += gold_earned
         wallet.gold   = 0
     }
     raid_result_gold = gold_earned
@@ -1278,9 +1408,11 @@ on_player_extract :: proc(w: ^cw.World) {
         serums_earned  = mc.serums - g_raid_serums_start
         if serums_earned < 0 { serums_earned = 0 }
 
-        g_stash.serums = mc.serums
+        local_stash().serums = mc.serums
     }
     raid_result_serums = serums_earned
+
+    quest_check_all(w)
 
     if cw.world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)

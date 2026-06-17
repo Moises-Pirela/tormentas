@@ -5,6 +5,9 @@ import      "core:fmt"
 import      "core:math"
 import cw   "clockwork"
 import clay "../clay"
+import p2p  "p2p"
+
+HUB_BG_PATH :: "data/sprites/Town/Town.png"
 
 HUB_PORTAL_POS     :: [2]f32{ -480, 0 }
 HUB_PORTAL_RADIUS  :: f32(80)
@@ -13,13 +16,66 @@ HUB_SHOPKEEPER_POS         :: [3]f32{  320,    0, 0 }
 HUB_MUTATION_WORKBENCH_POS :: [3]f32{  480,  -64, 0 }
 HUB_STASH_POS              :: [3]f32{  168, -152, 0 }
 HUB_ABILITY_VENDOR_POS     :: [3]f32{  320, -192, 0 }
+HUB_QUEST_BOARD_POS        :: [3]f32{  168,    0, 0 }
+HUB_QUARTERMASTER_POS      :: [3]f32{  480,    0, 0 }
+HUB_SURGEON_POS            :: [3]f32{  480, -128, 0 }
+
+// ── Hub background (pre-rendered town image) ──────────────────────────────────
+
+g_hub_bg_tex:    rl.Texture2D
+g_hub_bg_loaded: bool
+
+hub_load_bg :: proc() {
+    if g_hub_bg_loaded { return }
+    tex := rl.LoadTexture(HUB_BG_PATH)
+    if tex.id > 0 {
+        rl.SetTextureFilter(tex, .BILINEAR)
+        rl.SetTextureWrap(tex, .CLAMP)
+        g_hub_bg_tex    = tex
+        g_hub_bg_loaded = true
+    }
+}
+
+hub_unload_bg :: proc() {
+    if g_hub_bg_loaded {
+        rl.UnloadTexture(g_hub_bg_tex)
+        g_hub_bg_tex    = {}
+        g_hub_bg_loaded = false
+    }
+}
+
+// Draw the pre-rendered town background stretched to cover the full isometric
+// level bounds. Must be called inside BeginMode2D / BeginTextureMode(g_world_rt).
+//
+// Isometric bounding box for a DEFAULT_LEVEL_COLS × DEFAULT_LEVEL_ROWS grid:
+//   half_w = (COLS/2) * TILE_SIZE = 16 * 64 = 1024  (world half-width)
+//   half_h = (ROWS/2) * TILE_SIZE = 10 * 64 =  640  (world half-height)
+//   span   = half_w + half_h = 1664
+//   iso rect: { x = -span, y = -span*0.5, w = span*2, h = span }
+//           → { -1664, -832, 3328, 1664 }
+draw_hub_background :: proc() {
+    hub_load_bg()
+    if !g_hub_bg_loaded { return }
+
+    half_w := f32(DEFAULT_LEVEL_COLS / 2) * f32(TILE_SIZE)  // 1024
+    half_h := f32(DEFAULT_LEVEL_ROWS / 2) * f32(TILE_SIZE)  //  640
+    span   := half_w + half_h                                // 1664
+
+    src  := rl.Rectangle{ 0, 0, f32(g_hub_bg_tex.width), f32(g_hub_bg_tex.height) }
+    dest := rl.Rectangle{ -span, -span * 0.5, span * 2, span }
+    rl.DrawTexturePro(g_hub_bg_tex, src, dest, {0, 0}, 0, rl.WHITE)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     if save_progress && cw.world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
-    g_raid_timer      = 0
-    g_available_levels = level_scan_available()
+    g_hub_remote_spawned = false
+    g_hub_remote_loaded  = false
+    g_raid_timer         = 0
+    g_available_levels   = level_scan_available()
     level_clear(w)
     level_load(0)
     level_apply(w)
@@ -28,6 +84,20 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     spawn_players(w)
     if !load_player(w, w.player_id) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
+    }
+    hub_apply_quest_npcs(w)
+
+    // If already connected: spawn_players handled both; load remote char data if ready.
+    if p2p.session_is_online(&g_session) {
+        g_hub_remote_spawned = true
+        if g_session.remote_char_ready {
+            remote_slot := 1 - g_session.local_slot
+            if cw.world_is_valid(w, w.player_ids[remote_slot]) {
+                load_player_from_bytes(w, w.player_ids[remote_slot],
+                    g_session.remote_char_data[:g_session.remote_char_len])
+            }
+            g_hub_remote_loaded = true
+        }
     }
 
     if cw.world_has_component(w, w.player_id, .Health) {
@@ -69,6 +139,13 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     if !load_player(w, w.player_id) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
+    if p2p.session_is_online(&g_session) && g_session.remote_char_ready {
+        remote_slot := 1 - g_session.local_slot
+        if cw.world_is_valid(w, w.player_ids[remote_slot]) {
+            load_player_from_bytes(w, w.player_ids[remote_slot],
+                g_session.remote_char_data[:g_session.remote_char_len])
+        }
+    }
 
     if cw.world_has_component(w, w.player_id, .Health) {
         h := cw.world_get_health(w, w.player_id)
@@ -86,6 +163,47 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     ui_close_all()
 }
 
+hub_spawn_remote_player :: proc(w: ^cw.World) {
+    remote_slot := 1 - g_session.local_slot
+    if cw.world_is_valid(w, w.player_ids[remote_slot]) { return }
+
+    ps := g_level_data.player_start
+    sp: [3]f32
+    if ps[0] != 0 || ps[1] != 0 {
+        sp = { ps[0] + f32(remote_slot) * 60, ps[1], 0 }
+    } else {
+        sp = { f32(remote_slot) * 60, 0, 0 }
+    }
+
+    wep := spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_pistol"))
+    pid := spawn_from_def(w, find_entity_def(g_entity_defs, "player"))
+
+    if cw.world_has_component(w, pid, .Transform) {
+        cw.world_get_transform(w, pid).position = sp
+    }
+    cw.world_set_equipment(w, pid, cw.EquipmentComp{ weapon_entity_id = wep })
+    cw.world_set_inventory(w, pid, cw.inventory_make_empty())
+    cw.world_set_respawn(w, pid, cw.RespawnComp{ spawn_pos = sp, delay = RESPAWN_DELAY })
+    cw.world_set_ability(w, pid, cw.AbilityComp{})
+    cw.world_set_mutation(w, pid, cw.mutation_container_empty())
+    cw.world_set_stats(w, pid, cw.StatsComp{
+        strength    = 1, dexterity  = 1, science    = 1,
+        level       = 1, xp         = 0, xp_next    = 100.0,
+        stat_points = 0, base_hp    = 100.0,
+        base_energy = 100.0, base_speed = 240.0,
+    })
+    cw.world_set_player(w, pid, cw.PlayerComp{ slot = remote_slot })
+    cw.world_set_wallet(w, pid, cw.WalletComp{ gold = 0 })
+    cw.world_set_status_effect(w, pid, cw.StatusEffectComp{})
+    cw.world_set_key_ring(w, pid, cw.KeyRingComp{})
+    w.player_ids[remote_slot] = pid
+
+    if g_session.remote_char_ready {
+        load_player_from_bytes(w, pid, g_session.remote_char_data[:g_session.remote_char_len])
+    }
+    copy(g_player_names[remote_slot][:], g_session.remote_name[:])
+}
+
 update_hub_portal :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
     if !cw.world_has_component(w, w.player_id, .Transform) { return }
@@ -95,7 +213,9 @@ update_hub_portal :: proc(w: ^cw.World) {
     dy   := pos[1] - HUB_PORTAL_POS[1]
     near := dx*dx + dy*dy < (HUB_PORTAL_RADIUS * 2) * (HUB_PORTAL_RADIUS * 2)
 
-    if near && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+    online := p2p.session_is_online(&g_session)
+    if near && (!online || g_session.local_slot == 0) &&
+       input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
         ui_open(.LevelSelect)
     }
 }
@@ -120,10 +240,16 @@ draw_hub_world :: proc(w: ^cw.World) {
         dx  := pos[0] - px
         dy  := pos[1] - py
         if dx*dx + dy*dy < (HUB_PORTAL_RADIUS * 2) * (HUB_PORTAL_RADIUS * 2) {
-            lbl    := t(.HUB_INTERACT)
+            online := p2p.session_is_online(&g_session)
+            lbl: cstring
+            if online && g_session.local_slot != 0 {
+                lbl = "Waiting for host..."
+            } else {
+                lbl = t(.HUB_INTERACT)
+            }
             lbl_fs := f32(12)
-            lsz    := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
-            rl.DrawTextEx(g_font, lbl,
+            lsz    := rl.MeasureTextEx(g_font_body, lbl, lbl_fs, 0.5)
+            rl.DrawTextEx(g_font_body, lbl,
                 {iso.x - lsz.x * 0.5, iso.y - HUB_PORTAL_RADIUS - lbl_fs - 4},
                 lbl_fs, 0.5, rl.Color{160, 200, 255, 230})
         }
@@ -135,12 +261,12 @@ draw_hub_hud :: proc(w: ^cw.World) {
 
     loc    := t(.HUB_LABEL)
     loc_fs := uis(11)
-    lsz    := rl.MeasureTextEx(g_font, loc, loc_fs, 0.5)
-    rl.DrawTextEx(g_font, loc,
+    lsz    := rl.MeasureTextEx(g_font_body, loc, loc_fs, 0.5)
+    rl.DrawTextEx(g_font_body, loc,
         {sw * 0.5 - lsz.x * 0.5, uis(10)},
         loc_fs, 0.5, COL_MUTED)
 
-    rl.DrawTextEx(g_font, tf(.HUB_STASH, g_stash.gold, g_stash.serums),
+    rl.DrawTextEx(g_font_body, tf(.HUB_STASH, local_stash().gold, local_stash().serums),
         {uis(14), uis(14)}, uis(11), 0.5, COL_BRASS)
 }
 
@@ -191,8 +317,8 @@ draw_level_select :: proc(w: ^cw.World) {
 
         msg    := t(.HUB_NO_LEVELS)
         msg_fs := uis(11)
-        msz    := rl.MeasureTextEx(g_font, msg, msg_fs, 0.5)
-        rl.DrawTextEx(g_font, msg,
+        msz    := rl.MeasureTextEx(g_font_body, msg, msg_fs, 0.5)
+        rl.DrawTextEx(g_font_body, msg,
             {px + pw * 0.5 - msz.x * 0.5, py + uis(70)},
             msg_fs, 0.5, COL_MUTED)
     }
@@ -210,16 +336,15 @@ draw_level_select :: proc(w: ^cw.World) {
 
         lbl_cs  := tf(.HUB_LEVEL_N, i)
         lbl_fs  := uis(12)
-        lsz     := rl.MeasureTextEx(g_font, lbl_cs, lbl_fs, 0.5)
+        lsz     := rl.MeasureTextEx(g_font_body, lbl_cs, lbl_fs, 0.5)
         lbl_col := rl.Color{235, 215, 145, 255} if hot else COL_BRASS
-        rl.DrawTextEx(g_font, lbl_cs,
+        rl.DrawTextEx(g_font_body, lbl_cs,
             {r.x + (r.width - lsz.x) * 0.5, r.y + (r.height - lbl_fs) * 0.5},
             lbl_fs, 0.5, lbl_col)
 
         if hot && rl.IsMouseButtonReleased(.LEFT) {
-
-
             g_pending_raid_start = i
+            p2p.session_send_level_load(&g_session, i)
             ui_close(.LevelSelect)
             return
         }
@@ -227,8 +352,8 @@ draw_level_select :: proc(w: ^cw.World) {
 
     cancel    := t(.HUB_ESC_CANCEL)
     cancel_fs := uis(10)
-    csz       := rl.MeasureTextEx(g_font, cancel, cancel_fs, 0.5)
-    rl.DrawTextEx(g_font, cancel,
+    csz       := rl.MeasureTextEx(g_font_body, cancel, cancel_fs, 0.5)
+    rl.DrawTextEx(g_font_body, cancel,
         {px + pw * 0.5 - csz.x * 0.5, py + ph - uis(22)},
         cancel_fs, 0.5, COL_MUTED)
 }
@@ -258,12 +383,12 @@ _hub_btn_draw :: proc(r: rl.Rectangle, label: cstring, accent := false) {
     }
 
     fs  := uis(12)
-    tsz := rl.MeasureTextEx(g_font, label, fs, 0.5)
+    tsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
     col: rl.Color
     if hot          { col = rl.Color{235, 215, 145, 255} }
     else if accent  { col = COL_BRASS }
     else            { col = COL_PARCH }
-    rl.DrawTextEx(g_font, label,
+    rl.DrawTextEx(g_font_body, label,
         {r.x + (r.width  - tsz.x) * 0.5,
          r.y + (r.height - tsz.y) * 0.5},
         fs, 0.5, col)
@@ -317,32 +442,32 @@ draw_extract_screen :: proc(w: ^cw.World) {
     sep_y  := r2y + uis(30)
     r3y    := sep_y + uis(14)
 
-    rl.DrawTextEx(g_font, t(.EXTRACT_GOLD),   {px + uis(24), r1y}, row_fs, 1, COL_MUTED)
-    rl.DrawTextEx(g_font, t(.EXTRACT_SERUMS), {px + uis(24), r2y}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font_body, t(.EXTRACT_GOLD),   {px + uis(24), r1y}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font_body, t(.EXTRACT_SERUMS), {px + uis(24), r2y}, row_fs, 1, COL_MUTED)
     {
         buf: [32]u8
         s   := fmt.bprintf(buf[:31], "+ %d", raid_result_gold)
         buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
+        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
             {px + pw - uis(24) - sz.x, r1y}, row_fs, 1, COL_BRASS)
     }
     {
         buf: [32]u8
         s   := fmt.bprintf(buf[:31], "+ %d", raid_result_serums)
         buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
+        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
             {px + pw - uis(24) - sz.x, r2y}, row_fs, 1, COL_BRASS)
     }
     rl.DrawLineEx({px + uis(16), sep_y}, {px + pw - uis(16), sep_y}, 1, COL_RULE)
-    rl.DrawTextEx(g_font, t(.EXTRACT_STASH_TOTAL), {px + uis(24), r3y}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font_body, t(.EXTRACT_STASH_TOTAL), {px + uis(24), r3y}, row_fs, 1, COL_MUTED)
     {
         buf: [48]u8
-        s   := fmt.bprintf(buf[:47], "%d gold   %d serums", g_stash.gold, g_stash.serums)
+        s   := fmt.bprintf(buf[:47], "%d gold   %d serums", local_stash().gold, local_stash().serums)
         buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
+        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
             {px + pw - uis(24) - sz.x, r3y}, row_fs, 1, COL_PARCH)
     }
 
@@ -400,8 +525,8 @@ draw_death_screen :: proc(w: ^cw.World) {
 
     sub    := t(.DEATH_MSG)
     sub_fs := uis(12)
-    ssz    := rl.MeasureTextEx(g_font, sub, sub_fs, 0.5)
-    rl.DrawTextEx(g_font, sub,
+    ssz    := rl.MeasureTextEx(g_font_body, sub, sub_fs, 0.5)
+    rl.DrawTextEx(g_font_body, sub,
         {px + pw*0.5 - ssz.x*0.5, py + uis(72)},
         sub_fs, 0.5, COL_MUTED)
 
@@ -409,13 +534,13 @@ draw_death_screen :: proc(w: ^cw.World) {
         {px + uis(16), py + uis(100)},
         {px + pw - uis(16), py + uis(100)}, 1, COL_RULE)
     row_fs := uis(15)
-    rl.DrawTextEx(g_font, t(.DEATH_STASH), {px + uis(24), py + uis(112)}, row_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font_body, t(.DEATH_STASH), {px + uis(24), py + uis(112)}, row_fs, 1, COL_MUTED)
     {
         buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "%d gold", g_stash.gold)
+        s   := fmt.bprintf(buf[:31], "%d gold", local_stash().gold)
         buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
+        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
             {px + pw - uis(24) - sz.x, py + uis(112)}, row_fs, 1, COL_PARCH)
     }
 

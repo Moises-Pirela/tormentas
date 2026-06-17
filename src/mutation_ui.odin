@@ -124,10 +124,10 @@ draw_mutation_workbench_world :: proc(w: ^cw.World) {
 
     prompt := t(.MUT_INTERACT)
     fs := f32(10)
-    sz := rl.MeasureTextEx(g_font, prompt, fs, 0.5)
+    sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
     p := world_to_iso_xy(pos[0], pos[1])
-    rl.DrawTextEx(g_font, prompt,
+    rl.DrawTextEx(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
         fs, 0.5, rl.Color{ 220, 170, 255, pulse })
 }
@@ -202,7 +202,7 @@ update_mutation_tree :: proc(w: ^cw.World) {
         footer_y    := py + ph - uis(24)
         footer_fs   := uis(8)
         reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
-        reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
+        reset_sz    := rl.MeasureTextEx(g_font_body, reset_label, footer_fs, 0.4)
         reset_x     := px + pw - reset_sz.x - uis(14)
         reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
         if rl.CheckCollisionPointRec(mp, reset_rec) {
@@ -241,12 +241,12 @@ draw_mutation_tree :: proc(w: ^cw.World) {
     header_fs := uis(14)
     body_fs   := uis(9)
 
-    rl.DrawTextEx(g_font, t(.MUT_TITLE),
+    rl.DrawTextEx(g_font_body, t(.MUT_TITLE),
         {px + uis(14), py + uis(10)}, header_fs, 0.6, MUT_HEADER)
 
     serum_str := tf(.MUT_SERUMS, mc.serums)
-    serum_sz  := rl.MeasureTextEx(g_font, serum_str, body_fs, 0.5)
-    rl.DrawTextEx(g_font, serum_str,
+    serum_sz  := rl.MeasureTextEx(g_font_body, serum_str, body_fs, 0.5)
+    rl.DrawTextEx(g_font_body, serum_str,
         {px + pw - serum_sz.x - uis(14), py + uis(12)},
         body_fs, 0.5, MUT_OWNED)
 
@@ -273,8 +273,8 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         rl.DrawRectangleLinesEx(rec, uis(1), bd_col)
 
         label  := mutation_branch_name(branch)
-        lsz    := rl.MeasureTextEx(g_font, label, body_fs, 0.5)
-        rl.DrawTextEx(g_font, label,
+        lsz    := rl.MeasureTextEx(g_font_body, label, body_fs, 0.5)
+        rl.DrawTextEx(g_font_body, label,
             {rec.x + rec.width*0.5 - lsz.x*0.5, rec.y + rec.height*0.5 - lsz.y*0.5},
             body_fs, 0.5, tx_col)
     }
@@ -333,20 +333,20 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         ipad := uis(10)
         ty   := card_y + ipad
 
-        rl.DrawTextEx(g_font, fmt.ctprintf("%s", def.name),
+        rl.DrawTextEx(g_font_body, fmt.ctprintf("%s", def.name),
             {cx + ipad, ty}, name_fs, 0.5, name_c)
         ty += name_fs + uis(3)
 
-        rl.DrawTextEx(g_font, fmt.ctprintf("%s", def.effect),
+        rl.DrawTextEx(g_font_body, fmt.ctprintf("%s", def.effect),
             {cx + ipad, ty}, small_fs, 0.4, MUT_MUTED)
         ty += small_fs + uis(3)
 
-        rl.DrawTextEx(g_font, status, {cx + ipad, ty}, small_fs, 0.4, stat_c)
+        rl.DrawTextEx(g_font_body, status, {cx + ipad, ty}, small_fs, 0.4, stat_c)
 
         if can && !owned && !conflict {
             craft := t(.MUT_CRAFT_HINT)
-            csz   := rl.MeasureTextEx(g_font, craft, small_fs, 0.4)
-            rl.DrawTextEx(g_font, craft,
+            csz   := rl.MeasureTextEx(g_font_body, craft, small_fs, 0.4)
+            rl.DrawTextEx(g_font_body, craft,
                 {cx + cw_ - csz.x - ipad, ty}, small_fs, 0.4, MUT_CANGET)
         }
 
@@ -372,15 +372,15 @@ draw_mutation_tree :: proc(w: ^cw.World) {
 
     footer_fs := uis(8)
     hint      := t(.MUT_FOOTER)
-    hint_sz   := rl.MeasureTextEx(g_font, hint, footer_fs, 0.4)
+    hint_sz   := rl.MeasureTextEx(g_font_body, hint, footer_fs, 0.4)
     footer_y  := py + ph - footer_h
-    rl.DrawTextEx(g_font, hint,
+    rl.DrawTextEx(g_font_body, hint,
         {px + pw*0.5 - hint_sz.x*0.5, footer_y + uis(5)},
         footer_fs, 0.4, rl.Color{90, 70, 110, 180})
 
 
     reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
-    reset_sz    := rl.MeasureTextEx(g_font, reset_label, footer_fs, 0.4)
+    reset_sz    := rl.MeasureTextEx(g_font_body, reset_label, footer_fs, 0.4)
     reset_x     := px + pw - reset_sz.x - uis(14)
     reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
 
@@ -392,5 +392,5 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         rl.DrawRectangleRounded(reset_rec, 0.3, 4, rl.Color{80, 15, 15, 200})
         rl.DrawRectangleLinesEx(reset_rec, uis(1), rl.Color{200, 50, 50, 200})
     }
-    rl.DrawTextEx(g_font, reset_label, {reset_x, footer_y + uis(5)}, footer_fs, 0.4, reset_col)
+    rl.DrawTextEx(g_font_body, reset_label, {reset_x, footer_y + uis(5)}, footer_fs, 0.4, reset_col)
 }

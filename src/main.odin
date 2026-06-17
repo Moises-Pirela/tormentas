@@ -108,11 +108,12 @@ init_game :: proc() {
     door_init_blockers(w)
     hub_apply(w)
     spawn_players(w)
-    g_stash = stash_make_empty()
+    g_stash[0] = stash_make_empty()
+    g_stash[1] = stash_make_empty()
     if !load_player(w, w.player_id) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
-
+    hub_apply_quest_npcs(w)
 
     if cw.world_has_component(&g_sim.world, g_sim.world.player_id, .Health) {
         h := cw.world_get_health(&g_sim.world, g_sim.world.player_id)
@@ -134,6 +135,7 @@ shutdown_game :: proc() {
         }
     }
 
+    hub_unload_bg()
     stop_music()
     stop_ambience()
 
@@ -155,7 +157,8 @@ shutdown_game :: proc() {
     g_pending_level_switch = 0
     g_raid_timer           = 0
     g_is_host              = false
-    g_stash                = stash_make_empty()
+    g_stash[0]             = stash_make_empty()
+    g_stash[1]             = stash_make_empty()
     g_active_slot          = -1
     g_lifetime_stats       = {}
 }
@@ -186,6 +189,13 @@ update_playing :: proc(dt: f32) {
     if !g_sim_alive { return }
     w := &g_sim.world
 
+    // After handshake: send our character data to the peer once.
+    if g_session.peer_ready && !g_session.char_data_sent && cw.world_is_valid(w, w.player_id) {
+        bytes := player_to_bytes(w, w.player_id)
+        p2p.session_send_char_data(&g_session, bytes)
+        g_session.char_data_sent = true
+    }
+
     minimap_update(w)
 
     if cw.world_is_valid(w, w.player_id) &&
@@ -212,6 +222,12 @@ update_playing :: proc(dt: f32) {
 
         case .Hub:
 
+            // Client: pick up level-load notification sent by the host.
+            if g_session.pending_level_load > 0 && g_session.local_slot != 0 {
+                n := g_session.pending_level_load
+                g_session.pending_level_load = 0
+                g_pending_raid_start = n
+            }
 
             if g_pending_raid_start > 0 {
                 n := g_pending_raid_start
@@ -220,6 +236,23 @@ update_playing :: proc(dt: f32) {
                 break
             }
 
+            // Mid-hub join: spawn remote player once char data arrives.
+            if p2p.session_is_online(&g_session) {
+                remote_slot := 1 - g_session.local_slot
+                if !g_hub_remote_spawned {
+                    if g_session.remote_char_ready {
+                        hub_spawn_remote_player(w)
+                        g_hub_remote_spawned = true
+                        g_hub_remote_loaded  = true
+                    }
+                } else if !g_hub_remote_loaded && g_session.remote_char_ready {
+                    if cw.world_is_valid(w, w.player_ids[remote_slot]) {
+                        load_player_from_bytes(w, w.player_ids[remote_slot],
+                            g_session.remote_char_data[:g_session.remote_char_len])
+                        g_hub_remote_loaded = true
+                    }
+                }
+            }
 
             if input_is_gameplay() {
                 if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
@@ -231,10 +264,14 @@ update_playing :: proc(dt: f32) {
                 if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_stats)) {
                     ui_open(.Stats)
                 }
+                if rl.IsKeyPressed(.O) {
+                    if ui_has(.Social) { ui_close(.Social) } else { ui_open(.Social) }
+                }
                 update_mutation_workbench(w)
                 update_shop(w)
                 update_stash(w)
                 update_ability_vendor(w)
+                update_quest_board(w)
                 update_hub_portal(w)
             }
 
@@ -291,7 +328,7 @@ update_playing :: proc(dt: f32) {
                 case .AbilityVendor:
                     update_ability_vendor(w)
                 case .Settings, .LevelSelect, .Inventory, .Stats,
-                     .Lore, .Phonograph:
+                     .Lore, .Phonograph, .Social, .QuestBoard:
 
 
                 }
@@ -308,6 +345,7 @@ update_playing :: proc(dt: f32) {
             local_frame.actions = {}
         }
     }
+
 
     if g_playing_state == .Gameplay &&
        cw.world_is_valid(w, w.player_id) &&
@@ -340,7 +378,11 @@ draw_playing :: proc() {
     rl.BeginTextureMode(g_world_rt)
     rl.ClearBackground(rl.BLANK)
     rl.BeginMode2D(g_camera^)
-    draw_tilemap()
+    if g_hub_active {
+        draw_hub_background()   // pre-rendered town image replaces tilemap in hub (editor too)
+    } else {
+        draw_tilemap()
+    }
     draw_player_contact_shadow(w)
     if g_playing_state == .Hub {
         draw_hub_world(w)
@@ -372,9 +414,11 @@ draw_playing :: proc() {
     if !g_editor_mode { draw_fog_and_lights(w) }
 
     rl.BeginMode2D(g_camera^)
+    draw_editor_cell_overlay()
     draw_mutation_workbench_world(w)
     draw_stash_world(w)
     draw_ability_vendor_world(w)
+    draw_quest_board_world(w)
     draw_enemy_mutation_auras(w)
     draw_water_puddles()
     draw_fire_patches()
@@ -413,6 +457,8 @@ draw_playing :: proc() {
 
         draw_minimap(w)
         draw_levelup_flash()
+        draw_quest_flash()
+        draw_quest_hud(w)
         draw_loot_filter_hud()
     }
 
@@ -517,9 +563,29 @@ main :: proc() {
     chars_load_all()
     _mm_init()
 
+    steam_init()
+    defer steam_shutdown()
+
     for !rl.WindowShouldClose() && !g_should_exit {
         dt := rl.GetFrameTime()
         defer free_all(context.temp_allocator)
+
+        steam_run_callbacks()
+
+        // Handle Steam lobby invite accepted while already in-hub
+        if g_pending_join_lobby != 0 &&
+           g_app_state == .Playing &&
+           g_playing_state == .Hub &&
+           g_session.state == .Offline {
+            host_id := steam_lobby_get_host_id(g_pending_join_lobby)
+            g_pending_join_lobby = 0
+            if host_id != 0 {
+                g_is_host = false
+                copy(g_session.local_name[:], g_player_name[:])
+                p2p.session_join(&g_session, host_id)
+                g_app_state = .Playing
+            }
+        }
 
         update_clay_input()
         input_begin_frame()

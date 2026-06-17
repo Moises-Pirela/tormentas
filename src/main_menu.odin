@@ -2,26 +2,23 @@ package main
 
 import rl     "vendor:raylib"
 import        "core:fmt"
-import        "core:strings"
 import        "core:mem"
 import p2p    "p2p"
 
 MenuPhase :: enum { CharSelect, ClassSelect, PlayOptions }
-MenuFocus :: enum { None, NewName, IP }
+MenuFocus :: enum { None, NewName }
 
 g_mm: struct {
-    phase:          MenuPhase,
-    selected_slot:  int,
-    creating_slot:  int,
-    confirm_delete: bool,
-    new_name:       [PLAYER_NAME_MAX + 1]u8,
-    focus:          MenuFocus,
-    show_join:      bool,
-    ip:             [64]u8,
-    conn_timer:     f32,
-    new_char:       int,
-    cs_hovered:     int,
-    cs_anim_t:      f32,
+    phase:           MenuPhase,
+    selected_slot:   int,
+    creating_slot:   int,
+    confirm_delete:  bool,
+    new_name:        [PLAYER_NAME_MAX + 1]u8,
+    focus:           MenuFocus,
+    conn_timer:      f32,
+    new_char:        int,
+    cs_hovered:      int,
+    cs_anim_t:       f32,
     cs_pending_slot: int,
 }
 
@@ -34,7 +31,6 @@ _mm_init :: proc() {
     g_mm.creating_slot   = -1
     g_mm.confirm_delete  = false
     g_mm.focus           = .None
-    g_mm.show_join       = false
     g_mm.cs_hovered      = -1
     g_mm.cs_anim_t       = 0
     g_mm.cs_pending_slot = -1
@@ -81,7 +77,7 @@ update_main_menu :: proc(dt: f32) {
             case .Keybinds:
                 update_keybinds_screen()
             case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor, .PauseMenu,
-                 .LevelSelect, .Lore, .Phonograph:
+                 .LevelSelect, .Lore, .Phonograph, .Social, .QuestBoard:
 
             }
         }
@@ -119,8 +115,8 @@ draw_main_menu :: proc() {
         a    := u8(frac * 210)
         msg  := t(.MENU_DISCONNECTED)
         mfs  := uis(14)
-        msz  := rl.MeasureTextEx(g_font, msg, mfs, 0.5)
-        rl.DrawTextEx(g_font, msg,
+        msz  := rl.MeasureTextEx(g_font_body, msg, mfs, 0.5)
+        rl.DrawTextEx(g_font_body, msg,
             {cx - msz.x * 0.5, sh * 0.33},
             mfs, 0.5, rl.Color{220, 80, 60, a})
     }
@@ -135,7 +131,7 @@ draw_main_menu :: proc() {
     btn_bh  := btn_fs + uis(14)
 
     set_lbl := t(.MENU_BTN_SETTINGS)
-    set_sz  := rl.MeasureTextEx(g_font, set_lbl, btn_fs, 0.5)
+    set_sz  := rl.MeasureTextEx(g_font_body, set_lbl, btn_fs, 0.5)
     set_bw  := set_sz.x + uis(22)
     set_r   := rl.Rectangle{
         sw - set_bw - uis(12),
@@ -145,7 +141,7 @@ draw_main_menu :: proc() {
     set_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), set_r)
     rl.DrawRectangleRec(set_r, rl.Color{24, 20, 14, 240} if set_hot else rl.Color{14, 11, 8, 200})
     rl.DrawRectangleLinesEx(set_r, 1, COL_BRASS if set_hot else COL_RULE)
-    rl.DrawTextEx(g_font, set_lbl,
+    rl.DrawTextEx(g_font_body, set_lbl,
         {set_r.x + (set_bw - set_sz.x) * 0.5, set_r.y + (btn_bh - btn_fs) * 0.5},
         btn_fs, 0.5, COL_BRASS if set_hot else COL_MUTED)
     if set_hot && rl.IsMouseButtonReleased(.LEFT) {
@@ -153,7 +149,7 @@ draw_main_menu :: proc() {
     }
 
     exit_lbl := t(.MENU_BTN_EXIT)
-    exit_sz  := rl.MeasureTextEx(g_font, exit_lbl, btn_fs, 0.5)
+    exit_sz  := rl.MeasureTextEx(g_font_body, exit_lbl, btn_fs, 0.5)
     exit_bw  := exit_sz.x + uis(22)
     exit_r   := rl.Rectangle{
         uis(12),
@@ -163,7 +159,7 @@ draw_main_menu :: proc() {
     exit_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_r)
     rl.DrawRectangleRec(exit_r, rl.Color{24, 14, 14, 240} if exit_hot else rl.Color{14, 11, 8, 200})
     rl.DrawRectangleLinesEx(exit_r, 1, rl.Color{200, 80, 60, 220} if exit_hot else COL_RULE)
-    rl.DrawTextEx(g_font, exit_lbl,
+    rl.DrawTextEx(g_font_body, exit_lbl,
         {exit_r.x + (exit_bw - exit_sz.x) * 0.5, exit_r.y + (btn_bh - btn_fs) * 0.5},
         btn_fs, 0.5, rl.Color{220, 100, 80, 255} if exit_hot else COL_MUTED)
     if exit_hot && rl.IsMouseButtonReleased(.LEFT) {
@@ -290,8 +286,8 @@ _mm_draw_char_select :: proc() {
 
     lbl    := t(.MENU_SELECT_CHARACTER)
     lfs    := uis(13)
-    lsz    := rl.MeasureTextEx(g_font, lbl, lfs, 0.5)
-    rl.DrawTextEx(g_font, lbl,
+    lsz    := rl.MeasureTextEx(g_font_body, lbl, lfs, 0.5)
+    rl.DrawTextEx(g_font_body, lbl,
         {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(14)},
         lfs, 0.5, rl.Color{130, 118, 82, 200})
 
@@ -311,8 +307,8 @@ _mm_draw_char_select :: proc() {
         name_r := rl.Rectangle{sw * 0.5 - name_w * 0.5, btn_y - uis(52), name_w, uis(32)}
         n_lbl  := t(.MENU_NAME_CHARACTER)
         n_lfs  := uis(12)
-        n_lsz  := rl.MeasureTextEx(g_font, n_lbl, n_lfs, 0.5)
-        rl.DrawTextEx(g_font, n_lbl,
+        n_lsz  := rl.MeasureTextEx(g_font_body, n_lbl, n_lfs, 0.5)
+        rl.DrawTextEx(g_font_body, n_lbl,
             {sw * 0.5 - n_lsz.x * 0.5, name_r.y - n_lfs - uis(5)},
             n_lfs, 0.5, rl.Color{130, 118, 82, 200})
         _mm_field_draw(name_r, g_mm.new_name[:], g_mm.focus == .NewName, t(.MENU_CHAR_DEFAULT))
@@ -352,8 +348,8 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     if creating {
         lbl := t(.MENU_SLOT_NEW)
         fs  := uis(13)
-        sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
-        rl.DrawTextEx(g_font, lbl,
+        sz  := rl.MeasureTextEx(g_font_body, lbl, fs, 0.5)
+        rl.DrawTextEx(g_font_body, lbl,
             {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
             fs, 0.5, COL_BRASS)
         return
@@ -362,8 +358,8 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     if s.exists == 0 {
         lbl := t(.MENU_SLOT_EMPTY)
         fs  := uis(13)
-        sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
-        rl.DrawTextEx(g_font, lbl,
+        sz  := rl.MeasureTextEx(g_font_body, lbl, fs, 0.5)
+        rl.DrawTextEx(g_font_body, lbl,
             {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
             fs, 0.5, rl.Color{80, 72, 52, 180} if !over else rl.Color{140, 126, 82, 220})
         return
@@ -371,8 +367,8 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
 
     name_cs := cstring(&s.name[0])
     nfs     := uis(14)
-    nsz     := rl.MeasureTextEx(g_font, name_cs, nfs, 0.5)
-    rl.DrawTextEx(g_font, name_cs,
+    nsz     := rl.MeasureTextEx(g_font_body, name_cs, nfs, 0.5)
+    rl.DrawTextEx(g_font_body, name_cs,
         {r.x + (r.width - nsz.x) * 0.5, r.y + uis(18)},
         nfs, 0.5, rl.Color{218, 206, 160, 255})
 
@@ -380,16 +376,16 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     lv_s   := fmt.bprintf(num_buf[:], "Lv. %d", s.level)
     num_buf[len(lv_s)] = 0
     lv_fs  := uis(12)
-    lv_sz  := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), lv_fs, 0.5)
-    rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+    lv_sz  := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), lv_fs, 0.5)
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
         {r.x + (r.width - lv_sz.x) * 0.5, r.y + uis(42)},
         lv_fs, 0.5, rl.Color{160, 148, 100, 220})
 
     raid_s := fmt.bprintf(num_buf[:], "%d raids", s.raids_done)
     num_buf[len(raid_s)] = 0
     rd_fs  := uis(11)
-    rd_sz  := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), rd_fs, 0.5)
-    rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+    rd_sz  := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), rd_fs, 0.5)
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
         {r.x + (r.width - rd_sz.x) * 0.5, r.y + uis(62)},
         rd_fs, 0.5, rl.Color{120, 110, 76, 180})
 
@@ -397,8 +393,8 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
         death_s := fmt.bprintf(num_buf[:], "%d deaths", s.deaths)
         num_buf[len(death_s)] = 0
         dt_fs := uis(11)
-        dt_sz := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), dt_fs, 0.5)
-        rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+        dt_sz := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), dt_fs, 0.5)
+        rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
             {r.x + (r.width - dt_sz.x) * 0.5, r.y + uis(80)},
             dt_fs, 0.5, rl.Color{160, 80, 70, 160})
     }
@@ -407,79 +403,25 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
 
 @(private = "file")
 _mm_update_play_options :: proc() {
-    mp := rl.GetMousePosition()
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
 
-    cx      := sw * 0.5
-    btn_w   := sw * 0.20
-    btn_h   := uis(44)
-    gap     := uis(10)
+    cx    := sw * 0.5
+    btn_w := sw * 0.20
+    btn_h := uis(44)
+    btn_y := sh * 0.54
 
-    total  := btn_w * 3 + gap * 2
-    b0x    := cx - total * 0.5
-    btn_y  := sh * 0.54
-
-    sp_r   := rl.Rectangle{b0x,                        btn_y, btn_w, btn_h}
-    host_r := rl.Rectangle{b0x + btn_w + gap,           btn_y, btn_w, btn_h}
-    join_r := rl.Rectangle{b0x + (btn_w + gap) * 2,    btn_y, btn_w, btn_h}
-
-    if _mm_btn_hit(sp_r) {
-        g_mm.show_join = false
-        g_mm.focus     = .None
+    play_r := rl.Rectangle{cx - btn_w * 0.5, btn_y, btn_w, btn_h}
+    if _mm_btn_hit(play_r) {
         fade_to_black(_on_black_singleplayer)
     }
 
-    if _mm_btn_hit(host_r) {
-        g_mm.show_join = false
-        g_mm.focus     = .None
-        g_is_host      = true
-        copy(g_session.local_name[:], g_player_name[:])
-        p2p.session_host(&g_session, 7777)
-        g_mm.conn_timer = 0
-        g_app_state = .Connecting
-    }
-
-    if _mm_btn_hit(join_r) {
-        g_mm.show_join = !g_mm.show_join
-        if g_mm.show_join { g_mm.focus = .IP } else { g_mm.focus = .None }
-    }
-
-    if g_mm.show_join {
-        field_w := sw * 0.28
-        ip_r := rl.Rectangle{cx - field_w * 0.5, sh * 0.68, field_w, uis(34)}
-        if rl.IsMouseButtonPressed(.LEFT) {
-            if rl.CheckCollisionPointRec(mp, ip_r) {
-                g_mm.focus = .IP
-            } else if g_mm.focus == .IP {
-                g_mm.focus = .None
-            }
-        }
-        if g_mm.focus == .IP {
-            _mm_text_input(g_mm.ip[:63])
-        }
-
-        conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.78, btn_w, btn_h}
-        if _mm_btn_hit(conn_r) {
-            ip_raw := strings.clone_from_cstring(cstring(&g_mm.ip[0]),
-                context.temp_allocator)
-            if ip_raw == "" { ip_raw = "127.0.0.1" }
-            g_is_host = false
-            copy(g_session.local_name[:], g_player_name[:])
-            p2p.session_join(&g_session, ip_raw, 7777)
-            g_mm.conn_timer = 0
-            g_mm.focus      = .None
-            g_app_state     = .Connecting
-        }
-    }
-
     back_w := sw * 0.12
-    back_r := rl.Rectangle{sw * 0.5 - back_w * 0.5, sh * 0.88, back_w, uis(32)}
+    back_r := rl.Rectangle{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
     if _mm_btn_hit(back_r) {
-        g_mm.phase     = .CharSelect
-        g_mm.show_join = false
-        g_mm.focus     = .None
-        g_active_slot  = -1
+        g_mm.phase    = .CharSelect
+        g_mm.focus    = .None
+        g_active_slot = -1
     }
 }
 
@@ -496,42 +438,24 @@ _mm_draw_play_options :: proc() {
         sub_s  := fmt.bprintf(num_buf[:], "Playing as: %s  |  Lv. %d", name_s, s.level)
         num_buf[len(sub_s)] = 0
         sfs    := uis(13)
-        ssz    := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), sfs, 0.5)
-        rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+        ssz    := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), sfs, 0.5)
+        rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
             {cx - ssz.x * 0.5, sh * 0.40},
             sfs, 0.5, rl.Color{160, 148, 100, 200})
     }
 
-    btn_w   := sw * 0.20
-    btn_h   := uis(44)
-    gap     := uis(10)
-
-    total  := btn_w * 3 + gap * 2
-    b0x    := cx - total * 0.5
+    btn_w  := sw * 0.20
+    btn_h  := uis(44)
     btn_y  := sh * 0.54
+    play_r := rl.Rectangle{cx - btn_w * 0.5, btn_y, btn_w, btn_h}
+    _mm_btn_draw(play_r, t(.MENU_BTN_PLAY), false)
 
-    sp_r   := rl.Rectangle{b0x,                        btn_y, btn_w, btn_h}
-    host_r := rl.Rectangle{b0x + btn_w + gap,           btn_y, btn_w, btn_h}
-    join_r := rl.Rectangle{b0x + (btn_w + gap) * 2,    btn_y, btn_w, btn_h}
-
-    _mm_btn_draw(sp_r,   t(.MENU_BTN_SINGLEPLAYER), false)
-    _mm_btn_draw(host_r, t(.MENU_BTN_HOST),         false)
-    _mm_btn_draw(join_r, t(.MENU_BTN_JOIN),          g_mm.show_join)
-
-    if g_mm.show_join {
-        field_w := sw * 0.28
-        ip_lbl    := t(.MENU_HOST_IP_LABEL)
-        ip_lbl_fs := uis(12)
-        ilsz      := rl.MeasureTextEx(g_font, ip_lbl, ip_lbl_fs, 0.5)
-        ip_r      := rl.Rectangle{cx - field_w * 0.5, sh * 0.68, field_w, uis(34)}
-        rl.DrawTextEx(g_font, ip_lbl,
-            {cx - ilsz.x * 0.5, ip_r.y - ip_lbl_fs - uis(5)},
-            ip_lbl_fs, 0.5, rl.Color{130, 118, 82, 200})
-        _mm_field_draw(ip_r, g_mm.ip[:], g_mm.focus == .IP, "127.0.0.1")
-
-        conn_r := rl.Rectangle{cx - btn_w * 0.5, sh * 0.78, btn_w, btn_h}
-        _mm_btn_draw(conn_r, t(.MENU_BTN_CONNECT), false)
-    }
+    hint    := cstring("Invite friends from the Social panel once in the hub  [O]")
+    hint_fs := uis(11)
+    hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
+    rl.DrawTextEx(g_font_body, hint,
+        {cx - hsz.x * 0.5, btn_y + btn_h + uis(14)},
+        hint_fs, 0.5, rl.Color{100, 92, 66, 180})
 
     back_w := sw * 0.12
     back_r := rl.Rectangle{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
@@ -568,15 +492,7 @@ draw_connecting :: proc() {
     sh := f32(rl.GetScreenHeight())
     cx := sw * 0.5
 
-    msg_cs: cstring
-    if g_is_host {
-        msg_cs = t(.MENU_WAITING)
-    } else {
-        ip_raw := strings.clone_from_cstring(cstring(&g_mm.ip[0]),
-            context.temp_allocator)
-        if ip_raw == "" { ip_raw = "127.0.0.1" }
-        msg_cs = tf(.MENU_CONNECTING, ip_raw)
-    }
+    msg_cs: cstring = t(.MENU_WAITING)
 
     mfs := uis(22)
     msz := rl.MeasureTextEx(g_font, msg_cs, mfs, 0.5)
@@ -594,8 +510,8 @@ draw_connecting :: proc() {
 
     cancel := t(.MENU_ESC_CANCEL)
     cfs    := uis(13)
-    csz    := rl.MeasureTextEx(g_font, cancel, cfs, 0.5)
-    rl.DrawTextEx(g_font, cancel,
+    csz    := rl.MeasureTextEx(g_font_body, cancel, cfs, 0.5)
+    rl.DrawTextEx(g_font_body, cancel,
         {cx - csz.x * 0.5, sh * 0.58},
         cfs, 0.5, rl.Color{110, 100, 72, 180})
 }
@@ -617,9 +533,9 @@ _mm_btn_draw :: proc(r: rl.Rectangle, label: cstring, active: bool) {
     rl.DrawRectangleLinesEx(r, 1, border)
 
     fs  := uis(14)
-    tsz := rl.MeasureTextEx(g_font, label, fs, 0.5)
+    tsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
     col := rl.Color{235, 215, 145, 255} if hot else rl.Color{165, 152, 102, 215}
-    rl.DrawTextEx(g_font, label,
+    rl.DrawTextEx(g_font_body, label,
         {r.x + (r.width - tsz.x) * 0.5, r.y + (r.height - tsz.y) * 0.5},
         fs, 0.5, col)
 }
@@ -638,13 +554,13 @@ _mm_field_draw :: proc(r: rl.Rectangle, buf: []u8, focused: bool, placeholder: c
     ty    := r.y + (r.height - fs) * 0.5
 
     if empty && !focused {
-        rl.DrawTextEx(g_font, placeholder, {tx, ty}, fs, 0.5,
+        rl.DrawTextEx(g_font_body, placeholder, {tx, ty}, fs, 0.5,
             rl.Color{85, 78, 58, 145})
     } else {
-        rl.DrawTextEx(g_font, cstr, {tx, ty}, fs, 0.5,
+        rl.DrawTextEx(g_font_body, cstr, {tx, ty}, fs, 0.5,
             rl.Color{218, 206, 160, 255})
         if focused && (int(rl.GetTime() * 2) % 2 == 0) {
-            tw := rl.MeasureTextEx(g_font, cstr, fs, 0.5).x
+            tw := rl.MeasureTextEx(g_font_body, cstr, fs, 0.5).x
             rl.DrawRectangle(i32(tx + tw + 2), i32(ty), 2, i32(fs),
                 rl.Color{218, 206, 160, 255})
         }

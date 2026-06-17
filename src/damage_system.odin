@@ -381,6 +381,13 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             was_reanimated := false
             if cw.world_has_component(w, ev.target_id, .AIAgent) {
                 g_lifetime_stats.enemies_killed += 1
+                ai := cw.world_get_ai(w, ev.target_id)
+                if ai.tier == .Legendary {
+                    g_lifetime_stats.elites_killed += 1
+                }
+                if ev.target_id == g_boss_id {
+                    g_lifetime_stats.bosses_killed += 1
+                }
 
 
                 for pslot in 0..<cw.MAX_PLAYERS {
@@ -558,6 +565,7 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
 
                 play_sfx_at("enemy_death", death_pos)
+                quest_check_all(w)
             }
             if ev.target_id == g_boss_id {
                 g_boss_id = cw.INVALID_ENTITY

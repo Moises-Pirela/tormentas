@@ -197,6 +197,31 @@
         "organic": {}
     },
     {
+        "name": "npc_quest_board",
+        "render":    { "name": "Quest Board", "sprite": "mutation_workbench", "sprite_scale": 1.0, "layer": "sprite", "world_size": 64 },
+        "transform": { "position": [168, 0, 0], "rotation": 0 },
+        "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "quest_board", "interact_radius": 128 }
+    },
+    {
+        "name": "npc_quartermaster",
+        "render":    { "name": "The Quartermaster", "sprite": "npc_shopkeeper", "sprite_scale": 1.0, "layer": "sprite", "world_size": 64 },
+        "transform": { "position": [480, 0, 0], "rotation": 0 },
+        "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "quartermaster", "interact_radius": 128 },
+        "flammable": { "is_immune": false },
+        "organic": {}
+    },
+    {
+        "name": "npc_surgeon",
+        "render":    { "name": "The Surgeon", "sprite": "npc_shopkeeper", "sprite_scale": 1.0, "layer": "sprite", "world_size": 64 },
+        "transform": { "position": [480, -128, 0], "rotation": 0 },
+        "collider":  { "radius": 14, "faction": 0, "is_trigger": true },
+        "npc":       { "npc_type": "surgeon", "interact_radius": 128 },
+        "flammable": { "is_immune": false },
+        "organic": {}
+    },
+    {
         "name": "mut_glass_cannon",
         "mut_damage_mult": { "mult": 5.0 },
         "mut_lock_hp_to_one": {}

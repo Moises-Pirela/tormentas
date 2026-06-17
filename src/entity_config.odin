@@ -382,6 +382,12 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
                     n.npc_type = .Stash
                 case "ability_vendor":
                     n.npc_type = .AbilityVendor
+                case "quest_board":
+                    n.npc_type = .QuestBoard
+                case "quartermaster":
+                    n.npc_type = .Quartermaster
+                case "surgeon":
+                    n.npc_type = .Surgeon
                 case:
                     n.npc_type = .Shopkeeper
                 }

@@ -159,8 +159,8 @@ _mm_draw_class_select :: proc() {
     // Section subtitle
     lbl := t(.CLASS_SELECT_TITLE)
     lfs := uis(14)
-    lsz := rl.MeasureTextEx(g_font, lbl, lfs, 0.5)
-    rl.DrawTextEx(g_font, lbl,
+    lsz := rl.MeasureTextEx(g_font_body, lbl, lfs, 0.5)
+    rl.DrawTextEx(g_font_body, lbl,
         {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(18)},
         lfs, 0.5, rl.Color{130, 118, 82, 200})
 
@@ -185,8 +185,8 @@ _mm_draw_class_select :: proc() {
     desc    := t(CLASS_DESC_KEYS[display_idx])
     desc_fs := uis(12)
     desc_y  := cards_y + card_h + uis(18)
-    dsz     := rl.MeasureTextEx(g_font, desc, desc_fs, 0.5)
-    rl.DrawTextEx(g_font, desc,
+    dsz     := rl.MeasureTextEx(g_font_body, desc, desc_fs, 0.5)
+    rl.DrawTextEx(g_font_body, desc,
         {sw * 0.5 - dsz.x * 0.5, desc_y},
         desc_fs, 0.5, COL_MUTED)
 
@@ -202,8 +202,8 @@ _mm_draw_class_select :: proc() {
     // ESC hint
     hint    := cstring("ESC  Back")
     hint_fs := uis(10)
-    hsz     := rl.MeasureTextEx(g_font, hint, hint_fs, 0.5)
-    rl.DrawTextEx(g_font, hint,
+    hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
+    rl.DrawTextEx(g_font_body, hint,
         {sw * 0.5 - hsz.x * 0.5, sh * 0.94},
         hint_fs, 0.5, rl.Color{80, 72, 52, 160})
 }
@@ -249,16 +249,16 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
     name_y  := r.y + sprite_h + uis(6)
     name    := t(CLASS_NAME_KEYS[ci])
     name_fs := uis(14)
-    nsz     := rl.MeasureTextEx(g_font, name, name_fs, 0.5)
-    rl.DrawTextEx(g_font, name,
+    nsz     := rl.MeasureTextEx(g_font_body, name, name_fs, 0.5)
+    rl.DrawTextEx(g_font_body, name,
         {r.x + (r.width - nsz.x) * 0.5, name_y},
         name_fs, 0.5, COL_BRASS if hot else COL_MUTED)
 
     // Primary stat label
     stat_lbl := t(CLASS_PRIMARY_STAT_KEYS[ci])
     stat_fs  := uis(11)
-    ssz      := rl.MeasureTextEx(g_font, stat_lbl, stat_fs, 0.5)
-    rl.DrawTextEx(g_font, stat_lbl,
+    ssz      := rl.MeasureTextEx(g_font_body, stat_lbl, stat_fs, 0.5)
+    rl.DrawTextEx(g_font_body, stat_lbl,
         {r.x + (r.width - ssz.x) * 0.5, name_y + name_fs + uis(4)},
         stat_fs, 0.5,
         rl.Color{glow.r, glow.g, glow.b, 200} if hot else COL_RULE)
@@ -328,7 +328,7 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
 
     // Class title
     title_fs := uis(15)
-    rl.DrawTextEx(g_font, t(CLASS_TITLE_KEYS[ci]), {px, py}, title_fs, 0.5, COL_BRASS)
+    rl.DrawTextEx(g_font_body, t(CLASS_TITLE_KEYS[ci]), {px, py}, title_fs, 0.5, COL_BRASS)
     py += title_fs + uis(8)
 
     rl.DrawLineV({r.x + uis(6), py}, {r.x + r.width - uis(6), py}, COL_RULE)
@@ -348,17 +348,17 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
 
     hp_s := fmt.bprintf(num_buf[:], "HP:      %d", int(CLASS_BASE_HP[ci]))
     num_buf[len(hp_s)] = 0
-    rl.DrawTextEx(g_font, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
     py += val_fs + uis(4)
 
     en_s := fmt.bprintf(num_buf[:], "Energy:  %d", int(CLASS_BASE_ENERGY[ci]))
     num_buf[len(en_s)] = 0
-    rl.DrawTextEx(g_font, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
     py += val_fs + uis(4)
 
     sp_s := fmt.bprintf(num_buf[:], "Speed:   %d", int(CLASS_BASE_SPEED[ci]))
     num_buf[len(sp_s)] = 0
-    rl.DrawTextEx(g_font, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
     py += val_fs + uis(10)
 
     rl.DrawLineV({r.x + uis(6), py}, {r.x + r.width - uis(6), py}, COL_RULE)
@@ -366,7 +366,7 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
 
     // Ability
     ab_lbl_fs := uis(11)
-    rl.DrawTextEx(g_font, t(.CLASS_STARTER_ABILITY), {px, py}, ab_lbl_fs, 0.5, COL_MUTED)
+    rl.DrawTextEx(g_font_body, t(.CLASS_STARTER_ABILITY), {px, py}, ab_lbl_fs, 0.5, COL_MUTED)
     py += ab_lbl_fs + uis(4)
 
     at := CLASS_STARTER_ABILITIES[ci]
@@ -376,20 +376,20 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
     copy(ab_buf[:], ab_name[:ab_n])
     ab_buf[ab_n] = 0
     ab_fs := uis(12)
-    rl.DrawTextEx(g_font, cstring(&ab_buf[0]), {px, py}, ab_fs, 0.5, COL_PARCH)
+    rl.DrawTextEx(g_font_body, cstring(&ab_buf[0]), {px, py}, ab_fs, 0.5, COL_PARCH)
     py += ab_fs + uis(12)
 
     // Weapon
-    rl.DrawTextEx(g_font, t(.CLASS_STARTER_WEAPON), {px, py}, ab_lbl_fs, 0.5, COL_MUTED)
+    rl.DrawTextEx(g_font_body, t(.CLASS_STARTER_WEAPON), {px, py}, ab_lbl_fs, 0.5, COL_MUTED)
     py += ab_lbl_fs + uis(4)
-    rl.DrawTextEx(g_font, t(CLASS_WEAPON_KEYS[ci]), {px, py}, ab_fs, 0.5, COL_PARCH)
+    rl.DrawTextEx(g_font_body, t(CLASS_WEAPON_KEYS[ci]), {px, py}, ab_fs, 0.5, COL_PARCH)
 }
 
 @(private = "file")
 _cs_draw_stat_dots :: proc(label: cstring, value: int, glow: rl.Color, x, y: f32) {
     fs  := uis(11)
-    lsz := rl.MeasureTextEx(g_font, label, fs, 0.5)
-    rl.DrawTextEx(g_font, label, {x, y}, fs, 0.5, COL_MUTED)
+    lsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
+    rl.DrawTextEx(g_font_body, label, {x, y}, fs, 0.5, COL_MUTED)
 
     dot_x   := x + lsz.x + uis(8)
     dot_r   := uis(4)

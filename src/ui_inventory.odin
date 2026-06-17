@@ -284,7 +284,7 @@ _draw_backpack_raw :: proc(w: ^cw.World, inv: ^cw.InventoryComp, grid_bb: clay.B
             if cw.world_has_component(w, cell_id, .RenderConfig) {
                 rcc  := cw.world_get_render_config(w, cell_id)
                 name := loc_lookup(cw.render_config_name_cstr(rcc))
-                rl.DrawTextEx(g_font, name,
+                rl.DrawTextEx(g_font_body, name,
                     { f32(ix) + uis(3), f32(iy + icon_margin + icon_sz + 2) },
                     uis(11), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
             }

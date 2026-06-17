@@ -7,7 +7,7 @@ import cw "clockwork"
 SAVE_PATH        :: "save/player.bin"
 CHAR_SAVE_PATH   :: "save/characters.bin"
 SAVE_MAGIC       :: u32(0x544F524D)
-SAVE_VERSION     :: u16(6)
+SAVE_VERSION     :: u16(7)
 SAVE_MAX_ITEMS   :: 64
 CHAR_SAVE_MAGIC  :: u32(0x544F524E)
 CHAR_SAVE_VER    :: u16(2)
@@ -18,7 +18,10 @@ PlayerLifetimeStats :: struct #packed {
     enemies_killed:   i32,
     deaths:           i32,
     max_extract_gold: i32,
-    _reserved:        [12]i32,
+    bosses_killed:    i32,
+    elites_killed:    i32,
+    deep_extracts:    i32,
+    _reserved:        [9]i32,
 }
 
 g_lifetime_stats: PlayerLifetimeStats
@@ -111,6 +114,9 @@ PlayerSaveFile :: struct #packed {
     _mut_align:     u8,
 
     items:          [SAVE_MAX_ITEMS]SavedItem,
+
+    quest_completed: u8,
+    _quest_pad:      [3]u8,
 }
 
 PlayerSaveFileV4 :: struct #packed {
@@ -379,9 +385,8 @@ compute_extract_value :: proc(w: ^cw.World, pid: int) -> int {
     return total
 }
 
-save_player :: proc(w: ^cw.World, pid: int) {
-    if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return }
-
+@(private = "file")
+_build_player_save :: proc(w: ^cw.World, pid: int) -> PlayerSaveFile {
     save: PlayerSaveFile
     save.magic      = SAVE_MAGIC
     save.version    = SAVE_VERSION
@@ -393,6 +398,8 @@ save_player :: proc(w: ^cw.World, pid: int) {
         if stems_sv[i] == g_player_stem { char_idx = i; break }
     }
     save.character = u16(char_idx)
+
+    save.quest_completed = g_quest_completed[g_session.local_slot]
 
     if cw.world_has_component(w, pid, .Stats) {
         st              := cw.world_get_stats(w, pid)
@@ -419,10 +426,11 @@ save_player :: proc(w: ^cw.World, pid: int) {
         save.wallet_gold = i32(cw.world_get_wallet(w, pid).gold)
     }
 
-    save.stash_gold   = i32(g_stash.gold)
-    save.stash_serums = i32(g_stash.serums)
-    for i in 0..<g_stash.item_count {
-        eid := g_stash.item_ids[i]
+    st := local_stash()
+    save.stash_gold   = i32(st.gold)
+    save.stash_serums = i32(st.serums)
+    for i in 0..<st.item_count {
+        eid := st.item_ids[i]
         if !cw.world_is_valid(w, eid)             { continue }
         if !cw.world_has_component(w, eid, .Item) { continue }
         if save.stash_item_count >= STASH_MAX_ITEMS { break }
@@ -498,6 +506,12 @@ save_player :: proc(w: ^cw.World, pid: int) {
         }
     }
 
+    return save
+}
+
+save_player :: proc(w: ^cw.World, pid: int) {
+    if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return }
+    save := _build_player_save(w, pid)
     s := &g_char_save.slots[g_active_slot]
     s.player     = save
     s.level      = save.level
@@ -506,24 +520,19 @@ save_player :: proc(w: ^cw.World, pid: int) {
     chars_save_all()
 }
 
-load_player :: proc(w: ^cw.World, pid: int) -> bool {
-    if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return false }
+// Returns the local player's current state serialized as raw bytes (temp-allocated).
+player_to_bytes :: proc(w: ^cw.World, pid: int) -> []u8 {
+    save := _build_player_save(w, pid)
+    n    := size_of(PlayerSaveFile)
+    out  := make([]u8, n, context.temp_allocator)
+    mem.copy(raw_data(out), &save, n)
+    return out
+}
 
-    slot := &g_char_save.slots[g_active_slot]
-    if slot.exists == 0 { return false }
-
-    save := slot.player
-    if save.magic   != SAVE_MAGIC   { return false }
-    if save.version != SAVE_VERSION { return false }
-
-
-    char_idx  := int(save.character)
-    stems_ld  := PLAYER_STEMS
-    if char_idx < 0 || char_idx >= len(stems_ld) { char_idx = 0 }
-    g_player_stem = stems_ld[char_idx]
-
-    g_lifetime_stats = save.lifetime
-
+// Applies stats, health, wallet, mutations and inventory from a save to a world entity.
+// Does NOT touch stash — stash is local-player only and managed separately.
+@(private = "file")
+_apply_player_save :: proc(w: ^cw.World, pid: int, save: ^PlayerSaveFile) {
     if cw.world_has_component(w, pid, .Stats) {
         st             := cw.world_get_stats(w, pid)
         st.level        = int(save.level)
@@ -549,11 +558,70 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
         cw.world_get_wallet(w, pid).gold = int(save.wallet_gold)
     }
 
-    g_stash = stash_make_empty()
-    g_stash.gold   = int(save.stash_gold)
-    g_stash.serums = int(save.stash_serums)
+    if cw.world_has_component(w, pid, .MutationContainer) {
+        mc         := cw.world_get_mutation(w, pid)
+        mc.serums   = int(save.mut_serums)
+        for i in 0..<int(save.mut_count) {
+            mutation_restore_direct(w, pid, cw.MutationType(save.mut_types[i]))
+        }
+    }
+
+    if !cw.world_has_component(w, pid, .Inventory) { return }
+
+    for i in 0..<int(save.item_count) {
+        rec     := save.items[i]
+        item_id := _load_spawn_saved_item(w, &save.items[i])
+        if item_id == cw.INVALID_ENTITY { continue }
+        inv     := cw.world_get_inventory(w, pid)
+
+        if rec.is_equipped == 1 {
+            slot_idx := int(rec.equip_slot_idx)
+            if slot_idx >= 0 && slot_idx < cw.EQUIP_SLOT_COUNT {
+                slot      := cw.EquipSlot(slot_idx)
+                item_comp := cw.world_get_item(w, item_id)
+                is_ab_slot := slot >= .Ability1 && slot <= .Ability4
+                if is_ab_slot && item_comp.ability_type == .None {
+                    if col, row, ok := backpack_find_free(inv, item_comp); ok {
+                        backpack_place(inv, item_comp, item_id, col, row)
+                    }
+                } else {
+                    inv.equipped[slot_idx] = item_id
+                }
+            }
+        } else {
+            item_comp := cw.world_get_item(w, item_id)
+            backpack_place(inv, item_comp, item_id, int(rec.pack_x), int(rec.pack_y))
+        }
+    }
+}
+
+load_player :: proc(w: ^cw.World, pid: int) -> bool {
+    if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return false }
+
+    slot := &g_char_save.slots[g_active_slot]
+    if slot.exists == 0 { return false }
+
+    save := slot.player
+    if save.magic   != SAVE_MAGIC   { return false }
+    if save.version != SAVE_VERSION { return false }
+
+    char_idx  := int(save.character)
+    stems_ld  := PLAYER_STEMS
+    if char_idx < 0 || char_idx >= len(stems_ld) { char_idx = 0 }
+    g_player_stem    = stems_ld[char_idx]
+    g_lifetime_stats = save.lifetime
+    if save.version >= 7 {
+        g_quest_completed[g_session.local_slot] = save.quest_completed
+    } else {
+        g_quest_completed[g_session.local_slot] = 0
+    }
+
+    st := local_stash()
+    st^ = stash_make_empty()
+    st.gold   = int(save.stash_gold)
+    st.serums = int(save.stash_serums)
     for i in 0..<int(save.stash_item_count) {
-        if g_stash.item_count >= STASH_MAX_ITEMS { break }
+        if st.item_count >= STASH_MAX_ITEMS { break }
         item_id := _load_spawn_saved_item(w, &save.stash_items[i])
         if item_id == cw.INVALID_ENTITY { continue }
         item := cw.world_get_item(w, item_id)
@@ -567,46 +635,17 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
         }
     }
 
-    if cw.world_has_component(w, pid, .MutationContainer) {
-        mc         := cw.world_get_mutation(w, pid)
-        mc.serums   = int(save.mut_serums)
-        for i in 0..<int(save.mut_count) {
-            mutation_restore_direct(w, pid, cw.MutationType(save.mut_types[i]))
-        }
-    }
+    _apply_player_save(w, pid, &save)
+    return true
+}
 
-    if !cw.world_has_component(w, pid, .Inventory) { return true }
-
-    for i in 0..<int(save.item_count) {
-        rec     := save.items[i]
-        item_id := _load_spawn_saved_item(w, &save.items[i])
-        if item_id == cw.INVALID_ENTITY { continue }
-        inv     := cw.world_get_inventory(w, pid)
-
-        if rec.is_equipped == 1 {
-            slot_idx := int(rec.equip_slot_idx)
-            if slot_idx >= 0 && slot_idx < cw.EQUIP_SLOT_COUNT {
-                slot := cw.EquipSlot(slot_idx)
-                item_comp := cw.world_get_item(w, item_id)
-
-
-                is_ab_slot := slot >= .Ability1 && slot <= .Ability4
-                if is_ab_slot && item_comp.ability_type == .None {
-                    if col, row, ok := backpack_find_free(inv, item_comp); ok {
-                        backpack_place(inv, item_comp, item_id, col, row)
-                    }
-
-
-                } else {
-                    inv.equipped[slot_idx] = item_id
-                }
-            }
-        } else {
-            item_comp := cw.world_get_item(w, item_id)
-            backpack_place(inv, item_comp, item_id, int(rec.pack_x), int(rec.pack_y))
-        }
-    }
-
+// Deserializes a remote player's save bytes and applies their state to a world entity.
+// Only stats, items and mutations are applied — stash is not touched.
+load_player_from_bytes :: proc(w: ^cw.World, pid: int, data: []u8) -> bool {
+    if len(data) < size_of(PlayerSaveFile) { return false }
+    save := (^PlayerSaveFile)(raw_data(data))^
+    if save.magic != SAVE_MAGIC || save.version != SAVE_VERSION { return false }
+    _apply_player_save(w, pid, &save)
     return true
 }
 

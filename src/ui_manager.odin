@@ -18,6 +18,8 @@ UIPanel :: enum {
     LevelSelect,
     Lore,
     Phonograph,
+    Social,
+    QuestBoard,
 }
 
 UILayerState :: enum { FadeIn, Visible, FadeOut }
@@ -207,7 +209,7 @@ ui_update :: proc(dt: f32) {
 
                 l.dirty = true
             case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor,
-                 .PauseMenu, .Settings, .Keybinds, .LevelSelect, .Lore:
+                 .PauseMenu, .Settings, .Keybinds, .LevelSelect, .Lore, .Social, .QuestBoard:
 
                 if mouse_event { l.dirty = true }
             }
@@ -297,6 +299,11 @@ _ui_draw_panel :: proc(panel: UIPanel, w: ^cw.World) {
         draw_lore_panel()
     case .Phonograph:
         draw_phonograph_panel()
+    case .Social:
+        draw_social_panel()
+    case .QuestBoard:
+        if w == nil { return }
+        draw_quest_board_panel(w)
     }
 }
 
@@ -309,7 +316,7 @@ _ui_on_open :: proc(panel: UIPanel) {
     case .Keybinds:
         g_rebind_idx = -1
     case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor, .Settings,
-         .LevelSelect, .Lore, .Phonograph:
+         .LevelSelect, .Lore, .Phonograph, .Social, .QuestBoard:
 
     }
 }
@@ -326,10 +333,12 @@ _ui_on_close :: proc(panel: UIPanel) {
         g_stash_npc_id = cw.INVALID_ENTITY
     case .AbilityVendor:
         g_ability_vendor_npc_id = cw.INVALID_ENTITY
+    case .QuestBoard:
+        g_quest_board_npc_id = cw.INVALID_ENTITY
     case .Keybinds:
         g_rebind_idx = -1
     case .Inventory, .Stats, .MutationTree, .Settings, .LevelSelect,
-         .Lore, .Phonograph:
+         .Lore, .Phonograph, .Social:
 
     }
 }

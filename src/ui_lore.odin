@@ -74,8 +74,8 @@ draw_lore_panel :: proc() {
     if !ok {
 
         msg := cstring("[ Document not found ]")
-        msz := rl.MeasureTextEx(g_font, msg, uis(12), 1)
-        rl.DrawTextEx(g_font, msg,
+        msz := rl.MeasureTextEx(g_font_body, msg, uis(12), 1)
+        rl.DrawTextEx(g_font_body, msg,
             {px + PW*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
             uis(12), 1, rl.Color{100, 80, 50, 180})
     } else {
@@ -108,8 +108,8 @@ draw_lore_panel :: proc() {
 
 
     hint := cstring("[ ESC to close ]")
-    hsz  := rl.MeasureTextEx(g_font, hint, uis(9), 0.5)
-    rl.DrawTextEx(g_font, hint,
+    hsz  := rl.MeasureTextEx(g_font_body, hint, uis(9), 0.5)
+    rl.DrawTextEx(g_font_body, hint,
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(22)},
         uis(9), 0.5, rl.Color{90, 68, 32, 160})
 
@@ -136,19 +136,19 @@ lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: rl.Co
         n := min(len(s), 255)
         copy(sb[:n], s[:n])
         sb[n] = 0
-        wsz := rl.MeasureTextEx(g_font, cstring(&sb[0]), fs, 0.5)
+        wsz := rl.MeasureTextEx(g_font_body, cstring(&sb[0]), fs, 0.5)
         if cx^ > x0 && cx^ + wsz.x > x0 + max_w {
             cy^  += lh
             cx^   = x0
         }
-        rl.DrawTextEx(g_font, cstring(&sb[0]), {cx^, cy^}, fs, 0.5, col)
+        rl.DrawTextEx(g_font_body, cstring(&sb[0]), {cx^, cy^}, fs, 0.5, col)
         cx^ += wsz.x
     }
 
     space_w: f32
     {
         sb: [2]u8 = {' ', 0}
-        space_w = rl.MeasureTextEx(g_font, cstring(&sb[0]), fs, 0.5).x
+        space_w = rl.MeasureTextEx(g_font_body, cstring(&sb[0]), fs, 0.5).x
     }
 
     for i <= len(text) {

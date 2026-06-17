@@ -274,26 +274,26 @@ draw_interact_prompt :: proc(w: ^cw.World) {
 
     prompt_cs := cstring(&ia.prompt[0])
     prompt_fs := uis(15)
-    psz       := rl.MeasureTextEx(g_font, prompt_cs, prompt_fs, 1)
+    psz       := rl.MeasureTextEx(g_font_body, prompt_cs, prompt_fs, 1)
     px := sw * 0.5 - psz.x * 0.5
     py := sh * 0.60 - psz.y
 
 
-    rl.DrawTextEx(g_font, prompt_cs, {px + uis(1.5), py + uis(1.5)},
+    rl.DrawTextEx(g_font_body, prompt_cs, {px + uis(1.5), py + uis(1.5)},
         prompt_fs, 1, rl.Color{0, 0, 0, 180})
 
-    rl.DrawTextEx(g_font, prompt_cs, {px, py},
+    rl.DrawTextEx(g_font_body, prompt_cs, {px, py},
         prompt_fs, 1, rl.Color{255, 235, 160, 240})
 
 
     key_cs  := cstring("[E]")
     key_fs  := uis(13)
-    ksz     := rl.MeasureTextEx(g_font, key_cs, key_fs, 0.5)
+    ksz     := rl.MeasureTextEx(g_font_body, key_cs, key_fs, 0.5)
     kx      := sw * 0.5 - ksz.x * 0.5
     ky      := py + psz.y + uis(3)
-    rl.DrawTextEx(g_font, key_cs, {kx + uis(1), ky + uis(1)}, key_fs, 0.5,
+    rl.DrawTextEx(g_font_body, key_cs, {kx + uis(1), ky + uis(1)}, key_fs, 0.5,
         rl.Color{0, 0, 0, 150})
-    rl.DrawTextEx(g_font, key_cs, {kx, ky}, key_fs, 0.5,
+    rl.DrawTextEx(g_font_body, key_cs, {kx, ky}, key_fs, 0.5,
         rl.Color{190, 190, 190, 210})
 }
 
@@ -440,12 +440,12 @@ _draw_flask_pip_row :: proc(
     fid := inv.equipped[int(slot)]
 
     key_fs  := uis(11)
-    rl.DrawTextEx(g_font, key_label, { px, py }, key_fs, 0.5,
+    rl.DrawTextEx(g_font_body, key_label, { px, py }, key_fs, 0.5,
         rl.Color{ 160, 150, 130, 180 })
 
 
     if !cw.world_is_valid(w, fid) || !cw.world_has_component(w, fid, .Flask) {
-        rl.DrawTextEx(g_font, "empty", { px + uis(20), py }, key_fs, 0.5,
+        rl.DrawTextEx(g_font_body, "empty", { px + uis(20), py }, key_fs, 0.5,
             rl.Color{ 80, 70, 60, 120 })
         return
     }

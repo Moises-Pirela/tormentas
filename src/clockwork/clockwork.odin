@@ -1,5 +1,7 @@
 package clockwork
 
+import "core:mem"
+import "base:intrinsics"
 
 CHUNK_SIZE      :: 256
 MAX_COMPONENTS  :: 128
@@ -139,6 +141,54 @@ entity_is_active :: proc(e: Entity) -> bool {
 
 entity_empty :: proc() -> Entity {
     return Entity{ id = INVALID_ENTITY }
+}
+
+Component_Pool :: struct {
+    bytes:     [dynamic]u8,
+    bitset:    [dynamic]u64,
+    elem_size: int,
+    clear:     proc(rawptr),
+}
+
+@(private="file")
+_pool_init :: proc(w: ^World, ct: ComponentType, $T: typeid, clear_fn: proc(rawptr) = nil) {
+    p := &w.pools[ct]
+    p.elem_size = max(size_of(T), 1)  // zero-size structs still need addressable slots
+    p.clear     = clear_fn
+    resize(&p.bytes,  p.elem_size * CHUNK_SIZE)
+    resize(&p.bitset, (CHUNK_SIZE + 63) / 64)
+}
+
+@(private="file")
+_comp :: #force_inline proc(w: ^World, id: int, $T: typeid, ct: ComponentType) -> ^T {
+    p := &w.pools[ct]
+    return transmute(^T)(&p.bytes[id * p.elem_size])
+}
+
+@(private="file")
+_comp_set :: #force_inline proc(w: ^World, id: int, $T: typeid, ct: ComponentType, val: T) {
+    p := &w.pools[ct]
+    (transmute(^T)(&p.bytes[id * p.elem_size]))^ = val
+    p.bitset[id >> 6] |= u64(1) << uint(id & 63)
+    entity_sig_set(&w.entities[id].signature, ct)
+}
+
+@(private="file")
+_comp_clear :: #force_inline proc(w: ^World, id: int, $T: typeid, ct: ComponentType) {
+    p := &w.pools[ct]
+    (transmute(^T)(&p.bytes[id * p.elem_size]))^ = {}
+    p.bitset[id >> 6] &~= u64(1) << uint(id & 63)
+    entity_sig_clear(&w.entities[id].signature, ct)
+}
+
+@(private="file")
+_inv_clear :: proc(ptr: rawptr) {
+    (cast(^InventoryComp)ptr)^ = inventory_make_empty()
+}
+
+@(private="file")
+_item_clear :: proc(ptr: rawptr) {
+    (cast(^ItemComp)ptr)^ = item_empty()
 }
 
 StatusEffectType :: enum { Slow, Poison, Burn, Stun, Root, Oiled, Wet }
@@ -585,6 +635,9 @@ NPCType :: enum u8 {
     MutationWorkbench,
     Stash,
     AbilityVendor,
+    QuestBoard,
+    Quartermaster,
+    Surgeon,
 }
 
 NPCComp :: struct {
@@ -1035,113 +1088,19 @@ render_config_desc_cstr :: proc(c: ^RenderConfigComp) -> cstring {
 
 
 World :: struct {
-
-    entities:     [dynamic]Entity,
-    next_id:      int,
-    recycled_ids: [dynamic]int,
-    last_created: int,
+    entities:          [dynamic]Entity,
+    next_id:           int,
+    recycled_ids:      [dynamic]int,
+    last_created:      int,
 
     player_ids:        [MAX_PLAYERS]int,
     local_player_slot: int,
     player_id:         int,
 
-    transforms:   [dynamic]TransformComp,
-    velocities:   [dynamic]VelocityComp,
-    healths:      [dynamic]HealthComp,
-    inputs:       [dynamic]InputStateComp,
-    weapons:      [dynamic]WeaponSlotComp,
-    mutations:    [dynamic]MutationContainerComp,
-    renderers:    [dynamic]MeshRendererComp,
-    colliders:    [dynamic]ColliderComp,
-    projectiles:     [dynamic]ProjectileComp,
-    self_destructs:  [dynamic]SelfDestructComp,
-    ai_agents:       [dynamic]AIAgentComp,
-    projectile_tags: [dynamic]ProjectileTagComp,
-    weapon_data:     [dynamic]WeaponComp,
-    equipment:       [dynamic]EquipmentComp,
-    dodge_states:    [dynamic]DodgeComp,
-    render_configs:  [dynamic]RenderConfigComp,
-    melee_arcs:      [dynamic]MeleeArcComp,
-    respawns:        [dynamic]RespawnComp,
-    inventories:     [dynamic]InventoryComp,
-    items:           [dynamic]ItemComp,
-    ground_items:    [dynamic]GroundItemComp,
-    abilities:          [dynamic]AbilityComp,
-    stats:              [dynamic]StatsComp,
-    fog_of_wars:        [dynamic]FogOfWarComp,
-    extractions:        [dynamic]ExtractionComp,
-    muts:               [dynamic]MutComp,
-    players:            [dynamic]PlayerComp,
-    wallets:            [dynamic]WalletComp,
-    golds:              [dynamic]GoldComp,
-    npcs:               [dynamic]NPCComp,
-    mut_damage_mults:   [dynamic]MutDamageMultComp,
-    mut_lock_hp_to_one: [dynamic]MutLockHpToOneComp,
-    mut_root_on_fire:   [dynamic]MutRootOnFireComp,
-    mut_timed_self_dmg: [dynamic]MutTimedSelfDamageComp,
-    mut_block_healing:  [dynamic]MutBlockHealingComp,
-    mut_move_speed:     [dynamic]MutMoveSpeedMultComp,
-    mut_block_ranged:   [dynamic]MutBlockRangedComp,
-    mut_block_pickup_heal: [dynamic]MutBlockPickupHealComp,
-    mut_serum_gain:     [dynamic]MutSerumGainMultComp,
-    mut_block_pickups:  [dynamic]MutBlockPickupsComp,
-    mut_nonlethal:      [dynamic]MutNonlethalShotsComp,
-    mut_disable_actives:[dynamic]MutDisableActivesComp,
-    mut_early_death:    [dynamic]MutEarlyDeathThresholdComp,
-    mut_missing_hp_dmg: [dynamic]MutMissingHealthDamageComp,
-    mut_passive_power:  [dynamic]MutPassivePowerComp,
-    point_lights:       [dynamic]PointLightComp,
-    anim_states:        [dynamic]AnimStateComp,
-    mut_kill_heal:          [dynamic]MutKillHealComp,
-    mut_lifesteal:          [dynamic]MutLifestealComp,
-    mut_proximity_damage:   [dynamic]MutProximityDamageComp,
-    mut_on_death_explode:   [dynamic]MutOnDeathExplodeComp,
-    mut_stationary_shield:  [dynamic]MutStationaryShieldComp,
-    mut_extra_dodges:       [dynamic]MutExtraDodgeChargesComp,
-    mut_dmg_taken_mult:     [dynamic]MutDamageTakenMultComp,
-    mut_wall_phase:         [dynamic]MutWallPhaseComp,
-    mut_body_melee:         [dynamic]MutBodyMeleeComp,
-    mut_corpse_trigger:     [dynamic]MutCorpseTriggerComp,
-    mut_hide_enemy_sprites: [dynamic]MutHideEnemySpritesComp,
-    mut_unseen_dmg_mult:    [dynamic]MutUnseenDamageMultComp,
-    mut_heart_cage:         [dynamic]MutHeartCageComp,
-    mut_thorn_pact:         [dynamic]MutThornPactComp,
-    mut_carrion_crown:      [dynamic]MutCarrionCrownComp,
-    mut_false_saint:        [dynamic]MutFalseSaintComp,
-    mut_black_lung:         [dynamic]MutBlackLungComp,
-    reanimateds:            [dynamic]ReanimatedComp,
-    status_effects:         [dynamic]StatusEffectComp,
-    flammbles:              [dynamic]FlammableComp,
-    organics:               [dynamic]OrganicComp,
+    pools:             [ComponentType]Component_Pool,
 
-    interactables:          [dynamic]InteractableComp,
-    openables:              [dynamic]OpenableComp,
-    lockables:              [dynamic]LockableComp,
-    signal_emitters:        [dynamic]SignalEmitterComp,
-    signal_receivers:       [dynamic]SignalReceiverComp,
-    containers:             [dynamic]ContainerComp,
-    key_pickups:            [dynamic]KeyPickupComp,
-    key_rings:              [dynamic]KeyRingComp,
-    lore_items:             [dynamic]LoreItemComp,
-    phonographs:            [dynamic]PhonographComp,
-    grenades:               [dynamic]GrenadeComp,
-    poison_clouds:          [dynamic]PoisonCloudComp,
-    aim_locks:              [dynamic]AimLockComp,
-
-    damage_amps:            [dynamic]DamageAmpComp,
-    damage_amp_on_hits:     [dynamic]DamageAmpOnHitComp,
-    homings:                [dynamic]HomingComp,
-    proximity_triggers:     [dynamic]ProximityTriggerComp,
-    overcharge_buffs:       [dynamic]OverchargeBuffComp,
-    kill_heals:             [dynamic]KillHealComp,
-    contagion_tags:         [dynamic]ContagionTagComp,
-    flasks:                 [dynamic]FlaskComp,
-    flask_effects:          [dynamic]FlaskEffectComp,
-    resistances:            [dynamic]ResistanceComp,
-
-    damage_events:   [dynamic]DamageEvent,
-
-    tick: u64,
+    damage_events:     [dynamic]DamageEvent,
+    tick:              u64,
 }
 
 make_world :: proc() -> World {
@@ -1152,200 +1111,109 @@ make_world :: proc() -> World {
     w.next_id      = 0
     w.last_created = INVALID_ENTITY
 
-    resize(&w.entities,      CHUNK_SIZE)
-    resize(&w.transforms,    CHUNK_SIZE)
-    resize(&w.velocities,    CHUNK_SIZE)
-    resize(&w.healths,       CHUNK_SIZE)
-    resize(&w.inputs,        CHUNK_SIZE)
-    resize(&w.weapons,       CHUNK_SIZE)
-    resize(&w.mutations,     CHUNK_SIZE)
-    resize(&w.renderers,     CHUNK_SIZE)
-    resize(&w.colliders,     CHUNK_SIZE)
-    resize(&w.projectiles,     CHUNK_SIZE)
-    resize(&w.self_destructs,  CHUNK_SIZE)
-    resize(&w.ai_agents,       CHUNK_SIZE)
-    resize(&w.projectile_tags, CHUNK_SIZE)
-    resize(&w.weapon_data,     CHUNK_SIZE)
-    resize(&w.equipment,       CHUNK_SIZE)
-    resize(&w.dodge_states,    CHUNK_SIZE)
-    resize(&w.render_configs,  CHUNK_SIZE)
-    resize(&w.melee_arcs,      CHUNK_SIZE)
-    resize(&w.respawns,        CHUNK_SIZE)
-    resize(&w.inventories,     CHUNK_SIZE)
-    resize(&w.items,           CHUNK_SIZE)
-    resize(&w.ground_items,    CHUNK_SIZE)
-    resize(&w.abilities,          CHUNK_SIZE)
-    resize(&w.stats,              CHUNK_SIZE)
-    resize(&w.fog_of_wars,        CHUNK_SIZE)
-    resize(&w.extractions,        CHUNK_SIZE)
-    resize(&w.muts,               CHUNK_SIZE)
-    resize(&w.players,            CHUNK_SIZE)
-    resize(&w.wallets,            CHUNK_SIZE)
-    resize(&w.golds,              CHUNK_SIZE)
-    resize(&w.npcs,               CHUNK_SIZE)
-    resize(&w.mut_damage_mults,   CHUNK_SIZE)
-    resize(&w.mut_lock_hp_to_one, CHUNK_SIZE)
-    resize(&w.mut_root_on_fire,   CHUNK_SIZE)
-    resize(&w.mut_timed_self_dmg, CHUNK_SIZE)
-    resize(&w.mut_block_healing,  CHUNK_SIZE)
-    resize(&w.mut_move_speed,     CHUNK_SIZE)
-    resize(&w.mut_block_ranged,   CHUNK_SIZE)
-    resize(&w.mut_block_pickup_heal, CHUNK_SIZE)
-    resize(&w.mut_serum_gain,     CHUNK_SIZE)
-    resize(&w.mut_block_pickups,  CHUNK_SIZE)
-    resize(&w.mut_nonlethal,      CHUNK_SIZE)
-    resize(&w.mut_disable_actives,CHUNK_SIZE)
-    resize(&w.mut_early_death,    CHUNK_SIZE)
-    resize(&w.mut_missing_hp_dmg, CHUNK_SIZE)
-    resize(&w.mut_passive_power,  CHUNK_SIZE)
-    resize(&w.point_lights,       CHUNK_SIZE)
-    resize(&w.anim_states,        CHUNK_SIZE)
-    resize(&w.mut_kill_heal,          CHUNK_SIZE)
-    resize(&w.mut_lifesteal,          CHUNK_SIZE)
-    resize(&w.mut_proximity_damage,   CHUNK_SIZE)
-    resize(&w.mut_on_death_explode,   CHUNK_SIZE)
-    resize(&w.mut_stationary_shield,  CHUNK_SIZE)
-    resize(&w.mut_extra_dodges,       CHUNK_SIZE)
-    resize(&w.mut_dmg_taken_mult,     CHUNK_SIZE)
-    resize(&w.mut_wall_phase,         CHUNK_SIZE)
-    resize(&w.mut_body_melee,         CHUNK_SIZE)
-    resize(&w.mut_corpse_trigger,     CHUNK_SIZE)
-    resize(&w.mut_hide_enemy_sprites, CHUNK_SIZE)
-    resize(&w.mut_unseen_dmg_mult,    CHUNK_SIZE)
-    resize(&w.mut_heart_cage,         CHUNK_SIZE)
-    resize(&w.mut_thorn_pact,         CHUNK_SIZE)
-    resize(&w.mut_carrion_crown,      CHUNK_SIZE)
-    resize(&w.mut_false_saint,        CHUNK_SIZE)
-    resize(&w.mut_black_lung,         CHUNK_SIZE)
-    resize(&w.reanimateds,            CHUNK_SIZE)
-    resize(&w.status_effects,         CHUNK_SIZE)
-    resize(&w.flammbles,              CHUNK_SIZE)
-    resize(&w.organics,               CHUNK_SIZE)
-    resize(&w.interactables,          CHUNK_SIZE)
-    resize(&w.openables,              CHUNK_SIZE)
-    resize(&w.lockables,              CHUNK_SIZE)
-    resize(&w.signal_emitters,        CHUNK_SIZE)
-    resize(&w.signal_receivers,       CHUNK_SIZE)
-    resize(&w.containers,             CHUNK_SIZE)
-    resize(&w.key_pickups,            CHUNK_SIZE)
-    resize(&w.key_rings,              CHUNK_SIZE)
-    resize(&w.lore_items,             CHUNK_SIZE)
-    resize(&w.phonographs,            CHUNK_SIZE)
-    resize(&w.grenades,               CHUNK_SIZE)
-    resize(&w.poison_clouds,          CHUNK_SIZE)
-    resize(&w.aim_locks,              CHUNK_SIZE)
-    resize(&w.damage_amps,            CHUNK_SIZE)
-    resize(&w.damage_amp_on_hits,     CHUNK_SIZE)
-    resize(&w.homings,                CHUNK_SIZE)
-    resize(&w.proximity_triggers,     CHUNK_SIZE)
-    resize(&w.overcharge_buffs,       CHUNK_SIZE)
-    resize(&w.kill_heals,             CHUNK_SIZE)
-    resize(&w.contagion_tags,         CHUNK_SIZE)
-    resize(&w.flasks,                 CHUNK_SIZE)
-    resize(&w.flask_effects,          CHUNK_SIZE)
-    resize(&w.resistances,            CHUNK_SIZE)
-    for i in 0..<CHUNK_SIZE {
-        w.entities[i] = entity_empty()
-    }
+    resize(&w.entities, CHUNK_SIZE)
+    for i in 0..<CHUNK_SIZE { w.entities[i] = entity_empty() }
+
+    _pool_init(&w, .Transform,              TransformComp)
+    _pool_init(&w, .Velocity,               VelocityComp)
+    _pool_init(&w, .Health,                 HealthComp)
+    _pool_init(&w, .InputState,             InputStateComp)
+    _pool_init(&w, .WeaponSlot,             WeaponSlotComp)
+    _pool_init(&w, .MutationContainer,      MutationContainerComp)
+    _pool_init(&w, .MeshRenderer,           MeshRendererComp)
+    _pool_init(&w, .Collider,               ColliderComp)
+    _pool_init(&w, .Projectile,             ProjectileComp)
+    _pool_init(&w, .SelfDestruct,           SelfDestructComp)
+    _pool_init(&w, .AIAgent,                AIAgentComp)
+    _pool_init(&w, .ProjectileTag,          ProjectileTagComp)
+    _pool_init(&w, .Weapon,                 WeaponComp)
+    _pool_init(&w, .Equipment,              EquipmentComp)
+    _pool_init(&w, .DodgeState,             DodgeComp)
+    _pool_init(&w, .RenderConfig,           RenderConfigComp)
+    _pool_init(&w, .MeleeArc,               MeleeArcComp)
+    _pool_init(&w, .Respawn,                RespawnComp)
+    _pool_init(&w, .Inventory,              InventoryComp,              _inv_clear)
+    _pool_init(&w, .Item,                   ItemComp,                   _item_clear)
+    _pool_init(&w, .GroundItem,             GroundItemComp)
+    _pool_init(&w, .Ability,                AbilityComp)
+    _pool_init(&w, .Stats,                  StatsComp)
+    _pool_init(&w, .FogOfWar,               FogOfWarComp)
+    _pool_init(&w, .Extraction,             ExtractionComp)
+    _pool_init(&w, .Mut,                    MutComp)
+    _pool_init(&w, .Player,                 PlayerComp)
+    _pool_init(&w, .Wallet,                 WalletComp)
+    _pool_init(&w, .Gold,                   GoldComp)
+    _pool_init(&w, .NPC,                    NPCComp)
+    _pool_init(&w, .MutDamageMult,          MutDamageMultComp)
+    _pool_init(&w, .MutLockHpToOne,         MutLockHpToOneComp)
+    _pool_init(&w, .MutRootOnFire,          MutRootOnFireComp)
+    _pool_init(&w, .MutTimedSelfDamage,     MutTimedSelfDamageComp)
+    _pool_init(&w, .MutBlockHealing,        MutBlockHealingComp)
+    _pool_init(&w, .MutMoveSpeedMult,       MutMoveSpeedMultComp)
+    _pool_init(&w, .MutBlockRanged,         MutBlockRangedComp)
+    _pool_init(&w, .MutBlockPickupHeal,     MutBlockPickupHealComp)
+    _pool_init(&w, .MutSerumGainMult,       MutSerumGainMultComp)
+    _pool_init(&w, .MutBlockPickups,        MutBlockPickupsComp)
+    _pool_init(&w, .MutNonlethalShots,      MutNonlethalShotsComp)
+    _pool_init(&w, .MutDisableActives,      MutDisableActivesComp)
+    _pool_init(&w, .MutEarlyDeathThreshold, MutEarlyDeathThresholdComp)
+    _pool_init(&w, .MutMissingHealthDamage, MutMissingHealthDamageComp)
+    _pool_init(&w, .MutPassivePower,        MutPassivePowerComp)
+    _pool_init(&w, .PointLight,             PointLightComp)
+    _pool_init(&w, .AnimState,              AnimStateComp)
+    _pool_init(&w, .MutKillHeal,            MutKillHealComp)
+    _pool_init(&w, .MutLifesteal,           MutLifestealComp)
+    _pool_init(&w, .MutProximityDamage,     MutProximityDamageComp)
+    _pool_init(&w, .MutOnDeathExplode,      MutOnDeathExplodeComp)
+    _pool_init(&w, .MutStationaryShield,    MutStationaryShieldComp)
+    _pool_init(&w, .MutExtraDodgeCharges,   MutExtraDodgeChargesComp)
+    _pool_init(&w, .MutDamageTakenMult,     MutDamageTakenMultComp)
+    _pool_init(&w, .MutWallPhase,           MutWallPhaseComp)
+    _pool_init(&w, .MutBodyMelee,           MutBodyMeleeComp)
+    _pool_init(&w, .MutCorpseTrigger,       MutCorpseTriggerComp)
+    _pool_init(&w, .MutHideEnemySprites,    MutHideEnemySpritesComp)
+    _pool_init(&w, .MutUnseenDamageMult,    MutUnseenDamageMultComp)
+    _pool_init(&w, .MutHeartCage,           MutHeartCageComp)
+    _pool_init(&w, .MutThornPact,           MutThornPactComp)
+    _pool_init(&w, .MutCarrionCrown,        MutCarrionCrownComp)
+    _pool_init(&w, .MutFalseSaint,          MutFalseSaintComp)
+    _pool_init(&w, .MutBlackLung,           MutBlackLungComp)
+    _pool_init(&w, .Reanimated,             ReanimatedComp)
+    _pool_init(&w, .StatusEffect,           StatusEffectComp)
+    _pool_init(&w, .Flammable,              FlammableComp)
+    _pool_init(&w, .Organic,                OrganicComp)
+    _pool_init(&w, .Interactable,           InteractableComp)
+    _pool_init(&w, .Openable,               OpenableComp)
+    _pool_init(&w, .Lockable,               LockableComp)
+    _pool_init(&w, .SignalEmitter,          SignalEmitterComp)
+    _pool_init(&w, .SignalReceiver,         SignalReceiverComp)
+    _pool_init(&w, .Container,              ContainerComp)
+    _pool_init(&w, .KeyPickup,              KeyPickupComp)
+    _pool_init(&w, .KeyRing,                KeyRingComp)
+    _pool_init(&w, .LoreItem,               LoreItemComp)
+    _pool_init(&w, .Phonograph,             PhonographComp)
+    _pool_init(&w, .Grenade,                GrenadeComp)
+    _pool_init(&w, .PoisonCloud,            PoisonCloudComp)
+    _pool_init(&w, .AimLock,                AimLockComp)
+    _pool_init(&w, .DamageAmp,              DamageAmpComp)
+    _pool_init(&w, .DamageAmpOnHit,         DamageAmpOnHitComp)
+    _pool_init(&w, .Homing,                 HomingComp)
+    _pool_init(&w, .ProximityTrigger,       ProximityTriggerComp)
+    _pool_init(&w, .OverchargeBuff,         OverchargeBuffComp)
+    _pool_init(&w, .KillHeal,               KillHealComp)
+    _pool_init(&w, .ContagionTag,           ContagionTagComp)
+    _pool_init(&w, .Flask,                  FlaskComp)
+    _pool_init(&w, .FlaskEffect,            FlaskEffectComp)
+    _pool_init(&w, .Resistance,             ResistanceComp)
 
     return w
 }
 
 destroy_world :: proc(w: ^World) {
     delete(w.entities)
-    delete(w.transforms)
-    delete(w.velocities)
-    delete(w.healths)
-    delete(w.inputs)
-    delete(w.weapons)
-    delete(w.mutations)
-    delete(w.renderers)
-    delete(w.colliders)
-    delete(w.projectiles)
-    delete(w.self_destructs)
-    delete(w.ai_agents)
-    delete(w.projectile_tags)
-    delete(w.weapon_data)
-    delete(w.equipment)
-    delete(w.dodge_states)
-    delete(w.render_configs)
-    delete(w.melee_arcs)
-    delete(w.respawns)
-    delete(w.inventories)
-    delete(w.items)
-    delete(w.ground_items)
-    delete(w.abilities)
-    delete(w.stats)
-    delete(w.fog_of_wars)
-    delete(w.extractions)
-    delete(w.muts)
-    delete(w.players)
-    delete(w.wallets)
-    delete(w.golds)
-    delete(w.npcs)
-    delete(w.mut_damage_mults)
-    delete(w.mut_lock_hp_to_one)
-    delete(w.mut_root_on_fire)
-    delete(w.mut_timed_self_dmg)
-    delete(w.mut_block_healing)
-    delete(w.mut_move_speed)
-    delete(w.mut_block_ranged)
-    delete(w.mut_block_pickup_heal)
-    delete(w.mut_serum_gain)
-    delete(w.mut_block_pickups)
-    delete(w.mut_nonlethal)
-    delete(w.mut_disable_actives)
-    delete(w.mut_early_death)
-    delete(w.mut_missing_hp_dmg)
-    delete(w.mut_passive_power)
-    delete(w.point_lights)
-    delete(w.anim_states)
-    delete(w.mut_kill_heal)
-    delete(w.mut_lifesteal)
-    delete(w.mut_proximity_damage)
-    delete(w.mut_on_death_explode)
-    delete(w.mut_stationary_shield)
-    delete(w.mut_extra_dodges)
-    delete(w.mut_dmg_taken_mult)
-    delete(w.mut_wall_phase)
-    delete(w.mut_body_melee)
-    delete(w.mut_corpse_trigger)
-    delete(w.mut_hide_enemy_sprites)
-    delete(w.mut_unseen_dmg_mult)
-    delete(w.mut_heart_cage)
-    delete(w.mut_thorn_pact)
-    delete(w.mut_carrion_crown)
-    delete(w.mut_false_saint)
-    delete(w.mut_black_lung)
-    delete(w.reanimateds)
-    delete(w.damage_events)
     delete(w.recycled_ids)
-    delete(w.status_effects)
-    delete(w.flammbles)
-    delete(w.organics)
-    delete(w.interactables)
-    delete(w.openables)
-    delete(w.lockables)
-    delete(w.signal_emitters)
-    delete(w.signal_receivers)
-    delete(w.containers)
-    delete(w.key_pickups)
-    delete(w.key_rings)
-    delete(w.lore_items)
-    delete(w.phonographs)
-    delete(w.grenades)
-    delete(w.poison_clouds)
-    delete(w.aim_locks)
-    delete(w.damage_amps)
-    delete(w.damage_amp_on_hits)
-    delete(w.homings)
-    delete(w.proximity_triggers)
-    delete(w.overcharge_buffs)
-    delete(w.kill_heals)
-    delete(w.contagion_tags)
-    delete(w.flasks)
-    delete(w.flask_effects)
-    delete(w.resistances)
+    delete(w.damage_events)
+    for &p in w.pools { delete(p.bytes); delete(p.bitset) }
 }
 
 world_create_entity :: proc(w: ^World) -> int {
@@ -1372,103 +1240,8 @@ world_destroy_entity :: proc(w: ^World, id: int) {
     if id < 0 || id >= len(w.entities) { return }
     e := &w.entities[id]
     if !entity_is_active(e^) { return }
-
-    e.flags     = {}
+    e.flags     = { .ToDestroy }
     e.signature = 0
-    w.entities[id] = entity_empty()
-
-    w.transforms[id]    = {}
-    w.velocities[id]    = {}
-    w.healths[id]       = {}
-    w.inputs[id]        = {}
-    w.weapons[id]       = {}
-    w.mutations[id]     = {}
-    w.renderers[id]     = {}
-    w.colliders[id]     = {}
-    w.projectiles[id]     = {}
-    w.self_destructs[id]  = {}
-    w.ai_agents[id]       = {}
-    w.projectile_tags[id] = {}
-    w.weapon_data[id]     = {}
-    w.equipment[id]       = {}
-    w.dodge_states[id]    = {}
-    w.render_configs[id]  = {}
-    w.melee_arcs[id]      = {}
-    w.respawns[id]        = {}
-    w.inventories[id]     = inventory_make_empty()
-    w.items[id]           = item_empty()
-    w.ground_items[id]    = {}
-    w.abilities[id]          = {}
-    w.stats[id]              = {}
-    w.fog_of_wars[id]        = {}
-    w.extractions[id]        = {}
-    w.muts[id]               = {}
-    w.players[id]            = {}
-    w.wallets[id]            = {}
-    w.golds[id]              = {}
-    w.npcs[id]               = {}
-    w.mut_damage_mults[id]   = {}
-    w.mut_lock_hp_to_one[id] = {}
-    w.mut_root_on_fire[id]   = {}
-    w.mut_timed_self_dmg[id] = {}
-    w.mut_block_healing[id]  = {}
-    w.mut_move_speed[id]     = {}
-    w.mut_block_ranged[id]   = {}
-    w.mut_block_pickup_heal[id] = {}
-    w.mut_serum_gain[id]     = {}
-    w.mut_block_pickups[id]  = {}
-    w.mut_nonlethal[id]      = {}
-    w.mut_disable_actives[id]= {}
-    w.mut_early_death[id]    = {}
-    w.mut_missing_hp_dmg[id] = {}
-    w.mut_passive_power[id]  = {}
-    w.point_lights[id]       = {}
-    w.anim_states[id]        = {}
-    w.mut_kill_heal[id]          = {}
-    w.mut_lifesteal[id]          = {}
-    w.mut_proximity_damage[id]   = {}
-    w.mut_on_death_explode[id]   = {}
-    w.mut_stationary_shield[id]  = {}
-    w.mut_extra_dodges[id]       = {}
-    w.mut_dmg_taken_mult[id]     = {}
-    w.mut_wall_phase[id]         = {}
-    w.mut_body_melee[id]         = {}
-    w.mut_corpse_trigger[id]     = {}
-    w.mut_hide_enemy_sprites[id] = {}
-    w.mut_unseen_dmg_mult[id]    = {}
-    w.mut_heart_cage[id]         = {}
-    w.mut_thorn_pact[id]         = {}
-    w.mut_carrion_crown[id]      = {}
-    w.mut_false_saint[id]        = {}
-    w.mut_black_lung[id]         = {}
-    w.reanimateds[id]            = {}
-    w.status_effects[id]         = {}
-    w.flammbles[id]              = {}
-    w.organics[id]               = {}
-    w.interactables[id]          = {}
-    w.openables[id]              = {}
-    w.lockables[id]              = {}
-    w.signal_emitters[id]        = {}
-    w.signal_receivers[id]       = {}
-    w.containers[id]             = {}
-    w.key_pickups[id]            = {}
-    w.key_rings[id]              = {}
-    w.lore_items[id]             = {}
-    w.phonographs[id]            = {}
-    w.grenades[id]               = {}
-    w.poison_clouds[id]          = {}
-    w.aim_locks[id]              = {}
-    w.damage_amps[id]            = {}
-    w.damage_amp_on_hits[id]     = {}
-    w.homings[id]                = {}
-    w.proximity_triggers[id]     = {}
-    w.overcharge_buffs[id]       = {}
-    w.kill_heals[id]             = {}
-    w.contagion_tags[id]         = {}
-    w.flasks[id]                 = {}
-    w.flask_effects[id]          = {}
-    w.resistances[id]            = {}
-    append(&w.recycled_ids, id)
 }
 
 world_is_valid :: proc(w: ^World, id: int) -> bool {
@@ -1482,6 +1255,7 @@ world_reset :: proc(w: ^World) {
             world_destroy_entity(w, w.entities[i].id)
         }
     }
+    world_sweep(w)
 
     clear(&w.recycled_ids)
     w.next_id      = 0
@@ -1495,763 +1269,592 @@ world_reset :: proc(w: ^World) {
 
 world_ensure_capacity :: proc(w: ^World, id: int) {
     if id < len(w.entities) { return }
-
     target := ((id / CHUNK_SIZE) + 1) * CHUNK_SIZE
+    resize(&w.entities, target)
+    for &p in w.pools {
+        resize(&p.bytes,  target * p.elem_size)
+        resize(&p.bitset, (target + 63) / 64)
+    }
+}
 
-    resize(&w.entities,      target)
-    resize(&w.transforms,    target)
-    resize(&w.velocities,    target)
-    resize(&w.healths,       target)
-    resize(&w.inputs,        target)
-    resize(&w.weapons,       target)
-    resize(&w.mutations,     target)
-    resize(&w.renderers,     target)
-    resize(&w.colliders,     target)
-    resize(&w.projectiles,     target)
-    resize(&w.self_destructs,  target)
-    resize(&w.ai_agents,       target)
-    resize(&w.projectile_tags, target)
-    resize(&w.weapon_data,     target)
-    resize(&w.equipment,       target)
-    resize(&w.dodge_states,    target)
-    resize(&w.render_configs,  target)
-    resize(&w.melee_arcs,      target)
-    resize(&w.respawns,        target)
-    resize(&w.inventories,     target)
-    resize(&w.items,           target)
-    resize(&w.ground_items,    target)
-    resize(&w.abilities,         target)
-    resize(&w.stats,             target)
-    resize(&w.fog_of_wars,       target)
-    resize(&w.extractions,       target)
-    resize(&w.muts,              target)
-    resize(&w.players,            target)
-    resize(&w.wallets,            target)
-    resize(&w.golds,              target)
-    resize(&w.npcs,               target)
-    resize(&w.mut_damage_mults,   target)
-    resize(&w.mut_lock_hp_to_one, target)
-    resize(&w.mut_root_on_fire,   target)
-    resize(&w.mut_timed_self_dmg, target)
-    resize(&w.mut_block_healing,  target)
-    resize(&w.mut_move_speed,     target)
-    resize(&w.mut_block_ranged,   target)
-    resize(&w.mut_block_pickup_heal, target)
-    resize(&w.mut_serum_gain,     target)
-    resize(&w.mut_block_pickups,  target)
-    resize(&w.mut_nonlethal,      target)
-    resize(&w.mut_disable_actives,target)
-    resize(&w.mut_early_death,    target)
-    resize(&w.mut_missing_hp_dmg, target)
-    resize(&w.mut_passive_power,  target)
-    resize(&w.point_lights,       target)
-    resize(&w.anim_states,        target)
-    resize(&w.mut_kill_heal,          target)
-    resize(&w.mut_lifesteal,          target)
-    resize(&w.mut_proximity_damage,   target)
-    resize(&w.mut_on_death_explode,   target)
-    resize(&w.mut_stationary_shield,  target)
-    resize(&w.mut_extra_dodges,       target)
-    resize(&w.mut_dmg_taken_mult,     target)
-    resize(&w.mut_wall_phase,         target)
-    resize(&w.mut_body_melee,         target)
-    resize(&w.mut_corpse_trigger,     target)
-    resize(&w.mut_hide_enemy_sprites, target)
-    resize(&w.mut_unseen_dmg_mult,    target)
-    resize(&w.mut_heart_cage,         target)
-    resize(&w.mut_thorn_pact,         target)
-    resize(&w.mut_carrion_crown,      target)
-    resize(&w.mut_false_saint,        target)
-    resize(&w.mut_black_lung,         target)
-    resize(&w.reanimateds,            target)
-    resize(&w.status_effects,         target)
-    resize(&w.flammbles,              target)
-    resize(&w.organics,               target)
-    resize(&w.interactables,          target)
-    resize(&w.openables,              target)
-    resize(&w.lockables,              target)
-    resize(&w.signal_emitters,        target)
-    resize(&w.signal_receivers,       target)
-    resize(&w.containers,             target)
-    resize(&w.key_pickups,            target)
-    resize(&w.key_rings,              target)
-    resize(&w.lore_items,             target)
-    resize(&w.phonographs,            target)
-    resize(&w.grenades,               target)
-    resize(&w.poison_clouds,          target)
-    resize(&w.aim_locks,              target)
-    resize(&w.damage_amps,            target)
-    resize(&w.damage_amp_on_hits,     target)
-    resize(&w.homings,                target)
-    resize(&w.proximity_triggers,     target)
-    resize(&w.overcharge_buffs,       target)
-    resize(&w.kill_heals,             target)
-    resize(&w.contagion_tags,         target)
-    resize(&w.flasks,                 target)
-    resize(&w.flask_effects,          target)
-    resize(&w.resistances,            target)
+world_sweep :: proc(w: ^World) {
+    for i in 0..<len(w.entities) {
+        e := &w.entities[i]
+        if .ToDestroy not_in e.flags { continue }
+        word := i >> 6
+        bit  := uint(i & 63)
+        for ct in ComponentType {
+            p := &w.pools[ct]
+            slot := rawptr(uintptr(raw_data(p.bytes)) + uintptr(i * p.elem_size))
+            if p.clear != nil { p.clear(slot) } else { mem.zero(slot, p.elem_size) }
+            p.bitset[word] &~= u64(1) << bit
+        }
+        w.entities[i] = entity_empty()
+        append(&w.recycled_ids, i)
+    }
 }
 
 world_set_transform :: proc(w: ^World, id: int, c: TransformComp) {
-    w.transforms[id] = c
-    entity_sig_set(&w.entities[id].signature, .Transform)
+    _comp_set(w, id, TransformComp, .Transform, c)
 }
 world_get_transform :: proc(w: ^World, id: int) -> ^TransformComp {
-    return &w.transforms[id]
+    return _comp(w, id, TransformComp, .Transform)
 }
 
 world_set_velocity :: proc(w: ^World, id: int, c: VelocityComp) {
-    w.velocities[id] = c
-    entity_sig_set(&w.entities[id].signature, .Velocity)
+    _comp_set(w, id, VelocityComp, .Velocity, c)
 }
 world_get_velocity :: proc(w: ^World, id: int) -> ^VelocityComp {
-    return &w.velocities[id]
+    return _comp(w, id, VelocityComp, .Velocity)
 }
 
 world_set_health :: proc(w: ^World, id: int, c: HealthComp) {
-    w.healths[id] = c
-    entity_sig_set(&w.entities[id].signature, .Health)
+    _comp_set(w, id, HealthComp, .Health, c)
 }
 world_get_health :: proc(w: ^World, id: int) -> ^HealthComp {
-    return &w.healths[id]
+    return _comp(w, id, HealthComp, .Health)
 }
 
 world_set_input :: proc(w: ^World, id: int, c: InputStateComp) {
-    w.inputs[id] = c
-    entity_sig_set(&w.entities[id].signature, .InputState)
+    _comp_set(w, id, InputStateComp, .InputState, c)
 }
 world_get_input :: proc(w: ^World, id: int) -> ^InputStateComp {
-    return &w.inputs[id]
+    return _comp(w, id, InputStateComp, .InputState)
 }
 
 world_set_weapon :: proc(w: ^World, id: int, c: WeaponSlotComp) {
-    w.weapons[id] = c
-    entity_sig_set(&w.entities[id].signature, .WeaponSlot)
+    _comp_set(w, id, WeaponSlotComp, .WeaponSlot, c)
 }
 world_get_weapon :: proc(w: ^World, id: int) -> ^WeaponSlotComp {
-    return &w.weapons[id]
+    return _comp(w, id, WeaponSlotComp, .WeaponSlot)
 }
 
 world_set_mutation :: proc(w: ^World, id: int, c: MutationContainerComp) {
-    w.mutations[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutationContainer)
+    _comp_set(w, id, MutationContainerComp, .MutationContainer, c)
 }
 world_get_mutation :: proc(w: ^World, id: int) -> ^MutationContainerComp {
-    return &w.mutations[id]
+    return _comp(w, id, MutationContainerComp, .MutationContainer)
 }
 
 world_set_flammable :: proc(w: ^World, id: int, c: FlammableComp) {
-    w.flammbles[id] = c
-    entity_sig_set(&w.entities[id].signature, .Flammable)
+    _comp_set(w, id, FlammableComp, .Flammable, c)
 }
-
 world_get_flammable :: proc(w: ^World, id: int) -> ^FlammableComp {
-    return &w.flammbles[id]
+    return _comp(w, id, FlammableComp, .Flammable)
 }
 
 world_set_organic :: proc(w: ^World, id: int, c: OrganicComp) {
-    w.organics[id] = c
-    entity_sig_set(&w.entities[id].signature, .Organic)
+    _comp_set(w, id, OrganicComp, .Organic, c)
 }
 world_get_organic :: proc(w: ^World, id: int) -> ^OrganicComp {
-    return &w.organics[id]
+    return _comp(w, id, OrganicComp, .Organic)
 }
-
 
 world_set_interactable :: proc(w: ^World, id: int, c: InteractableComp) {
-    w.interactables[id] = c
-    entity_sig_set(&w.entities[id].signature, .Interactable)
+    _comp_set(w, id, InteractableComp, .Interactable, c)
 }
 world_get_interactable :: proc(w: ^World, id: int) -> ^InteractableComp {
-    return &w.interactables[id]
+    return _comp(w, id, InteractableComp, .Interactable)
 }
 
 world_set_openable :: proc(w: ^World, id: int, c: OpenableComp) {
-    w.openables[id] = c
-    entity_sig_set(&w.entities[id].signature, .Openable)
+    _comp_set(w, id, OpenableComp, .Openable, c)
 }
 world_get_openable :: proc(w: ^World, id: int) -> ^OpenableComp {
-    return &w.openables[id]
+    return _comp(w, id, OpenableComp, .Openable)
 }
 
 world_set_lockable :: proc(w: ^World, id: int, c: LockableComp) {
-    w.lockables[id] = c
-    entity_sig_set(&w.entities[id].signature, .Lockable)
+    _comp_set(w, id, LockableComp, .Lockable, c)
 }
 world_get_lockable :: proc(w: ^World, id: int) -> ^LockableComp {
-    return &w.lockables[id]
+    return _comp(w, id, LockableComp, .Lockable)
 }
 
 world_set_signal_emitter :: proc(w: ^World, id: int, c: SignalEmitterComp) {
-    w.signal_emitters[id] = c
-    entity_sig_set(&w.entities[id].signature, .SignalEmitter)
+    _comp_set(w, id, SignalEmitterComp, .SignalEmitter, c)
 }
 world_get_signal_emitter :: proc(w: ^World, id: int) -> ^SignalEmitterComp {
-    return &w.signal_emitters[id]
+    return _comp(w, id, SignalEmitterComp, .SignalEmitter)
 }
 
 world_set_signal_receiver :: proc(w: ^World, id: int, c: SignalReceiverComp) {
-    w.signal_receivers[id] = c
-    entity_sig_set(&w.entities[id].signature, .SignalReceiver)
+    _comp_set(w, id, SignalReceiverComp, .SignalReceiver, c)
 }
 world_get_signal_receiver :: proc(w: ^World, id: int) -> ^SignalReceiverComp {
-    return &w.signal_receivers[id]
+    return _comp(w, id, SignalReceiverComp, .SignalReceiver)
 }
 
 world_set_container :: proc(w: ^World, id: int, c: ContainerComp) {
-    w.containers[id] = c
-    entity_sig_set(&w.entities[id].signature, .Container)
+    _comp_set(w, id, ContainerComp, .Container, c)
 }
 world_get_container :: proc(w: ^World, id: int) -> ^ContainerComp {
-    return &w.containers[id]
+    return _comp(w, id, ContainerComp, .Container)
 }
 
 world_set_key_pickup :: proc(w: ^World, id: int, c: KeyPickupComp) {
-    w.key_pickups[id] = c
-    entity_sig_set(&w.entities[id].signature, .KeyPickup)
+    _comp_set(w, id, KeyPickupComp, .KeyPickup, c)
 }
 world_get_key_pickup :: proc(w: ^World, id: int) -> ^KeyPickupComp {
-    return &w.key_pickups[id]
+    return _comp(w, id, KeyPickupComp, .KeyPickup)
 }
 
 world_set_key_ring :: proc(w: ^World, id: int, c: KeyRingComp) {
-    w.key_rings[id] = c
-    entity_sig_set(&w.entities[id].signature, .KeyRing)
+    _comp_set(w, id, KeyRingComp, .KeyRing, c)
 }
 world_get_key_ring :: proc(w: ^World, id: int) -> ^KeyRingComp {
-    return &w.key_rings[id]
+    return _comp(w, id, KeyRingComp, .KeyRing)
 }
 
 world_set_lore_item :: proc(w: ^World, id: int, c: LoreItemComp) {
-    w.lore_items[id] = c
-    entity_sig_set(&w.entities[id].signature, .LoreItem)
+    _comp_set(w, id, LoreItemComp, .LoreItem, c)
 }
 world_get_lore_item :: proc(w: ^World, id: int) -> ^LoreItemComp {
-    return &w.lore_items[id]
+    return _comp(w, id, LoreItemComp, .LoreItem)
 }
 
 world_set_phonograph :: proc(w: ^World, id: int, c: PhonographComp) {
-    w.phonographs[id] = c
-    entity_sig_set(&w.entities[id].signature, .Phonograph)
+    _comp_set(w, id, PhonographComp, .Phonograph, c)
 }
 world_get_phonograph :: proc(w: ^World, id: int) -> ^PhonographComp {
-    return &w.phonographs[id]
+    return _comp(w, id, PhonographComp, .Phonograph)
 }
 
 world_set_grenade :: proc(w: ^World, id: int, c: GrenadeComp) {
-    w.grenades[id] = c
-    entity_sig_set(&w.entities[id].signature, .Grenade)
+    _comp_set(w, id, GrenadeComp, .Grenade, c)
 }
 world_get_grenade :: proc(w: ^World, id: int) -> ^GrenadeComp {
-    return &w.grenades[id]
+    return _comp(w, id, GrenadeComp, .Grenade)
 }
 
 world_set_poison_cloud :: proc(w: ^World, id: int, c: PoisonCloudComp) {
-    w.poison_clouds[id] = c
-    entity_sig_set(&w.entities[id].signature, .PoisonCloud)
+    _comp_set(w, id, PoisonCloudComp, .PoisonCloud, c)
 }
 world_get_poison_cloud :: proc(w: ^World, id: int) -> ^PoisonCloudComp {
-    return &w.poison_clouds[id]
+    return _comp(w, id, PoisonCloudComp, .PoisonCloud)
 }
-
 
 world_set_aim_lock :: proc(w: ^World, id: int) {
-    w.aim_locks[id] = {}
-    entity_sig_set(&w.entities[id].signature, .AimLock)
+    _comp_set(w, id, AimLockComp, .AimLock, AimLockComp{})
 }
-
-
 world_clear_aim_lock :: proc(w: ^World, id: int) {
-    w.aim_locks[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .AimLock)
+    _comp_clear(w, id, AimLockComp, .AimLock)
 }
-
 
 world_set_damage_amp :: proc(w: ^World, id: int, c: DamageAmpComp) {
-    w.damage_amps[id] = c
-    entity_sig_set(&w.entities[id].signature, .DamageAmp)
+    _comp_set(w, id, DamageAmpComp, .DamageAmp, c)
 }
 world_get_damage_amp :: proc(w: ^World, id: int) -> ^DamageAmpComp {
-    return &w.damage_amps[id]
+    return _comp(w, id, DamageAmpComp, .DamageAmp)
 }
 world_clear_damage_amp :: proc(w: ^World, id: int) {
-    w.damage_amps[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .DamageAmp)
+    _comp_clear(w, id, DamageAmpComp, .DamageAmp)
 }
 
 world_set_damage_amp_on_hit :: proc(w: ^World, id: int, c: DamageAmpOnHitComp) {
-    w.damage_amp_on_hits[id] = c
-    entity_sig_set(&w.entities[id].signature, .DamageAmpOnHit)
+    _comp_set(w, id, DamageAmpOnHitComp, .DamageAmpOnHit, c)
 }
 world_get_damage_amp_on_hit :: proc(w: ^World, id: int) -> ^DamageAmpOnHitComp {
-    return &w.damage_amp_on_hits[id]
+    return _comp(w, id, DamageAmpOnHitComp, .DamageAmpOnHit)
 }
 world_clear_damage_amp_on_hit :: proc(w: ^World, id: int) {
-    w.damage_amp_on_hits[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .DamageAmpOnHit)
+    _comp_clear(w, id, DamageAmpOnHitComp, .DamageAmpOnHit)
 }
 
 world_set_homing :: proc(w: ^World, id: int, c: HomingComp) {
-    w.homings[id] = c
-    entity_sig_set(&w.entities[id].signature, .Homing)
+    _comp_set(w, id, HomingComp, .Homing, c)
 }
 world_get_homing :: proc(w: ^World, id: int) -> ^HomingComp {
-    return &w.homings[id]
+    return _comp(w, id, HomingComp, .Homing)
 }
 
 world_set_proximity_trigger :: proc(w: ^World, id: int, c: ProximityTriggerComp) {
-    w.proximity_triggers[id] = c
-    entity_sig_set(&w.entities[id].signature, .ProximityTrigger)
+    _comp_set(w, id, ProximityTriggerComp, .ProximityTrigger, c)
 }
 world_get_proximity_trigger :: proc(w: ^World, id: int) -> ^ProximityTriggerComp {
-    return &w.proximity_triggers[id]
+    return _comp(w, id, ProximityTriggerComp, .ProximityTrigger)
 }
 
 world_set_overcharge_buff :: proc(w: ^World, id: int, c: OverchargeBuffComp) {
-    w.overcharge_buffs[id] = c
-    entity_sig_set(&w.entities[id].signature, .OverchargeBuff)
+    _comp_set(w, id, OverchargeBuffComp, .OverchargeBuff, c)
 }
 world_get_overcharge_buff :: proc(w: ^World, id: int) -> ^OverchargeBuffComp {
-    return &w.overcharge_buffs[id]
+    return _comp(w, id, OverchargeBuffComp, .OverchargeBuff)
 }
 world_clear_overcharge_buff :: proc(w: ^World, id: int) {
-    w.overcharge_buffs[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .OverchargeBuff)
+    _comp_clear(w, id, OverchargeBuffComp, .OverchargeBuff)
 }
 
 world_set_kill_heal :: proc(w: ^World, id: int, c: KillHealComp) {
-    w.kill_heals[id] = c
-    entity_sig_set(&w.entities[id].signature, .KillHeal)
+    _comp_set(w, id, KillHealComp, .KillHeal, c)
 }
 world_get_kill_heal :: proc(w: ^World, id: int) -> ^KillHealComp {
-    return &w.kill_heals[id]
+    return _comp(w, id, KillHealComp, .KillHeal)
 }
 world_clear_kill_heal :: proc(w: ^World, id: int) {
-    w.kill_heals[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .KillHeal)
+    _comp_clear(w, id, KillHealComp, .KillHeal)
 }
 
 world_set_contagion_tag :: proc(w: ^World, id: int) {
-    w.contagion_tags[id] = {}
-    entity_sig_set(&w.entities[id].signature, .ContagionTag)
+    _comp_set(w, id, ContagionTagComp, .ContagionTag, ContagionTagComp{})
 }
 world_clear_contagion_tag :: proc(w: ^World, id: int) {
-    w.contagion_tags[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .ContagionTag)
+    _comp_clear(w, id, ContagionTagComp, .ContagionTag)
 }
 
 world_set_flask :: proc(w: ^World, id: int, c: FlaskComp) {
-    w.flasks[id] = c
-    entity_sig_set(&w.entities[id].signature, .Flask)
+    _comp_set(w, id, FlaskComp, .Flask, c)
 }
 world_get_flask :: proc(w: ^World, id: int) -> ^FlaskComp {
-    return &w.flasks[id]
+    return _comp(w, id, FlaskComp, .Flask)
 }
 world_clear_flask :: proc(w: ^World, id: int) {
-    w.flasks[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .Flask)
+    _comp_clear(w, id, FlaskComp, .Flask)
 }
 
 world_set_flask_effect :: proc(w: ^World, id: int, c: FlaskEffectComp) {
-    w.flask_effects[id] = c
-    entity_sig_set(&w.entities[id].signature, .FlaskEffect)
+    _comp_set(w, id, FlaskEffectComp, .FlaskEffect, c)
 }
 world_get_flask_effect :: proc(w: ^World, id: int) -> ^FlaskEffectComp {
-    return &w.flask_effects[id]
+    return _comp(w, id, FlaskEffectComp, .FlaskEffect)
 }
 world_clear_flask_effect :: proc(w: ^World, id: int) {
-    w.flask_effects[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .FlaskEffect)
+    _comp_clear(w, id, FlaskEffectComp, .FlaskEffect)
 }
 
 world_set_resistance :: proc(w: ^World, id: int, c: ResistanceComp) {
-    w.resistances[id] = c
-    entity_sig_set(&w.entities[id].signature, .Resistance)
+    _comp_set(w, id, ResistanceComp, .Resistance, c)
 }
 world_get_resistance :: proc(w: ^World, id: int) -> ^ResistanceComp {
-    return &w.resistances[id]
+    return _comp(w, id, ResistanceComp, .Resistance)
 }
 world_clear_resistance :: proc(w: ^World, id: int) {
-    w.resistances[id] = {}
-    entity_sig_clear(&w.entities[id].signature, .Resistance)
+    _comp_clear(w, id, ResistanceComp, .Resistance)
 }
-
 
 world_set_extraction :: proc(w: ^World, id: int, c: ExtractionComp) {
-    w.extractions[id] = c
-    entity_sig_set(&w.entities[id].signature, .Extraction)
+    _comp_set(w, id, ExtractionComp, .Extraction, c)
 }
 world_get_extraction :: proc(w: ^World, id: int) -> ^ExtractionComp {
-    return &w.extractions[id]
+    return _comp(w, id, ExtractionComp, .Extraction)
 }
 
 world_set_mut :: proc(w: ^World, id: int, c: MutComp) {
-    w.muts[id] = c
-    entity_sig_set(&w.entities[id].signature, .Mut)
+    _comp_set(w, id, MutComp, .Mut, c)
 }
 world_get_mut :: proc(w: ^World, id: int) -> ^MutComp {
-    return &w.muts[id]
+    return _comp(w, id, MutComp, .Mut)
 }
 
 world_set_player :: proc(w: ^World, id: int, c: PlayerComp) {
-    w.players[id] = c
-    entity_sig_set(&w.entities[id].signature, .Player)
+    _comp_set(w, id, PlayerComp, .Player, c)
 }
 world_get_player :: proc(w: ^World, id: int) -> ^PlayerComp {
-    return &w.players[id]
+    return _comp(w, id, PlayerComp, .Player)
 }
 
 world_set_wallet :: proc(w: ^World, id: int, c: WalletComp) {
-    w.wallets[id] = c
-    entity_sig_set(&w.entities[id].signature, .Wallet)
+    _comp_set(w, id, WalletComp, .Wallet, c)
 }
 world_get_wallet :: proc(w: ^World, id: int) -> ^WalletComp {
-    return &w.wallets[id]
+    return _comp(w, id, WalletComp, .Wallet)
 }
 
 world_set_gold :: proc(w: ^World, id: int, c: GoldComp) {
-    w.golds[id] = c
-    entity_sig_set(&w.entities[id].signature, .Gold)
+    _comp_set(w, id, GoldComp, .Gold, c)
 }
 world_get_gold :: proc(w: ^World, id: int) -> ^GoldComp {
-    return &w.golds[id]
+    return _comp(w, id, GoldComp, .Gold)
 }
 
 world_set_npc :: proc(w: ^World, id: int, c: NPCComp) {
-    w.npcs[id] = c
-    entity_sig_set(&w.entities[id].signature, .NPC)
+    _comp_set(w, id, NPCComp, .NPC, c)
 }
 world_get_npc :: proc(w: ^World, id: int) -> ^NPCComp {
-    return &w.npcs[id]
+    return _comp(w, id, NPCComp, .NPC)
 }
 
 world_set_mut_damage_mult :: proc(w: ^World, id: int, c: MutDamageMultComp) {
-    w.mut_damage_mults[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutDamageMult)
+    _comp_set(w, id, MutDamageMultComp, .MutDamageMult, c)
 }
 world_get_mut_damage_mult :: proc(w: ^World, id: int) -> ^MutDamageMultComp {
-    return &w.mut_damage_mults[id]
+    return _comp(w, id, MutDamageMultComp, .MutDamageMult)
 }
 
 world_set_mut_lock_hp_to_one :: proc(w: ^World, id: int) {
-    w.mut_lock_hp_to_one[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutLockHpToOne)
+    _comp_set(w, id, MutLockHpToOneComp, .MutLockHpToOne, MutLockHpToOneComp{})
 }
 
 world_set_mut_root_on_fire :: proc(w: ^World, id: int, c: MutRootOnFireComp) {
-    w.mut_root_on_fire[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutRootOnFire)
+    _comp_set(w, id, MutRootOnFireComp, .MutRootOnFire, c)
 }
 world_get_mut_root_on_fire :: proc(w: ^World, id: int) -> ^MutRootOnFireComp {
-    return &w.mut_root_on_fire[id]
+    return _comp(w, id, MutRootOnFireComp, .MutRootOnFire)
 }
 
 world_set_mut_timed_self_damage :: proc(w: ^World, id: int, c: MutTimedSelfDamageComp) {
-    w.mut_timed_self_dmg[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutTimedSelfDamage)
+    _comp_set(w, id, MutTimedSelfDamageComp, .MutTimedSelfDamage, c)
 }
 world_get_mut_timed_self_damage :: proc(w: ^World, id: int) -> ^MutTimedSelfDamageComp {
-    return &w.mut_timed_self_dmg[id]
+    return _comp(w, id, MutTimedSelfDamageComp, .MutTimedSelfDamage)
 }
 
 world_set_mut_block_healing :: proc(w: ^World, id: int) {
-    w.mut_block_healing[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutBlockHealing)
+    _comp_set(w, id, MutBlockHealingComp, .MutBlockHealing, MutBlockHealingComp{})
 }
 
 world_set_mut_move_speed_mult :: proc(w: ^World, id: int, c: MutMoveSpeedMultComp) {
-    w.mut_move_speed[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutMoveSpeedMult)
+    _comp_set(w, id, MutMoveSpeedMultComp, .MutMoveSpeedMult, c)
 }
 world_get_mut_move_speed_mult :: proc(w: ^World, id: int) -> ^MutMoveSpeedMultComp {
-    return &w.mut_move_speed[id]
+    return _comp(w, id, MutMoveSpeedMultComp, .MutMoveSpeedMult)
 }
 
 world_set_mut_block_ranged :: proc(w: ^World, id: int) {
-    w.mut_block_ranged[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutBlockRanged)
+    _comp_set(w, id, MutBlockRangedComp, .MutBlockRanged, MutBlockRangedComp{})
 }
 
 world_set_mut_block_pickup_heal :: proc(w: ^World, id: int) {
-    w.mut_block_pickup_heal[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutBlockPickupHeal)
+    _comp_set(w, id, MutBlockPickupHealComp, .MutBlockPickupHeal, MutBlockPickupHealComp{})
 }
 
 world_set_mut_serum_gain_mult :: proc(w: ^World, id: int, c: MutSerumGainMultComp) {
-    w.mut_serum_gain[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutSerumGainMult)
+    _comp_set(w, id, MutSerumGainMultComp, .MutSerumGainMult, c)
 }
 world_get_mut_serum_gain_mult :: proc(w: ^World, id: int) -> ^MutSerumGainMultComp {
-    return &w.mut_serum_gain[id]
+    return _comp(w, id, MutSerumGainMultComp, .MutSerumGainMult)
 }
 
 world_set_mut_block_pickups :: proc(w: ^World, id: int) {
-    w.mut_block_pickups[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutBlockPickups)
+    _comp_set(w, id, MutBlockPickupsComp, .MutBlockPickups, MutBlockPickupsComp{})
 }
 
 world_set_mut_nonlethal_shots :: proc(w: ^World, id: int) {
-    w.mut_nonlethal[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutNonlethalShots)
+    _comp_set(w, id, MutNonlethalShotsComp, .MutNonlethalShots, MutNonlethalShotsComp{})
 }
 
 world_set_mut_disable_actives :: proc(w: ^World, id: int) {
-    w.mut_disable_actives[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutDisableActives)
+    _comp_set(w, id, MutDisableActivesComp, .MutDisableActives, MutDisableActivesComp{})
 }
 
 world_set_mut_early_death_threshold :: proc(w: ^World, id: int, c: MutEarlyDeathThresholdComp) {
-    w.mut_early_death[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutEarlyDeathThreshold)
+    _comp_set(w, id, MutEarlyDeathThresholdComp, .MutEarlyDeathThreshold, c)
 }
 world_get_mut_early_death_threshold :: proc(w: ^World, id: int) -> ^MutEarlyDeathThresholdComp {
-    return &w.mut_early_death[id]
+    return _comp(w, id, MutEarlyDeathThresholdComp, .MutEarlyDeathThreshold)
 }
 
 world_set_mut_missing_health_damage :: proc(w: ^World, id: int, c: MutMissingHealthDamageComp) {
-    w.mut_missing_hp_dmg[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutMissingHealthDamage)
+    _comp_set(w, id, MutMissingHealthDamageComp, .MutMissingHealthDamage, c)
 }
 world_get_mut_missing_health_damage :: proc(w: ^World, id: int) -> ^MutMissingHealthDamageComp {
-    return &w.mut_missing_hp_dmg[id]
+    return _comp(w, id, MutMissingHealthDamageComp, .MutMissingHealthDamage)
 }
 
 world_set_mut_passive_power :: proc(w: ^World, id: int, c: MutPassivePowerComp) {
-    w.mut_passive_power[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutPassivePower)
+    _comp_set(w, id, MutPassivePowerComp, .MutPassivePower, c)
 }
 world_get_mut_passive_power :: proc(w: ^World, id: int) -> ^MutPassivePowerComp {
-    return &w.mut_passive_power[id]
+    return _comp(w, id, MutPassivePowerComp, .MutPassivePower)
 }
 
 world_set_mut_kill_heal :: proc(w: ^World, id: int, c: MutKillHealComp) {
-    w.mut_kill_heal[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutKillHeal)
+    _comp_set(w, id, MutKillHealComp, .MutKillHeal, c)
 }
 world_get_mut_kill_heal :: proc(w: ^World, id: int) -> ^MutKillHealComp {
-    return &w.mut_kill_heal[id]
+    return _comp(w, id, MutKillHealComp, .MutKillHeal)
 }
 
 world_set_mut_lifesteal :: proc(w: ^World, id: int, c: MutLifestealComp) {
-    w.mut_lifesteal[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutLifesteal)
+    _comp_set(w, id, MutLifestealComp, .MutLifesteal, c)
 }
 world_get_mut_lifesteal :: proc(w: ^World, id: int) -> ^MutLifestealComp {
-    return &w.mut_lifesteal[id]
+    return _comp(w, id, MutLifestealComp, .MutLifesteal)
 }
 
 world_set_mut_proximity_damage :: proc(w: ^World, id: int, c: MutProximityDamageComp) {
-    w.mut_proximity_damage[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutProximityDamage)
+    _comp_set(w, id, MutProximityDamageComp, .MutProximityDamage, c)
 }
 world_get_mut_proximity_damage :: proc(w: ^World, id: int) -> ^MutProximityDamageComp {
-    return &w.mut_proximity_damage[id]
+    return _comp(w, id, MutProximityDamageComp, .MutProximityDamage)
 }
 
 world_set_mut_on_death_explode :: proc(w: ^World, id: int, c: MutOnDeathExplodeComp) {
-    w.mut_on_death_explode[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutOnDeathExplode)
+    _comp_set(w, id, MutOnDeathExplodeComp, .MutOnDeathExplode, c)
 }
 world_get_mut_on_death_explode :: proc(w: ^World, id: int) -> ^MutOnDeathExplodeComp {
-    return &w.mut_on_death_explode[id]
+    return _comp(w, id, MutOnDeathExplodeComp, .MutOnDeathExplode)
 }
 
 world_set_mut_stationary_shield :: proc(w: ^World, id: int, c: MutStationaryShieldComp) {
-    w.mut_stationary_shield[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutStationaryShield)
+    _comp_set(w, id, MutStationaryShieldComp, .MutStationaryShield, c)
 }
 world_get_mut_stationary_shield :: proc(w: ^World, id: int) -> ^MutStationaryShieldComp {
-    return &w.mut_stationary_shield[id]
+    return _comp(w, id, MutStationaryShieldComp, .MutStationaryShield)
 }
 
 world_set_mut_extra_dodge_charges :: proc(w: ^World, id: int, c: MutExtraDodgeChargesComp) {
-    w.mut_extra_dodges[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutExtraDodgeCharges)
+    _comp_set(w, id, MutExtraDodgeChargesComp, .MutExtraDodgeCharges, c)
 }
 world_get_mut_extra_dodge_charges :: proc(w: ^World, id: int) -> ^MutExtraDodgeChargesComp {
-    return &w.mut_extra_dodges[id]
+    return _comp(w, id, MutExtraDodgeChargesComp, .MutExtraDodgeCharges)
 }
 
 world_set_mut_damage_taken_mult :: proc(w: ^World, id: int, c: MutDamageTakenMultComp) {
-    w.mut_dmg_taken_mult[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutDamageTakenMult)
+    _comp_set(w, id, MutDamageTakenMultComp, .MutDamageTakenMult, c)
 }
 world_get_mut_damage_taken_mult :: proc(w: ^World, id: int) -> ^MutDamageTakenMultComp {
-    return &w.mut_dmg_taken_mult[id]
+    return _comp(w, id, MutDamageTakenMultComp, .MutDamageTakenMult)
 }
 
 world_set_mut_wall_phase :: proc(w: ^World, id: int) {
-    w.mut_wall_phase[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutWallPhase)
+    _comp_set(w, id, MutWallPhaseComp, .MutWallPhase, MutWallPhaseComp{})
 }
 
 world_set_mut_body_melee :: proc(w: ^World, id: int, c: MutBodyMeleeComp) {
-    w.mut_body_melee[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutBodyMelee)
+    _comp_set(w, id, MutBodyMeleeComp, .MutBodyMelee, c)
 }
 world_get_mut_body_melee :: proc(w: ^World, id: int) -> ^MutBodyMeleeComp {
-    return &w.mut_body_melee[id]
+    return _comp(w, id, MutBodyMeleeComp, .MutBodyMelee)
 }
 
 world_set_mut_corpse_trigger :: proc(w: ^World, id: int, c: MutCorpseTriggerComp) {
-    w.mut_corpse_trigger[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutCorpseTrigger)
+    _comp_set(w, id, MutCorpseTriggerComp, .MutCorpseTrigger, c)
 }
 world_get_mut_corpse_trigger :: proc(w: ^World, id: int) -> ^MutCorpseTriggerComp {
-    return &w.mut_corpse_trigger[id]
+    return _comp(w, id, MutCorpseTriggerComp, .MutCorpseTrigger)
 }
 
 world_set_mut_hide_enemy_sprites :: proc(w: ^World, id: int) {
-    w.mut_hide_enemy_sprites[id] = {}
-    entity_sig_set(&w.entities[id].signature, .MutHideEnemySprites)
+    _comp_set(w, id, MutHideEnemySpritesComp, .MutHideEnemySprites, MutHideEnemySpritesComp{})
 }
 
 world_set_mut_unseen_damage_mult :: proc(w: ^World, id: int, c: MutUnseenDamageMultComp) {
-    w.mut_unseen_dmg_mult[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutUnseenDamageMult)
+    _comp_set(w, id, MutUnseenDamageMultComp, .MutUnseenDamageMult, c)
 }
 world_get_mut_unseen_damage_mult :: proc(w: ^World, id: int) -> ^MutUnseenDamageMultComp {
-    return &w.mut_unseen_dmg_mult[id]
+    return _comp(w, id, MutUnseenDamageMultComp, .MutUnseenDamageMult)
 }
 
 world_set_mut_heart_cage :: proc(w: ^World, id: int, c: MutHeartCageComp) {
-    w.mut_heart_cage[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutHeartCage)
+    _comp_set(w, id, MutHeartCageComp, .MutHeartCage, c)
 }
 world_get_mut_heart_cage :: proc(w: ^World, id: int) -> ^MutHeartCageComp {
-    return &w.mut_heart_cage[id]
+    return _comp(w, id, MutHeartCageComp, .MutHeartCage)
 }
 
 world_set_mut_thorn_pact :: proc(w: ^World, id: int, c: MutThornPactComp) {
-    w.mut_thorn_pact[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutThornPact)
+    _comp_set(w, id, MutThornPactComp, .MutThornPact, c)
 }
 world_get_mut_thorn_pact :: proc(w: ^World, id: int) -> ^MutThornPactComp {
-    return &w.mut_thorn_pact[id]
+    return _comp(w, id, MutThornPactComp, .MutThornPact)
 }
 
 world_set_mut_carrion_crown :: proc(w: ^World, id: int, c: MutCarrionCrownComp) {
-    w.mut_carrion_crown[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutCarrionCrown)
+    _comp_set(w, id, MutCarrionCrownComp, .MutCarrionCrown, c)
 }
 world_get_mut_carrion_crown :: proc(w: ^World, id: int) -> ^MutCarrionCrownComp {
-    return &w.mut_carrion_crown[id]
+    return _comp(w, id, MutCarrionCrownComp, .MutCarrionCrown)
 }
 
 world_set_mut_false_saint :: proc(w: ^World, id: int, c: MutFalseSaintComp) {
-    w.mut_false_saint[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutFalseSaint)
+    _comp_set(w, id, MutFalseSaintComp, .MutFalseSaint, c)
 }
 world_get_mut_false_saint :: proc(w: ^World, id: int) -> ^MutFalseSaintComp {
-    return &w.mut_false_saint[id]
+    return _comp(w, id, MutFalseSaintComp, .MutFalseSaint)
 }
 
 world_set_mut_black_lung :: proc(w: ^World, id: int, c: MutBlackLungComp) {
-    w.mut_black_lung[id] = c
-    entity_sig_set(&w.entities[id].signature, .MutBlackLung)
+    _comp_set(w, id, MutBlackLungComp, .MutBlackLung, c)
 }
 world_get_mut_black_lung :: proc(w: ^World, id: int) -> ^MutBlackLungComp {
-    return &w.mut_black_lung[id]
+    return _comp(w, id, MutBlackLungComp, .MutBlackLung)
 }
-
 
 world_set_reanimated :: proc(w: ^World, id: int, c: ReanimatedComp) {
-    w.reanimateds[id] = c
-    entity_sig_set(&w.entities[id].signature, .Reanimated)
+    _comp_set(w, id, ReanimatedComp, .Reanimated, c)
 }
 world_get_reanimated :: proc(w: ^World, id: int) -> ^ReanimatedComp {
-    return &w.reanimateds[id]
+    return _comp(w, id, ReanimatedComp, .Reanimated)
 }
 
 world_set_point_light :: proc(w: ^World, id: int, c: PointLightComp) {
-    w.point_lights[id] = c
-    entity_sig_set(&w.entities[id].signature, .PointLight)
+    _comp_set(w, id, PointLightComp, .PointLight, c)
 }
 world_get_point_light :: proc(w: ^World, id: int) -> ^PointLightComp {
-    return &w.point_lights[id]
+    return _comp(w, id, PointLightComp, .PointLight)
 }
 
 world_set_anim_state :: proc(w: ^World, id: int, c: AnimStateComp) {
-    w.anim_states[id] = c
-    entity_sig_set(&w.entities[id].signature, .AnimState)
+    _comp_set(w, id, AnimStateComp, .AnimState, c)
 }
 world_get_anim_state :: proc(w: ^World, id: int) -> ^AnimStateComp {
-    return &w.anim_states[id]
+    return _comp(w, id, AnimStateComp, .AnimState)
 }
 
 world_set_collider :: proc(w: ^World, id: int, c: ColliderComp) {
-    w.colliders[id] = c
-    entity_sig_set(&w.entities[id].signature, .Collider)
+    _comp_set(w, id, ColliderComp, .Collider, c)
 }
 world_get_collider :: proc(w: ^World, id: int) -> ^ColliderComp {
-    return &w.colliders[id]
+    return _comp(w, id, ColliderComp, .Collider)
 }
 
 world_set_projectile :: proc(w: ^World, id: int, c: ProjectileComp) {
-    w.projectiles[id] = c
-    entity_sig_set(&w.entities[id].signature, .Projectile)
+    _comp_set(w, id, ProjectileComp, .Projectile, c)
 }
 
 world_set_self_destruct :: proc(w: ^World, id: int, c: SelfDestructComp) {
-    w.self_destructs[id] = c
-    entity_sig_set(&w.entities[id].signature, .SelfDestruct)
+    _comp_set(w, id, SelfDestructComp, .SelfDestruct, c)
 }
 
 world_set_ai :: proc(w: ^World, id: int, c: AIAgentComp) {
-    w.ai_agents[id] = c
-    entity_sig_set(&w.entities[id].signature, .AIAgent)
+    _comp_set(w, id, AIAgentComp, .AIAgent, c)
 }
 world_get_ai :: proc(w: ^World, id: int) -> ^AIAgentComp {
-    return &w.ai_agents[id]
+    return _comp(w, id, AIAgentComp, .AIAgent)
 }
 
 world_get_self_destruct :: proc(w: ^World, id: int) -> ^SelfDestructComp {
-    return &w.self_destructs[id]
+    return _comp(w, id, SelfDestructComp, .SelfDestruct)
 }
 
 world_set_melee_arc :: proc(w: ^World, id: int, c: MeleeArcComp) {
-    w.melee_arcs[id] = c
-    entity_sig_set(&w.entities[id].signature, .MeleeArc)
+    _comp_set(w, id, MeleeArcComp, .MeleeArc, c)
 }
 world_get_melee_arc :: proc(w: ^World, id: int) -> ^MeleeArcComp {
-    return &w.melee_arcs[id]
+    return _comp(w, id, MeleeArcComp, .MeleeArc)
 }
 
 world_set_respawn :: proc(w: ^World, id: int, c: RespawnComp) {
-    w.respawns[id] = c
-    entity_sig_set(&w.entities[id].signature, .Respawn)
+    _comp_set(w, id, RespawnComp, .Respawn, c)
 }
 world_get_respawn :: proc(w: ^World, id: int) -> ^RespawnComp {
-    return &w.respawns[id]
+    return _comp(w, id, RespawnComp, .Respawn)
 }
 
 world_set_inventory :: proc(w: ^World, id: int, c: InventoryComp) {
-    w.inventories[id] = c
-    entity_sig_set(&w.entities[id].signature, .Inventory)
+    _comp_set(w, id, InventoryComp, .Inventory, c)
 }
 world_get_inventory :: proc(w: ^World, id: int) -> ^InventoryComp {
-    return &w.inventories[id]
+    return _comp(w, id, InventoryComp, .Inventory)
 }
 
 world_set_item :: proc(w: ^World, id: int, c: ItemComp) {
-    w.items[id] = c
-    entity_sig_set(&w.entities[id].signature, .Item)
+    _comp_set(w, id, ItemComp, .Item, c)
 }
 world_get_item :: proc(w: ^World, id: int) -> ^ItemComp {
-    return &w.items[id]
+    return _comp(w, id, ItemComp, .Item)
 }
 
 world_set_ground_item :: proc(w: ^World, id: int) {
-    w.ground_items[id] = {}
-    entity_sig_set(&w.entities[id].signature, .GroundItem)
+    _comp_set(w, id, GroundItemComp, .GroundItem, GroundItemComp{})
 }
-
 world_clear_ground_item :: proc(w: ^World, id: int) {
-    entity_sig_clear(&w.entities[id].signature, .GroundItem)
+    _comp_clear(w, id, GroundItemComp, .GroundItem)
 }
 
 world_get_projectile :: proc(w: ^World, id: int) -> ^ProjectileComp {
-    return &w.projectiles[id]
+    return _comp(w, id, ProjectileComp, .Projectile)
 }
 
 world_push_damage :: proc(w: ^World, target_id: int, amount: f32, source_id: int = 0, kind: DamageKind = .Physical) {
@@ -2278,54 +1881,46 @@ world_tag_is_destroy :: proc(w: ^World, id: int) -> bool {
 }
 
 world_set_projectile_tag :: proc(w: ^World, id: int) {
-    w.projectile_tags[id] = {}
-    entity_sig_set(&w.entities[id].signature, .ProjectileTag)
+    _comp_set(w, id, ProjectileTagComp, .ProjectileTag, ProjectileTagComp{})
 }
 
 world_set_fog_of_war :: proc(w: ^World, id: int) {
-    w.fog_of_wars[id] = {}
-    entity_sig_set(&w.entities[id].signature, .FogOfWar)
+    _comp_set(w, id, FogOfWarComp, .FogOfWar, FogOfWarComp{})
 }
 
 world_set_weapon_data :: proc(w: ^World, id: int, c: WeaponComp) {
-    w.weapon_data[id] = c
-    entity_sig_set(&w.entities[id].signature, .Weapon)
+    _comp_set(w, id, WeaponComp, .Weapon, c)
 }
 world_get_weapon_data :: proc(w: ^World, id: int) -> ^WeaponComp {
-    return &w.weapon_data[id]
+    return _comp(w, id, WeaponComp, .Weapon)
 }
 
 world_set_equipment :: proc(w: ^World, id: int, c: EquipmentComp) {
-    w.equipment[id] = c
-    entity_sig_set(&w.entities[id].signature, .Equipment)
+    _comp_set(w, id, EquipmentComp, .Equipment, c)
 }
 world_get_equipment :: proc(w: ^World, id: int) -> ^EquipmentComp {
-    return &w.equipment[id]
+    return _comp(w, id, EquipmentComp, .Equipment)
 }
 
 world_set_dodge :: proc(w: ^World, id: int, c: DodgeComp) {
-    w.dodge_states[id] = c
-    entity_sig_set(&w.entities[id].signature, .DodgeState)
+    _comp_set(w, id, DodgeComp, .DodgeState, c)
 }
 world_get_dodge :: proc(w: ^World, id: int) -> ^DodgeComp {
-    return &w.dodge_states[id]
+    return _comp(w, id, DodgeComp, .DodgeState)
 }
 
 world_set_render_config :: proc(w: ^World, id: int, c: RenderConfigComp) {
-    w.render_configs[id] = c
-    entity_sig_set(&w.entities[id].signature, .RenderConfig)
+    _comp_set(w, id, RenderConfigComp, .RenderConfig, c)
 }
 world_get_render_config :: proc(w: ^World, id: int) -> ^RenderConfigComp {
-    return &w.render_configs[id]
+    return _comp(w, id, RenderConfigComp, .RenderConfig)
 }
 
 world_set_status_effect :: proc(w: ^World, id: int, c: StatusEffectComp) {
-    w.status_effects[id] = c
-    entity_sig_set(&w.entities[id].signature, .StatusEffect)
+    _comp_set(w, id, StatusEffectComp, .StatusEffect, c)
 }
-
 world_get_status_effects :: proc(w: ^World, id: int) -> ^StatusEffectComp {
-    return &w.status_effects[id]
+    return _comp(w, id, StatusEffectComp, .StatusEffect)
 }
 
 status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
@@ -2439,19 +2034,17 @@ StatsComp :: struct {
 }
 
 world_set_ability :: proc(w: ^World, id: int, c: AbilityComp) {
-    w.abilities[id] = c
-    entity_sig_set(&w.entities[id].signature, .Ability)
+    _comp_set(w, id, AbilityComp, .Ability, c)
 }
 world_get_ability :: proc(w: ^World, id: int) -> ^AbilityComp {
-    return &w.abilities[id]
+    return _comp(w, id, AbilityComp, .Ability)
 }
 
 world_set_stats :: proc(w: ^World, id: int, c: StatsComp) {
-    w.stats[id] = c
-    entity_sig_set(&w.entities[id].signature, .Stats)
+    _comp_set(w, id, StatsComp, .Stats, c)
 }
 world_get_stats :: proc(w: ^World, id: int) -> ^StatsComp {
-    return &w.stats[id]
+    return _comp(w, id, StatsComp, .Stats)
 }
 
 world_entity_count :: proc(w: ^World) -> int {
@@ -2467,14 +2060,47 @@ world_has_component :: proc(w: ^World, id: int, ct: ComponentType) -> bool {
     return entity_sig_has(w.entities[id].signature, ct)
 }
 
+Query :: struct {
+    w:        ^World,
+    mask:     ComponentSignature,
+    word_idx: int,
+    base:     int,
+    cur_word: u64,
+}
+
+world_query_iter :: proc(w: ^World, mask: ComponentSignature) -> Query {
+    return Query{ w = w, mask = mask }
+}
+
+query_next :: proc(q: ^Query) -> (id: int, ok: bool) {
+    for {
+        for q.cur_word != 0 {
+            bit      := int(intrinsics.count_trailing_zeros(q.cur_word))
+            q.cur_word &= q.cur_word - 1
+            eid      := q.base + bit
+            if eid < len(q.w.entities) && entity_is_active(q.w.entities[eid]) {
+                return eid, true
+            }
+        }
+        words := len(q.w.pools[ComponentType(0)].bitset)
+        if q.word_idx >= words { return INVALID_ENTITY, false }
+        combined := ~u64(0)
+        for cm := u128(q.mask); cm != 0; cm &= cm - 1 {
+            combined &= q.w.pools[ComponentType(intrinsics.count_trailing_zeros(cm))].bitset[q.word_idx]
+        }
+        q.base     = q.word_idx * 64
+        q.word_idx += 1
+        q.cur_word  = combined
+    }
+}
+
 world_query :: proc(w: ^World, mask: ComponentSignature, allocator := context.allocator) -> []int {
     results := make([dynamic]int, allocator)
-    for i in 0..<len(w.entities) {
-        e := w.entities[i]
-        if !entity_is_active(e) { continue }
-        if (e.signature & mask) == mask {
-            append(&results, e.id)
-        }
+    q := world_query_iter(w, mask)
+    for {
+        id, ok := query_next(&q)
+        if !ok { break }
+        append(&results, id)
     }
     return results[:]
 }
@@ -2554,6 +2180,7 @@ sim_tick :: proc(s: ^Simulation, dt: f32) {
     sim_broadcast(s, .LateUpdate,   dt)
 
     sim_broadcast(s, .DestroyEntity, dt)
+    world_sweep(&s.world)
     sim_broadcast(s, .CreateEntity,  dt)
 
     s.world.tick += 1
@@ -2594,7 +2221,7 @@ projectile_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
     for id in ids {
         t := world_get_transform(w, id)
-        p := &w.projectiles[id]
+        p := world_get_projectile(w, id)
 
         t.position[0] += p.direction[0] * p.speed * dt
         t.position[1] += p.direction[1] * p.speed * dt
@@ -2615,7 +2242,7 @@ self_destruct_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     defer delete(ids)
 
     for id in ids {
-        sd := &w.self_destructs[id]
+        sd := world_get_self_destruct(w, id)
         sd.timer -= dt
         if sd.timer <= 0 {
             w.entities[id].flags += { .ToDestroy }

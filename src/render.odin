@@ -12,15 +12,20 @@ import cw       "clockwork"
 import clay     "../clay"
 
 
-g_font: rl.Font
+g_font:      rl.Font
+g_font_body: rl.Font
 
 @(private = "file")
-FONT_PATH :: cstring("data/fonts/cinzel.ttf")
+FONT_PATH      :: cstring("data/fonts/cinzel.ttf")
+FONT_PATH_BODY :: cstring("data/fonts/body.ttf")
 
 
 g_ui_scale: f32 = 1.0
 
-uis :: proc(base: f32) -> f32 { return base * g_ui_scale }
+uis :: proc(base: f32) -> f32 { return math.round(base * g_ui_scale) }
+
+// font_for returns g_font_body for body/label text (base <= 14) and g_font (Cinzel) for large display text.
+font_for :: proc(base_size: f32) -> rl.Font { return g_font_body if base_size <= 14 else g_font }
 
 
 g_levelup_flash: f32
@@ -89,8 +94,8 @@ update_draw_dmg_numbers :: proc(dt: f32) {
         num_s := fmt.bprintf(num_buf[:15], "%.0f", n.value)
         num_buf[len(num_s)] = 0
 
-        tsz := rl.MeasureTextEx(g_font, cstring(&num_buf[0]), fs, 0.5)
-        rl.DrawTextEx(g_font, cstring(&num_buf[0]),
+        tsz := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), fs, 0.5)
+        rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
             { n.x - tsz.x*0.5, n.y - tsz.y*0.5 }, fs, 0.5, col)
     }
 }
@@ -141,10 +146,10 @@ draw_extraction_zones :: proc(w: ^cw.World) {
 
         lbl_fs  := f32(14)
         lbl     := t(.HUD_EXTRACT)
-        lbl_sz  := rl.MeasureTextEx(g_font, lbl, lbl_fs, 0.5)
+        lbl_sz  := rl.MeasureTextEx(g_font_body, lbl, lbl_fs, 0.5)
         lbl_blink := u8(180 + i32(pulse * 60))
         center_iso := world_to_iso_v(center)
-        rl.DrawTextEx(g_font, lbl,
+        rl.DrawTextEx(g_font_body, lbl,
             { center_iso.x - lbl_sz.x * 0.5, center_iso.y - r * 0.55 - lbl_sz.y - 6 },
             lbl_fs, 0.5,
             rl.Color{ 100, 240, 110, lbl_blink })
@@ -177,8 +182,8 @@ draw_extraction_zones :: proc(w: ^cw.World) {
             secs_s := fmt.bprintf(secs_buf[:15], "%.0f", math.ceil(secs_left))
             secs_buf[len(secs_s)] = 0
             s_fs  := f32(18)
-            s_sz  := rl.MeasureTextEx(g_font, cstring(&secs_buf[0]), s_fs, 0.5)
-            rl.DrawTextEx(g_font, cstring(&secs_buf[0]),
+            s_sz  := rl.MeasureTextEx(g_font_body, cstring(&secs_buf[0]), s_fs, 0.5)
+            rl.DrawTextEx(g_font_body, cstring(&secs_buf[0]),
                 { center_iso.x - s_sz.x * 0.5, center_iso.y - s_sz.y * 0.5 },
                 s_fs, 0.5,
                 rl.Color{ 130, 255, 140, 230 })
@@ -203,8 +208,8 @@ draw_loot_filter_hud :: proc() {
     _   = sw
     fs  := uis(12)
     prefix    := t(.HUD_LOOT_FILTER)
-    psz       := rl.MeasureTextEx(g_font, prefix, fs, 0.5)
-    lsz       := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
+    psz       := rl.MeasureTextEx(g_font_body, prefix, fs, 0.5)
+    lsz       := rl.MeasureTextEx(g_font_body, lbl, fs, 0.5)
     total_w   := psz.x + lsz.x + uis(16)
     total_h   := fs + uis(10)
     bx        := i32(uis(12))
@@ -212,10 +217,10 @@ draw_loot_filter_hud :: proc() {
 
     rl.DrawRectangle(bx, by, i32(total_w), i32(total_h), rl.Color{ 8, 6, 4, 210 })
     rl.DrawRectangleLinesEx({ f32(bx), f32(by), total_w, total_h }, 1, COL_RULE)
-    rl.DrawTextEx(g_font, prefix,
+    rl.DrawTextEx(g_font_body, prefix,
         { f32(bx) + uis(8), f32(by) + uis(5) }, fs, 0.5, COL_MUTED)
     rc := rarity_color(g_loot_filter_rarity)
-    rl.DrawTextEx(g_font, lbl,
+    rl.DrawTextEx(g_font_body, lbl,
         { f32(bx) + uis(8) + psz.x, f32(by) + uis(5) }, fs, 0.5,
         rl.Color{ rc.r, rc.g, rc.b, 230 })
 }
@@ -246,11 +251,11 @@ draw_raid_timer :: proc() {
     icon := t(.HUD_RAID_TIMER)
     lbl  := cstring(&buf[0])
 
-    icon_sz := rl.MeasureTextEx(g_font, icon, uis(11), 0.5)
+    icon_sz := rl.MeasureTextEx(g_font_body, icon, uis(11), 0.5)
     lbl_sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
 
     x := sw - max(icon_sz.x, lbl_sz.x) - uis(20)
-    rl.DrawTextEx(g_font, icon, { x, uis(12) }, uis(11), 0.5, rl.Color{ 150, 200, 130, 180 })
+    rl.DrawTextEx(g_font_body, icon, { x, uis(12) }, uis(11), 0.5, rl.Color{ 150, 200, 130, 180 })
     rl.DrawTextEx(g_font, lbl,  { x, uis(26) }, fs, 0.5, col)
 }
 
@@ -286,8 +291,8 @@ draw_boss_warning :: proc() {
     s := fmt.bprintf(buf[:15], "%ds", secs_left)
     buf[len(s)] = 0
     cd_fs := uis(14)
-    cd_sz := rl.MeasureTextEx(g_font, cstring(&buf[0]), cd_fs, 0.5)
-    rl.DrawTextEx(g_font, cstring(&buf[0]),
+    cd_sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), cd_fs, 0.5)
+    rl.DrawTextEx(g_font_body, cstring(&buf[0]),
         { sw * 0.5 - cd_sz.x * 0.5, cy + warn_fs + uis(4) + warn_fs * 0.65 + uis(6) },
         cd_fs, 0.5, rl.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
 }
@@ -373,8 +378,8 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
 
     hp_str := rl.TextFormat("%d / %d", i32(h.current), i32(h.max))
     hp_fs  := uis(11)
-    hp_sz  := rl.MeasureTextEx(g_font, hp_str, hp_fs, 0.4)
-    rl.DrawTextEx(g_font, hp_str,
+    hp_sz  := rl.MeasureTextEx(g_font_body, hp_str, hp_fs, 0.4)
+    rl.DrawTextEx(g_font_body, hp_str,
         { bx + bw - hp_sz.x - uis(3), by + (bh - hp_fs) * 0.5 },
         hp_fs, 0.4, rl.Color{ 220, 200, 200, 130 })
 
@@ -386,9 +391,9 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
         if cs != nil && len(cs) > 0 { name_lbl = cs }
     }
     name_fs := uis(13)
-    name_sz := rl.MeasureTextEx(g_font, name_lbl, name_fs, 0.5)
+    name_sz := rl.MeasureTextEx(g_font_body, name_lbl, name_fs, 0.5)
     name_y  := by + bh + uis(3)
-    rl.DrawTextEx(g_font, name_lbl,
+    rl.DrawTextEx(g_font_body, name_lbl,
         { sw * 0.5 - name_sz.x * 0.5, name_y },
         name_fs, 0.5, rl.Color{ 200, 120, 120, 200 })
 
@@ -412,7 +417,7 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
             if !cw.world_has_component(w, meid, .Mut) { continue }
             mt   := cw.world_get_mut(w, meid).type_id
             name := mutation_short_name(mt)
-            sz   := rl.MeasureTextEx(g_font, name, badge_fs, 0.4)
+            sz   := rl.MeasureTextEx(g_font_body, name, badge_fs, 0.4)
             b_mt[n_b]   = mt
             b_name[n_b] = name
             b_sz[n_b]   = sz
@@ -430,7 +435,7 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
                 rl.DrawCircleV(
                     { x + dot_r, badge_y + badge_fs * 0.5 },
                     dot_r, rl.Color{ col.r, col.g, col.b, 230 })
-                rl.DrawTextEx(g_font, b_name[i],
+                rl.DrawTextEx(g_font_body, b_name[i],
                     { x + dot_r * 2 + uis(5), badge_y },
                     badge_fs, 0.4, rl.Color{ col.r, col.g, col.b, 195 })
                 item_w := dot_r * 2 + uis(5) + b_sz[i].x
@@ -448,21 +453,29 @@ draw_boss_hud :: proc(w: ^cw.World) {
 @(private = "file")
 
 
-FONT_SIZE :: i32(128)
+FONT_SIZE :: i32(512)
 
 init_font :: proc() {
     if rl.FileExists(FONT_PATH) {
         g_font = rl.LoadFontEx(FONT_PATH, FONT_SIZE, nil, 0)
-        rl.SetTextureFilter(g_font.texture, .BILINEAR)
+        rl.GenTextureMipmaps(&g_font.texture)
+        rl.SetTextureFilter(g_font.texture, .TRILINEAR)
     } else {
         g_font = rl.GetFontDefault()
+    }
+
+    if rl.FileExists(FONT_PATH_BODY) {
+        g_font_body = rl.LoadFontEx(FONT_PATH_BODY, FONT_SIZE, nil, 0)
+        rl.GenTextureMipmaps(&g_font_body.texture)
+        rl.SetTextureFilter(g_font_body.texture, .TRILINEAR)
+    } else {
+        g_font_body = g_font
     }
 }
 
 shutdown_font :: proc() {
-    if rl.FileExists(FONT_PATH) {
-        rl.UnloadFont(g_font)
-    }
+    if rl.FileExists(FONT_PATH)      { rl.UnloadFont(g_font) }
+    if rl.FileExists(FONT_PATH_BODY) { rl.UnloadFont(g_font_body) }
 }
 
 HIT_FLASH_DURATION :: f32(0.12)
@@ -670,6 +683,9 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
             case .MutationWorkbench: info.world_size = 78
             case .Stash:             info.world_size = 70
             case .AbilityVendor:     info.world_size = 64
+            case .QuestBoard:        info.world_size = 64
+            case .Quartermaster:     info.world_size = 64
+            case .Surgeon:           info.world_size = 64
             }
         }
     }
@@ -685,6 +701,9 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
             case .MutationWorkbench: info.sprite_key = cstring("mutation_workbench")
             case .Stash:             info.sprite_key = cstring("mutation_workbench")
             case .AbilityVendor:     info.sprite_key = cstring("npc_shopkeeper")
+            case .QuestBoard:        info.sprite_key = cstring("mutation_workbench")
+            case .Quartermaster:     info.sprite_key = cstring("npc_shopkeeper")
+            case .Surgeon:           info.sprite_key = cstring("npc_shopkeeper")
             }
         } else if cw.world_has_component(w, id, .AIAgent) {
             ai := cw.world_get_ai(w, id)
@@ -829,9 +848,9 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
         pulse := (math.sin(tt * 3.2 + f32(id) * 0.37) + 1) * 0.5
 
         nfs  := uis(9)
-        nsz  := rl.MeasureTextEx(g_font, name, nfs, 0.4)
+        nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.4)
         name_a := u8(160 + pulse * 95)
-        rl.DrawTextEx(g_font, name,
+        rl.DrawTextEx(g_font_body, name,
             { iso.x - nsz.x * 0.5, iso.y - uis(20) - nsz.y },
             nfs, 0.4, rl.Color{ rc.r, rc.g, rc.b, name_a })
 
@@ -839,8 +858,8 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
         if item.ability_type != .None {
             tag := t(.HUD_ITEM_ACTIVE)
             tfs := uis(8)
-            tsz := rl.MeasureTextEx(g_font, tag, tfs, 0.4)
-            rl.DrawTextEx(g_font, tag,
+            tsz := rl.MeasureTextEx(g_font_body, tag, tfs, 0.4)
+            rl.DrawTextEx(g_font_body, tag,
                 { iso.x - tsz.x * 0.5, iso.y - uis(20) - nsz.y - tfs - uis(1) },
                 tfs, 0.4, rl.Color{ 200, 170, 100, u8(130 + pulse * 60) })
         }
@@ -913,8 +932,8 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
                 mt   := cw.world_get_mut(w, meid).type_id
                 col  := mutation_visual_color(mt)
                 name := mutation_short_name(mt)
-                lsz  := rl.MeasureTextEx(g_font, name, label_fs, 0.4)
-                rl.DrawTextEx(g_font, name,
+                lsz  := rl.MeasureTextEx(g_font_body, name, label_fs, 0.4)
+                rl.DrawTextEx(g_font_body, name,
                     { iso.x - lsz.x * 0.5, iso.y - sprite_top - 14 },
                     label_fs, 0.4, rl.Color{ col.r, col.g, col.b, 175 })
                 break
@@ -946,9 +965,9 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
         }
         iso      := world_to_iso_v(pos)
         name_fs  := f32(11)
-        name_sz  := rl.MeasureTextEx(g_font, name_str, name_fs, 0.5)
+        name_sz  := rl.MeasureTextEx(g_font_body, name_str, name_fs, 0.5)
         line_col := PLAYER_SLOT_COLORS[slot][2]
-        rl.DrawTextEx(g_font, name_str,
+        rl.DrawTextEx(g_font_body, name_str,
             { iso.x - name_sz.x * 0.5, iso.y - sprite_top - name_fs - 3 },
             name_fs, 0.5, rl.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
@@ -1308,8 +1327,8 @@ pause_arrow_row :: proc(
         { f32(px) + 16, f32(row_y) - 10 },
         { f32(px + pW) - 16, f32(row_y) - 10 }, 1, COL_RULE)
     hdr_fs := uis(13)
-    hsz    := rl.MeasureTextEx(g_font, header, hdr_fs, 1)
-    rl.DrawTextEx(g_font, header,
+    hsz    := rl.MeasureTextEx(g_font_body, header, hdr_fs, 1)
+    rl.DrawTextEx(g_font_body, header,
         { f32(px) + f32(pW) * 0.5 - hsz.x * 0.5, f32(row_y) - uis(22) },
         hdr_fs, 1, COL_MUTED)
 
@@ -1349,7 +1368,7 @@ draw_vol_slider :: proc(px, row_y: i32, label: cstring, value: f32, mp: rl.Vecto
     bh    := i32(uis(14))
 
     lbl_fs := uis(13)
-    rl.DrawTextEx(g_font, label, { f32(px + pad), f32(row_y) + uis(8) }, lbl_fs, 1, COL_MUTED)
+    rl.DrawTextEx(g_font_body, label, { f32(px + pad), f32(row_y) + uis(8) }, lbl_fs, 1, COL_MUTED)
 
     rl.DrawRectangle(bx, by, bw, bh, rl.Color{ 18, 14, 10, 255 })
     rl.DrawRectangleLinesEx({ f32(bx), f32(by), f32(bw), f32(bh) }, 1, COL_RULE)
@@ -1369,8 +1388,8 @@ draw_vol_slider :: proc(px, row_y: i32, label: cstring, value: f32, mp: rl.Vecto
     pct_buf: [8]u8
     pct := fmt.bprintf(pct_buf[:7], "%d%%", int(value * 100 + 0.5))
     pct_buf[len(pct)] = 0
-    vsz := rl.MeasureTextEx(g_font, cstring(&pct_buf[0]), lbl_fs, 1)
-    rl.DrawTextEx(g_font, cstring(&pct_buf[0]),
+    vsz := rl.MeasureTextEx(g_font_body, cstring(&pct_buf[0]), lbl_fs, 1)
+    rl.DrawTextEx(g_font_body, cstring(&pct_buf[0]),
         { f32(px + pW - pad) - vsz.x, f32(row_y) + uis(8) }, lbl_fs, 1, COL_PARCH)
 }
 
@@ -1510,12 +1529,12 @@ draw_pause_menu :: proc() {
     {
         vol_hdr    := t(.SETTINGS_VOLUME)
         vol_hdr_fs := uis(13)
-        vol_hdr_sz := rl.MeasureTextEx(g_font, vol_hdr, vol_hdr_fs, 1)
+        vol_hdr_sz := rl.MeasureTextEx(g_font_body, vol_hdr, vol_hdr_fs, 1)
         vol_row_y  := f32(py + pause_y_vol())
         rl.DrawLineEx(
             { f32(px) + 16, vol_row_y - uis(10) },
             { f32(px + pW) - 16, vol_row_y - uis(10) }, 1, COL_RULE)
-        rl.DrawTextEx(g_font, vol_hdr,
+        rl.DrawTextEx(g_font_body, vol_hdr,
             { f32(px) + f32(pW) * 0.5 - vol_hdr_sz.x * 0.5, vol_row_y - uis(22) },
             vol_hdr_fs, 1, COL_MUTED)
 
@@ -1637,8 +1656,8 @@ draw_keybinds_screen :: proc() {
 
     title    := t(.KEYBINDS_TITLE)
     title_fs := uis(15)
-    tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
+    tsz      := rl.MeasureTextEx(g_font_body, title, title_fs, 1)
+    rl.DrawTextEx(g_font_body, title,
         { px + uis(PW)*0.5 - tsz.x*0.5, py + uis(10) }, title_fs, 1, COL_BRASS)
     rl.DrawLineEx(
         { px + uis(16), py + uis(34) },
@@ -1671,7 +1690,7 @@ draw_keybinds_screen :: proc() {
         rl.DrawRectangleLinesEx(row_r, 1,
             COL_BRASS if is_listening else (COL_RULE if is_hot else rl.Color{ 55, 48, 34, 80 }))
 
-        rl.DrawTextEx(g_font, rows[i].label,
+        rl.DrawTextEx(g_font_body, rows[i].label,
             { px + uis(20), ry + uis(BIND_ROW_H)*0.5 - lfs*0.5 },
             lfs, 0.5, COL_PARCH if !is_listening else COL_BRASS)
 
@@ -1682,8 +1701,8 @@ draw_keybinds_screen :: proc() {
             key_str = key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:])
         }
         kcol := COL_BRASS if is_listening else rl.Color{ 180, 160, 90, 220 }
-        ksz  := rl.MeasureTextEx(g_font, key_str, lfs, 0.5)
-        rl.DrawTextEx(g_font, key_str,
+        ksz  := rl.MeasureTextEx(g_font_body, key_str, lfs, 0.5)
+        rl.DrawTextEx(g_font_body, key_str,
             { px + uis(PW) - uis(20) - ksz.x, ry + uis(BIND_ROW_H)*0.5 - lfs*0.5 },
             lfs, 0.5, kcol)
     }
@@ -1697,8 +1716,8 @@ draw_keybinds_screen :: proc() {
     rl.DrawRectangleRec(reset_r, rl.Color{ 28, 14, 10, 240 } if reset_hot else rl.Color{ 18, 10, 8, 220 })
     rl.DrawRectangleLinesEx(reset_r, 1, COL_RULE)
     reset_lbl := t(.KEYBINDS_BTN_RESET)
-    rlbl_sz   := rl.MeasureTextEx(g_font, reset_lbl, rlbl_fs, 0.5)
-    rl.DrawTextEx(g_font, reset_lbl,
+    rlbl_sz   := rl.MeasureTextEx(g_font_body, reset_lbl, rlbl_fs, 0.5)
+    rl.DrawTextEx(g_font_body, reset_lbl,
         { reset_r.x + reset_r.width*0.5 - rlbl_sz.x*0.5,
           reset_r.y + reset_r.height*0.5 - rlbl_fs*0.5 },
         rlbl_fs, 0.5, rl.Color{ 200, 120, 80, 220 } if reset_hot else COL_MUTED)
@@ -1708,8 +1727,8 @@ draw_keybinds_screen :: proc() {
     rl.DrawRectangleRec(close_r, rl.Color{ 28, 22, 16, 240 } if close_hot else rl.Color{ 18, 14, 10, 220 })
     rl.DrawRectangleLinesEx(close_r, 1, COL_RULE if !close_hot else COL_BRASS)
     close_lbl := t(.KEYBINDS_BTN_CLOSE)
-    clbl_sz   := rl.MeasureTextEx(g_font, close_lbl, rlbl_fs, 0.5)
-    rl.DrawTextEx(g_font, close_lbl,
+    clbl_sz   := rl.MeasureTextEx(g_font_body, close_lbl, rlbl_fs, 0.5)
+    rl.DrawTextEx(g_font_body, close_lbl,
         { close_r.x + close_r.width*0.5 - clbl_sz.x*0.5,
           close_r.y + close_r.height*0.5 - rlbl_fs*0.5 },
         rlbl_fs, 0.5, COL_BRASS if close_hot else COL_PARCH)
@@ -1717,8 +1736,8 @@ draw_keybinds_screen :: proc() {
     if g_rebind_idx >= 0 {
         hint    := t(.KEYBINDS_ESC_CANCEL)
         hint_fs := uis(11)
-        hsz     := rl.MeasureTextEx(g_font, hint, hint_fs, 0.5)
-        rl.DrawTextEx(g_font, hint,
+        hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
+        rl.DrawTextEx(g_font_body, hint,
             { px + uis(PW)*0.5 - hsz.x*0.5, footer_y + uis(44) },
             hint_fs, 0.5, COL_MUTED)
     }
@@ -1729,8 +1748,8 @@ _draw_bind_section_header :: proc(px, ry, pw, fs: f32, label: cstring) {
     rl.DrawLineEx(
         { px + uis(8),      ry + fs * 0.5 },
         { px + uis(48),     ry + fs * 0.5 }, 1, COL_RULE)
-    lsz := rl.MeasureTextEx(g_font, label, fs, 0.5)
-    rl.DrawTextEx(g_font, label,
+    lsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
+    rl.DrawTextEx(g_font_body, label,
         { px + uis(54), ry }, fs, 0.5, COL_MUTED)
     rl.DrawLineEx(
         { px + uis(60) + lsz.x, ry + fs * 0.5 },
@@ -1887,12 +1906,12 @@ draw_settings_overlay :: proc() {
     {
         vol_hdr    := t(.SETTINGS_VOLUME)
         vol_hdr_fs := uis(13)
-        vol_hdr_sz := rl.MeasureTextEx(g_font, vol_hdr, vol_hdr_fs, 1)
+        vol_hdr_sz := rl.MeasureTextEx(g_font_body, vol_hdr, vol_hdr_fs, 1)
         vol_row_y  := f32(py + settings_y_vol())
         rl.DrawLineEx(
             { f32(px) + 16, vol_row_y - uis(10) },
             { f32(px + pW) - 16, vol_row_y - uis(10) }, 1, COL_RULE)
-        rl.DrawTextEx(g_font, vol_hdr,
+        rl.DrawTextEx(g_font_body, vol_hdr,
             { f32(px) + f32(pW) * 0.5 - vol_hdr_sz.x * 0.5, vol_row_y - uis(22) },
             vol_hdr_fs, 1, COL_MUTED)
 
@@ -1930,8 +1949,8 @@ draw_settings_overlay :: proc() {
         rl.DrawRectangleLinesEx(exit_r, 1, exit_bdr)
         exit_lbl := t(.SETTINGS_BTN_EXIT)
         exit_fs  := uis(18)
-        exit_sz  := rl.MeasureTextEx(g_font, exit_lbl, exit_fs, 1)
-        rl.DrawTextEx(g_font, exit_lbl,
+        exit_sz  := rl.MeasureTextEx(g_font_body, exit_lbl, exit_fs, 1)
+        rl.DrawTextEx(g_font_body, exit_lbl,
             { exit_r.x + exit_r.width * 0.5 - exit_sz.x * 0.5,
               exit_r.y + exit_r.height * 0.5 - exit_fs * 0.5 },
             exit_fs, 1, exit_txt)
@@ -2411,7 +2430,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     if cw.world_has_component(w, item_id, .RenderConfig) {
         rcc  := cw.world_get_render_config(w, item_id)
         name := loc_lookup(cw.render_config_name_cstr(rcc))
-        rl.DrawTextEx(g_font, name, { tx2, ty2 }, fs15, 0.5,
+        rl.DrawTextEx(g_font_body, name, { tx2, ty2 }, fs15, 0.5,
             rl.Color{ rc.r, rc.g, rc.b, 245 })
     }
 
@@ -2422,18 +2441,18 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         .Legendary = "Legendary",
         .Unique    = "Unique",
     }
-    rl.DrawTextEx(g_font, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
+    rl.DrawTextEx(g_font_body, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
         rl.Color{ rc.r, rc.g, rc.b, 195 })
 
     if item.ability_type != .None && int(item.ability_type) < len(ABILITY_DEFS) {
 
         def := ABILITY_DEFS[item.ability_type]
-        rl.DrawTextEx(g_font, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
+        rl.DrawTextEx(g_font_body, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
             rl.Color{ 200, 170, 100, 210 })
         cd_buf: [32]u8
         cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
         cd_buf[len(cd_s)] = 0
-        rl.DrawTextEx(g_font, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        rl.DrawTextEx(g_font_body, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
     } else if cw.world_has_component(w, item_id, .Flask) {
 
         fc := cw.world_get_flask(w, item_id)
@@ -2445,11 +2464,11 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             ns := fmt.bprintf(name_buf[:39], "%s %s Flask",
                 size_names[fc.size], kind_names[fc.kind])
             name_buf[len(ns)] = 0
-            rl.DrawTextEx(g_font, cstring(&name_buf[0]), { tx2, ty2 }, fs15, 0.5,
+            rl.DrawTextEx(g_font_body, cstring(&name_buf[0]), { tx2, ty2 }, fs15, 0.5,
                 rl.Color{ rc.r, rc.g, rc.b, 245 })
         }
         slot_label: cstring = "Health Flask [1]" if item.slot == .Flask1 else "Energy Flask [2]"
-        rl.DrawTextEx(g_font, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
+        rl.DrawTextEx(g_font_body, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
 
         stat_buf: [64]u8
@@ -2457,14 +2476,14 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         rs := fmt.bprintf(stat_buf[:63], "Recovers %.0f %s over %.0fs",
             fc.recover_amount, recover_what, fc.recover_duration)
         stat_buf[len(rs)] = 0
-        rl.DrawTextEx(g_font, cstring(&stat_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_STAT)
+        rl.DrawTextEx(g_font_body, cstring(&stat_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_STAT)
 
 
         chg_buf: [32]u8
         cs := fmt.bprintf(chg_buf[:31], "Charges: %d / %d", fc.charges, fc.max_charges)
         chg_buf[len(cs)] = 0
         chg_col := COL_AFFIX if fc.charges > 0 else COL_MUTED
-        rl.DrawTextEx(g_font, cstring(&chg_buf[0]), { tx2, ty2 + uis(78) }, fs13, 0.5, chg_col)
+        rl.DrawTextEx(g_font_body, cstring(&chg_buf[0]), { tx2, ty2 + uis(78) }, fs13, 0.5, chg_col)
     } else {
         slot_labels := [cw.EquipSlot]cstring{
             .Head          = "Slot: Head",
@@ -2480,7 +2499,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             .Flask1        = "Health Flask",
             .Flask2        = "Energy Flask",
         }
-        rl.DrawTextEx(g_font, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
+        rl.DrawTextEx(g_font_body, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
         archetype_labels := [cw.WeaponArchetype]cstring{
             .None    = "",
@@ -2492,13 +2511,13 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             .Sword   = "Sword",
         }
         if item.weapon_archetype != .None {
-            rl.DrawTextEx(g_font, archetype_labels[item.weapon_archetype],
+            rl.DrawTextEx(g_font_body, archetype_labels[item.weapon_archetype],
                 { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
         } else {
             size_buf: [32]u8
             size_str := fmt.bprintf(size_buf[:31], "%d x %d", item.grid_w, item.grid_h)
             size_buf[len(size_str)] = 0
-            rl.DrawTextEx(g_font, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+            rl.DrawTextEx(g_font_body, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
         }
     }
 
@@ -2510,51 +2529,51 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             if item.base_damage > 0 {
                 s := fmt.bprintf(sbuf[:47], "DMG  %.0f", item.base_damage)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.base_fire_rate > 0 {
                 s := fmt.bprintf(sbuf[:47], "RATE  %.1f/s", item.base_fire_rate)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.base_ammo_max > 0 {
                 s := fmt.bprintf(sbuf[:47], "MAG  %d", int(item.base_ammo_max))
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.base_reload_time > 0 {
                 s := fmt.bprintf(sbuf[:47], "RELOAD  %.1fs", item.base_reload_time)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
         } else if item.is_melee {
             if item.melee_damage > 0 {
                 s := fmt.bprintf(sbuf[:47], "DMG  %.0f", item.melee_damage)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.melee_cooldown_max > 0 {
                 s := fmt.bprintf(sbuf[:47], "ATK SPD  %.1f/s", 1.0 / item.melee_cooldown_max)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
         }
         if item.base_armor > 0 {
             s := fmt.bprintf(sbuf[:47], "ARMOR  %.0f%%", item.base_armor * 100)
             sbuf[len(s)] = 0
-            rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+            rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
             stat_y += uis(17)
         }
         if item.base_shield > 0 {
             s := fmt.bprintf(sbuf[:47], "SHIELD  +%.0f", item.base_shield)
             sbuf[len(s)] = 0
-            rl.DrawTextEx(g_font, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+            rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
             stat_y += uis(17)
         }
         if stat_line_count > 0 { stat_y += uis(6) }
@@ -2578,7 +2597,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             rbuf: [32]u8
             rs := fmt.bprintf(rbuf[:31], "STR %d required", item.req_str)
             rbuf[len(rs)] = 0
-            rl.DrawTextEx(g_font, cstring(&rbuf[0]),
+            rl.DrawTextEx(g_font_body, cstring(&rbuf[0]),
                 { tx2, req_y_base + uis(17) * f32(req_row) }, fs13, 0.5, col)
             req_row += 1
         }
@@ -2587,7 +2606,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             rbuf: [32]u8
             rs := fmt.bprintf(rbuf[:31], "DEX %d required", item.req_dex)
             rbuf[len(rs)] = 0
-            rl.DrawTextEx(g_font, cstring(&rbuf[0]),
+            rl.DrawTextEx(g_font_body, cstring(&rbuf[0]),
                 { tx2, req_y_base + uis(17) * f32(req_row) }, fs13, 0.5, col)
             req_row += 1
         }
@@ -2596,7 +2615,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             rbuf: [32]u8
             rs := fmt.bprintf(rbuf[:31], "SCI %d required", item.req_sci)
             rbuf[len(rs)] = 0
-            rl.DrawTextEx(g_font, cstring(&rbuf[0]),
+            rl.DrawTextEx(g_font_body, cstring(&rbuf[0]),
                 { tx2, req_y_base + uis(17) * f32(req_row) }, fs13, 0.5, col)
         }
     }
@@ -2653,7 +2672,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             as = fmt.bprintf(abuf[:31], "+%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
         }
         abuf[len(as)] = 0
-        rl.DrawTextEx(g_font, cstring(&abuf[0]), { tx2, ay }, fs13, 0.5, COL_AFFIX)
+        rl.DrawTextEx(g_font_body, cstring(&abuf[0]), { tx2, ay }, fs13, 0.5, COL_AFFIX)
     }
 
     if has_desc {
@@ -2661,7 +2680,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
             { f32(tx) + uis(10), f32(ty + TH) - uis(36) },
             { f32(tx + TW) - uis(10), f32(ty + TH) - uis(36) },
             1, rl.Color{ rc.r, rc.g, rc.b, 50 })
-        draw_text_wrapped(g_font, desc_str,
+        draw_text_wrapped(g_font_body, desc_str,
             f32(tx) + uis(10), f32(ty + TH) - uis(30),
             fs13, text_w + (tx2 - f32(tx) - uis(10)), 0.5,
             rl.Color{ 200, 190, 160, 200 })
