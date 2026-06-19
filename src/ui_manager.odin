@@ -205,11 +205,14 @@ ui_update :: proc(dt: f32) {
 
         case .Visible:
             switch l.panel {
-            case .Phonograph:
+            case .Phonograph, .Social, .MutationTree:
 
+                // Time-based / scroll feedback (phonograph animation, social invite
+                // "Sent!" timer, mutation tree wheel scrolling) needs a redraw every
+                // frame, not just on mouse events.
                 l.dirty = true
-            case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor,
-                 .PauseMenu, .Settings, .Keybinds, .LevelSelect, .Lore, .Social, .QuestBoard:
+            case .Inventory, .Stats, .Shop, .Stash, .AbilityVendor,
+                 .PauseMenu, .Settings, .Keybinds, .LevelSelect, .Lore, .QuestBoard:
 
                 if mouse_event { l.dirty = true }
             }

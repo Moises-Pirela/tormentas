@@ -63,6 +63,7 @@ clay_raylib_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
             spacing := f32(cfg.letterSpacing)
             if spacing <= 0 { spacing = 0.5 }
             col := clay_color(cfg.textColor)
+            fnt := clay_font(cfg.fontId)
 
             line_start := 0
             line_idx := 0
@@ -70,7 +71,7 @@ clay_raylib_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
                 if i < len(text) && text[i] != '\n' { continue }
                 line := text[line_start:i]
                 line_cs := strings.clone_to_cstring(line, context.temp_allocator)
-                rl.DrawTextEx(g_font, line_cs, { bb.x, bb.y + f32(line_idx) * fs }, fs, spacing, col)
+                rl.DrawTextEx(fnt, line_cs, { bb.x, bb.y + f32(line_idx) * fs }, fs, spacing, col)
                 line_start = i + 1
                 line_idx += 1
             }

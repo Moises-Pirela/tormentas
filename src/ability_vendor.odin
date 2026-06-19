@@ -3,8 +3,9 @@ package main
 
 import "core:math/rand"
 import "core:fmt"
-import rl  "vendor:raylib"
-import cw  "clockwork"
+import rl   "vendor:raylib"
+import cw   "clockwork"
+import clay "../clay"
 
 
 MAX_ABILITY_VENDOR_STOCK  :: 4
@@ -142,17 +143,6 @@ draw_ability_vendor_world :: proc(w: ^cw.World) {
 }
 
 
-@(private = "file")
-_av_panel_origin :: proc() -> (px, py: i32) {
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
-    PW := i32(uis(480))
-    PH := i32(uis(520))
-    px  = (sw - PW) / 2
-    py  = (sh - PH) / 2
-    return
-}
-
 draw_ability_vendor_hud :: proc(w: ^cw.World) {
     if !ui_has(.AbilityVendor) { return }
     if !cw.world_is_valid(w, g_ability_vendor_npc_id) {
@@ -161,148 +151,90 @@ draw_ability_vendor_hud :: proc(w: ^cw.World) {
     }
 
     pid := w.player_id
-    mp  := rl.GetMousePosition()
-    PW  := i32(uis(480))
-    PH  := i32(uis(520))
-    px, py := _av_panel_origin()
-
-
-    rl.DrawRectangle(px, py, PW, PH, rl.Color{ 4, 6, 12, 252 })
-    rl.DrawRectangle(px, py, PW, i32(uis(3)), rl.Color{ 120, 160, 220, 255 })
-    rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
-
+    blue := rl.Color{ 100, 160, 220, 255 }
 
     rc       := cw.world_get_render_config(w, g_ability_vendor_npc_id)
     npc_name := loc_lookup(cw.render_config_name_cstr(rc))
-    title_fs := uis(20)
-    tsz      := rl.MeasureTextEx(g_font, npc_name, title_fs, 1)
-    rl.DrawTextEx(g_font, npc_name,
-        { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(12) },
-        title_fs, 1, COL_PARCH)
-
-    sub_cs := t(.ABILITY_VENDOR_SUBTITLE)
-    sub_sz := rl.MeasureTextEx(g_font_body, sub_cs, uis(10), 1)
-    rl.DrawTextEx(g_font_body, sub_cs,
-        { f32(px) + f32(PW)*0.5 - sub_sz.x*0.5,
-          f32(py) + uis(12) + title_fs + uis(2) },
-        uis(10), 1, COL_MUTED)
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(py) + uis(56) },
-        { f32(px + PW) - uis(16), f32(py) + uis(56) }, 1, COL_RULE)
-
 
     player_serums := 0
     if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .MutationContainer) {
         player_serums = cw.world_get_mutation(w, pid).serums
     }
-    {
-        buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "%d serums", player_serums)
-        buf[len(s)] = 0
-        sfs  := uis(13)
-        ssz  := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), sfs, 1)
-        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
-            { f32(px + PW) - uis(16) - ssz.x, f32(py) + uis(12) },
-            sfs, 1, rl.Color{ 120, 200, 120, 255 })
-    }
-
+    can_afford := player_serums >= ABILITY_VENDOR_SERUM_COST
 
     slot_idx := g_ability_vendor_npc_id % MAX_NPC_ENTITIES
     n        := g_av_stk_count[slot_idx]
-    item_h   := i32(uis(70))
-    item_pad := i32(uis(8))
-    start_y  := py + i32(uis(66))
+    item_h   := uis(70)
 
-    for i in 0..<n {
-        ss := &g_av_stock[slot_idx][i]
+    clay.BeginLayout()
+    ui_panel_begin("AbilityVendorPanel", string(npc_name), uis(480), uis(520), {
+        anchor     = .CenterCenter,
+        bg_col     = rl.Color{ 4, 6, 12, 252 },
+        border_col = COL_RULE,
+        accent_col = blue,
+        title_col  = COL_PARCH,
+        title_fs   = uis(20),
+    })
+    {
+        // Header row: subtitle (left) + serum balance (right)
+        ui_hstack_begin("AVHeader", 0, 0, .Center)
+        ui_label("AVSub", string(t(.ABILITY_VENDOR_SUBTITLE)), uis(10), COL_MUTED)
+        ui_grow("AVHeaderSpc")
+        ui_label("AVSerums", fmt.tprintf("%d serums", player_serums), uis(13),
+            rl.Color{ 120, 200, 120, 255 })
+        ui_hstack_end()
 
-        iy    := start_y + i32(i) * (item_h + item_pad)
-        row_r := rl.Rectangle{
-            f32(px + i32(uis(12))), f32(iy),
-            f32(PW - i32(uis(24))), f32(item_h),
+        // Stock list
+        ui_vstack_begin("AVList", u16(uis(8)))
+        for i in 0..<n {
+            ss := &g_av_stock[slot_idx][i]
+
+            if ss.item_entity == cw.INVALID_ENTITY || !cw.world_is_valid(w, ss.item_entity) {
+                // Sold-out placeholder
+                ui_hstack_begin(fmt.tprintf("AVSold%d", i), 0, u16(uis(10)), .Center)
+                ui_grow(fmt.tprintf("AVSoldL%d", i))
+                ui_label(fmt.tprintf("AVSoldT%d", i), string(t(.SHOP_SOLD_OUT)), uis(11), COL_MUTED)
+                ui_grow(fmt.tprintf("AVSoldR%d", i))
+                ui_hstack_end()
+                continue
+            }
+
+            irc := cw.world_get_render_config(w, ss.item_entity)
+
+            hovered := ui_clickable_begin(fmt.tprintf("AVRow%d", i), item_h, blue)
+            {
+                ui_box(fmt.tprintf("AVIcon%d", i), uis(40), uis(40), rl.Color{ 20, 30, 50, 255 }, 2)
+                ui_vstack_begin(fmt.tprintf("AVInfo%d", i), u16(uis(3)))
+                ui_label(fmt.tprintf("AVName%d", i),
+                    string(loc_lookup(cw.render_config_name_cstr(irc))), uis(13), blue)
+                ui_label(fmt.tprintf("AVDesc%d", i),
+                    string(loc_lookup(cw.render_config_desc_cstr(irc))), uis(9), COL_MUTED)
+                ui_label(fmt.tprintf("AVRar%d", i), "Epic", uis(9), rarity_color(.Epic))
+                ui_vstack_end()
+                ui_grow(fmt.tprintf("AVRowSpc%d", i))
+                price_col := rl.Color{ 120, 200, 120, 255 } if can_afford else rl.Color{ 180, 80, 60, 255 }
+                ui_label(fmt.tprintf("AVPrice%d", i),
+                    fmt.tprintf("%d serums", ABILITY_VENDOR_SERUM_COST), uis(13), price_col)
+            }
+            ui_clickable_end()
+
+            if hovered && rl.IsMouseButtonReleased(.LEFT) && can_afford {
+                _av_buy(w, i)
+            }
         }
+        ui_vstack_end()
 
-        if ss.item_entity == cw.INVALID_ENTITY {
-
-            rl.DrawRectangleRec(row_r, rl.Color{ 12, 10, 8, 180 })
-            rl.DrawRectangleLinesEx(row_r, 1, rl.Color{ 55, 48, 34, 80 })
-            so_cs := t(.SHOP_SOLD_OUT)
-            so_fs := uis(11)
-            rl.DrawTextEx(g_font_body, so_cs,
-                { row_r.x + row_r.width*0.5 - rl.MeasureTextEx(g_font_body, so_cs, so_fs, 0.5).x*0.5,
-                  row_r.y + row_r.height*0.5 - so_fs*0.5 },
-                so_fs, 0.5, COL_MUTED)
-            continue
-        }
-
-        if !cw.world_is_valid(w, ss.item_entity) { continue }
-        irc := cw.world_get_render_config(w, ss.item_entity)
-
-        is_hot := rl.CheckCollisionPointRec(mp, row_r)
-        bg     := rl.Color{ 18, 24, 38, 220 } if is_hot else rl.Color{ 10, 14, 24, 200 }
-        rc_col := rl.Color{ 100, 160, 220, 255 }
-        rl.DrawRectangleRec(row_r, bg)
-        rl.DrawRectangleLinesEx(row_r, 1, rc_col if is_hot else COL_RULE)
-
-
-        icon_r := f32(uis(20))
-        rl.DrawRectangle(
-            i32(row_r.x + uis(8)), i32(row_r.y + row_r.height*0.5 - icon_r),
-            i32(icon_r*2), i32(icon_r*2), rl.Color{ 20, 30, 50, 255 })
-        rl.DrawRectangleLinesEx(
-            { row_r.x + uis(8), row_r.y + row_r.height*0.5 - icon_r, icon_r*2, icon_r*2 },
-            1, rc_col)
-
-
-        name_fs := uis(13)
-        name_x  := row_r.x + icon_r*2 + uis(18)
-        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_name_cstr(irc)),
-            { name_x, row_r.y + uis(8) }, name_fs, 0.5, rc_col)
-
-
-        desc_fs := uis(9)
-        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_desc_cstr(irc)),
-            { name_x, row_r.y + uis(8) + name_fs + uis(4) }, desc_fs, 0.5, COL_MUTED)
-
-
-        rar_fs  := uis(9)
-        rl.DrawTextEx(g_font_body, "Epic",
-            { name_x, row_r.y + uis(8) + name_fs + uis(4) + desc_fs + uis(3) },
-            rar_fs, 0.5, rarity_color(.Epic))
-
-
-        can_afford := player_serums >= ABILITY_VENDOR_SERUM_COST
-        price_buf: [24]u8
-        price_str := fmt.bprintf(price_buf[:23], "%d serums", ABILITY_VENDOR_SERUM_COST)
-        price_buf[len(price_str)] = 0
-        price_fs  := uis(13)
-        psz       := rl.MeasureTextEx(g_font_body, cstring(&price_buf[0]), price_fs, 1)
-        price_col := rl.Color{ 120, 200, 120, 255 } if can_afford else rl.Color{ 180, 80, 60, 255 }
-        rl.DrawTextEx(g_font_body, cstring(&price_buf[0]),
-            { row_r.x + row_r.width - uis(12) - psz.x,
-              row_r.y + row_r.height*0.5 - price_fs*0.5 },
-            price_fs, 1, price_col)
-
-
-        if is_hot && rl.IsMouseButtonPressed(.LEFT) && can_afford {
-            _av_buy(w, i)
-        }
+        // Close hint
+        ui_grow("AVSpacer")
+        ui_hstack_begin("AVCloseRow", 0, 0, .Center)
+        ui_grow("AVCloseL")
+        ui_label("AVClose", string(t(.SHOP_ESC_CLOSE)), uis(10), COL_MUTED)
+        ui_grow("AVCloseR")
+        ui_hstack_end()
     }
-
-
-    sell_y := start_y + i32(n) * (item_h + item_pad) + i32(uis(8))
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(sell_y) },
-        { f32(px + PW) - uis(16), f32(sell_y) }, 1, COL_RULE)
-
-
-    close_cs := t(.SHOP_ESC_CLOSE)
-    close_fs := uis(10)
-    rl.DrawTextEx(g_font_body, close_cs,
-        { f32(px) + f32(PW)*0.5 -
-          rl.MeasureTextEx(g_font_body, close_cs, close_fs, 0.5).x*0.5,
-          f32(py + PH) - close_fs - uis(10) },
-        close_fs, 0.5, COL_MUTED)
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
 
 

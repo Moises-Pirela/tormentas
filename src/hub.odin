@@ -271,296 +271,157 @@ draw_hub_hud :: proc(w: ^cw.World) {
 }
 
 draw_level_select :: proc(w: ^cw.World) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 160})
+    ui_scrim(160)
 
     n_levels := max(g_available_levels, 1)
     pw := uis(360)
     ph := uis(80) + f32(n_levels) * uis(62) + uis(48)
-    px := (sw - pw) * 0.5
-    py := (sh - ph) * 0.5
-
-    clay.BeginLayout()
-    if clay.UI(clay.ID("LevelSelectPanel"))({
-        layout = { sizing = { clay.SizingFixed(pw), clay.SizingFixed(ph) } },
-        floating = {
-            offset     = { px, py },
-            attachment = { element = .LeftTop, parent = .LeftTop },
-            attachTo   = .Root,
-        },
-        backgroundColor = { 10, 8, 6, 252 },
-        border          = { color = { 90, 68, 28, 200 }, width = { 1, 1, 1, 1, 0 } },
-        cornerRadius    = clay.CornerRadiusAll(5),
-    }) {}
-    cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
-
-    rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
-
-    title    := t(.HUB_LEVEL_SELECT)
-    title_fs := uis(16)
-    tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
-        {px + pw * 0.5 - tsz.x * 0.5, py + uis(16)},
-        title_fs, 1, COL_PARCH)
-    rl.DrawLineEx(
-        {px + uis(16), py + uis(46)},
-        {px + pw - uis(16), py + uis(46)}, 1, COL_RULE)
 
     btn_w := pw - uis(32)
     btn_h := uis(46)
-    bx    := px + uis(16)
 
-    if g_available_levels == 0 {
-
-        msg    := t(.HUB_NO_LEVELS)
-        msg_fs := uis(11)
-        msz    := rl.MeasureTextEx(g_font_body, msg, msg_fs, 0.5)
-        rl.DrawTextEx(g_font_body, msg,
-            {px + pw * 0.5 - msz.x * 0.5, py + uis(70)},
-            msg_fs, 0.5, COL_MUTED)
-    }
-    for i in 1 ..= g_available_levels {
-        by := py + uis(58) + f32(i - 1) * (btn_h + uis(10))
-        r  := rl.Rectangle{ bx, by, btn_w, btn_h }
-
-        mp  := rl.GetMousePosition()
-        hot := rl.CheckCollisionPointRec(mp, r)
-
-        bg     := rl.Color{  80,  58, 14, 255 } if hot else rl.Color{  50,  36, 10, 235 }
-        border := rl.Color{ 200, 162, 55, 255 } if hot else rl.Color{ 140, 108, 38, 200 }
-        rl.DrawRectangleRec(r, bg)
-        rl.DrawRectangleLinesEx(r, 1.5, border)
-
-        lbl_cs  := tf(.HUB_LEVEL_N, i)
-        lbl_fs  := uis(12)
-        lsz     := rl.MeasureTextEx(g_font_body, lbl_cs, lbl_fs, 0.5)
-        lbl_col := rl.Color{235, 215, 145, 255} if hot else COL_BRASS
-        rl.DrawTextEx(g_font_body, lbl_cs,
-            {r.x + (r.width - lsz.x) * 0.5, r.y + (r.height - lbl_fs) * 0.5},
-            lbl_fs, 0.5, lbl_col)
-
-        if hot && rl.IsMouseButtonReleased(.LEFT) {
-            g_pending_raid_start = i
-            p2p.session_send_level_load(&g_session, i)
-            ui_close(.LevelSelect)
-            return
+    clay.BeginLayout()
+    ui_panel_begin("LevelSelectPanel", string(t(.HUB_LEVEL_SELECT)), pw, ph,
+        { anchor = .CenterCenter })
+    {
+        if g_available_levels == 0 {
+            ui_label("LSNoLevels", string(t(.HUB_NO_LEVELS)), uis(11), COL_MUTED)
         }
+
+        ui_vstack_begin("LSList", u16(uis(10)))
+        for i in 1 ..= g_available_levels {
+            if ui_button(fmt.tprintf("LSLvl%d", i), string(tf(.HUB_LEVEL_N, i)),
+                btn_w, btn_h, .Primary) {
+                g_pending_raid_start = i
+                p2p.session_send_level_load(&g_session, i)
+                ui_close(.LevelSelect)
+                break
+            }
+        }
+        ui_vstack_end()
+
+        ui_grow("LSSpacer")
+        ui_hstack_begin("LSCancelRow", 0, 0, .Center)
+        ui_grow("LSCancelL")
+        ui_label("LSCancel", string(t(.HUB_ESC_CANCEL)), uis(10), COL_MUTED)
+        ui_grow("LSCancelR")
+        ui_hstack_end()
     }
-
-    cancel    := t(.HUB_ESC_CANCEL)
-    cancel_fs := uis(10)
-    csz       := rl.MeasureTextEx(g_font_body, cancel, cancel_fs, 0.5)
-    rl.DrawTextEx(g_font_body, cancel,
-        {px + pw * 0.5 - csz.x * 0.5, py + ph - uis(22)},
-        cancel_fs, 0.5, COL_MUTED)
-}
-
-
-@(private = "file")
-_hub_btn_hit :: proc(r: rl.Rectangle) -> bool {
-    return rl.IsMouseButtonReleased(.LEFT) &&
-           rl.CheckCollisionPointRec(rl.GetMousePosition(), r)
-}
-
-@(private = "file")
-_hub_btn_draw :: proc(r: rl.Rectangle, label: cstring, accent := false) {
-    mp  := rl.GetMousePosition()
-    hot := rl.CheckCollisionPointRec(mp, r)
-
-    if accent {
-        bg     := rl.Color{  80,  58, 14, 255 } if hot else rl.Color{  50,  36, 10, 235 }
-        border := rl.Color{ 200, 162, 55, 255 } if hot else rl.Color{ 140, 108, 38, 200 }
-        rl.DrawRectangleRec(r, bg)
-        rl.DrawRectangleLinesEx(r, 1.5, border)
-    } else {
-        bg     := rl.Color{  32,  27, 20, 240 } if hot else rl.Color{  18,  15, 11, 230 }
-        border := COL_BRASS if hot else COL_RULE
-        rl.DrawRectangleRec(r, bg)
-        rl.DrawRectangleLinesEx(r, 1, border)
-    }
-
-    fs  := uis(12)
-    tsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
-    col: rl.Color
-    if hot          { col = rl.Color{235, 215, 145, 255} }
-    else if accent  { col = COL_BRASS }
-    else            { col = COL_PARCH }
-    rl.DrawTextEx(g_font_body, label,
-        {r.x + (r.width  - tsz.x) * 0.5,
-         r.y + (r.height - tsz.y) * 0.5},
-        fs, 0.5, col)
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
 
 
 draw_extract_screen :: proc(w: ^cw.World) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 185})
+    ui_scrim(185)
 
     pw := uis(360)
     ph := uis(310)
-    px := (sw - pw) * 0.5
-    py := (sh - ph) * 0.5
+
+    green_title  := rl.Color{100, 230, 100, 255}
+    green_accent := rl.Color{ 60, 200,  80, 200}
+    green_border := rl.Color{ 48, 140,  55, 200}
 
     clay.BeginLayout()
-    if clay.UI(clay.ID("ExtractPanel"))({
-        layout = { sizing = { clay.SizingFixed(pw), clay.SizingFixed(ph) } },
-        floating = {
-            offset     = { px, py },
-            attachment = { element = .LeftTop, parent = .LeftTop },
-            attachTo   = .Root,
-        },
-        backgroundColor = { 10, 14, 10, 252 },
-        border          = { color = { 48, 140, 55, 200 }, width = { 1, 1, 1, 1, 0 } },
-        cornerRadius    = clay.CornerRadiusAll(5),
-    }) {}
+    ui_panel_begin("ExtractPanel", string(t(.EXTRACT_TITLE)), pw, ph, {
+        anchor     = .CenterCenter,
+        bg_col     = rl.Color{10, 14, 10, 252},
+        border_col = green_border,
+        accent_col = green_accent,
+        title_col  = green_title,
+        title_fs   = uis(20),
+    })
+    {
+        // Subtitle (centered)
+        ui_hstack_begin("ExSubRow", 0, 0, .Center)
+        ui_grow("ExSubL")
+        ui_label("ExSub", string(t(.EXTRACT_SUBTITLE)), uis(16), rl.Color{80, 200, 80, 200})
+        ui_grow("ExSubR")
+        ui_hstack_end()
+
+        _hub_reward_row("ExGold",   string(t(.EXTRACT_GOLD)),
+            fmt.tprintf("+ %d", raid_result_gold), COL_BRASS)
+        _hub_reward_row("ExSerums", string(t(.EXTRACT_SERUMS)),
+            fmt.tprintf("+ %d", raid_result_serums), COL_BRASS)
+
+        ui_divider("ExSep")
+
+        _hub_reward_row("ExStash", string(t(.EXTRACT_STASH_TOTAL)),
+            fmt.tprintf("%d gold   %d serums", local_stash().gold, local_stash().serums),
+            COL_PARCH)
+
+        ui_grow("ExSpacer")
+        ui_hstack_begin("ExBtnRow", 0, 0, .Center)
+        ui_grow("ExBtnL")
+        if ui_button("ExReturn", string(t(.HUB_BTN_RETURN)), uis(200), uis(44), .Primary) {
+            enter_hub(w, true)
+        }
+        ui_grow("ExBtnR")
+        ui_hstack_end()
+    }
+    ui_panel_end()
     cmds := clay.EndLayout()
     clay_raylib_render(&cmds)
-
-    rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), rl.Color{60, 200, 80, 200})
-
-    t_fs := uis(20)
-    t1   := t(.EXTRACT_TITLE)
-    t2   := t(.EXTRACT_SUBTITLE)
-    t1sz := rl.MeasureTextEx(g_font, t1, t_fs, 1)
-    t2sz := rl.MeasureTextEx(g_font, t2, t_fs, 1)
-    rl.DrawTextEx(g_font, t1, {px + pw*0.5 - t1sz.x*0.5, py + uis(16)},
-        t_fs, 1, rl.Color{100, 230, 100, 255})
-    rl.DrawTextEx(g_font, t2, {px + pw*0.5 - t2sz.x*0.5, py + uis(42)},
-        t_fs, 1, rl.Color{80, 200, 80, 200})
-    rl.DrawLineEx(
-        {px + uis(16), py + uis(74)},
-        {px + pw - uis(16), py + uis(74)}, 1, rl.Color{40, 100, 45, 180})
-
-    row_fs := uis(15)
-    r1y    := py + uis(86)
-    r2y    := r1y + uis(28)
-    sep_y  := r2y + uis(30)
-    r3y    := sep_y + uis(14)
-
-    rl.DrawTextEx(g_font_body, t(.EXTRACT_GOLD),   {px + uis(24), r1y}, row_fs, 1, COL_MUTED)
-    rl.DrawTextEx(g_font_body, t(.EXTRACT_SERUMS), {px + uis(24), r2y}, row_fs, 1, COL_MUTED)
-    {
-        buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "+ %d", raid_result_gold)
-        buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
-            {px + pw - uis(24) - sz.x, r1y}, row_fs, 1, COL_BRASS)
-    }
-    {
-        buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "+ %d", raid_result_serums)
-        buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
-            {px + pw - uis(24) - sz.x, r2y}, row_fs, 1, COL_BRASS)
-    }
-    rl.DrawLineEx({px + uis(16), sep_y}, {px + pw - uis(16), sep_y}, 1, COL_RULE)
-    rl.DrawTextEx(g_font_body, t(.EXTRACT_STASH_TOTAL), {px + uis(24), r3y}, row_fs, 1, COL_MUTED)
-    {
-        buf: [48]u8
-        s   := fmt.bprintf(buf[:47], "%d gold   %d serums", local_stash().gold, local_stash().serums)
-        buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
-            {px + pw - uis(24) - sz.x, r3y}, row_fs, 1, COL_PARCH)
-    }
-
-    btn_w  := uis(200)
-    btn_h  := uis(44)
-    cont_r := rl.Rectangle{
-        px + pw*0.5 - btn_w*0.5,
-        py + ph - uis(62),
-        btn_w, btn_h,
-    }
-    _hub_btn_draw(cont_r, t(.HUB_BTN_RETURN), true)
-    if _hub_btn_hit(cont_r) {
-        enter_hub(w, true)
-    }
 }
 
 
 draw_death_screen :: proc(w: ^cw.World) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 185})
+    ui_scrim(185)
 
     pw := uis(370)
     ph := uis(300)
-    px := (sw - pw) * 0.5
-    py := (sh - ph) * 0.5
+
+    red_title  := rl.Color{200,  55,  55, 255}
+    red_accent := rl.Color{200,  40,  40, 200}
+    red_border := rl.Color{140,  28,  28, 200}
 
     clay.BeginLayout()
-    if clay.UI(clay.ID("DeathPanel"))({
-        layout = { sizing = { clay.SizingFixed(pw), clay.SizingFixed(ph) } },
-        floating = {
-            offset     = { px, py },
-            attachment = { element = .LeftTop, parent = .LeftTop },
-            attachTo   = .Root,
-        },
-        backgroundColor = { 14, 6, 6, 252 },
-        border          = { color = { 140, 28, 28, 200 }, width = { 1, 1, 1, 1, 0 } },
-        cornerRadius    = clay.CornerRadiusAll(5),
-    }) {}
+    ui_panel_begin("DeathPanel", string(t(.DEATH_TITLE)), pw, ph, {
+        anchor     = .CenterCenter,
+        bg_col     = rl.Color{14, 6, 6, 252},
+        border_col = red_border,
+        accent_col = red_accent,
+        title_col  = red_title,
+        title_fs   = uis(26),
+    })
+    {
+        // Subtitle (centered)
+        ui_hstack_begin("DeSubRow", 0, 0, .Center)
+        ui_grow("DeSubL")
+        ui_label("DeSub", string(t(.DEATH_MSG)), uis(12), COL_MUTED)
+        ui_grow("DeSubR")
+        ui_hstack_end()
+
+        ui_divider("DeSep")
+
+        _hub_reward_row("DeStash", string(t(.DEATH_STASH)),
+            fmt.tprintf("%d gold", local_stash().gold), COL_PARCH)
+
+        ui_grow("DeSpacer")
+        ui_hstack_begin("DeBtnRow", u16(uis(14)), 0, .Center)
+        ui_grow("DeBtnL")
+        if ui_button("DeRetry", string(t(.HUB_BTN_RETRY)), uis(155), uis(44), .Primary) {
+            enter_raid(w, g_current_raid_level)
+        }
+        if ui_button("DeReturn", string(t(.HUB_BTN_RETURN)), uis(155), uis(44), .Default) {
+            enter_hub(w)
+        }
+        ui_grow("DeBtnR")
+        ui_hstack_end()
+    }
+    ui_panel_end()
     cmds := clay.EndLayout()
     clay_raylib_render(&cmds)
+}
 
-    rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), rl.Color{200, 40, 40, 200})
 
-    title    := t(.DEATH_TITLE)
-    title_fs := uis(26)
-    tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
-        {px + pw*0.5 - tsz.x*0.5, py + uis(16)},
-        title_fs, 1, rl.Color{200, 55, 55, 255})
-    rl.DrawLineEx(
-        {px + uis(16), py + uis(60)},
-        {px + pw - uis(16), py + uis(60)}, 1, rl.Color{100, 28, 28, 180})
-
-    sub    := t(.DEATH_MSG)
-    sub_fs := uis(12)
-    ssz    := rl.MeasureTextEx(g_font_body, sub, sub_fs, 0.5)
-    rl.DrawTextEx(g_font_body, sub,
-        {px + pw*0.5 - ssz.x*0.5, py + uis(72)},
-        sub_fs, 0.5, COL_MUTED)
-
-    rl.DrawLineEx(
-        {px + uis(16), py + uis(100)},
-        {px + pw - uis(16), py + uis(100)}, 1, COL_RULE)
-    row_fs := uis(15)
-    rl.DrawTextEx(g_font_body, t(.DEATH_STASH), {px + uis(24), py + uis(112)}, row_fs, 1, COL_MUTED)
-    {
-        buf: [32]u8
-        s   := fmt.bprintf(buf[:31], "%d gold", local_stash().gold)
-        buf[len(s)] = 0
-        sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), row_fs, 1)
-        rl.DrawTextEx(g_font_body, cstring(&buf[0]),
-            {px + pw - uis(24) - sz.x, py + uis(112)}, row_fs, 1, COL_PARCH)
-    }
-
-    btn_w := uis(155)
-    btn_h := uis(44)
-    gap   := uis(14)
-    total := btn_w*2 + gap
-    bx    := px + pw*0.5 - total*0.5
-    by    := py + ph - uis(64)
-
-    retry_r := rl.Rectangle{ bx,             by, btn_w, btn_h }
-    hub_r   := rl.Rectangle{ bx + btn_w+gap, by, btn_w, btn_h }
-
-    _hub_btn_draw(retry_r, t(.HUB_BTN_RETRY),  true)
-    _hub_btn_draw(hub_r,   t(.HUB_BTN_RETURN), false)
-
-    if _hub_btn_hit(retry_r) {
-        enter_raid(w, g_current_raid_level)
-    }
-    if _hub_btn_hit(hub_r) {
-        enter_hub(w)
-    }
+// _hub_reward_row draws a label (left) + value (right) row inside a panel body.
+@(private = "file")
+_hub_reward_row :: proc(base_id, label, value: string, value_col: rl.Color) {
+    ui_hstack_begin(fmt.tprintf("%sRow", base_id), 0, 0, .Center)
+    ui_label(fmt.tprintf("%sLbl", base_id), label, uis(15), COL_MUTED)
+    ui_grow(fmt.tprintf("%sSpc", base_id))
+    ui_label(fmt.tprintf("%sVal", base_id), value, uis(15), value_col)
+    ui_hstack_end()
 }

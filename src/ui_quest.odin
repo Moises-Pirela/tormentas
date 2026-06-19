@@ -1,8 +1,9 @@
 package main
 
-import cw  "clockwork"
-import rl  "vendor:raylib"
-import fmt "core:fmt"
+import cw   "clockwork"
+import rl   "vendor:raylib"
+import fmt  "core:fmt"
+import clay "../clay"
 
 g_quest_board_npc_id: int = cw.INVALID_ENTITY
 
@@ -74,84 +75,65 @@ draw_quest_board_world :: proc(w: ^cw.World) {
 }
 
 draw_quest_board_panel :: proc(w: ^cw.World) {
-    sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
 
-    pw := uis(520)
-    ph := sh * 0.86
-    px := (sw - pw) * 0.5
-    py := sh * 0.07
+    clay.BeginLayout()
+    ui_panel_begin("QuestBoardPanel", string(t(.QUEST_BOARD_TITLE)), uis(520), sh * 0.86, {
+        anchor   = .CenterCenter,
+        title_fs = uis(17),
+    })
+    {
+        ui_vstack_begin("QBList", u16(uis(5)))
+        for qi in QuestID {
+            idx  := int(qi)
+            def  := &QUEST_DEFS[idx]
+            done := quest_is_done(qi)
+            cur, tgt := quest_progress(qi, w)
 
-    rl.DrawRectangleRec({px, py, pw, ph}, rl.Color{10, 8, 6, 252})
-    rl.DrawRectangleLinesEx({px, py, pw, ph}, 1.5, COL_RULE)
-    rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
+            card_bg  := rl.Color{15, 22, 15, 255} if done else rl.Color{22, 17, 12, 255}
+            card_bdr := rl.Color{70, 150, 70, 140} if done else COL_RULE
+            ui_card_begin(fmt.tprintf("QBCard%d", idx), card_bg, card_bdr, u16(uis(5)))
+            {
+                // Title row + COMPLETED badge
+                ui_hstack_begin(fmt.tprintf("QBTitleRow%d", idx), 0, 0, .Center)
+                ui_label(fmt.tprintf("QBTitle%d", idx), string(t(def.title_key)), uis(12),
+                    rl.Color{120, 200, 120, 255} if done else COL_PARCH)
+                if done {
+                    ui_grow(fmt.tprintf("QBTitleSpc%d", idx))
+                    ui_label(fmt.tprintf("QBDone%d", idx), "COMPLETED", uis(9),
+                        rl.Color{80, 200, 80, 220})
+                }
+                ui_hstack_end()
 
-    title    := t(.QUEST_BOARD_TITLE)
-    title_fs := uis(17)
-    tsz      := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
-        {px + pw*0.5 - tsz.x*0.5, py + uis(14)}, title_fs, 1, COL_PARCH)
-    rl.DrawLineEx(
-        {px + uis(16), py + uis(46)},
-        {px + pw - uis(16), py + uis(46)}, 1, COL_RULE)
+                ui_label(fmt.tprintf("QBObj%d", idx), string(t(def.obj_key)), uis(10), COL_MUTED)
 
-    list_y   := py + uis(54)
-    card_h   := uis(78)
-    card_gap := uis(5)
+                // Progress bar + count
+                ui_hstack_begin(fmt.tprintf("QBProg%d", idx), u16(uis(6)), 0, .Center)
+                ratio := f32(min(cur, tgt)) / f32(tgt) if tgt > 0 else 0
+                ui_hbar(fmt.tprintf("QBBar%d", idx), ratio,
+                    rl.Color{80, 200, 80, 210} if done else rl.Color{180, 140, 60, 210},
+                    rl.Color{35, 28, 20, 255}, uis(5))
+                ui_label(fmt.tprintf("QBCount%d", idx),
+                    fmt.tprintf("%d / %d", min(cur, tgt), tgt), uis(9), COL_MUTED)
+                ui_hstack_end()
 
-    for qi in QuestID {
-        idx  := int(qi)
-        def  := &QUEST_DEFS[idx]
-        done := quest_is_done(qi)
-        cur, tgt := quest_progress(qi, w)
-
-        cy := list_y + f32(idx) * (card_h + card_gap)
-        if cy + card_h > py + ph - uis(44) { break }
-
-        card_r  := rl.Rectangle{px + uis(14), cy, pw - uis(28), card_h}
-        card_bg := rl.Color{15, 22, 15, 255} if done else rl.Color{22, 17, 12, 255}
-        rl.DrawRectangleRec(card_r, card_bg)
-        rl.DrawRectangleLinesEx(card_r, 1,
-            rl.Color{70, 150, 70, 140} if done else COL_RULE)
-
-        tx := card_r.x + uis(12)
-
-        title_col := rl.Color{120, 200, 120, 255} if done else COL_PARCH
-        rl.DrawTextEx(g_font_body, t(def.title_key),
-            {tx, cy + uis(7)}, uis(12), 0.5, title_col)
-
-        if done {
-            clbl := cstring("COMPLETED")
-            clsz := rl.MeasureTextEx(g_font_body, clbl, uis(9), 0.5)
-            rl.DrawTextEx(g_font_body, clbl,
-                {card_r.x + card_r.width - uis(12) - clsz.x, cy + uis(8)},
-                uis(9), 0.5, rl.Color{80, 200, 80, 220})
+                ui_label(fmt.tprintf("QBRew%d", idx), string(_quest_reward_cstr(def)), uis(9),
+                    rl.Color{200, 170, 80, 200})
+            }
+            ui_card_end()
         }
+        ui_vstack_end()
 
-        rl.DrawTextEx(g_font_body, t(def.obj_key),
-            {tx, cy + uis(26)}, uis(10), 0.5, COL_MUTED)
-
-        bar_x    := tx
-        bar_y    := cy + uis(43)
-        bar_w    := pw - uis(80)
-        bar_h    := uis(5)
-        fill     := f32(min(cur, tgt)) / f32(tgt) * bar_w
-        fill_col := rl.Color{80, 200, 80, 210} if done else rl.Color{180, 140, 60, 210}
-        rl.DrawRectangle(i32(bar_x), i32(bar_y), i32(bar_w), i32(bar_h), rl.Color{35, 28, 20, 255})
-        if fill > 0 {
-            rl.DrawRectangle(i32(bar_x), i32(bar_y), i32(fill), i32(bar_h), fill_col)
-        }
-        prog := fmt.ctprintf("%d / %d", min(cur, tgt), tgt)
-        rl.DrawTextEx(g_font_body, prog,
-            {bar_x + bar_w + uis(6), bar_y - uis(1)}, uis(9), 0.5, COL_MUTED)
-
-        rew := _quest_reward_cstr(def)
-        rl.DrawTextEx(g_font_body, rew,
-            {tx, cy + uis(56)}, uis(9), 0.5, rl.Color{200, 170, 80, 200})
+        ui_grow("QBSpacer")
+        ui_hstack_begin("QBCloseRow", 0, 0, .Center)
+        ui_grow("QBCloseL")
+        ui_label("QBClose", "[ESC] Close", uis(9), COL_MUTED)
+        ui_grow("QBCloseR")
+        ui_hstack_end()
     }
-
-    rl.DrawTextEx(g_font_body, cstring("[ESC] Close"),
-        {px + pw*0.5 - uis(28), py + ph - uis(28)}, uis(9), 0.5, COL_MUTED)
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
 
 @(private = "file")

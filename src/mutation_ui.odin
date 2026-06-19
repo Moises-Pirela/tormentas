@@ -4,11 +4,11 @@ import rl   "vendor:raylib"
 import      "core:fmt"
 import      "core:math"
 import cw   "clockwork"
+import clay "../clay"
 
 
 MUT_PANEL_W  :: f32(680)
 MUT_PANEL_H  :: f32(560)
-MUT_CARD_H   :: f32(105)
 MUT_CARD_GAP :: f32(8)
 
 
@@ -22,20 +22,8 @@ MUT_CARD_GAP :: f32(8)
 @(private="file") MUT_LOCKED   :: rl.Color{  70, 50, 90, 160 }
 
 
-@(private="file") g_mut_tab:    MutationBranch = .Corpus
-@(private="file") g_mut_scroll: f32
+@(private="file") g_mut_tab: MutationBranch = .Corpus
 
-
-@(private="file")
-mut_panel_rect :: proc() -> (px, py, pw, ph: f32) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-    pw  = uis(MUT_PANEL_W)
-    ph  = uis(MUT_PANEL_H)
-    px  = sw*0.5 - pw*0.5
-    py  = sh*0.5 - ph*0.5
-    return
-}
 
 @(private="file")
 mutation_branch_name :: proc(branch: MutationBranch) -> cstring {
@@ -46,39 +34,6 @@ mutation_branch_name :: proc(branch: MutationBranch) -> cstring {
     }
     return ""
 }
-
-@(private="file")
-mut_count_in_branch :: proc(branch: MutationBranch) -> int {
-    n := 0
-    for mt in cw.MutationType {
-        if mt == .None { continue }
-        if MUTATION_DEFS[mt].branch == branch { n += 1 }
-    }
-    return n
-}
-
-
-@(private="file")
-mut_content_geo :: proc(px, py, pw, ph: f32) -> (cx, cy, cw_, ch, max_scroll: f32) {
-    pad      := uis(12)
-    header_h := uis(32)
-    tab_h    := uis(28)
-    footer_h := uis(24)
-    scroll_w := uis(6)
-    card_h   := uis(MUT_CARD_H)
-    card_gap := uis(MUT_CARD_GAP)
-
-    cx  = px + pad
-    cy  = py + pad + header_h + uis(6) + tab_h + uis(8)
-    cw_ = pw - pad*2 - scroll_w - uis(4)
-    ch  = ph - (cy - py) - footer_h - pad
-
-    n := mut_count_in_branch(g_mut_tab)
-    total_h := f32(n)*(card_h + card_gap) - (card_gap if n > 0 else 0)
-    max_scroll = max(total_h - ch, 0)
-    return
-}
-
 
 @(private="file")
 find_nearby_mutation_workbench :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, ok: bool) {
@@ -111,8 +66,7 @@ find_nearby_mutation_workbench :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, o
 update_mutation_workbench :: proc(w: ^cw.World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
     if _, _, ok := find_nearby_mutation_workbench(w); ok && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
-        g_mut_tab    = .Corpus
-        g_mut_scroll = 0
+        g_mut_tab = .Corpus
         ui_open(.MutationTree)
     }
 }
@@ -137,79 +91,11 @@ update_mutation_tree :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
     if !cw.world_has_component(w, w.player_id, .MutationContainer) { return }
 
+    // Tab/card/reset clicks and wheel scrolling are handled in draw_mutation_tree
+    // (Clay immediate-mode + wired scroll); only ESC-to-close stays here.
     if input_pressed(.ESCAPE) {
         ui_close_top()
         return
-    }
-
-    px, py, pw, ph := mut_panel_rect()
-    pad     := uis(12)
-    tab_h   := uis(28)
-    tab_top := py + pad + uis(32) + uis(6)
-
-    cx, cy, cw_, ch, max_scroll := mut_content_geo(px, py, pw, ph)
-
-    mp := rl.GetMousePosition()
-
-
-    tab_count := len(MutationBranch)
-    tab_w     := (pw - pad*2) / f32(tab_count)
-    for branch in MutationBranch {
-        tx  := px + pad + f32(int(branch))*tab_w
-        rec := rl.Rectangle{ tx, tab_top, tab_w - uis(4), tab_h }
-        if rl.IsMouseButtonPressed(.LEFT) && rl.CheckCollisionPointRec(mp, rec) {
-            if g_mut_tab != branch {
-                g_mut_tab    = branch
-                g_mut_scroll = 0
-
-                _, _, _, _, max_scroll = mut_content_geo(px, py, pw, ph)
-            }
-        }
-    }
-
-
-    if rl.CheckCollisionPointRec(mp, rl.Rectangle{px, py, pw, ph}) {
-        wh := rl.GetMouseWheelMove()
-        if wh != 0 {
-            g_mut_scroll = clamp(g_mut_scroll - wh*uis(40), 0, max_scroll)
-        }
-    }
-
-
-    if rl.IsMouseButtonPressed(.LEFT) {
-        clip_rec := rl.Rectangle{ cx, cy, cw_, ch }
-        card_h   := uis(MUT_CARD_H)
-        card_gap := uis(MUT_CARD_GAP)
-        row := 0
-        for mt in cw.MutationType {
-            if mt == .None { continue }
-            if MUTATION_DEFS[mt].branch != g_mut_tab { continue }
-            card_y   := cy + f32(row)*(card_h + card_gap) - g_mut_scroll
-            card_rec := rl.Rectangle{ cx, card_y, cw_, card_h }
-            if rl.CheckCollisionPointRec(mp, card_rec) &&
-               rl.CheckCollisionPointRec(mp, clip_rec) {
-                if mutation_unlock(w, w.player_id, mt) {
-                    play_sfx("stat_up")
-                }
-                break
-            }
-            row += 1
-        }
-    }
-
-
-    if rl.IsMouseButtonPressed(.LEFT) {
-        footer_y    := py + ph - uis(24)
-        footer_fs   := uis(8)
-        reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
-        reset_sz    := rl.MeasureTextEx(g_font_body, reset_label, footer_fs, 0.4)
-        reset_x     := px + pw - reset_sz.x - uis(14)
-        reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
-        if rl.CheckCollisionPointRec(mp, reset_rec) {
-            if mutation_clear_all(w, w.player_id) {
-                play_sfx("stat_up")
-            }
-        }
     }
 }
 
@@ -218,179 +104,104 @@ draw_mutation_tree :: proc(w: ^cw.World) {
     if !cw.world_is_valid(w, w.player_id) { return }
     if !cw.world_has_component(w, w.player_id, .MutationContainer) { return }
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 165})
-
-    px, py, pw, ph := mut_panel_rect()
-    pad      := uis(12)
-    header_h := uis(32)
-    tab_h    := uis(28)
-    footer_h := uis(24)
-    card_h   := uis(MUT_CARD_H)
-    card_gap := uis(MUT_CARD_GAP)
-    scroll_w := uis(6)
-
-
-    rl.DrawRectangleRounded({px, py, pw, ph}, 0.04, 8, MUT_BG)
-    rl.DrawRectangleLinesEx({px, py, pw, ph}, uis(1.5), MUT_BORDER)
-
+    ui_scrim(165)
     mc := cw.world_get_mutation(w, w.player_id)
 
+    pw      := uis(MUT_PANEL_W)
+    ph      := uis(MUT_PANEL_H)
+    inner_w := pw - uis(28)                  // panel padding (~14 each side)
+    tab_w   := (inner_w - uis(8)) / 3        // 3 tabs, 2 gaps of uis(4)
+    purple_active := rl.Color{ 50, 20, 80, 245 }
 
-    header_fs := uis(14)
-    body_fs   := uis(9)
+    clay.BeginLayout()
+    ui_panel_begin("MutPanel", string(t(.MUT_TITLE)), pw, ph, {
+        anchor     = .CenterCenter,
+        title_fs   = uis(14),
+        bg_col     = MUT_BG,
+        border_col = MUT_BORDER,
+        accent_col = MUT_BORDER,
+        title_col  = MUT_HEADER,
+    })
+    {
+        // Serum balance (right-aligned)
+        ui_hstack_begin("MutSerumRow", 0, 0, .Center)
+        ui_grow("MutSerumL")
+        ui_label("MutSerums", string(tf(.MUT_SERUMS, mc.serums)), uis(9), MUT_OWNED)
+        ui_hstack_end()
 
-    rl.DrawTextEx(g_font_body, t(.MUT_TITLE),
-        {px + uis(14), py + uis(10)}, header_fs, 0.6, MUT_HEADER)
-
-    serum_str := tf(.MUT_SERUMS, mc.serums)
-    serum_sz  := rl.MeasureTextEx(g_font_body, serum_str, body_fs, 0.5)
-    rl.DrawTextEx(g_font_body, serum_str,
-        {px + pw - serum_sz.x - uis(14), py + uis(12)},
-        body_fs, 0.5, MUT_OWNED)
-
-
-    div_y := py + pad + header_h - uis(4)
-    rl.DrawRectangle(i32(px + pad), i32(div_y), i32(pw - pad*2), i32(uis(1)),
-        rl.Color{100, 50, 160, 120})
-
-
-    tab_count := len(MutationBranch)
-    tab_w     := (pw - pad*2) / f32(tab_count)
-    tab_top   := py + pad + header_h + uis(6)
-
-    for branch in MutationBranch {
-        tx  := px + pad + f32(int(branch))*tab_w
-        rec := rl.Rectangle{ tx, tab_top, tab_w - uis(4), tab_h }
-
-        active := branch == g_mut_tab
-        bg_col := rl.Color{50, 20, 80, 245} if active else rl.Color{22, 14, 36, 210}
-        bd_col := MUT_BORDER                if active else MUT_LOCKED
-        tx_col := MUT_HEADER                if active else MUT_MUTED
-
-        rl.DrawRectangleRounded(rec, 0.28, 6, bg_col)
-        rl.DrawRectangleLinesEx(rec, uis(1), bd_col)
-
-        label  := mutation_branch_name(branch)
-        lsz    := rl.MeasureTextEx(g_font_body, label, body_fs, 0.5)
-        rl.DrawTextEx(g_font_body, label,
-            {rec.x + rec.width*0.5 - lsz.x*0.5, rec.y + rec.height*0.5 - lsz.y*0.5},
-            body_fs, 0.5, tx_col)
-    }
-
-
-    cx, cy, cw_, ch, max_scroll := mut_content_geo(px, py, pw, ph)
-
-
-    n       := mut_count_in_branch(g_mut_tab)
-    total_h := f32(n)*(card_h + card_gap) - (card_gap if n > 0 else 0)
-
-    rl.BeginScissorMode(i32(cx), i32(cy), i32(cw_), i32(ch))
-
-    row    := 0
-    small_fs := uis(8)
-    name_fs  := uis(10)
-    mp := rl.GetMousePosition()
-
-    for mt in cw.MutationType {
-        if mt == .None { continue }
-        def := &MUTATION_DEFS[mt]
-        if def.branch != g_mut_tab { continue }
-
-        card_y := cy + f32(row)*(card_h + card_gap) - g_mut_scroll
-        if card_y + card_h < cy || card_y > cy + ch { row += 1; continue }
-
-        owned    := player_has_mutation(w, w.player_id, mt)
-        can      := mutation_can_unlock(w, w.player_id, mt)
-        conflict := !owned && mutation_conflicts(w, w.player_id, mt)
-        clip_rec := rl.Rectangle{cx, cy, cw_, ch}
-        hovered  := rl.CheckCollisionPointRec(mp, rl.Rectangle{cx, card_y, cw_, card_h}) &&
-                    rl.CheckCollisionPointRec(mp, clip_rec)
-
-        bg     := rl.Color{ 16, 14, 28, 240 }
-        border := MUT_LOCKED
-        name_c := MUT_HEADER
-        status := tf(.MUT_COST, def.serum_cost)
-        stat_c := rl.Color{180, 60, 60, 200}
-
-        if owned {
-            bg = rl.Color{20, 40, 24, 240}; border = MUT_OWNED; name_c = MUT_OWNED
-            status = t(.MUT_ACQUIRED); stat_c = MUT_OWNED
-        } else if conflict {
-            bg = rl.Color{40, 14, 14, 240}; border = MUT_CONFLICT; name_c = MUT_CONFLICT
-            status = t(.MUT_CONFLICT); stat_c = MUT_CONFLICT
-        } else if can {
-            bg = rl.Color{28, 14, 50, 240}
-            border = rl.Color{220, 120, 255, 255} if hovered else MUT_CANGET
-            stat_c = rl.Color{100, 210, 120, 210}
+        // Branch tabs
+        ui_hstack_begin("MutTabs", u16(uis(4)), 0, .Center)
+        for branch in MutationBranch {
+            if ui_tab(fmt.tprintf("MutTab%d", int(branch)),
+                string(mutation_branch_name(branch)), tab_w, uis(26),
+                branch == g_mut_tab, MUT_BORDER, purple_active) {
+                g_mut_tab = branch
+            }
         }
+        ui_hstack_end()
 
-        card_rec := rl.Rectangle{cx, card_y, cw_, card_h}
-        rl.DrawRectangleRounded(card_rec, 0.06, 8, bg)
-        rl.DrawRectangleLinesEx(card_rec, uis(1.5), border)
+        // Scrollable card list (grows to fill remaining height; footer sits below it)
+        ui_scroll_begin("MutScroll")
+        ui_vstack_begin("MutList", u16(uis(MUT_CARD_GAP)))
+        for mt in cw.MutationType {
+            if mt == .None { continue }
+            def := &MUTATION_DEFS[mt]
+            if def.branch != g_mut_tab { continue }
 
-        ipad := uis(10)
-        ty   := card_y + ipad
+            cardid  := fmt.tprintf("MutCard%d", int(mt))
+            hovered := clay.PointerOver(clay.ID(cardid))
 
-        rl.DrawTextEx(g_font_body, fmt.ctprintf("%s", def.name),
-            {cx + ipad, ty}, name_fs, 0.5, name_c)
-        ty += name_fs + uis(3)
+            owned    := player_has_mutation(w, w.player_id, mt)
+            can      := mutation_can_unlock(w, w.player_id, mt)
+            conflict := !owned && mutation_conflicts(w, w.player_id, mt)
 
-        rl.DrawTextEx(g_font_body, fmt.ctprintf("%s", def.effect),
-            {cx + ipad, ty}, small_fs, 0.4, MUT_MUTED)
-        ty += small_fs + uis(3)
+            bg     := rl.Color{ 16, 14, 28, 240 }
+            border := MUT_LOCKED
+            name_c := MUT_HEADER
+            status := string(tf(.MUT_COST, def.serum_cost))
+            stat_c := rl.Color{ 180, 60, 60, 200 }
+            if owned {
+                bg = rl.Color{ 20, 40, 24, 240 }; border = MUT_OWNED; name_c = MUT_OWNED
+                status = string(t(.MUT_ACQUIRED)); stat_c = MUT_OWNED
+            } else if conflict {
+                bg = rl.Color{ 40, 14, 14, 240 }; border = MUT_CONFLICT; name_c = MUT_CONFLICT
+                status = string(t(.MUT_CONFLICT)); stat_c = MUT_CONFLICT
+            } else if can {
+                bg = rl.Color{ 28, 14, 50, 240 }
+                border = rl.Color{ 220, 120, 255, 255 } if hovered else MUT_CANGET
+                stat_c = rl.Color{ 100, 210, 120, 210 }
+            }
 
-        rl.DrawTextEx(g_font_body, status, {cx + ipad, ty}, small_fs, 0.4, stat_c)
+            ui_card_begin(cardid, bg, border, u16(uis(3)))
+            ui_label(fmt.tprintf("MutName%d", int(mt)), fmt.tprintf("%s", def.name), uis(10), name_c)
+            ui_label(fmt.tprintf("MutEff%d", int(mt)),  fmt.tprintf("%s", def.effect), uis(8), MUT_MUTED)
+            ui_hstack_begin(fmt.tprintf("MutStatRow%d", int(mt)), 0, 0, .Center)
+            ui_label(fmt.tprintf("MutStat%d", int(mt)), status, uis(8), stat_c)
+            if can && !owned && !conflict {
+                ui_grow(fmt.tprintf("MutStatSpc%d", int(mt)))
+                ui_label(fmt.tprintf("MutCraft%d", int(mt)), string(t(.MUT_CRAFT_HINT)), uis(8), MUT_CANGET)
+            }
+            ui_hstack_end()
+            ui_card_end()
 
-        if can && !owned && !conflict {
-            craft := t(.MUT_CRAFT_HINT)
-            csz   := rl.MeasureTextEx(g_font_body, craft, small_fs, 0.4)
-            rl.DrawTextEx(g_font_body, craft,
-                {cx + cw_ - csz.x - ipad, ty}, small_fs, 0.4, MUT_CANGET)
+            if hovered && rl.IsMouseButtonReleased(.LEFT) {
+                if mutation_unlock(w, w.player_id, mt) { play_sfx("stat_up") }
+            }
         }
+        ui_vstack_end()
+        ui_scroll_end()
 
-        row += 1
+        // Footer: hint (left) + reset (right)
+        ui_hstack_begin("MutFooter", u16(uis(8)), 0, .Center)
+        ui_label("MutHint", string(t(.MUT_FOOTER)), uis(8), rl.Color{ 90, 70, 110, 180 })
+        ui_grow("MutFooterSpc")
+        can_clear := mc.entity_count > 0 && mc.serums >= MUT_CLEAR_COST
+        if ui_button("MutReset", string(tf(.MUT_RESET, MUT_CLEAR_COST)), uis(130), uis(22), .Danger) && can_clear {
+            if mutation_clear_all(w, w.player_id) { play_sfx("stat_up") }
+        }
+        ui_hstack_end()
     }
-
-    rl.EndScissorMode()
-
-
-    if max_scroll > 0 {
-        track_x := px + pw - scroll_w - uis(4)
-        track_h := ch
-        thumb_h := max(ch * (ch / total_h), uis(20))
-        thumb_y := cy + (ch - thumb_h) * (g_mut_scroll / max_scroll)
-        rl.DrawRectangleRounded(
-            {track_x, cy, scroll_w, track_h}, 0.5, 4,
-            rl.Color{30, 20, 44, 160})
-        rl.DrawRectangleRounded(
-            {track_x, thumb_y, scroll_w, thumb_h}, 0.5, 4,
-            rl.Color{160, 80, 240, 200})
-    }
-
-
-    footer_fs := uis(8)
-    hint      := t(.MUT_FOOTER)
-    hint_sz   := rl.MeasureTextEx(g_font_body, hint, footer_fs, 0.4)
-    footer_y  := py + ph - footer_h
-    rl.DrawTextEx(g_font_body, hint,
-        {px + pw*0.5 - hint_sz.x*0.5, footer_y + uis(5)},
-        footer_fs, 0.4, rl.Color{90, 70, 110, 180})
-
-
-    reset_label := tf(.MUT_RESET, MUT_CLEAR_COST)
-    reset_sz    := rl.MeasureTextEx(g_font_body, reset_label, footer_fs, 0.4)
-    reset_x     := px + pw - reset_sz.x - uis(14)
-    reset_rec   := rl.Rectangle{ reset_x - uis(4), footer_y + uis(2), reset_sz.x + uis(8), uis(18) }
-
-    mc2       := cw.world_get_mutation(w, w.player_id)
-    can_clear := mc2.entity_count > 0 && mc2.serums >= MUT_CLEAR_COST
-    reset_col := rl.Color{220, 60, 60, 200} if can_clear else rl.Color{80, 50, 50, 120}
-
-    if can_clear && rl.CheckCollisionPointRec(mp, reset_rec) {
-        rl.DrawRectangleRounded(reset_rec, 0.3, 4, rl.Color{80, 15, 15, 200})
-        rl.DrawRectangleLinesEx(reset_rec, uis(1), rl.Color{200, 50, 50, 200})
-    }
-    rl.DrawTextEx(g_font_body, reset_label, {reset_x, footer_y + uis(5)}, footer_fs, 0.4, reset_col)
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }

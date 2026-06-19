@@ -2,8 +2,9 @@ package main
 
 import "core:math/rand"
 import "core:fmt"
-import rl  "vendor:raylib"
-import cw  "clockwork"
+import rl   "vendor:raylib"
+import cw   "clockwork"
+import clay "../clay"
 
 
 MAX_SHOP_STOCK   :: 6
@@ -250,143 +251,97 @@ draw_shop_hud :: proc(w: ^cw.World) {
         return
     }
 
-    mp      := rl.GetMousePosition()
-    PW      := i32(uis(480))
-    PH      := i32(uis(520))
-    px, py  := shop_panel_origin()
-
-
-    rl.DrawRectangle(px, py, PW, PH, rl.Color{ 8, 6, 4, 252 })
-    rl.DrawRectangle(px, py, PW, i32(uis(3)), COL_BRASS)
-    rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
-
+    pid := w.player_id
 
     rc       := cw.world_get_render_config(w, g_shop_npc_id)
     npc_name := loc_lookup(cw.render_config_name_cstr(rc))
-    title_fs := uis(20)
-    tsz      := rl.MeasureTextEx(g_font, npc_name, title_fs, 1)
-    rl.DrawTextEx(g_font, npc_name,
-        { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(12) },
-        title_fs, 1, COL_PARCH)
-    shop_title    := t(.SHOP_TITLE)
-    shop_title_sz := rl.MeasureTextEx(g_font_body, shop_title, uis(10), 1)
-    rl.DrawTextEx(g_font_body, shop_title,
-        { f32(px) + f32(PW)*0.5 - shop_title_sz.x*0.5,
-          f32(py) + uis(12) + title_fs + uis(2) },
-        uis(10), 1, COL_MUTED)
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(py) + uis(56) },
-        { f32(px + PW) - uis(16), f32(py) + uis(56) }, 1, COL_RULE)
-
 
     wallet_gold := 0
-    pid := w.player_id
     if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Wallet) {
         wallet_gold = cw.world_get_wallet(w, pid).gold
     }
-    gold_cs := tf(.SHOP_GOLD, wallet_gold)
-    gfs     := uis(13)
-    rl.DrawTextEx(g_font_body, gold_cs,
-        { f32(px + PW) - uis(16) - rl.MeasureTextEx(g_font_body, gold_cs, gfs, 1).x,
-          f32(py) + uis(12) },
-        gfs, 1, rl.Color{ 255, 215, 50, 255 })
-
 
     slot_idx := g_shop_npc_id % MAX_NPC_ENTITIES
     n        := g_shop_stk_count[slot_idx]
-    item_h   := i32(uis(60))
-    item_pad := i32(uis(8))
-    start_y  := py + i32(uis(66))
+    item_h   := uis(60)
 
-    for i in 0..<n {
-        ss := &g_shop_stock[slot_idx][i]
-        if ss.item_entity == cw.INVALID_ENTITY {
+    clay.BeginLayout()
+    // Shift left by half the inventory panel width — the inventory is docked on the
+    // right while the shop is open, so the shop centers in the area left of it.
+    ui_panel_begin("ShopPanel", string(npc_name), uis(480), uis(520), {
+        anchor     = .CenterCenter,
+        offset     = { -f32(g_inv.panel_w) * 0.5, 0 },
+        bg_col     = rl.Color{ 8, 6, 4, 252 },
+        border_col = COL_RULE,
+        accent_col = COL_BRASS,
+        title_col  = COL_PARCH,
+        title_fs   = uis(20),
+    })
+    {
+        // Header row: shop subtitle (left) + wallet gold (right)
+        ui_hstack_begin("ShopHeader", 0, 0, .Center)
+        ui_label("ShopSub", string(t(.SHOP_TITLE)), uis(10), COL_MUTED)
+        ui_grow("ShopHeaderSpc")
+        ui_label("ShopGold", string(tf(.SHOP_GOLD, wallet_gold)), uis(13),
+            rl.Color{ 255, 215, 50, 255 })
+        ui_hstack_end()
 
-            iy := start_y + i32(i) * (item_h + item_pad)
-            rl.DrawRectangle(px + i32(uis(12)), iy, PW - i32(uis(24)), item_h,
-                rl.Color{ 12, 10, 8, 180 })
-            rl.DrawRectangleLinesEx(
-                { f32(px + i32(uis(12))), f32(iy), f32(PW - i32(uis(24))), f32(item_h) },
-                1, rl.Color{ 55, 48, 34, 80 })
-            so_fs := uis(11)
-            so_cs := t(.SHOP_SOLD_OUT)
-            rl.DrawTextEx(g_font_body, so_cs,
-                { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font_body, so_cs, so_fs, 0.5).x*0.5,
-                  f32(iy) + f32(item_h)*0.5 - so_fs*0.5 },
-                so_fs, 0.5, COL_MUTED)
-            continue
+        // Stock list
+        ui_vstack_begin("ShopList", u16(uis(8)))
+        for i in 0..<n {
+            ss := &g_shop_stock[slot_idx][i]
+
+            if ss.item_entity == cw.INVALID_ENTITY || !cw.world_is_valid(w, ss.item_entity) {
+                ui_hstack_begin(fmt.tprintf("ShopSold%d", i), 0, u16(uis(8)), .Center)
+                ui_grow(fmt.tprintf("ShopSoldL%d", i))
+                ui_label(fmt.tprintf("ShopSoldT%d", i), string(t(.SHOP_SOLD_OUT)), uis(11), COL_MUTED)
+                ui_grow(fmt.tprintf("ShopSoldR%d", i))
+                ui_hstack_end()
+                continue
+            }
+
+            item := cw.world_get_item(w, ss.item_entity)
+            irc  := cw.world_get_render_config(w, ss.item_entity)
+            rc_col := rarity_color(item.rarity)
+            can_afford := wallet_gold >= ss.price
+
+            hovered := ui_clickable_begin(fmt.tprintf("ShopRow%d", i), item_h, rc_col)
+            {
+                ui_box(fmt.tprintf("ShopIcon%d", i), uis(36), uis(36), rl.Color{ 40, 34, 22, 255 }, 2)
+                ui_vstack_begin(fmt.tprintf("ShopInfo%d", i), u16(uis(3)))
+                ui_label(fmt.tprintf("ShopName%d", i),
+                    string(loc_lookup(cw.render_config_name_cstr(irc))), uis(12), rc_col)
+                ui_label(fmt.tprintf("ShopDesc%d", i),
+                    string(loc_lookup(cw.render_config_desc_cstr(irc))), uis(9), COL_MUTED)
+                ui_vstack_end()
+                ui_grow(fmt.tprintf("ShopRowSpc%d", i))
+                price_col := rl.Color{255, 215, 50, 255} if can_afford else rl.Color{180, 80, 60, 255}
+                ui_label(fmt.tprintf("ShopPrice%d", i),
+                    fmt.tprintf("%d g", ss.price), uis(13), price_col)
+            }
+            ui_clickable_end()
+
+            if hovered && rl.IsMouseButtonReleased(.LEFT) && can_afford {
+                _shop_buy(w, i)
+            }
         }
+        ui_vstack_end()
 
-        if !cw.world_is_valid(w, ss.item_entity) { continue }
-        item := cw.world_get_item(w, ss.item_entity)
-        irc  := cw.world_get_render_config(w, ss.item_entity)
+        // Sell section header
+        ui_divider("ShopSellDiv")
+        ui_label("ShopSell", string(t(.SHOP_SELL)), uis(11), COL_MUTED)
 
-        iy      := start_y + i32(i) * (item_h + item_pad)
-        row_r   := rl.Rectangle{ f32(px + i32(uis(12))), f32(iy),
-                                  f32(PW - i32(uis(24))), f32(item_h) }
-        is_hot  := rl.CheckCollisionPointRec(mp, row_r)
-        bg        := rl.Color{ 28, 22, 14, 220 } if is_hot else rl.Color{ 16, 12, 8, 200 }
-        rc_col    := rarity_color(item.rarity)
-        rc_border := rc_col
-        rl.DrawRectangleRec(row_r, bg)
-        rl.DrawRectangleLinesEx(row_r, 1, rc_border if is_hot else COL_RULE)
-
-
-        icon_r := f32(uis(18))
-        rl.DrawRectangle(
-            i32(row_r.x + uis(8)), i32(row_r.y + f32(item_h)*0.5 - icon_r),
-            i32(icon_r*2), i32(icon_r*2), rl.Color{ 40, 34, 22, 255 })
-        rl.DrawRectangleLinesEx(
-            { row_r.x + uis(8), row_r.y + f32(item_h)*0.5 - icon_r, icon_r*2, icon_r*2 },
-            1, rc_col)
-
-
-        name_fs := uis(12)
-        name_x  := row_r.x + icon_r*2 + uis(18)
-        name_col := rarity_color(item.rarity)
-        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_name_cstr(irc)),
-            { name_x, row_r.y + uis(8) }, name_fs, 0.5, name_col)
-
-
-        desc_fs := uis(9)
-        rl.DrawTextEx(g_font_body, loc_lookup(cw.render_config_desc_cstr(irc)),
-            { name_x, row_r.y + uis(8) + name_fs + uis(3) }, desc_fs, 0.5, COL_MUTED)
-
-
-        price_buf: [24]u8
-        price_str := fmt.bprintf(price_buf[:23], "%d g", ss.price)
-        price_buf[len(price_str)] = 0
-        price_fs  := uis(13)
-        psz       := rl.MeasureTextEx(g_font_body, cstring(&price_buf[0]), price_fs, 1)
-        can_afford := wallet_gold >= ss.price
-        price_col  := rl.Color{255, 215, 50, 255} if can_afford else rl.Color{180, 80, 60, 255}
-        rl.DrawTextEx(g_font_body, cstring(&price_buf[0]),
-            { row_r.x + row_r.width - uis(12) - psz.x,
-              row_r.y + f32(item_h)*0.5 - price_fs*0.5 },
-            price_fs, 1, price_col)
-
-
-        if is_hot && rl.IsMouseButtonPressed(.LEFT) && can_afford {
-            _shop_buy(w, i)
-        }
+        // Close hint
+        ui_grow("ShopSpacer")
+        ui_hstack_begin("ShopCloseRow", 0, 0, .Center)
+        ui_grow("ShopCloseL")
+        ui_label("ShopClose", string(t(.SHOP_ESC_CLOSE)), uis(10), COL_MUTED)
+        ui_grow("ShopCloseR")
+        ui_hstack_end()
     }
-
-
-    sell_y := start_y + i32(n) * (item_h + item_pad) + i32(uis(8))
-    rl.DrawLineEx(
-        { f32(px) + uis(16), f32(sell_y) },
-        { f32(px + PW) - uis(16), f32(sell_y) }, 1, COL_RULE)
-    sell_hdr_fs := uis(11)
-    rl.DrawTextEx(g_font_body, t(.SHOP_SELL),
-        { f32(px) + uis(16), f32(sell_y) + uis(5) }, sell_hdr_fs, 0.5, COL_MUTED)
-
-
-    close_fs := uis(10)
-    close_cs := t(.SHOP_ESC_CLOSE)
-    rl.DrawTextEx(g_font_body, close_cs,
-        { f32(px) + f32(PW)*0.5 - rl.MeasureTextEx(g_font_body, close_cs, close_fs, 0.5).x*0.5,
-          f32(py + PH) - close_fs - uis(10) },
-        close_fs, 0.5, COL_MUTED)
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
 
 

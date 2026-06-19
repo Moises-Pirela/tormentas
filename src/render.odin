@@ -37,6 +37,14 @@ uis :: proc(base: f32) -> f32 { return math.round(base * g_ui_scale) }
 // font_for returns g_font_body for body/label text (base <= 14) and g_font (Cinzel) for large display text.
 font_for :: proc(base_size: f32) -> rl.Font { return g_font_body if base_size <= 14 else g_font }
 
+// Clay font ids — used by TextElementConfig.fontId so Clay text can pick a font.
+FONT_ID_TITLE :: u16(0)  // Cinzel (g_font) — the default when fontId is omitted
+FONT_ID_BODY  :: u16(1)  // body font (g_font_body)
+
+clay_font :: proc "c" (font_id: u16) -> rl.Font {
+    return g_font_body if font_id == FONT_ID_BODY else g_font
+}
+
 
 g_levelup_flash: f32
 
@@ -561,6 +569,7 @@ shutdown_clay :: proc() {
 update_clay_input :: proc() {
     mp := rl.GetMousePosition()
     clay.SetPointerState({ mp.x, mp.y }, rl.IsMouseButtonDown(.LEFT))
+    clay.UpdateScrollContainers(true, { 0, rl.GetMouseWheelMove() * uis(30) }, rl.GetFrameTime())
     clay.SetLayoutDimensions({ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) })
     g_ui_scale = f32(rl.GetScreenHeight()) / 720.0
     g_inv = InvLayout{
@@ -607,11 +616,12 @@ clay_measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElement
     }
     spacing := f32(config.letterSpacing)
     raw_text := string(text.chars[:text.length])
+    fnt := clay_font(config.fontId)
     lines := strings.split(raw_text, "\n")
     max_w := f32(0)
     for line in lines {
         line_cs := strings.clone_to_cstring(line, context.temp_allocator)
-        sz := rl.MeasureTextEx(g_font, line_cs, font_size, spacing)
+        sz := rl.MeasureTextEx(fnt, line_cs, font_size, spacing)
         if sz.x > max_w { max_w = sz.x }
     }
     line_h := font_size
@@ -1230,6 +1240,10 @@ PAUSE_RESOLUTIONS := [?]PauseResolution{
 g_pause_res_idx: int
 g_borderless:    bool
 
+// Set by draw_pause_menu (the Quit button) and relayed out by update_pause_menu,
+// because the pause menu now handles input inside its cached Clay draw pass.
+g_pause_quit_requested: bool
+
 
 @(private = "file")
 lang_name :: proc(lang: Language) -> cstring {
@@ -1254,27 +1268,10 @@ PAUSE_H_BASE      :: f32(668)
 PAUSE_BTN_W_BASE  :: f32(200)
 PAUSE_BTN_H_BASE  :: f32(42)
 
-PAUSE_Y_RESUME_BASE   :: f32(62)
-PAUSE_Y_RES_BASE      :: f32(140)
-PAUSE_Y_MODE_BASE     :: f32(222)
-PAUSE_Y_LANG_BASE     :: f32(304)
-PAUSE_Y_VOL_BASE      :: f32(398)
-PAUSE_VOL_ROW_H_BASE  :: f32(34)
-PAUSE_Y_KEYBINDS_BASE :: f32(566)
-PAUSE_Y_QUIT_BASE     :: f32(616)
-
 pause_W          :: proc() -> i32 { return i32(uis(PAUSE_W_BASE))           }
 pause_H          :: proc() -> i32 { return i32(uis(PAUSE_H_BASE))           }
 pause_btn_w      :: proc() -> i32 { return i32(uis(PAUSE_BTN_W_BASE))       }
 pause_btn_h      :: proc() -> i32 { return i32(uis(PAUSE_BTN_H_BASE))       }
-pause_y_resume   :: proc() -> i32 { return i32(uis(PAUSE_Y_RESUME_BASE))    }
-pause_y_res      :: proc() -> i32 { return i32(uis(PAUSE_Y_RES_BASE))       }
-pause_y_mode     :: proc() -> i32 { return i32(uis(PAUSE_Y_MODE_BASE))      }
-pause_y_lang     :: proc() -> i32 { return i32(uis(PAUSE_Y_LANG_BASE))      }
-pause_y_vol      :: proc() -> i32 { return i32(uis(PAUSE_Y_VOL_BASE))       }
-pause_vol_row_h  :: proc() -> i32 { return i32(uis(PAUSE_VOL_ROW_H_BASE))   }
-pause_y_keybinds :: proc() -> i32 { return i32(uis(PAUSE_Y_KEYBINDS_BASE))  }
-pause_y_quit     :: proc() -> i32 { return i32(uis(PAUSE_Y_QUIT_BASE))      }
 
 g_rebind_idx: int = -1
 
@@ -1308,271 +1305,83 @@ set_window_mode :: proc(borderless: bool) {
     g_borderless = borderless
 }
 
-draw_pause_btn :: proc(rect: rl.Rectangle, label: cstring, mp: rl.Vector2, enabled := true) -> bool {
-    hot     := enabled && rl.CheckCollisionPointRec(mp, rect)
-    bg      := rl.Color{ 28, 22, 16, 240 } if !hot else rl.Color{ 52, 38, 20, 255 }
-    border  := COL_RULE if !hot else COL_BRASS
-    txt_col: rl.Color
-    if !enabled      { txt_col = rl.Color{ 80, 72, 55, 140 }
-    } else if !hot   { txt_col = COL_PARCH
-    } else           { txt_col = COL_BRASS }
-    if !enabled { bg = rl.Color{ 16, 13, 10, 200 }; border = rl.Color{ 60, 50, 32, 100 } }
-    rl.DrawRectangleRec(rect, bg)
-    rl.DrawRectangleLinesEx(rect, 1, border)
-    btn_fs := uis(18)
-    lsz := rl.MeasureTextEx(g_font, label, btn_fs, 1)
-    rl.DrawTextEx(g_font, label,
-        { rect.x + rect.width * 0.5 - lsz.x * 0.5, rect.y + rect.height * 0.5 - btn_fs * 0.5 },
-        btn_fs, 1, txt_col)
-    return hot && rl.IsMouseButtonPressed(.LEFT)
-}
-
-pause_arrow_row :: proc(
-    px, row_y: i32,
-    header, value: cstring,
-    mp: rl.Vector2,
-    enabled := true,
-) -> int {
-    pW        := pause_W()
-    arrow_sz  := f32(pause_btn_h())
-    lrect := rl.Rectangle{ f32(px + 16), f32(row_y), arrow_sz, arrow_sz }
-    rrect := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, f32(row_y), arrow_sz, arrow_sz }
-
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(row_y) - 10 },
-        { f32(px + pW) - 16, f32(row_y) - 10 }, 1, COL_RULE)
-    hdr_fs := uis(13)
-    hsz    := rl.MeasureTextEx(g_font_body, header, hdr_fs, 1)
-    rl.DrawTextEx(g_font_body, header,
-        { f32(px) + f32(pW) * 0.5 - hsz.x * 0.5, f32(row_y) - uis(22) },
-        hdr_fs, 1, COL_MUTED)
-
-    l_clicked := draw_pause_btn(lrect, "<", mp, enabled)
-    r_clicked := draw_pause_btn(rrect, ">", mp, enabled)
-
-    val_fs := uis(18)
-    vcol   := COL_PARCH if enabled else rl.Color{ 80, 72, 55, 140 }
-    vsz    := rl.MeasureTextEx(g_font, value, val_fs, 1)
-    rl.DrawTextEx(g_font, value,
-        { f32(px) + f32(pW) * 0.5 - vsz.x * 0.5, f32(row_y) + arrow_sz * 0.5 - val_fs * 0.5 },
-        val_fs, 1, vcol)
-
-    if l_clicked { return -1 }
-    if r_clicked { return  1 }
-    return 0
-}
-
-vol_bar_dims :: proc(px, row_y: i32) -> (bar_x, bar_y, bar_w: i32, hit: rl.Rectangle) {
-    pW    := pause_W()
-    pad   := i32(uis(16))
-    lbl_w := i32(uis(58))
-    gap   := i32(uis(8))
-    val_w := i32(uis(46))
-    bh    := i32(uis(14))
-    bx    := px + pad + lbl_w + gap
-    by    := row_y + i32(uis(10))
-    bw    := pW - pad*2 - lbl_w - gap - val_w - gap
-    r     := rl.Rectangle{ f32(bx), f32(by) - uis(5), f32(bw), f32(bh) + uis(10) }
-    return bx, by, bw, r
-}
-
-draw_vol_slider :: proc(px, row_y: i32, label: cstring, value: f32, mp: rl.Vector2) {
-    bx, by, bw, hit := vol_bar_dims(px, row_y)
-    pW    := pause_W()
-    pad   := i32(uis(16))
-    bh    := i32(uis(14))
-
-    lbl_fs := uis(13)
-    rl.DrawTextEx(g_font_body, label, { f32(px + pad), f32(row_y) + uis(8) }, lbl_fs, 1, COL_MUTED)
-
-    rl.DrawRectangle(bx, by, bw, bh, rl.Color{ 18, 14, 10, 255 })
-    rl.DrawRectangleLinesEx({ f32(bx), f32(by), f32(bw), f32(bh) }, 1, COL_RULE)
-
-    fill_w := i32(f32(bw) * clamp(value, 0, 1))
-    if fill_w > 0 {
-        rl.DrawRectangle(bx, by, fill_w, bh, COL_BRASS)
-    }
-
-    thumb_x := bx + fill_w
-    rl.DrawRectangle(thumb_x - 1, by - 2, 3, bh + 4, rl.Color{ 230, 205, 105, 245 })
-
-    if rl.CheckCollisionPointRec(mp, hit) {
-        rl.DrawRectangleLinesEx(hit, 1, rl.Color{ 215, 175, 28, 90 })
-    }
-
-    pct_buf: [8]u8
-    pct := fmt.bprintf(pct_buf[:7], "%d%%", int(value * 100 + 0.5))
-    pct_buf[len(pct)] = 0
-    vsz := rl.MeasureTextEx(g_font_body, cstring(&pct_buf[0]), lbl_fs, 1)
-    rl.DrawTextEx(g_font_body, cstring(&pct_buf[0]),
-        { f32(px + pW - pad) - vsz.x, f32(row_y) + uis(8) }, lbl_fs, 1, COL_PARCH)
-}
-
+// Input is handled inside draw_pause_menu (Clay immediate-mode in the cached draw
+// pass); this just relays the quit request out to the main loop.
 update_pause_menu :: proc() -> (quit: bool) {
-    sw   := rl.GetScreenWidth()
-    sh   := rl.GetScreenHeight()
-    pW   := pause_W()
-    pH   := pause_H()
-    pBW  := pause_btn_w()
-    pBH  := pause_btn_h()
-    px   := sw / 2 - pW / 2
-    py   := sh / 2 - pH / 2
-    mp   := rl.GetMousePosition()
-    bx   := f32(px) + f32(pW - pBW) / 2
-
-    if rl.CheckCollisionPointRec(mp,
-        { bx, f32(py + pause_y_resume()), f32(pBW), f32(pBH) }) &&
-       rl.IsMouseButtonPressed(.LEFT) {
-        ui_close_top()
-        return false
-    }
-
-    if !g_borderless {
-        arrow_sz := f32(pBH)
-        res_y    := f32(py + pause_y_res())
-        l_rect   := rl.Rectangle{ f32(px + 16), res_y, arrow_sz, arrow_sz }
-        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, res_y, arrow_sz, arrow_sz }
-        if rl.CheckCollisionPointRec(mp, l_rect) && rl.IsMouseButtonPressed(.LEFT) {
-            g_pause_res_idx = (g_pause_res_idx - 1 + len(PAUSE_RESOLUTIONS)) % len(PAUSE_RESOLUTIONS)
-            apply_resolution(g_pause_res_idx)
-        }
-        if rl.CheckCollisionPointRec(mp, r_rect) && rl.IsMouseButtonPressed(.LEFT) {
-            g_pause_res_idx = (g_pause_res_idx + 1) % len(PAUSE_RESOLUTIONS)
-            apply_resolution(g_pause_res_idx)
-        }
-    }
-
-    {
-        arrow_sz := f32(pBH)
-        mode_y   := f32(py + pause_y_mode())
-        l_rect   := rl.Rectangle{ f32(px + 16), mode_y, arrow_sz, arrow_sz }
-        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, mode_y, arrow_sz, arrow_sz }
-        if (rl.CheckCollisionPointRec(mp, l_rect) || rl.CheckCollisionPointRec(mp, r_rect)) &&
-            rl.IsMouseButtonPressed(.LEFT) {
-            set_window_mode(!g_borderless)
-        }
-    }
-
-    {
-        arrow_sz := f32(pBH)
-        lang_y   := f32(py + pause_y_lang())
-        l_rect   := rl.Rectangle{ f32(px + 16), lang_y, arrow_sz, arrow_sz }
-        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, lang_y, arrow_sz, arrow_sz }
-        lp := rl.CheckCollisionPointRec(mp, l_rect) && rl.IsMouseButtonPressed(.LEFT)
-        rp := rl.CheckCollisionPointRec(mp, r_rect) && rl.IsMouseButtonPressed(.LEFT)
-        if lp { _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT)) }
-        if rp { _apply_lang(Language((int(g_lang) + 1)              % LANG_COUNT)) }
-    }
-
-    if rl.IsMouseButtonDown(.LEFT) {
-        vol_ys := [4]i32{
-            py + pause_y_vol(),
-            py + pause_y_vol() + pause_vol_row_h(),
-            py + pause_y_vol() + pause_vol_row_h() * 2,
-            py + pause_y_vol() + pause_vol_row_h() * 3,
-        }
-        vol_ptrs := [4]^f32{ &g_vol_sfx, &g_vol_music, &g_vol_ambience, &g_vol_voice }
-        changed := false
-        for i in 0..<4 {
-            bx_i, _, bw_i, hit := vol_bar_dims(px, vol_ys[i])
-            if rl.CheckCollisionPointRec(mp, hit) {
-                vol_ptrs[i]^ = clamp((mp.x - f32(bx_i)) / f32(bw_i), 0, 1)
-                changed = true
-                break
-            }
-        }
-        if changed { apply_bus_volumes() }
-    }
-
-    if rl.CheckCollisionPointRec(mp,
-        { bx, f32(py + pause_y_keybinds()), f32(pBW), f32(pBH) }) &&
-       rl.IsMouseButtonPressed(.LEFT) {
-        ui_open(.Keybinds)
-    }
-
-    if rl.CheckCollisionPointRec(mp,
-        { bx, f32(py + pause_y_quit()), f32(pBW), f32(pBH) }) &&
-       rl.IsMouseButtonPressed(.LEFT) {
-        return true
-    }
-
-    return false
+    quit = g_pause_quit_requested
+    g_pause_quit_requested = false
+    return
 }
 
 draw_pause_menu :: proc() {
-    sw  := rl.GetScreenWidth()
-    sh  := rl.GetScreenHeight()
-    pW  := pause_W()
-    pH  := pause_H()
-    pBW := pause_btn_w()
-    pBH := pause_btn_h()
-    px  := sw / 2 - pW / 2
-    py  := sh / 2 - pH / 2
-    mp  := rl.GetMousePosition()
-    bx  := f32(px) + f32(pW - pBW) / 2
+    ui_scrim(175)
 
-    rl.DrawRectangle(0, 0, sw, sh, rl.Color{ 0, 0, 0, 175 })
+    bw := f32(pause_btn_w())
+    bh := f32(pause_btn_h())
 
-    rl.DrawRectangle(px, py, pW, pH, rl.Color{ 8, 6, 4, 252 })
-    rl.DrawRectangle(px, py, pW, 3, COL_BRASS)
-    rl.DrawRectangleLinesEx(
-        { f32(px), f32(py), f32(pW), f32(pH) }, 2, COL_RULE)
-
-    title    := t(.PAUSE_TITLE)
-    title_fs := uis(24)
-    title_sz := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
-        { f32(px) + f32(pW) * 0.5 - title_sz.x * 0.5, f32(py) + uis(16) },
-        title_fs, 1, COL_PARCH)
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py) + uis(52) },
-        { f32(px + pW) - 16, f32(py) + uis(52) }, 1, COL_RULE)
-
-    draw_pause_btn(
-        { bx, f32(py + pause_y_resume()), f32(pBW), f32(pBH) },
-        t(.PAUSE_BTN_RESUME), mp)
-
-    res_label := PAUSE_RESOLUTIONS[g_pause_res_idx].label
-    pause_arrow_row(px, py + pause_y_res(), t(.SETTINGS_RESOLUTION), res_label, mp,
-        enabled = !g_borderless)
-
-    mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
-    pause_arrow_row(px, py + pause_y_mode(), t(.SETTINGS_WINDOW_MODE), mode_label, mp)
-
-    pause_arrow_row(px, py + pause_y_lang(), t(.SETTINGS_LANGUAGE), lang_name(g_lang), mp)
-
+    clay.BeginLayout()
+    ui_panel_begin("PausePanel", string(t(.PAUSE_TITLE)), f32(pause_W()), f32(pause_H()), {
+        anchor   = .CenterCenter,
+        title_fs = uis(24),
+    })
     {
-        vol_hdr    := t(.SETTINGS_VOLUME)
-        vol_hdr_fs := uis(13)
-        vol_hdr_sz := rl.MeasureTextEx(g_font_body, vol_hdr, vol_hdr_fs, 1)
-        vol_row_y  := f32(py + pause_y_vol())
-        rl.DrawLineEx(
-            { f32(px) + 16, vol_row_y - uis(10) },
-            { f32(px + pW) - 16, vol_row_y - uis(10) }, 1, COL_RULE)
-        rl.DrawTextEx(g_font_body, vol_hdr,
-            { f32(px) + f32(pW) * 0.5 - vol_hdr_sz.x * 0.5, vol_row_y - uis(22) },
-            vol_hdr_fs, 1, COL_MUTED)
+        if ui_button_centered("PauseResume", string(t(.PAUSE_BTN_RESUME)), bw, bh) {
+            ui_close_top()
+        }
 
-        rh := pause_vol_row_h()
-        draw_vol_slider(px, py + pause_y_vol() + rh * 0, t(.SETTINGS_SFX),      g_vol_sfx,      mp)
-        draw_vol_slider(px, py + pause_y_vol() + rh * 1, t(.SETTINGS_MUSIC),    g_vol_music,    mp)
-        draw_vol_slider(px, py + pause_y_vol() + rh * 2, t(.SETTINGS_AMBIENCE), g_vol_ambience, mp)
-        draw_vol_slider(px, py + pause_y_vol() + rh * 3, t(.SETTINGS_VOICE),    g_vol_voice,    mp)
+        // Resolution (disabled in borderless mode)
+        rd := ui_stepper("PauseRes", string(t(.SETTINGS_RESOLUTION)),
+            string(PAUSE_RESOLUTIONS[g_pause_res_idx].label), !g_borderless)
+        if rd < 0 {
+            g_pause_res_idx = (g_pause_res_idx - 1 + len(PAUSE_RESOLUTIONS)) % len(PAUSE_RESOLUTIONS)
+            apply_resolution(g_pause_res_idx)
+        } else if rd > 0 {
+            g_pause_res_idx = (g_pause_res_idx + 1) % len(PAUSE_RESOLUTIONS)
+            apply_resolution(g_pause_res_idx)
+        }
+
+        // Window mode (either arrow toggles)
+        mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
+        if ui_stepper("PauseMode", string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
+            set_window_mode(!g_borderless)
+        }
+
+        // Language
+        ld := ui_stepper("PauseLang", string(t(.SETTINGS_LANGUAGE)), string(lang_name(g_lang)))
+        if ld < 0 {
+            _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT))
+        } else if ld > 0 {
+            _apply_lang(Language((int(g_lang) + 1) % LANG_COUNT))
+        }
+
+        // Volume
+        ui_divider("PauseVolDiv")
+        ui_hstack_begin("PauseVolHdrRow", 0, 0, .Center)
+        ui_grow("PauseVolHdrL")
+        ui_label("PauseVolHdr", string(t(.SETTINGS_VOLUME)), uis(13), COL_MUTED)
+        ui_grow("PauseVolHdrR")
+        ui_hstack_end()
+
+        if nv, ch := ui_slider("PauseSfx",      string(t(.SETTINGS_SFX)),      g_vol_sfx);      ch { g_vol_sfx      = nv; apply_bus_volumes() }
+        if nv, ch := ui_slider("PauseMusic",    string(t(.SETTINGS_MUSIC)),    g_vol_music);    ch { g_vol_music    = nv; apply_bus_volumes() }
+        if nv, ch := ui_slider("PauseAmbience", string(t(.SETTINGS_AMBIENCE)), g_vol_ambience); ch { g_vol_ambience = nv; apply_bus_volumes() }
+        if nv, ch := ui_slider("PauseVoice",    string(t(.SETTINGS_VOICE)),    g_vol_voice);    ch { g_vol_voice    = nv; apply_bus_volumes() }
+
+        // Keybinds
+        ui_divider("PauseKbDiv")
+        if ui_button_centered("PauseKeybinds", string(t(.PAUSE_BTN_KEYBINDS)), bw, bh) {
+            ui_open(.Keybinds)
+        }
+
+        // Quit
+        ui_divider("PauseQuitDiv")
+        if ui_button_centered("PauseQuit", string(t(.PAUSE_BTN_QUIT)), bw, bh, .Danger) {
+            g_pause_quit_requested = true
+        }
     }
-
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py + pause_y_keybinds()) - 12 },
-        { f32(px + pW) - 16, f32(py + pause_y_keybinds()) - 12 }, 1, COL_RULE)
-    draw_pause_btn(
-        { bx, f32(py + pause_y_keybinds()), f32(pBW), f32(pBH) },
-        t(.PAUSE_BTN_KEYBINDS), mp)
-
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py + pause_y_quit()) - 12 },
-        { f32(px + pW) - 16, f32(py + pause_y_quit()) - 12 }, 1, COL_RULE)
-    draw_pause_btn(
-        { bx, f32(py + pause_y_quit()), f32(pBW), f32(pBH) },
-        t(.PAUSE_BTN_QUIT), mp)
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
 
 
@@ -1598,378 +1407,184 @@ _bind_content_h :: proc() -> f32 {
     return _bind_row_y(TOTAL_BIND_COUNT - 1) + BIND_ROW_H
 }
 
+// Keybinds rebinding listens for keypresses every frame, so the key capture stays
+// here (the main-loop input phase); row/button clicks live in the cached Clay draw.
 update_keybinds_screen :: proc() {
     if !ui_has(.Keybinds) { return }
+    if g_rebind_idx < 0   { return }
 
     rows := all_bind_rows()
-
-    PW :: f32(480)
-    PH := f32(56) + _bind_content_h() + f32(80)
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
-    px := f32(sw) * 0.5 - uis(PW) * 0.5
-    py := f32(sh) * 0.5 - uis(PH) * 0.5
-    mp := rl.GetMousePosition()
-
-
-    if g_rebind_idx >= 0 {
-        k := rl.GetKeyPressed()
-        if k == .ESCAPE {
-            g_rebind_idx = -1
-            input_consume_key(.ESCAPE)
-        } else if k != .KEY_NULL {
-            rows[g_rebind_idx].ptr^ = i32(k)
-            g_rebind_idx = -1
-            save_config()
-        }
-        return
+    k := rl.GetKeyPressed()
+    if k == .ESCAPE {
+        g_rebind_idx = -1
+        input_consume_key(.ESCAPE)
+        ui_mark_dirty(.Keybinds)
+    } else if k != .KEY_NULL {
+        rows[g_rebind_idx].ptr^ = i32(k)
+        g_rebind_idx = -1
+        save_config()
+        ui_mark_dirty(.Keybinds)
     }
+}
 
-    if rl.IsMouseButtonPressed(.LEFT) {
-        content_y := py + uis(56)
-        for i in 0..<TOTAL_BIND_COUNT {
-            ry := content_y + uis(_bind_row_y(i))
-            r  := rl.Rectangle{ px + uis(8), ry, uis(PW - 16), uis(BIND_ROW_H - 4) }
-            if rl.CheckCollisionPointRec(mp, r) {
-                g_rebind_idx = i
-                return
-            }
+@(private = "file")
+_kb_draw_row :: proc(i: int, rows: ^[TOTAL_BIND_COUNT]BindRow, listening: bool) {
+    active  := g_rebind_idx == i
+    hovered := ui_clickable_begin(fmt.tprintf("KBRow%d", i), uis(BIND_ROW_H), COL_BRASS, active)
+    {
+        ui_label(fmt.tprintf("KBLbl%d", i), string(rows[i].label), uis(13),
+            COL_BRASS if active else COL_PARCH)
+        ui_grow(fmt.tprintf("KBSpc%d", i))
+        key_str: string
+        if active {
+            key_str = string(t(.KEYBINDS_PRESS_KEY))
+        } else {
+            // tprintf clones into the temp allocator so the text survives until Clay renders.
+            name_buf: [16]u8
+            key_str = fmt.tprintf("%s", key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:]))
         }
-
-        footer_y := py + uis(56) + uis(_bind_content_h()) + uis(16)
-        reset_r  := rl.Rectangle{ px + uis(8), footer_y, uis(PW * 0.5 - 16), uis(36) }
-        if rl.CheckCollisionPointRec(mp, reset_r) {
-            g_binds = default_binds()
-            save_config()
-            return
-        }
-
-        close_r := rl.Rectangle{ px + uis(PW * 0.5 + 8), footer_y, uis(PW * 0.5 - 16), uis(36) }
-        if rl.CheckCollisionPointRec(mp, close_r) {
-            ui_close_top()
-            return
-        }
+        ui_label(fmt.tprintf("KBKey%d", i), key_str, uis(13),
+            COL_BRASS if active else rl.Color{ 180, 160, 90, 220 })
+    }
+    ui_clickable_end()
+    if hovered && rl.IsMouseButtonReleased(.LEFT) && !listening {
+        g_rebind_idx = i
     }
 }
 
 draw_keybinds_screen :: proc() {
     if !ui_has(.Keybinds) { return }
 
-    rows := all_bind_rows()
+    rows      := all_bind_rows()
+    listening := g_rebind_idx >= 0
+    ph        := uis(56) + uis(_bind_content_h()) + uis(80)
 
-    PW :: f32(480)
-    PH := f32(56) + _bind_content_h() + f32(80)
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
-    px := f32(sw) * 0.5 - uis(PW) * 0.5
-    py := f32(sh) * 0.5 - uis(PH) * 0.5
-    mp := rl.GetMousePosition()
-
-    rl.DrawRectangle(i32(px), i32(py), i32(uis(PW)), i32(uis(PH)), rl.Color{ 8, 6, 4, 252 })
-    rl.DrawRectangle(i32(px), i32(py), i32(uis(PW)), i32(uis(3)), COL_BRASS)
-    rl.DrawRectangleLinesEx({ px, py, uis(PW), uis(PH) }, 2, COL_RULE)
-
-    title    := t(.KEYBINDS_TITLE)
-    title_fs := uis(15)
-    tsz      := rl.MeasureTextEx(g_font_body, title, title_fs, 1)
-    rl.DrawTextEx(g_font_body, title,
-        { px + uis(PW)*0.5 - tsz.x*0.5, py + uis(10) }, title_fs, 1, COL_BRASS)
-    rl.DrawLineEx(
-        { px + uis(16), py + uis(34) },
-        { px + uis(PW) - uis(16), py + uis(34) }, 1, COL_RULE)
-
-    content_y := py + uis(56)
-    hdr_fs    := uis(10)
-    name_buf  : [16]u8
-
-
-    _draw_bind_section_header(px, content_y, uis(PW), hdr_fs, t(.KEYBINDS_SECTION_GAMEPLAY))
-
-
-    ui_hdr_y := content_y + uis(BIND_HDR_H + f32(GAMEPLAY_BIND_COUNT) * BIND_ROW_H)
-    _draw_bind_section_header(px, ui_hdr_y, uis(PW), hdr_fs, t(.KEYBINDS_SECTION_UI))
-
-
-    lfs := uis(13)
-    for i in 0..<TOTAL_BIND_COUNT {
-        ry           := content_y + uis(_bind_row_y(i))
-        row_r        := rl.Rectangle{ px + uis(8), ry, uis(PW - 16), uis(BIND_ROW_H - 4) }
-        is_hot       := rl.CheckCollisionPointRec(mp, row_r) && g_rebind_idx < 0
-        is_listening := g_rebind_idx == i
-
-        row_bg: rl.Color
-        if is_listening  { row_bg = rl.Color{ 50, 38, 14, 230 }
-        } else if is_hot { row_bg = rl.Color{ 30, 24, 14, 220 }
-        } else           { row_bg = rl.Color{ 18, 14, 10, 200 } }
-        rl.DrawRectangleRec(row_r, row_bg)
-        rl.DrawRectangleLinesEx(row_r, 1,
-            COL_BRASS if is_listening else (COL_RULE if is_hot else rl.Color{ 55, 48, 34, 80 }))
-
-        rl.DrawTextEx(g_font_body, rows[i].label,
-            { px + uis(20), ry + uis(BIND_ROW_H)*0.5 - lfs*0.5 },
-            lfs, 0.5, COL_PARCH if !is_listening else COL_BRASS)
-
-        key_str: cstring
-        if is_listening {
-            key_str = t(.KEYBINDS_PRESS_KEY)
-        } else {
-            key_str = key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:])
+    clay.BeginLayout()
+    ui_panel_begin("KeybindsPanel", string(t(.KEYBINDS_TITLE)), uis(480), ph, {
+        anchor    = .CenterCenter,
+        title_fs  = uis(15),
+        title_col = COL_BRASS,
+    })
+    {
+        ui_label("KBGameplayHdr", string(t(.KEYBINDS_SECTION_GAMEPLAY)), uis(10), COL_MUTED)
+        ui_vstack_begin("KBGameplay", u16(uis(2)))
+        for i in 0..<GAMEPLAY_BIND_COUNT {
+            _kb_draw_row(i, &rows, listening)
         }
-        kcol := COL_BRASS if is_listening else rl.Color{ 180, 160, 90, 220 }
-        ksz  := rl.MeasureTextEx(g_font_body, key_str, lfs, 0.5)
-        rl.DrawTextEx(g_font_body, key_str,
-            { px + uis(PW) - uis(20) - ksz.x, ry + uis(BIND_ROW_H)*0.5 - lfs*0.5 },
-            lfs, 0.5, kcol)
+        ui_vstack_end()
+
+        ui_label("KBUiHdr", string(t(.KEYBINDS_SECTION_UI)), uis(10), COL_MUTED)
+        ui_vstack_begin("KBUi", u16(uis(2)))
+        for i in GAMEPLAY_BIND_COUNT..<TOTAL_BIND_COUNT {
+            _kb_draw_row(i, &rows, listening)
+        }
+        ui_vstack_end()
+
+        ui_grow("KBSpacer")
+
+        // Footer: Reset + Close
+        ui_hstack_begin("KBFooter", u16(uis(8)), 0, .Center)
+        ui_grow("KBFooterL")
+        if ui_button("KBReset", string(t(.KEYBINDS_BTN_RESET)), uis(160), uis(36)) && !listening {
+            g_binds = default_binds()
+            save_config()
+        }
+        if ui_button("KBClose", string(t(.KEYBINDS_BTN_CLOSE)), uis(160), uis(36)) && !listening {
+            ui_close_top()
+        }
+        ui_grow("KBFooterR")
+        ui_hstack_end()
+
+        if listening {
+            ui_hstack_begin("KBHintRow", 0, 0, .Center)
+            ui_grow("KBHintL")
+            ui_label("KBHint", string(t(.KEYBINDS_ESC_CANCEL)), uis(11), COL_MUTED)
+            ui_grow("KBHintR")
+            ui_hstack_end()
+        }
     }
-
-
-    footer_y  := content_y + uis(_bind_content_h()) + uis(16)
-    rlbl_fs   := uis(13)
-
-    reset_r   := rl.Rectangle{ px + uis(8), footer_y, uis(PW * 0.5 - 16), uis(36) }
-    reset_hot := rl.CheckCollisionPointRec(mp, reset_r) && g_rebind_idx < 0
-    rl.DrawRectangleRec(reset_r, rl.Color{ 28, 14, 10, 240 } if reset_hot else rl.Color{ 18, 10, 8, 220 })
-    rl.DrawRectangleLinesEx(reset_r, 1, COL_RULE)
-    reset_lbl := t(.KEYBINDS_BTN_RESET)
-    rlbl_sz   := rl.MeasureTextEx(g_font_body, reset_lbl, rlbl_fs, 0.5)
-    rl.DrawTextEx(g_font_body, reset_lbl,
-        { reset_r.x + reset_r.width*0.5 - rlbl_sz.x*0.5,
-          reset_r.y + reset_r.height*0.5 - rlbl_fs*0.5 },
-        rlbl_fs, 0.5, rl.Color{ 200, 120, 80, 220 } if reset_hot else COL_MUTED)
-
-    close_r   := rl.Rectangle{ px + uis(PW * 0.5 + 8), footer_y, uis(PW * 0.5 - 16), uis(36) }
-    close_hot := rl.CheckCollisionPointRec(mp, close_r) && g_rebind_idx < 0
-    rl.DrawRectangleRec(close_r, rl.Color{ 28, 22, 16, 240 } if close_hot else rl.Color{ 18, 14, 10, 220 })
-    rl.DrawRectangleLinesEx(close_r, 1, COL_RULE if !close_hot else COL_BRASS)
-    close_lbl := t(.KEYBINDS_BTN_CLOSE)
-    clbl_sz   := rl.MeasureTextEx(g_font_body, close_lbl, rlbl_fs, 0.5)
-    rl.DrawTextEx(g_font_body, close_lbl,
-        { close_r.x + close_r.width*0.5 - clbl_sz.x*0.5,
-          close_r.y + close_r.height*0.5 - rlbl_fs*0.5 },
-        rlbl_fs, 0.5, COL_BRASS if close_hot else COL_PARCH)
-
-    if g_rebind_idx >= 0 {
-        hint    := t(.KEYBINDS_ESC_CANCEL)
-        hint_fs := uis(11)
-        hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
-        rl.DrawTextEx(g_font_body, hint,
-            { px + uis(PW)*0.5 - hsz.x*0.5, footer_y + uis(44) },
-            hint_fs, 0.5, COL_MUTED)
-    }
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
+SETTINGS_H_BASE :: f32(648)
 
-@(private = "file")
-_draw_bind_section_header :: proc(px, ry, pw, fs: f32, label: cstring) {
-    rl.DrawLineEx(
-        { px + uis(8),      ry + fs * 0.5 },
-        { px + uis(48),     ry + fs * 0.5 }, 1, COL_RULE)
-    lsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
-    rl.DrawTextEx(g_font_body, label,
-        { px + uis(54), ry }, fs, 0.5, COL_MUTED)
-    rl.DrawLineEx(
-        { px + uis(60) + lsz.x, ry + fs * 0.5 },
-        { px + pw - uis(8),     ry + fs * 0.5 }, 1, COL_RULE)
-}
-SETTINGS_H_BASE          :: f32(648)
-SETTINGS_Y_RES_BASE       :: f32(80)
-SETTINGS_Y_MODE_BASE      :: f32(162)
-SETTINGS_Y_LANG_BASE      :: f32(244)
-SETTINGS_Y_VOL_BASE       :: f32(338)
-SETTINGS_VOL_ROW_H_BASE   :: f32(34)
-SETTINGS_Y_KEYBINDS_BASE  :: f32(490)
-SETTINGS_Y_CLOSE_BASE     :: f32(542)
-SETTINGS_Y_EXIT_BASE      :: f32(596)
+settings_H :: proc() -> i32 { return i32(uis(SETTINGS_H_BASE)) }
 
-settings_H          :: proc() -> i32 { return i32(uis(SETTINGS_H_BASE))         }
-settings_y_res      :: proc() -> i32 { return i32(uis(SETTINGS_Y_RES_BASE))     }
-settings_y_mode     :: proc() -> i32 { return i32(uis(SETTINGS_Y_MODE_BASE))    }
-settings_y_lang     :: proc() -> i32 { return i32(uis(SETTINGS_Y_LANG_BASE))    }
-settings_y_vol      :: proc() -> i32 { return i32(uis(SETTINGS_Y_VOL_BASE))     }
-settings_vol_row_h  :: proc() -> i32 { return i32(uis(SETTINGS_VOL_ROW_H_BASE)) }
-settings_y_keybinds :: proc() -> i32 { return i32(uis(SETTINGS_Y_KEYBINDS_BASE))}
-settings_y_close    :: proc() -> i32 { return i32(uis(SETTINGS_Y_CLOSE_BASE))   }
-settings_y_exit     :: proc() -> i32 { return i32(uis(SETTINGS_Y_EXIT_BASE))    }
+// Input handled in draw_settings_overlay (Clay immediate-mode in the cached draw pass).
+update_settings_overlay :: proc() {}
 
-update_settings_overlay :: proc() {
-    sw  := rl.GetScreenWidth()
-    sh  := rl.GetScreenHeight()
-    pW  := pause_W()
-    pH  := settings_H()
-    pBW := pause_btn_w()
-    pBH := pause_btn_h()
-    px  := sw / 2 - pW / 2
-    py  := sh / 2 - pH / 2
-    mp  := rl.GetMousePosition()
-    bx  := f32(px) + f32(pW - pBW) / 2
+draw_settings_overlay :: proc() {
+    ui_scrim(165)
 
-    if !g_borderless {
-        arrow_sz := f32(pBH)
-        res_y    := f32(py + settings_y_res())
-        l_rect   := rl.Rectangle{ f32(px + 16), res_y, arrow_sz, arrow_sz }
-        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, res_y, arrow_sz, arrow_sz }
-        if rl.CheckCollisionPointRec(mp, l_rect) && rl.IsMouseButtonPressed(.LEFT) {
+    bw := f32(pause_btn_w())
+    bh := f32(pause_btn_h())
+
+    clay.BeginLayout()
+    ui_panel_begin("SettingsPanel", string(t(.SETTINGS_TITLE)), f32(pause_W()), f32(settings_H()), {
+        anchor   = .CenterCenter,
+        title_fs = uis(24),
+    })
+    {
+        // Resolution (disabled in borderless mode)
+        rd := ui_stepper("SetRes", string(t(.SETTINGS_RESOLUTION)),
+            string(PAUSE_RESOLUTIONS[g_pause_res_idx].label), !g_borderless)
+        if rd < 0 {
             g_pause_res_idx = (g_pause_res_idx - 1 + len(PAUSE_RESOLUTIONS)) % len(PAUSE_RESOLUTIONS)
             apply_resolution(g_pause_res_idx)
-        }
-        if rl.CheckCollisionPointRec(mp, r_rect) && rl.IsMouseButtonPressed(.LEFT) {
+        } else if rd > 0 {
             g_pause_res_idx = (g_pause_res_idx + 1) % len(PAUSE_RESOLUTIONS)
             apply_resolution(g_pause_res_idx)
         }
-    }
 
-    {
-        arrow_sz := f32(pBH)
-        mode_y   := f32(py + settings_y_mode())
-        l_rect   := rl.Rectangle{ f32(px + 16), mode_y, arrow_sz, arrow_sz }
-        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, mode_y, arrow_sz, arrow_sz }
-        if (rl.CheckCollisionPointRec(mp, l_rect) || rl.CheckCollisionPointRec(mp, r_rect)) &&
-            rl.IsMouseButtonPressed(.LEFT) {
+        // Window mode (either arrow toggles)
+        mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
+        if ui_stepper("SetMode", string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
             set_window_mode(!g_borderless)
         }
-    }
 
-    {
-        arrow_sz := f32(pBH)
-        lang_y   := f32(py + settings_y_lang())
-        l_rect   := rl.Rectangle{ f32(px + 16), lang_y, arrow_sz, arrow_sz }
-        r_rect   := rl.Rectangle{ f32(px + pW - 16) - arrow_sz, lang_y, arrow_sz, arrow_sz }
-        lp := rl.CheckCollisionPointRec(mp, l_rect) && rl.IsMouseButtonPressed(.LEFT)
-        rp := rl.CheckCollisionPointRec(mp, r_rect) && rl.IsMouseButtonPressed(.LEFT)
-        if lp { _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT)) }
-        if rp { _apply_lang(Language((int(g_lang) + 1)              % LANG_COUNT)) }
-    }
-
-    if rl.IsMouseButtonDown(.LEFT) {
-        rh := settings_vol_row_h()
-        vol_ys := [4]i32{
-            py + settings_y_vol() + rh * 0,
-            py + settings_y_vol() + rh * 1,
-            py + settings_y_vol() + rh * 2,
-            py + settings_y_vol() + rh * 3,
+        // Language
+        ld := ui_stepper("SetLang", string(t(.SETTINGS_LANGUAGE)), string(lang_name(g_lang)))
+        if ld < 0 {
+            _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT))
+        } else if ld > 0 {
+            _apply_lang(Language((int(g_lang) + 1) % LANG_COUNT))
         }
-        vol_ptrs := [4]^f32{ &g_vol_sfx, &g_vol_music, &g_vol_ambience, &g_vol_voice }
-        changed := false
-        for i in 0..<4 {
-            bx_i, _, bw_i, hit := vol_bar_dims(px, vol_ys[i])
-            if rl.CheckCollisionPointRec(mp, hit) {
-                vol_ptrs[i]^ = clamp((mp.x - f32(bx_i)) / f32(bw_i), 0, 1)
-                changed = true
-                break
-            }
+
+        // Volume
+        ui_divider("SetVolDiv")
+        ui_hstack_begin("SetVolHdrRow", 0, 0, .Center)
+        ui_grow("SetVolHdrL")
+        ui_label("SetVolHdr", string(t(.SETTINGS_VOLUME)), uis(13), COL_MUTED)
+        ui_grow("SetVolHdrR")
+        ui_hstack_end()
+
+        if nv, ch := ui_slider("SetSfx",      string(t(.SETTINGS_SFX)),      g_vol_sfx);      ch { g_vol_sfx      = nv; apply_bus_volumes() }
+        if nv, ch := ui_slider("SetMusic",    string(t(.SETTINGS_MUSIC)),    g_vol_music);    ch { g_vol_music    = nv; apply_bus_volumes() }
+        if nv, ch := ui_slider("SetAmbience", string(t(.SETTINGS_AMBIENCE)), g_vol_ambience); ch { g_vol_ambience = nv; apply_bus_volumes() }
+        if nv, ch := ui_slider("SetVoice",    string(t(.SETTINGS_VOICE)),    g_vol_voice);    ch { g_vol_voice    = nv; apply_bus_volumes() }
+
+        // Keybinds
+        ui_divider("SetKbDiv")
+        if ui_button_centered("SetKeybinds", string(t(.SETTINGS_BTN_KEYBINDS)), bw, bh) {
+            ui_open(.Keybinds)
         }
-        if changed { apply_bus_volumes() }
+
+        // Close
+        ui_divider("SetCloseDiv")
+        if ui_button_centered("SetClose", string(t(.SETTINGS_BTN_CLOSE)), bw, bh) {
+            ui_close_top()
+        }
+
+        // Exit game
+        ui_divider("SetExitDiv")
+        if ui_button_centered("SetExit", string(t(.SETTINGS_BTN_EXIT)), bw, bh, .Danger) {
+            g_should_exit = true
+        }
     }
-
-    if rl.CheckCollisionPointRec(mp,
-        { bx, f32(py + settings_y_keybinds()), f32(pBW), f32(pBH) }) &&
-       rl.IsMouseButtonPressed(.LEFT) {
-        ui_open(.Keybinds)
-    }
-
-    if rl.CheckCollisionPointRec(mp,
-        { bx, f32(py + settings_y_close()), f32(pBW), f32(pBH) }) &&
-       rl.IsMouseButtonPressed(.LEFT) {
-        ui_close_top()
-        return
-    }
-
-    if rl.CheckCollisionPointRec(mp,
-        { bx, f32(py + settings_y_exit()), f32(pBW), f32(pBH) }) &&
-       rl.IsMouseButtonPressed(.LEFT) {
-        g_should_exit = true
-        return
-    }
-}
-
-draw_settings_overlay :: proc() {
-    sw  := rl.GetScreenWidth()
-    sh  := rl.GetScreenHeight()
-    pW  := pause_W()
-    pH  := settings_H()
-    pBW := pause_btn_w()
-    pBH := pause_btn_h()
-    px  := sw / 2 - pW / 2
-    py  := sh / 2 - pH / 2
-    mp  := rl.GetMousePosition()
-    bx  := f32(px) + f32(pW - pBW) / 2
-
-    rl.DrawRectangle(0, 0, sw, sh, rl.Color{ 0, 0, 0, 165 })
-
-    rl.DrawRectangle(px, py, pW, pH, rl.Color{ 8, 6, 4, 252 })
-    rl.DrawRectangle(px, py, pW, 3, COL_BRASS)
-    rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(pW), f32(pH) }, 2, COL_RULE)
-
-    title    := t(.SETTINGS_TITLE)
-    title_fs := uis(24)
-    title_sz := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title,
-        { f32(px) + f32(pW) * 0.5 - title_sz.x * 0.5, f32(py) + uis(16) },
-        title_fs, 1, COL_PARCH)
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py) + uis(52) },
-        { f32(px + pW) - 16, f32(py) + uis(52) }, 1, COL_RULE)
-
-    res_label := PAUSE_RESOLUTIONS[g_pause_res_idx].label
-    pause_arrow_row(px, py + settings_y_res(), t(.SETTINGS_RESOLUTION), res_label, mp,
-        enabled = !g_borderless)
-
-    mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
-    pause_arrow_row(px, py + settings_y_mode(), t(.SETTINGS_WINDOW_MODE), mode_label, mp)
-
-    pause_arrow_row(px, py + settings_y_lang(), t(.SETTINGS_LANGUAGE), lang_name(g_lang), mp)
-
-    {
-        vol_hdr    := t(.SETTINGS_VOLUME)
-        vol_hdr_fs := uis(13)
-        vol_hdr_sz := rl.MeasureTextEx(g_font_body, vol_hdr, vol_hdr_fs, 1)
-        vol_row_y  := f32(py + settings_y_vol())
-        rl.DrawLineEx(
-            { f32(px) + 16, vol_row_y - uis(10) },
-            { f32(px + pW) - 16, vol_row_y - uis(10) }, 1, COL_RULE)
-        rl.DrawTextEx(g_font_body, vol_hdr,
-            { f32(px) + f32(pW) * 0.5 - vol_hdr_sz.x * 0.5, vol_row_y - uis(22) },
-            vol_hdr_fs, 1, COL_MUTED)
-
-        rh := settings_vol_row_h()
-        draw_vol_slider(px, py + settings_y_vol() + rh * 0, t(.SETTINGS_SFX),      g_vol_sfx,      mp)
-        draw_vol_slider(px, py + settings_y_vol() + rh * 1, t(.SETTINGS_MUSIC),    g_vol_music,    mp)
-        draw_vol_slider(px, py + settings_y_vol() + rh * 2, t(.SETTINGS_AMBIENCE), g_vol_ambience, mp)
-        draw_vol_slider(px, py + settings_y_vol() + rh * 3, t(.SETTINGS_VOICE),    g_vol_voice,    mp)
-    }
-
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py + settings_y_keybinds()) - 12 },
-        { f32(px + pW) - 16, f32(py + settings_y_keybinds()) - 12 }, 1, COL_RULE)
-    draw_pause_btn(
-        { bx, f32(py + settings_y_keybinds()), f32(pBW), f32(pBH) },
-        t(.SETTINGS_BTN_KEYBINDS), mp)
-
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py + settings_y_close()) - 12 },
-        { f32(px + pW) - 16, f32(py + settings_y_close()) - 12 }, 1, COL_RULE)
-    draw_pause_btn(
-        { bx, f32(py + settings_y_close()), f32(pBW), f32(pBH) },
-        t(.SETTINGS_BTN_CLOSE), mp)
-
-    rl.DrawLineEx(
-        { f32(px) + 16, f32(py + settings_y_exit()) - 10 },
-        { f32(px + pW) - 16, f32(py + settings_y_exit()) - 10 }, 1, COL_RULE)
-    {
-        exit_r   := rl.Rectangle{ bx, f32(py + settings_y_exit()), f32(pBW), f32(pBH) }
-        exit_hot := rl.CheckCollisionPointRec(mp, exit_r)
-        exit_bg  := rl.Color{ 48, 16, 12, 240 } if exit_hot else rl.Color{ 28, 10, 8, 240 }
-        exit_bdr := rl.Color{ 200, 70, 50, 220 } if exit_hot else rl.Color{ 100, 35, 25, 180 }
-        exit_txt := rl.Color{ 235, 100, 75, 255 } if exit_hot else rl.Color{ 160, 60, 45, 220 }
-        rl.DrawRectangleRec(exit_r, exit_bg)
-        rl.DrawRectangleLinesEx(exit_r, 1, exit_bdr)
-        exit_lbl := t(.SETTINGS_BTN_EXIT)
-        exit_fs  := uis(18)
-        exit_sz  := rl.MeasureTextEx(g_font_body, exit_lbl, exit_fs, 1)
-        rl.DrawTextEx(g_font_body, exit_lbl,
-            { exit_r.x + exit_r.width * 0.5 - exit_sz.x * 0.5,
-              exit_r.y + exit_r.height * 0.5 - exit_fs * 0.5 },
-            exit_fs, 1, exit_txt)
-    }
+    ui_panel_end()
+    cmds := clay.EndLayout()
+    clay_raylib_render(&cmds)
 }
 
 @(private = "file")
@@ -2299,14 +1914,6 @@ draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2
 }
 
 
-shop_panel_origin :: proc() -> (px, py: i32) {
-    shop_w   := i32(uis(480))
-    shop_h   := i32(uis(520))
-    game_w   := rl.GetScreenWidth() - g_inv.panel_w
-    left_x   := (game_w - shop_w) / 2
-    top_y    := rl.GetScreenHeight() / 2 - shop_h / 2
-    return left_x, top_y
-}
 
 
 @(private = "file")
