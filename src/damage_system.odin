@@ -28,6 +28,11 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if !cw.world_is_valid(w, ev.target_id)               { continue }
         if !cw.world_has_component(w, ev.target_id, .Health) { continue }
 
+        // Keep combat music alive while the local player is dealing or taking damage.
+        if ev.amount > 0 && (ev.target_id == w.player_id || ev.source_id == w.player_id) {
+            mark_combat()
+        }
+
         h := cw.world_get_health(w, ev.target_id)
         amount := ev.amount
 

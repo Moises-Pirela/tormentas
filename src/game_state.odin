@@ -28,6 +28,46 @@ g_current_raid_level: int
 g_pending_raid_start: int
 
 
+// ---------------------------------------------------------------------------
+// Music state resolution (maps game state -> engine MusicState each frame)
+// ---------------------------------------------------------------------------
+
+COMBAT_MUSIC_HOLD :: f32(5.0)   // seconds of "combat" music after the last hit
+g_combat_timer: f32
+
+// Called from combat code (damage involving the local player) to keep combat music up.
+mark_combat :: proc() { g_combat_timer = COMBAT_MUSIC_HOLD }
+
+// Resolves the desired music state from app/playing state, boss presence, and recent
+// combat, then hands it to the crossfading music system (which no-ops if unchanged).
+update_music_state :: proc(w: ^cw.World) {
+    dt := rl.GetFrameTime()
+    if g_combat_timer > 0 { g_combat_timer = max(g_combat_timer - dt, 0) }
+
+    state := MusicState.None
+    switch g_app_state {
+    case .MainMenu, .Connecting:
+        state = .Menu
+    case .Playing:
+        switch g_playing_state {
+        case .Hub, .ExtractScreen:
+            state = .Hub
+        case .DeathScreen, .Editor:
+            state = .None
+        case .Gameplay:
+            if g_boss_id != cw.INVALID_ENTITY && cw.world_is_valid(w, g_boss_id) {
+                state = .Boss
+            } else if g_combat_timer > 0 {
+                state = .Combat
+            } else {
+                state = .Explore
+            }
+        }
+    }
+    audio_music_set_state(state)
+}
+
+
 STASH_MAX_ITEMS :: 64
 STASH_COLS :: 12
 STASH_ROWS :: 8

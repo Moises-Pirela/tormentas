@@ -1,0 +1,41 @@
+{
+  "_comment": "Engine audio bank. Add events here to tune them without code changes. Fields: bus(sfx|music|ambience|voice|ui), variants[](paths under data/sounds/, no extension; loader tries .ogg/.wav/.mp3), select(random|round_robin|first), gain, gain_var, pitch, pitch_var, max_instances, min_interval_ms, priority, spatial, rolloff(linear|inverse|none), inner, outer, preload. Any play_sfx() name not listed auto-registers with sane defaults. 'music' maps MusicState -> stem for audio_music_set_state() (crossfaded); if a state is omitted it defaults to music/<state>.",
+
+  "music": {
+    "menu":    "music/menu",
+    "hub":     "music/hub",
+    "explore": "music/explore",
+    "combat":  "music/combat",
+    "boss":    "music/boss",
+    "tension": "music/tension"
+  },
+
+  "events": {
+    "enemy_melee": {
+      "bus": "sfx",
+      "variants": ["sfx/enemy_melee"],
+      "gain": 0.9, "pitch_var": 0.08,
+      "max_instances": 6, "min_interval_ms": 30, "priority": 3,
+      "spatial": true, "rolloff": "linear", "outer": 700,
+      "preload": true
+    },
+
+    "enemy_shoot": {
+      "bus": "sfx",
+      "variants": ["sfx/enemy_shoot"],
+      "gain": 0.85, "pitch_var": 0.1,
+      "max_instances": 8, "min_interval_ms": 20, "priority": 3,
+      "spatial": true, "rolloff": "linear", "outer": 800,
+      "preload": true
+    },
+
+    "dodge": {
+      "bus": "sfx",
+      "variants": ["sfx/dodge"],
+      "gain": 1.0, "pitch_var": 0.05,
+      "max_instances": 3, "min_interval_ms": 60, "priority": 4,
+      "spatial": false,
+      "preload": true
+    }
+  }
+}

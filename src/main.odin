@@ -590,6 +590,7 @@ main :: proc() {
         update_clay_input()
         input_begin_frame()
         update_audio()
+        update_music_state(&g_sim.world)
         update_fade(dt)
         update_console(dt)
         update_anim_editor(dt)

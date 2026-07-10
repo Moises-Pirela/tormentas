@@ -128,6 +128,7 @@ _director_tick_boss :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
     warning_start := cfg.boss_spawn_at + BOSS_WARNING_LEAD
     if g_raid_timer <= warning_start && g_boss_warning_timer <= 0 {
         g_boss_warning_timer = BOSS_WARNING_LEAD
+        audio_duck_music(0.5, 500, 1200)   // dip music under the boss warning
     }
 
     if g_boss_warning_timer > 0 {

@@ -244,6 +244,7 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
         console_log("  hp <n>                    set player current HP")
         console_log("  kill                      kill player")
         console_log("  god_mode                  toggle invincibility")
+        console_log("  audio <sub>               reload|list|play <ev>|state <name>|duck")
         console_log("  clear                     clear console log")
         console_log("available mutations:")
         for mt in cw.MutationType {
@@ -324,6 +325,38 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
             console_log("god mode ON — player cannot die")
         } else {
             console_log("god mode OFF")
+        }
+
+    case "audio":
+        sub  := args
+        rest := ""
+        if ssep := strings.index_byte(args, ' '); ssep >= 0 {
+            sub  = args[:ssep]
+            rest = strings.trim_space(args[ssep + 1:])
+        }
+        switch sub {
+        case "reload":
+            audio_reload()
+            console_log("audio: reloaded data/sounds/audio.json")
+        case "list":
+            names := audio_debug_event_names()
+            console_logf("audio: %d events registered", len(names))
+            for n in names { console_logf("    %s", n) }
+        case "play":
+            if len(rest) == 0 { console_log("usage: audio play <event>"); return }
+            play_sfx(rest)
+            console_logf("audio: played '%s'", rest)
+        case "state":
+            if audio_music_set_state_named(rest) {
+                console_logf("audio: music state -> %s", rest)
+            } else {
+                console_log("usage: audio state <none|menu|hub|explore|combat|boss|tension>")
+            }
+        case "duck":
+            audio_duck_music(0.6, 200, 700)
+            console_log("audio: ducked music")
+        case:
+            console_log("usage: audio <reload | list | play <event> | state <name> | duck>")
         }
 
     case "ability":
