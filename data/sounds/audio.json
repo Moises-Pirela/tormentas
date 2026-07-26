@@ -20,6 +20,15 @@
       "preload": true
     },
 
+    "enemy_death": {
+      "bus": "sfx",
+      "variants": ["sfx/enemy_death"],
+      "gain": 0.9, "pitch_var": 0.08,
+      "max_instances": 6, "min_interval_ms": 30, "priority": 3,
+      "spatial": true, "rolloff": "linear", "outer": 700,
+      "preload": true
+    },
+
     "enemy_shoot": {
       "bus": "sfx",
       "variants": ["sfx/enemy_shoot"],

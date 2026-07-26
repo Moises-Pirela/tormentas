@@ -47,14 +47,44 @@ Write-Host ''
 Write-Host '[PACKAGE] Building dist\tormentas\ ...'
 
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
-if (Test-Path (Join-Path $Dist 'data')) {
-    Remove-Item -Recurse -Force (Join-Path $Dist 'data') -ErrorAction SilentlyContinue
+
+# Clean previously-staged data/save so we ship a fresh, dev-save-free tree.
+foreach ($stale in 'data', 'save') {
+    $p = Join-Path $Dist $stale
+    if (Test-Path $p) { Remove-Item -Recurse -Force $p -ErrorAction SilentlyContinue }
 }
+
 Copy-Item -Force $Out (Join-Path $Dist 'tormentas.exe')
 Copy-Item -Recurse -Force (Join-Path $Root 'data') (Join-Path $Dist 'data')
+
+# Empty save\ so the directory exists for the tester (no dev characters/saves shipped).
+New-Item -ItemType Directory -Force -Path (Join-Path $Dist 'save') | Out-Null
+
+# Steam runtime files (from bin\): steam_api64.dll is required for the build to
+# launch; steam_appid.txt lets Steam init when launched outside the Steam client
+# (needed for friends/invite/multiplayer).
+foreach ($f in 'steam_api64.dll', 'steam_appid.txt') {
+    $srcF = Join-Path $Root ('bin\' + $f)
+    if (Test-Path $srcF) {
+        Copy-Item -Force $srcF (Join-Path $Dist $f)
+    } else {
+        Write-Host "[PACKAGE] Warning: $f not found in bin - build may fail to launch / lack Steam"
+    }
+}
 
 Write-Host '[PACKAGE] Done'
 Write-Host ''
 Write-Host '  dist\tormentas\'
 Write-Host '    tormentas.exe'
+Write-Host '    steam_api64.dll'
+Write-Host '    steam_appid.txt'
 Write-Host '    data\'
+Write-Host '    save\'
+
+# Dated zip for sending to collaborators (extracts to a single tormentas\ folder).
+$Stamp = Get-Date -Format 'yyyy-MM-dd'
+$Zip   = Join-Path $Root ('dist\tormentas_' + $Stamp + '.zip')
+if (Test-Path $Zip) { Remove-Item -Force $Zip }
+Compress-Archive -Path $Dist -DestinationPath $Zip
+Write-Host ''
+Write-Host "[PACKAGE] Zipped  ->  $Zip"

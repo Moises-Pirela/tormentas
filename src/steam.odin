@@ -10,6 +10,13 @@ g_steam_pipe:         sw.HSteamPipe
 g_steam_lobby_id:     sw.CSteamID
 g_pending_join_lobby: sw.CSteamID
 
+// A resolved, accept-able co-op invitation, surfaced as an on-screen prompt so the
+// player can join from anywhere rather than only while sitting in the hub.
+g_invite_pending:   bool
+g_invite_host_id:   sw.CSteamID
+g_invite_host_name: [64]u8
+g_invite_name_len:  int
+
 @(private = "file")
 g_create_lobby_call: sw.SteamAPICall
 
@@ -50,9 +57,21 @@ steam_run_callbacks :: proc() {
         defer sw.ManualDispatch_FreeLastCallback(g_steam_pipe)
         #partial switch cb.iCallback {
         case .GameLobbyJoinRequested:
+            // Accepting an invite only tells us *which* lobby to join — we must
+            // actually enter it before its data (host_id) becomes readable. The
+            // real join is kicked off in the LobbyEnter callback below.
             req := (^sw.GameLobbyJoinRequested)(cb.pubParam)
-            g_pending_join_lobby = req.steamIDLobby
             fmt.printf("[steam] lobby join requested: %d\n", u64(req.steamIDLobby))
+            sw.Matchmaking_JoinLobby(sw.Matchmaking(), req.steamIDLobby)
+
+        case .LobbyEnter:
+            ev    := (^sw.LobbyEnter)(cb.pubParam)
+            lobby := sw.CSteamID(ev.ulSteamIDLobby)
+            // The host also gets LobbyEnter for the lobby it created — skip that one.
+            if lobby != g_steam_lobby_id {
+                g_pending_join_lobby = lobby
+                fmt.printf("[steam] entered lobby: %d\n", u64(lobby))
+            }
 
         case .SteamNetConnectionStatusChangedCallback:
             ev := (^sw.SteamNetConnectionStatusChangedCallback)(cb.pubParam)
@@ -85,6 +104,11 @@ steam_run_callbacks :: proc() {
 steam_get_local_id :: proc() -> sw.CSteamID {
     if !g_steam_ok { return 0 }
     return sw.User_GetSteamID(sw.User())
+}
+
+steam_friend_name :: proc(id: sw.CSteamID) -> string {
+    if !g_steam_ok { return "" }
+    return string(sw.Friends_GetFriendPersonaName(sw.Friends(), id))
 }
 
 steam_get_friends :: proc(allocator := context.temp_allocator) -> []SteamFriend {

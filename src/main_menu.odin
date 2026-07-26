@@ -63,6 +63,22 @@ _on_black_to_menu :: proc() {
     fade_from_black()
 }
 
+// Accepted a co-op invite from outside the hub (menu or mid-raid): rebuild a fresh
+// hub as a client and connect to the host.
+@(private)
+_on_black_join_invite :: proc() {
+    if g_sim_alive { shutdown_game() }
+    g_is_host = false
+    init_game()
+    g_hub_active = true
+    g_app_state  = .Playing
+    set_playing_state(.Hub)
+    copy(g_session.local_name[:], g_player_name[:])
+    p2p.session_join(&g_session, g_invite_host_id)
+    g_invite_pending = false
+    fade_from_black()
+}
+
 
 update_main_menu :: proc(dt: f32) {
     if g_disconnect_msg_timer > 0 { g_disconnect_msg_timer -= dt }

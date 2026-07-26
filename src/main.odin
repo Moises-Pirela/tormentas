@@ -48,6 +48,54 @@ do_sim_tick :: proc(sim: ^cw.Simulation, local_frame: p2p.InputFrame, dt: f32) -
     return false
 }
 
+// Accept a pending co-op invitation from whatever state the player is in.
+accept_invite :: proc() {
+    if !g_invite_pending { return }
+    if p2p.session_is_online(&g_session) { g_invite_pending = false; return }
+
+    // Already in a hub: connect in place (the proven path).
+    if g_app_state == .Playing && g_playing_state == .Hub {
+        g_is_host = false
+        copy(g_session.local_name[:], g_player_name[:])
+        p2p.session_join(&g_session, g_invite_host_id)
+        g_invite_pending = false
+        return
+    }
+
+    // Otherwise load into a hub as a client first — which needs a chosen character.
+    if g_active_slot < 0 { return }   // prompt hints to pick a character
+    fade_to_black(_on_black_join_invite)
+}
+
+draw_invite_toast :: proc() {
+    if !g_invite_pending || p2p.session_is_online(&g_session) { return }
+
+    sw := f32(rl.GetScreenWidth())
+    pw := uis(380)
+    ph := uis(60)
+    px := sw * 0.5 - pw * 0.5
+    py := uis(16)
+
+    rl.DrawRectangleRec({ px, py, pw, ph }, rl.Color{ 10, 8, 6, 240 })
+    rl.DrawRectangleLinesEx({ px, py, pw, ph }, 1.5, COL_BRASS)
+    rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
+
+    buf: [96]u8
+    n := copy(buf[:], g_invite_host_name[:g_invite_name_len])
+    n += copy(buf[n:], " invites you to co-op")
+    buf[n] = 0
+    title := cstring(&buf[0])
+    tfs   := uis(13)
+    tsz   := rl.MeasureTextEx(g_font_body, title, tfs, 0.5)
+    rl.DrawTextEx(g_font_body, title, { px + pw*0.5 - tsz.x*0.5, py + uis(11) }, tfs, 0.5, COL_PARCH)
+
+    can_join := (g_app_state == .Playing && g_playing_state == .Hub) || g_active_slot >= 0
+    hint := cstring("[J] Join      [N] Dismiss") if can_join else cstring("Select a character to join      [N] Dismiss")
+    hfs  := uis(11)
+    hsz  := rl.MeasureTextEx(g_font_body, hint, hfs, 0.5)
+    rl.DrawTextEx(g_font_body, hint, { px + pw*0.5 - hsz.x*0.5, py + ph - uis(20) }, hfs, 0.5, COL_BRASS)
+}
+
 init_game :: proc() {
     g_sim       = cw.make_default_simulation()
     g_sim_alive = true
@@ -572,18 +620,29 @@ main :: proc() {
 
         steam_run_callbacks()
 
-        // Handle Steam lobby invite accepted while already in-hub
-        if g_pending_join_lobby != 0 &&
-           g_app_state == .Playing &&
-           g_playing_state == .Hub &&
-           g_session.state == .Offline {
+        // Once we've entered the invited lobby, resolve its host into a pending co-op
+        // invitation the player can accept from anywhere via the on-screen prompt.
+        // Retried each frame — lobby data can lag a frame behind LobbyEnter.
+        if g_pending_join_lobby != 0 && !g_invite_pending && !p2p.session_is_online(&g_session) {
             host_id := steam_lobby_get_host_id(g_pending_join_lobby)
-            g_pending_join_lobby = 0
-            if host_id != 0 {
-                g_is_host = false
-                copy(g_session.local_name[:], g_player_name[:])
-                p2p.session_join(&g_session, host_id)
-                g_app_state = .Playing
+            if host_id != 0 && host_id != steam_get_local_id() {
+                g_steam_lobby_id     = g_pending_join_lobby
+                g_pending_join_lobby = 0
+                g_invite_host_id     = host_id
+                nm := steam_friend_name(host_id)
+                g_invite_name_len = min(len(nm), len(g_invite_host_name) - 1)
+                copy(g_invite_host_name[:], nm[:g_invite_name_len])
+                g_invite_host_name[g_invite_name_len] = 0
+                g_invite_pending = true
+            }
+        }
+
+        // Invite prompt input (guarded against console / name-entry text capture).
+        if g_invite_pending && !p2p.session_is_online(&g_session) {
+            typing := g_console_open || (g_app_state == .MainMenu && g_mm.focus == .NewName)
+            if !typing {
+                if rl.IsKeyPressed(.J) { accept_invite() }
+                if rl.IsKeyPressed(.N) { g_invite_pending = false }
             }
         }
 
@@ -631,6 +690,7 @@ main :: proc() {
             ui_draw(ui_w)
         }
 
+        draw_invite_toast()
         draw_anim_editor()
         draw_fade()
         draw_console()
