@@ -204,18 +204,8 @@ ui_update :: proc(dt: f32) {
             if l.alpha >= 1 { l.alpha = 1; l.state = .Visible }
 
         case .Visible:
-            switch l.panel {
-            case .Phonograph, .Social, .MutationTree:
-
-                // Time-based / scroll feedback (phonograph animation, social invite
-                // "Sent!" timer, mutation tree wheel scrolling) needs a redraw every
-                // frame, not just on mouse events.
-                l.dirty = true
-            case .Inventory, .Stats, .Shop, .Stash, .AbilityVendor,
-                 .PauseMenu, .Settings, .Keybinds, .LevelSelect, .Lore, .QuestBoard:
-
-                if mouse_event { l.dirty = true }
-            }
+            _ = mouse_event
+            l.dirty = true
 
         case .FadeOut:
             l.alpha = max(l.alpha - dt * UI_FADE_SPEED, 0)
