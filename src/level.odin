@@ -117,6 +117,7 @@ LevelData :: struct {
     lore_items:   [dynamic]LevelLoreItem,
     phonographs:  [dynamic]LevelPhonograph,
     key_pickups:  [dynamic]LevelKeyPickup,
+    modules:      [dynamic]LevelModule,
     player_start: [2]f32,
     lighting:     LevelLightingConfig,
 
@@ -165,6 +166,7 @@ level_data_init :: proc() {
     g_level_data.lore_items   = make([dynamic]LevelLoreItem)
     g_level_data.phonographs  = make([dynamic]LevelPhonograph)
     g_level_data.key_pickups  = make([dynamic]LevelKeyPickup)
+    g_level_data.modules      = make([dynamic]LevelModule)
     g_level_data.lighting     = LIGHTING_CONFIG_DEFAULT
 }
 
@@ -239,7 +241,7 @@ lv_rbf32 :: proc(raw: []u8, cur: int) -> (val: f32, next: int, ok: bool) {
 
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
-LEVEL_VERSION :: u16(12)
+LEVEL_VERSION :: u16(13)
 
 
 level_save :: proc(n: int) {
@@ -425,6 +427,17 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, u8(v))
     }
 
+    // ver 13: placed prerendered modules (stored by manifest id for stability)
+    lv_wb4(&buf, u32(len(g_level_data.modules)))
+    for m in g_level_data.modules {
+        name := ""
+        if m.def_idx >= 0 && m.def_idx < len(g_modules) { name = g_modules[m.def_idx].id }
+        lv_wb1(&buf, u8(min(len(name), 255)))
+        for c in transmute([]u8)name { lv_wb1(&buf, c) }
+        lv_wbi16(&buf, m.tx)
+        lv_wbi16(&buf, m.ty)
+    }
+
     os.write_entire_file(level_path(n), buf[:])
 }
 
@@ -446,6 +459,7 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lore_items)
         clear(&g_level_data.phonographs)
         clear(&g_level_data.key_pickups)
+        clear(&g_level_data.modules)
         g_level_data.player_start = {}
         return
     }
@@ -474,7 +488,7 @@ level_load :: proc(n: int) {
 
 
     ver, ver_c, ver_ok := lv_rb2(raw, cur)
-    if !ver_ok || ver < 1 || ver > 12 {
+    if !ver_ok || ver < 1 || ver > 13 {
         clear(&g_tilemap)
         clear(&g_overlay_map)
         clear(&g_level_data.spawns)
@@ -854,6 +868,31 @@ level_load :: proc(n: int) {
                 for sx in 0..<scale {
                     g_hub_cell_map[[2]int{k[0]*scale+sx, k[1]*scale+sy}] = tt
                 }
+            }
+        }
+    }
+
+    // ver 13: placed prerendered modules
+    clear(&g_level_data.modules)
+    if ver >= 13 {
+        mc, mcc, mcok := lv_rb4(raw, cur)
+        if mcok {
+            cur = mcc
+            for _ in 0..<mc {
+                nl, nlc, nlok := lv_rb1(raw, cur); if !nlok { break }; cur = nlc
+                name_buf := make([]u8, int(nl), context.temp_allocator)
+                bad := false
+                for i in 0..<int(nl) {
+                    b, bc, bok := lv_rb1(raw, cur); if !bok { bad = true; break }; cur = bc
+                    name_buf[i] = b
+                }
+                if bad { break }
+                mtx, mtxc, mtxok := lv_rbi16(raw, cur); if !mtxok { break }; cur = mtxc
+                mty, mtyc, mtyok := lv_rbi16(raw, cur); if !mtyok { break }; cur = mtyc
+                append(&g_level_data.modules, LevelModule{
+                    def_idx = module_index_by_name(string(name_buf)),
+                    tx = mtx, ty = mty,
+                })
             }
         }
     }

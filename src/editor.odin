@@ -63,6 +63,10 @@ EditorBrush :: enum u8 {
     // so the intent ("no visible sprite, hub collision only") is clear.
     HubCollision = 36,
     HubWalkable  = 37,
+
+    // Places a prerendered level module (rooms/connectors/landmarks). The active
+    // module is selected via g_ed_module_idx and cycled with , / .
+    Module       = 38,
 }
 
 EditorCategory :: enum u8 { Environment, Entities, Interactive }
@@ -81,8 +85,9 @@ ED_PAL_ITEM_H :: f32(36)
 ED_PAL_PAD    :: f32(6)
 ED_PAL_HOTKEYS :: [14]cstring{"1","2","3","4","5","6","7","8","9","0","","","",""}
 
-@(private = "file") g_ed_palette:        [44]PaletteEntry
+@(private = "file") g_ed_palette:        [48]PaletteEntry
 @(private = "file") g_ed_palette_n:      int
+@(private = "file") g_ed_module_idx:     int  // selected module for the Module brush
 @(private = "file") g_ed_pal_scroll:     f32
 @(private = "file") g_ed_cat_collapsed:  [3]bool
 @(private = "file") g_ed_key_id:         int = 0
@@ -161,6 +166,8 @@ ed_build_palette :: proc() {
 
     add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
     add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
+
+    if module_count() > 0 { add(.Module, .Environment, "Module", {28, 40, 62, 255}, &ki) }
 
 
     entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, cat: EditorCategory, ok: bool) {
@@ -451,6 +458,12 @@ update_editor :: proc(dt: f32) {
             }
         }
 
+        // Cycle the active module (Module brush) with , / .
+        if EditorBrush(g_ed_brush) == .Module && module_count() > 0 {
+            if rl.IsKeyPressed(.COMMA)  { g_ed_module_idx = (g_ed_module_idx - 1 + module_count()) %% module_count() }
+            if rl.IsKeyPressed(.PERIOD) { g_ed_module_idx = (g_ed_module_idx + 1) %% module_count() }
+        }
+
         shift := rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
         ctrl  := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
         if shift {
@@ -645,6 +658,10 @@ update_editor :: proc(dt: f32) {
             } else if rl.IsMouseButtonDown(.RIGHT) && !ed_insp_has_selection() {
                 ed_erase_cell(cell_x, cell_y)
             }
+        } else if EditorBrush(g_ed_brush) == .Module {
+            // Discrete placement: one module per click, grid-snapped to the tile.
+            if rl.IsMouseButtonPressed(.LEFT)  { module_place_at(g_ed_module_idx, tx, ty) }
+            if rl.IsMouseButtonPressed(.RIGHT) { module_erase_at(tx, ty) }
         } else {
             if rl.IsMouseButtonDown(.LEFT) {
                 r := g_ed_brush_size / TILE_SIZE / 2
@@ -787,6 +804,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         case .Floor:   g_tilemap[[2]int{tx, ty}] = .Floor;   delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Wall:    g_tilemap[[2]int{tx, ty}] = .Wall;    delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Water:   g_tilemap[[2]int{tx, ty}] = .Water;   delete_key(&g_overlay_map, [2]int{tx, ty})
+        case .Module:  // placed locally via module_place_at, not a networked tile op
         case .Pillar:  g_tilemap[[2]int{tx, ty}] = .Pillar;  delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Floor1:  g_tilemap[[2]int{tx, ty}] = .Floor1;  delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Floor2:  g_tilemap[[2]int{tx, ty}] = .Floor2;  delete_key(&g_overlay_map, [2]int{tx, ty})
@@ -1100,6 +1118,13 @@ draw_editor_world :: proc() {
     ty0 := int(math.floor(tl.y / f32(TILE_SIZE))) - 1
     tx1 := int(math.floor(br.x / f32(TILE_SIZE))) + 2
     ty1 := int(math.floor(br.y / f32(TILE_SIZE))) + 2
+
+    // Module placement ghost at the cursor tile.
+    if EditorBrush(g_ed_brush) == .Module && module_count() > 0 {
+        wc := screen_to_world_cartesian(rl.GetMousePosition())
+        mtx, mty := world_to_tile(wc.x, wc.y)
+        module_draw_ghost(g_ed_module_idx, mtx, mty)
+    }
 
     if g_hub_active {
         // ── Hub cell grid ──────────────────────────────────────────────────────
@@ -1543,6 +1568,7 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     case .Floor:       return {110,  95,  65,  85}, {200, 170,  90, 200}
     case .Wall:        return { 70, 105, 140,  85}, { 90, 150, 210, 200}
     case .Water:       return { 18,  60, 130,  90}, { 40, 120, 220, 210}
+    case .Module:      return { 40,  90, 160,  90}, { 90, 150, 230, 210}
     case .SpawnMelee:  return {220,  70,  50,  70}, {255, 110,  80, 210}
     case .SpawnBrute:  return {160,  30,  30,  70}, {210,  60,  60, 210}
     case .SpawnHunter: return {120,  60, 200,  70}, {160,  90, 255, 210}

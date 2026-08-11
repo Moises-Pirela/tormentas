@@ -437,6 +437,8 @@ draw_playing :: proc() {
     rl.BeginMode2D(g_camera^)
     if g_hub_active {
         draw_hub_background()   // pre-rendered town image replaces tilemap in hub (editor too)
+    } else if len(g_level_data.modules) > 0 {
+        draw_level_modules()    // prerendered modules; tiles are invisible collision (hub model)
     } else {
         draw_tilemap()
     }
@@ -598,6 +600,9 @@ main :: proc() {
 
     tilemap_init()
     defer tilemap_destroy()
+
+    module_registry_init()
+    defer module_registry_destroy()
 
     ai_paths_init()
     defer ai_paths_destroy()

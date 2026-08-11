@@ -245,7 +245,6 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
         console_log("  kill                      kill player")
         console_log("  god_mode                  toggle invincibility")
         console_log("  audio <sub>               reload|list|play <ev>|state <name>|duck")
-        console_log("  autotile template         export the 47-tile autotile reference png")
         console_log("  clear                     clear console log")
         console_log("available mutations:")
         for mt in cw.MutationType {
@@ -358,17 +357,6 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
             console_log("audio: ducked music")
         case:
             console_log("usage: audio <reload | list | play <event> | state <name> | duck>")
-        }
-
-    case "autotile":
-        if args == "template" {
-            if autotile_export_reference() {
-                console_log("autotile: wrote data/sprites/tiles/autotile_reference.png")
-            } else {
-                console_log("autotile: export FAILED")
-            }
-        } else {
-            console_log("usage: autotile template   (exports the 47-tile reference image)")
         }
 
     case "ability":

@@ -1,0 +1,6 @@
+{
+  "_comment": "Prerendered level modules. Each entry: file (png stem under data/sprites/modules/, drawn in iso), w/h (footprint in tiles, for grid-snapped placement), off_x/off_y (px offset to align the art to the placement anchor in iso). Place them in the editor: pick the 'Module' brush, cycle with , / . , left-click to place (grid-snapped), right-click to erase. Levels store placements by id, so renaming an id orphans its placements.",
+
+  "modules": {
+  }
+}
