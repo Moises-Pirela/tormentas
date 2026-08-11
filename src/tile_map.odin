@@ -182,6 +182,12 @@ tilemap_init :: proc() {
     _load_tile_variants(int(TileType.Wall),   "wall",   .Wall)
     _load_tile_variants(int(TileType.Water),  "water",  .Water)
     _load_tile_variants(int(TileType.Pillar), "pillar", .Pillar)
+
+    autotile_build_table()
+    autotile_load(int(TileType.Floor),  "floor")
+    autotile_load(int(TileType.Wall),   "wall")
+    autotile_load(int(TileType.Water),  "water")
+    autotile_load(int(TileType.Pillar), "pillar")
 }
 
 tilemap_destroy :: proc() {
@@ -196,6 +202,7 @@ tilemap_destroy :: proc() {
             }
         }
     }
+    autotile_destroy()
     delete(g_tilemap)
     delete(g_overlay_map)
     delete(g_hub_cell_map)
@@ -274,7 +281,16 @@ _tile_cat_vi :: proc(tt: TileType) -> (cat: int, vi: int) {
 @(private = "file")
 _tile_variant :: proc(tt: TileType, tx, ty: int) -> TileSpriteEntry {
     cat, vi := _tile_cat_vi(tt)
-    count   := g_tile_variant_count[cat]
+
+    // Autotiling: base types (no explicit variant) with a full 47-tile set loaded pick
+    // their sprite from same-type neighbour connectivity. Explicit variants (Floor1..)
+    // and types without an autotile set fall through to the random-variant path below.
+    if vi < 0 && cat >= 1 && cat <= 4 && g_autotile_present[cat] {
+        ai := g_blob47_index[autotile_mask(TileType(cat), tx, ty)]
+        if ai >= 0 { return g_autotile[cat][ai] }
+    }
+
+    count := g_tile_variant_count[cat]
     if count == 0 { return {} }
     if vi >= 0 {
 

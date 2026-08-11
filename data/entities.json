@@ -1,7 +1,7 @@
 [
     {
         "name": "player",
-        "render":    { "name": "Sheriff", "sprite": "player_sheriff", "sprite_scale": 1.0, "layer": "sprite", "world_size": 70, "show_dir_tip": true },
+        "render":    { "name": "Sheriff", "sprite": "player_sheriff", "sprite_scale": 3.0, "layer": "sprite", "world_size": 70, "show_dir_tip": true },
         "transform": { "position": [0, 0, 0], "rotation": 0 },
         "velocity":  {},
         "health":    { "current": 100, "max": 100, "corruption": 0, "energy": 100, "max_energy": 100 },

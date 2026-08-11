@@ -339,9 +339,14 @@ anim_editor_save :: proc() {
         first = false
         clip   := ed.sheet.clips[si]
         loop_s := "false"; if clip.looping { loop_s = "true" }
+        // Braces are written literally via write_string — fmt.bprintf treats "{" as a
+        // directive and would emit "%!(MISSING CLOSE BRACE)" if braces were in the format.
+        strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], "    \"%s\": ", ANIM_STATE_NAMES[si]))])
+        strings.write_string(&sb, "{ ")
         strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:],
-            "    \"%s\": { \"start_frame\": %d, \"frame_count\": %d, \"fps\": %.1f, \"looping\": %s }",
-            ANIM_STATE_NAMES[si], clip.start_frame, clip.frame_count, clip.fps, loop_s))])
+            "\"start_frame\": %d, \"frame_count\": %d, \"fps\": %.1f, \"looping\": %s",
+            clip.start_frame, clip.frame_count, clip.fps, loop_s))])
+        strings.write_string(&sb, " }")
     }
     strings.write_string(&sb, "\n  }\n}\n")
 

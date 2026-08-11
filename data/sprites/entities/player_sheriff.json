@@ -1,9 +1,10 @@
 {
-  "frame_width": 130,
-  "frame_height": 256,
-  "columns": 1,
-  "anchor": [65, 220],
+  "frame_width": 512,
+  "frame_height": 512,
+  "columns": 8,
+  "anchor": [256, 500],
   "states": {
-    "idle": %!(MISSING CLOSE BRACE)"start_frame": 0, "frame_count": 1, "fps": 6.0, "looping": true }
+    "idle": { "start_frame": 0, "frame_count": 1, "fps": 6,  "looping": true },
+    "walk": { "start_frame": 8, "frame_count": 7, "fps": 12, "looping": true }
   }
 }

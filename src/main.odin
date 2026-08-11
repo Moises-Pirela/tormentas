@@ -15,6 +15,9 @@ PLAYER_RADIUS :: 16.0
 
 TICK_RATE :: 60
 TICK_DT   :: f32(1.0 / TICK_RATE)
+// Max simulation ticks caught up in a single frame; beyond this we drop the backlog
+// so one long frame can't cascade into an ever-growing catch-up (spiral of death).
+MAX_CATCHUP_TICKS :: 5
 
 g_camera:            ^rl.Camera2D
 
@@ -387,10 +390,16 @@ update_playing :: proc(dt: f32) {
     if g_playing_state != .DeathScreen && g_playing_state != .ExtractScreen {
         local_frame := collect_local_input() if playing_collects_input() else p2p.InputFrame{}
         g_accumulator += f64(dt)
+        n := 0
         for g_accumulator >= f64(TICK_DT) {
             do_sim_tick(&g_sim, local_frame, TICK_DT)
             g_accumulator -= f64(TICK_DT)
             local_frame.actions = {}
+            n += 1
+            if n >= MAX_CATCHUP_TICKS {
+                g_accumulator = 0   // drop the backlog rather than spiral on a bad frame
+                break
+            }
         }
     }
 
