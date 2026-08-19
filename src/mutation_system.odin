@@ -1,6 +1,5 @@
 package main
 
-import cw "clockwork"
 
 MutationBranch :: enum u8 { Corpus, Shadow, Venom }
 
@@ -10,10 +9,10 @@ MutationDef :: struct {
     effect:     string,
     branch:     MutationBranch,
     serum_cost: int,
-    conflicts:  [2]cw.MutationType,
+    conflicts:  [2]MutationType,
 }
 
-MUTATION_DEFS := [cw.MutationType]MutationDef{
+MUTATION_DEFS := [MutationType]MutationDef{
     .None = {},
 
 
@@ -175,31 +174,31 @@ MUTATION_DEFS := [cw.MutationType]MutationDef{
     },
 }
 
-mutation_get_entity :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> int {
-    if mt == .None { return cw.INVALID_ENTITY }
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return cw.INVALID_ENTITY }
-    mc := cw.world_get_mutation(w, player_id)
+mutation_get_entity :: proc(w: ^World, player_id: int, mt: MutationType) -> int {
+    if mt == .None { return INVALID_ENTITY }
+    if !world_has_component(w, player_id, .MutationContainer) { return INVALID_ENTITY }
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     for i in 0..<mc.entity_count {
         eid := mc.entities[i]
-        if !cw.world_is_valid(w, eid) { continue }
-        if !cw.world_has_component(w, eid, .Mut) { continue }
-        if cw.world_get_mut(w, eid).type_id == mt { return eid }
+        if !world_is_valid(w, eid) { continue }
+        if !world_has_component(w, eid, .Mut) { continue }
+        if comp_get(w, eid, .Mut, MutComp).type_id == mt { return eid }
     }
-    return cw.INVALID_ENTITY
+    return INVALID_ENTITY
 }
 
-player_has_mutation :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bool {
-    return mutation_get_entity(w, player_id, mt) != cw.INVALID_ENTITY
+player_has_mutation :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
+    return mutation_get_entity(w, player_id, mt) != INVALID_ENTITY
 }
 
-mutation_get_state :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> ^cw.MutComp {
+mutation_get_state :: proc(w: ^World, player_id: int, mt: MutationType) -> ^MutComp {
     eid := mutation_get_entity(w, player_id, mt)
-    if eid == cw.INVALID_ENTITY { return nil }
-    return cw.world_get_mut(w, eid)
+    if eid == INVALID_ENTITY { return nil }
+    return comp_get(w, eid, .Mut, MutComp)
 }
 
 @(private = "file")
-mutation_template_name :: proc(mt: cw.MutationType) -> string {
+mutation_template_name :: proc(mt: MutationType) -> string {
     #partial switch mt {
     case .GlassCannon: return "mut_glass_cannon"
     case .SerratedHands: return "mut_serrated_hands"
@@ -226,43 +225,43 @@ mutation_template_name :: proc(mt: cw.MutationType) -> string {
     return ""
 }
 
-player_has_mutation_effect :: proc(w: ^cw.World, player_id: int, ct: cw.ComponentType) -> bool {
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return false }
-    mc := cw.world_get_mutation(w, player_id)
+player_has_mutation_effect :: proc(w: ^World, player_id: int, ct: ComponentType) -> bool {
+    if !world_has_component(w, player_id, .MutationContainer) { return false }
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     for i in 0..<mc.entity_count {
         eid := mc.entities[i]
-        if !cw.world_is_valid(w, eid) { continue }
-        if cw.world_has_component(w, eid, ct) { return true }
+        if !world_is_valid(w, eid) { continue }
+        if world_has_component(w, eid, ct) { return true }
     }
     return false
 }
 
-player_get_root_on_fire :: proc(w: ^cw.World, player_id: int) -> ^cw.MutRootOnFireComp {
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return nil }
-    mc := cw.world_get_mutation(w, player_id)
+player_get_root_on_fire :: proc(w: ^World, player_id: int) -> ^MutRootOnFireComp {
+    if !world_has_component(w, player_id, .MutationContainer) { return nil }
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     for i in 0..<mc.entity_count {
         eid := mc.entities[i]
-        if !cw.world_is_valid(w, eid) { continue }
-        if cw.world_has_component(w, eid, .MutRootOnFire) {
-            return cw.world_get_mut_root_on_fire(w, eid)
+        if !world_is_valid(w, eid) { continue }
+        if world_has_component(w, eid, .MutRootOnFire) {
+            return comp_get(w, eid, .MutRootOnFire, MutRootOnFireComp)
         }
     }
     return nil
 }
 
-mutation_conflicts :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bool {
+mutation_conflicts :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
     def := &MUTATION_DEFS[mt]
     for c in def.conflicts {
         if c == .None { continue }
         if player_has_mutation(w, player_id, c) { return true }
     }
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return false }
-    mc := cw.world_get_mutation(w, player_id)
+    if !world_has_component(w, player_id, .MutationContainer) { return false }
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     for i in 0..<mc.entity_count {
         eid := mc.entities[i]
-        if !cw.world_is_valid(w, eid) { continue }
-        if !cw.world_has_component(w, eid, .Mut) { continue }
-        existing := cw.world_get_mut(w, eid).type_id
+        if !world_is_valid(w, eid) { continue }
+        if !world_has_component(w, eid, .Mut) { continue }
+        existing := comp_get(w, eid, .Mut, MutComp).type_id
         for c in MUTATION_DEFS[existing].conflicts {
             if c == mt { return true }
         }
@@ -270,52 +269,52 @@ mutation_conflicts :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) ->
     return false
 }
 
-mutation_can_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bool {
+mutation_can_unlock :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
     if mt == .None { return false }
     if player_has_mutation(w, player_id, mt) { return false }
     if mutation_conflicts(w, player_id, mt) { return false }
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return false }
-    mc := cw.world_get_mutation(w, player_id)
-    if mc.entity_count >= cw.MAX_MUTATION_SLOTS { return false }
+    if !world_has_component(w, player_id, .MutationContainer) { return false }
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
+    if mc.entity_count >= MAX_MUTATION_SLOTS { return false }
     return mc.serums >= MUTATION_DEFS[mt].serum_cost
 }
 
-mutation_init_components :: proc(w: ^cw.World, player_id: int, eid: int, mt: cw.MutationType) {
+mutation_init_components :: proc(w: ^World, player_id: int, eid: int, mt: MutationType) {
     switch mt {
     case .HeartCage:
         max_hp := f32(60)
-        if cw.world_has_component(w, player_id, .Health) {
-            max_hp = cw.world_get_health(w, player_id).max * 0.6
+        if world_has_component(w, player_id, .Health) {
+            max_hp = comp_get(w, player_id, .Health, HealthComp).max * 0.6
         }
         heart_id := _spawn_heart_entity(w, player_id, max_hp)
 
         init_angle := f32(player_id % 7) * 0.9
-        cw.world_set_mut_heart_cage(w, eid, cw.MutHeartCageComp{
+        comp_set(w, eid, .MutHeartCage, MutHeartCageComp{
             heart_id    = heart_id,
             max_hp_pct  = 0.6,
             orbit_angle = init_angle,
         })
 
     case .ThornPact:
-        cw.world_set_mut_thorn_pact(w, eid, cw.MutThornPactComp{
+        comp_set(w, eid, .MutThornPact, MutThornPactComp{
             reflect_pct    = 0.4,
             slow_heal_mult = 0.5,
         })
 
     case .CarrionCrown:
-        c := cw.MutCarrionCrownComp{}
-        for &sid in c.servant_ids { sid = cw.INVALID_ENTITY }
-        cw.world_set_mut_carrion_crown(w, eid, c)
+        c := MutCarrionCrownComp{}
+        for &sid in c.servant_ids { sid = INVALID_ENTITY }
+        comp_set(w, eid, .MutCarrionCrown, c)
 
     case .FalseSaint:
-        cw.world_set_mut_false_saint(w, eid, cw.MutFalseSaintComp{
+        comp_set(w, eid, .MutFalseSaint, MutFalseSaintComp{
             aura_radius   = 200.0,
             slow_mult     = 0.60,
             beacon_radius = 400.0,
         })
 
     case .BlackLung:
-        cw.world_set_mut_black_lung(w, eid, cw.MutBlackLungComp{
+        comp_set(w, eid, .MutBlackLung, MutBlackLungComp{
             pressure     = 0,
             regen_rate   = 5.0,
             gain_per_hit = 15.0,
@@ -342,48 +341,48 @@ mutation_init_components :: proc(w: ^cw.World, player_id: int, eid: int, mt: cw.
 }
 
 
-mutation_restore_direct :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) {
+mutation_restore_direct :: proc(w: ^World, player_id: int, mt: MutationType) {
     if mt == .None { return }
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return }
+    if !world_has_component(w, player_id, .MutationContainer) { return }
 
     tname := mutation_template_name(mt)
-    eid   := cw.INVALID_ENTITY
+    eid   := INVALID_ENTITY
     if tname != "" {
         eid = spawn_from_def(w, find_entity_def(g_entity_defs, tname))
     }
-    if eid == cw.INVALID_ENTITY {
-        eid = cw.world_create_entity(w)
+    if eid == INVALID_ENTITY {
+        eid = world_create_entity(w)
     }
-    cw.world_set_mut(w, eid, cw.MutComp{ type_id = mt })
+    comp_set(w, eid, .Mut, MutComp{ type_id = mt })
     mutation_init_components(w, player_id, eid, mt)
 
-    mc := cw.world_get_mutation(w, player_id)
-    if mc.entity_count < cw.MAX_MUTATION_SLOTS {
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
+    if mc.entity_count < MAX_MUTATION_SLOTS {
         mc.entities[mc.entity_count] = eid
         mc.entity_count += 1
     }
 }
 
-mutation_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bool {
+mutation_unlock :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
     if !mutation_can_unlock(w, player_id, mt) { return false }
 
-    mc := cw.world_get_mutation(w, player_id)
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     mc.serums -= MUTATION_DEFS[mt].serum_cost
 
 
     tname := mutation_template_name(mt)
-    eid   := cw.INVALID_ENTITY
+    eid   := INVALID_ENTITY
     if tname != "" {
         eid = spawn_from_def(w, find_entity_def(g_entity_defs, tname))
     }
-    if eid == cw.INVALID_ENTITY {
-        eid = cw.world_create_entity(w)
+    if eid == INVALID_ENTITY {
+        eid = world_create_entity(w)
     }
-    cw.world_set_mut(w, eid, cw.MutComp{ type_id = mt })
+    comp_set(w, eid, .Mut, MutComp{ type_id = mt })
     mutation_init_components(w, player_id, eid, mt)
 
 
-    mc = cw.world_get_mutation(w, player_id)
+    mc = comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     mc.entities[mc.entity_count] = eid
     mc.entity_count += 1
     return true
@@ -393,9 +392,9 @@ mutation_unlock :: proc(w: ^cw.World, player_id: int, mt: cw.MutationType) -> bo
 MUT_CLEAR_COST :: 3
 
 
-mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
-    if !cw.world_has_component(w, player_id, .MutationContainer) { return false }
-    mc := cw.world_get_mutation(w, player_id)
+mutation_clear_all :: proc(w: ^World, player_id: int) -> bool {
+    if !world_has_component(w, player_id, .MutationContainer) { return false }
+    mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     if mc.entity_count == 0       { return false }
     if mc.serums < MUT_CLEAR_COST { return false }
 
@@ -403,44 +402,44 @@ mutation_clear_all :: proc(w: ^cw.World, player_id: int) -> bool {
 
 
     n    := mc.entity_count
-    eids : [cw.MAX_MUTATION_SLOTS]int
+    eids : [MAX_MUTATION_SLOTS]int
     for i in 0..<n { eids[i] = mc.entities[i] }
 
     for i in 0..<n {
         eid := eids[i]
-        if !cw.world_is_valid(w, eid) { continue }
+        if !world_is_valid(w, eid) { continue }
 
 
-        if cw.world_has_component(w, eid, .MutHeartCage) {
-            hc := cw.world_get_mut_heart_cage(w, eid)
-            if cw.world_is_valid(w, hc.heart_id) {
-                cw.world_destroy_entity(w, hc.heart_id)
+        if world_has_component(w, eid, .MutHeartCage) {
+            hc := comp_get(w, eid, .MutHeartCage, MutHeartCageComp)
+            if world_is_valid(w, hc.heart_id) {
+                world_destroy_entity(w, hc.heart_id)
             }
         }
 
 
-        if cw.world_has_component(w, eid, .MutCarrionCrown) {
-            cc := cw.world_get_mut_carrion_crown(w, eid)
-            for si in 0..<cw.CARRION_MAX_SERVANTS {
+        if world_has_component(w, eid, .MutCarrionCrown) {
+            cc := comp_get(w, eid, .MutCarrionCrown, MutCarrionCrownComp)
+            for si in 0..<CARRION_MAX_SERVANTS {
                 sid := cc.servant_ids[si]
-                if sid == cw.INVALID_ENTITY         { continue }
-                if !cw.world_is_valid(w, sid)       { continue }
-                cw.world_destroy_entity(w, sid)
+                if sid == INVALID_ENTITY         { continue }
+                if !world_is_valid(w, sid)       { continue }
+                world_destroy_entity(w, sid)
             }
         }
 
-        cw.world_destroy_entity(w, eid)
+        world_destroy_entity(w, eid)
     }
 
 
-    mc = cw.world_get_mutation(w, player_id)
+    mc = comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     mc.entity_count = 0
     return true
 }
 
 
-mutation_name_to_type :: proc(template_name: string) -> cw.MutationType {
-    for mt in cw.MutationType {
+mutation_name_to_type :: proc(template_name: string) -> MutationType {
+    for mt in MutationType {
         if mt == .None { continue }
         if mutation_template_name(mt) == template_name { return mt }
     }

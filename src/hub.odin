@@ -3,7 +3,6 @@ package main
 import rl   "vendor:raylib"
 import      "core:fmt"
 import      "core:math"
-import cw   "clockwork"
 import clay "../clay"
 import p2p  "p2p"
 
@@ -68,8 +67,8 @@ draw_hub_background :: proc() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
-    if save_progress && cw.world_is_valid(w, w.player_id) {
+enter_hub :: proc(w: ^World, save_progress: bool = false) {
+    if save_progress && world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
     g_hub_remote_spawned = false
@@ -92,7 +91,7 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
         g_hub_remote_spawned = true
         if g_session.remote_char_ready {
             remote_slot := 1 - g_session.local_slot
-            if cw.world_is_valid(w, w.player_ids[remote_slot]) {
+            if world_is_valid(w, w.player_ids[remote_slot]) {
                 load_player_from_bytes(w, w.player_ids[remote_slot],
                     g_session.remote_char_data[:g_session.remote_char_len])
             }
@@ -100,8 +99,8 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
         }
     }
 
-    if cw.world_has_component(w, w.player_id, .Health) {
-        h := cw.world_get_health(w, w.player_id)
+    if world_has_component(w, w.player_id, .Health) {
+        h := comp_get(w, w.player_id, .Health, HealthComp)
         h.current = h.max
     }
     g_hub_active       = true
@@ -109,8 +108,8 @@ enter_hub :: proc(w: ^cw.World, save_progress: bool = false) {
     set_playing_state(.Hub)
 }
 
-enter_raid :: proc(w: ^cw.World, n: int) {
-    if cw.world_is_valid(w, w.player_id) {
+enter_raid :: proc(w: ^World, n: int) {
+    if world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
     director_init()
@@ -141,20 +140,20 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     }
     if p2p.session_is_online(&g_session) && g_session.remote_char_ready {
         remote_slot := 1 - g_session.local_slot
-        if cw.world_is_valid(w, w.player_ids[remote_slot]) {
+        if world_is_valid(w, w.player_ids[remote_slot]) {
             load_player_from_bytes(w, w.player_ids[remote_slot],
                 g_session.remote_char_data[:g_session.remote_char_len])
         }
     }
 
-    if cw.world_has_component(w, w.player_id, .Health) {
-        h := cw.world_get_health(w, w.player_id)
+    if world_has_component(w, w.player_id, .Health) {
+        h := comp_get(w, w.player_id, .Health, HealthComp)
         h.current = h.max
     }
 
     g_raid_serums_start = 0
-    if cw.world_has_component(w, w.player_id, .MutationContainer) {
-        g_raid_serums_start = cw.world_get_mutation(w, w.player_id).serums
+    if world_has_component(w, w.player_id, .MutationContainer) {
+        g_raid_serums_start = comp_get(w, w.player_id, .MutationContainer, MutationContainerComp).serums
     }
     g_hub_active       = false
     g_was_player_alive = true
@@ -163,9 +162,9 @@ enter_raid :: proc(w: ^cw.World, n: int) {
     ui_close_all()
 }
 
-hub_spawn_remote_player :: proc(w: ^cw.World) {
+hub_spawn_remote_player :: proc(w: ^World) {
     remote_slot := 1 - g_session.local_slot
-    if cw.world_is_valid(w, w.player_ids[remote_slot]) { return }
+    if world_is_valid(w, w.player_ids[remote_slot]) { return }
 
     ps := g_level_data.player_start
     sp: [3]f32
@@ -178,24 +177,24 @@ hub_spawn_remote_player :: proc(w: ^cw.World) {
     wep := spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_pistol"))
     pid := spawn_from_def(w, find_entity_def(g_entity_defs, "player"))
 
-    if cw.world_has_component(w, pid, .Transform) {
-        cw.world_get_transform(w, pid).position = sp
+    if world_has_component(w, pid, .Transform) {
+        comp_get(w, pid, .Transform, TransformComp).position = sp
     }
-    cw.world_set_equipment(w, pid, cw.EquipmentComp{ weapon_entity_id = wep })
-    cw.world_set_inventory(w, pid, cw.inventory_make_empty())
-    cw.world_set_respawn(w, pid, cw.RespawnComp{ spawn_pos = sp, delay = RESPAWN_DELAY })
-    cw.world_set_ability(w, pid, cw.AbilityComp{})
-    cw.world_set_mutation(w, pid, cw.mutation_container_empty())
-    cw.world_set_stats(w, pid, cw.StatsComp{
+    comp_set(w, pid, .Equipment, EquipmentComp{ weapon_entity_id = wep })
+    comp_set(w, pid, .Inventory, inventory_make_empty())
+    comp_set(w, pid, .Respawn, RespawnComp{ spawn_pos = sp, delay = RESPAWN_DELAY })
+    comp_set(w, pid, .Ability, AbilityComp{})
+    comp_set(w, pid, .MutationContainer, mutation_container_empty())
+    comp_set(w, pid, .Stats, StatsComp{
         strength    = 1, dexterity  = 1, science    = 1,
         level       = 1, xp         = 0, xp_next    = 100.0,
         stat_points = 0, base_hp    = 100.0,
         base_energy = 100.0, base_speed = 240.0,
     })
-    cw.world_set_player(w, pid, cw.PlayerComp{ slot = remote_slot })
-    cw.world_set_wallet(w, pid, cw.WalletComp{ gold = 0 })
-    cw.world_set_status_effect(w, pid, cw.StatusEffectComp{})
-    cw.world_set_key_ring(w, pid, cw.KeyRingComp{})
+    comp_set(w, pid, .Player, PlayerComp{ slot = remote_slot })
+    comp_set(w, pid, .Wallet, WalletComp{ gold = 0 })
+    comp_set(w, pid, .StatusEffect, StatusEffectComp{})
+    comp_set(w, pid, .KeyRing, KeyRingComp{})
     w.player_ids[remote_slot] = pid
 
     if g_session.remote_char_ready {
@@ -204,11 +203,11 @@ hub_spawn_remote_player :: proc(w: ^cw.World) {
     copy(g_player_names[remote_slot][:], g_session.remote_name[:])
 }
 
-update_hub_portal :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Transform) { return }
+update_hub_portal :: proc(w: ^World) {
+    if !world_is_valid(w, w.player_id) { return }
+    if !world_has_component(w, w.player_id, .Transform) { return }
 
-    pos  := cw.world_get_transform(w, w.player_id).position
+    pos  := comp_get(w, w.player_id, .Transform, TransformComp).position
     dx   := pos[0] - HUB_PORTAL_POS[0]
     dy   := pos[1] - HUB_PORTAL_POS[1]
     near := dx*dx + dy*dy < (HUB_PORTAL_RADIUS * 2) * (HUB_PORTAL_RADIUS * 2)
@@ -220,7 +219,7 @@ update_hub_portal :: proc(w: ^cw.World) {
     }
 }
 
-draw_hub_world :: proc(w: ^cw.World) {
+draw_hub_world :: proc(w: ^World) {
     px := HUB_PORTAL_POS[0]
     py := HUB_PORTAL_POS[1]
     tt := f32(rl.GetTime())
@@ -234,9 +233,9 @@ draw_hub_world :: proc(w: ^cw.World) {
     draw_world_circle(center, HUB_PORTAL_RADIUS, rl.Color{40, 60, 180, fill_alpha})
     draw_world_circle_lines(center, HUB_PORTAL_RADIUS, rl.Color{100, 140, 255, ring_alpha})
 
-    if cw.world_is_valid(w, w.player_id) &&
-       cw.world_has_component(w, w.player_id, .Transform) {
-        pos := cw.world_get_transform(w, w.player_id).position
+    if world_is_valid(w, w.player_id) &&
+       world_has_component(w, w.player_id, .Transform) {
+        pos := comp_get(w, w.player_id, .Transform, TransformComp).position
         dx  := pos[0] - px
         dy  := pos[1] - py
         if dx*dx + dy*dy < (HUB_PORTAL_RADIUS * 2) * (HUB_PORTAL_RADIUS * 2) {
@@ -256,7 +255,7 @@ draw_hub_world :: proc(w: ^cw.World) {
     }
 }
 
-draw_hub_hud :: proc(w: ^cw.World) {
+draw_hub_hud :: proc(w: ^World) {
     sw := f32(rl.GetScreenWidth())
 
     loc    := t(.HUB_LABEL)
@@ -270,7 +269,7 @@ draw_hub_hud :: proc(w: ^cw.World) {
         {uis(14), uis(14)}, uis(11), 0.5, COL_BRASS)
 }
 
-draw_level_select :: proc(w: ^cw.World) {
+draw_level_select :: proc(w: ^World) {
     ui_scrim(160)
 
     n_levels := max(g_available_levels, 1)
@@ -313,7 +312,7 @@ draw_level_select :: proc(w: ^cw.World) {
 }
 
 
-draw_extract_screen :: proc(w: ^cw.World) {
+draw_extract_screen :: proc(w: ^World) {
     ui_scrim(185)
 
     pw := uis(360)
@@ -366,7 +365,7 @@ draw_extract_screen :: proc(w: ^cw.World) {
 }
 
 
-draw_death_screen :: proc(w: ^cw.World) {
+draw_death_screen :: proc(w: ^World) {
     ui_scrim(185)
 
     pw := uis(370)

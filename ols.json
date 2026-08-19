@@ -8,7 +8,7 @@
     "enable_semantic_tokens": true,
     "enable_references": true,
     "collections": [
-        { "name": "clockwork", "path": "src/clockwork" },
-        { "name": "clay",      "path": "clay" }
+        { "name": "cw",   "path": "../clockwork-ecs" },
+        { "name": "clay", "path": "clay" }
     ]
 }

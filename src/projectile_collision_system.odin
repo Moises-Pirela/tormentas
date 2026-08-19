@@ -1,7 +1,6 @@
 package main
 
 import "core:math"
-import cw "clockwork"
 
 PROJ_RADIUS    :: f32(4)
 MAX_SWEEP_HITS :: 16
@@ -16,20 +15,20 @@ SweepHit :: struct {
 // fast projectiles tunnel through targets and thin walls), we test the segment the
 // projectile travelled this tick (prev -> current) against walls (tile DDA) and targets
 // (ray vs inflated circle), resolving hits in travel order so pierce still works.
-projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    proj_ids := cw.world_query(w, cw.query_mask(.ProjectileTag, .Projectile, .Transform))
+    proj_ids := world_query(w, query_mask(.ProjectileTag, .Projectile, .Transform))
     defer delete(proj_ids)
 
-    target_ids := cw.world_query(w, cw.query_mask(.Collider, .Health, .Transform))
+    target_ids := world_query(w, query_mask(.Collider, .Health, .Transform))
     defer delete(target_ids)
 
     for proj_id in proj_ids {
-        if cw.world_tag_is_destroy(w, proj_id) { continue }
+        if world_tag_is_destroy(w, proj_id) { continue }
 
-        proj   := cw.world_get_projectile(w, proj_id)
-        proj_t := cw.world_get_transform(w, proj_id)
+        proj   := comp_get(w, proj_id, .Projectile, ProjectileComp)
+        proj_t := comp_get(w, proj_id, .Transform, TransformComp)
 
         bx := proj_t.position[0]
         by := proj_t.position[1]
@@ -46,15 +45,15 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
         if dx*dx + dy*dy < 1.0 {
             for target_id in target_ids {
                 if target_id == proj_id { continue }
-                col := cw.world_get_collider(w, target_id)
+                col := comp_get(w, target_id, .Collider, ColliderComp)
                 if col.faction == proj.owner_faction { continue }
-                tt  := cw.world_get_transform(w, target_id)
+                tt  := comp_get(w, target_id, .Transform, TransformComp)
                 ddx := tt.position[0] - bx
                 ddy := tt.position[1] - by
                 rr  := PROJ_RADIUS + col.radius
                 if ddx*ddx + ddy*ddy < rr*rr {
                     if _apply_proj_hit(w, proj_id, proj, target_id, tt.position) {
-                        cw.world_tag_destroy(w, proj_id)
+                        world_tag_destroy(w, proj_id)
                         break
                     }
                 }
@@ -70,9 +69,9 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
         n_hits: int
         for target_id in target_ids {
             if target_id == proj_id { continue }
-            col := cw.world_get_collider(w, target_id)
+            col := comp_get(w, target_id, .Collider, ColliderComp)
             if col.faction == proj.owner_faction { continue }
-            tt := cw.world_get_transform(w, target_id)
+            tt := comp_get(w, target_id, .Transform, TransformComp)
             th, hit := _ray_circle_t(ax, ay, dx, dy, tt.position[0], tt.position[1], PROJ_RADIUS + col.radius)
             if !hit || th > t_wall { continue }
             if n_hits < MAX_SWEEP_HITS {
@@ -87,7 +86,7 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
         stop_t    := f32(1)
         for k in 0..<n_hits {
             tid := hits[k].id
-            tt  := cw.world_get_transform(w, tid)
+            tt  := comp_get(w, tid, .Transform, TransformComp)
             if _apply_proj_hit(w, proj_id, proj, tid, tt.position) {
                 stop_t    = hits[k].t
                 destroyed = true
@@ -99,11 +98,11 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
             // Snap to the hit point so the projectile doesn't render past its target.
             proj_t.position[0] = ax + dx * stop_t
             proj_t.position[1] = ay + dy * stop_t
-            cw.world_tag_destroy(w, proj_id)
+            world_tag_destroy(w, proj_id)
         } else if t_wall < 1 {
             proj_t.position[0] = ax + dx * t_wall
             proj_t.position[1] = ay + dy * t_wall
-            cw.world_tag_destroy(w, proj_id)
+            world_tag_destroy(w, proj_id)
         }
     }
 }
@@ -111,19 +110,19 @@ projectile_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32
 // Applies damage + on-hit effects for one target, returns true if the projectile should
 // be destroyed (i.e. it had no pierce left).
 @(private = "file")
-_apply_proj_hit :: proc(w: ^cw.World, proj_id: int, proj: ^cw.ProjectileComp, target_id: int, target_pos: [3]f32) -> (destroy: bool) {
-    cw.world_push_damage(w, target_id, proj.damage, proj.owner_id)
+_apply_proj_hit :: proc(w: ^World, proj_id: int, proj: ^ProjectileComp, target_id: int, target_pos: [3]f32) -> (destroy: bool) {
+    world_push_damage(w, target_id, proj.damage, proj.owner_id)
 
-    if cw.world_has_component(w, proj_id, .DamageAmpOnHit) {
-        dah := cw.world_get_damage_amp_on_hit(w, proj_id)
-        if cw.world_has_component(w, target_id, .DamageAmp) {
-            da      := cw.world_get_damage_amp(w, target_id)
+    if world_has_component(w, proj_id, .DamageAmpOnHit) {
+        dah := comp_get(w, proj_id, .DamageAmpOnHit, DamageAmpOnHitComp)
+        if world_has_component(w, target_id, .DamageAmp) {
+            da      := comp_get(w, target_id, .DamageAmp, DamageAmpComp)
             da.mult *= dah.mult
             da.timer = max(da.timer, dah.dur)
         } else {
-            cw.world_set_damage_amp(w, target_id, cw.DamageAmpComp{ mult = dah.mult, timer = dah.dur })
+            comp_set(w, target_id, .DamageAmp, DamageAmpComp{ mult = dah.mult, timer = dah.dur })
         }
-        cw.world_clear_damage_amp_on_hit(w, proj_id)
+        comp_rm(w, proj_id, .DamageAmpOnHit)
     }
 
     if target_id != w.player_id {

@@ -6,10 +6,9 @@ import "core:math/rand"
 import "core:os"
 import "core:strconv"
 import "core:fmt"
-import cw "clockwork"
 
 @(private = "file")
-affix_count_for_rarity :: proc(r: cw.ItemRarity) -> int {
+affix_count_for_rarity :: proc(r: ItemRarity) -> int {
     switch r {
     case .Normal:    return 1
     case .Rare:      return 2
@@ -21,7 +20,7 @@ affix_count_for_rarity :: proc(r: cw.ItemRarity) -> int {
 }
 
 @(private = "file")
-affix_value_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+affix_value_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
     case .Normal:    return 0.01 + rand.float32() * 0.05
     case .Rare:      return 0.06 + rand.float32() * 0.06
@@ -34,7 +33,7 @@ affix_value_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
 
 
 @(private = "file")
-affix_stat_bonus_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+affix_stat_bonus_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
     case .Normal:    return 1
     case .Rare:      return 1 + f32(rand.int_max(2))
@@ -47,7 +46,7 @@ affix_stat_bonus_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
 
 
 @(private = "file")
-affix_energy_regen_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+affix_energy_regen_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
     case .Normal:    return 1 + rand.float32() * 2
     case .Rare:      return 3 + rand.float32() * 2
@@ -60,7 +59,7 @@ affix_energy_regen_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
 
 
 @(private = "file")
-affix_resist_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
+affix_resist_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
     case .Normal:    return 0.05 + rand.float32() * 0.05
     case .Rare:      return 0.10 + rand.float32() * 0.07
@@ -73,7 +72,7 @@ affix_resist_for_rarity :: proc(r: cw.ItemRarity) -> f32 {
 
 
 @(private = "file")
-FLASK_STATS := [cw.FlaskKind][cw.FlaskSize][2][3]f32{
+FLASK_STATS := [FlaskKind][FlaskSize][2][3]f32{
 
     .Health = {
         .Small  = { {  60, 4, 3 }, { 100, 4, 3 } },
@@ -89,23 +88,23 @@ FLASK_STATS := [cw.FlaskKind][cw.FlaskSize][2][3]f32{
 }
 
 @(private = "file")
-FLASK_SIZE_NAMES := [cw.FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
+FLASK_SIZE_NAMES := [FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
 @(private = "file")
-FLASK_KIND_NAMES := [cw.FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
+FLASK_KIND_NAMES := [FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
 
 
-create_flask_item :: proc(w: ^cw.World, kind: cw.FlaskKind, size: cw.FlaskSize, rarity: cw.ItemRarity) -> int {
-    r := rarity if rarity <= .Rare else cw.ItemRarity.Rare
+create_flask_item :: proc(w: ^World, kind: FlaskKind, size: FlaskSize, rarity: ItemRarity) -> int {
+    r := rarity if rarity <= .Rare else ItemRarity.Rare
     ri := int(r)
     stats := FLASK_STATS[kind][size][ri]
     recover_amount   := stats[0]
     recover_duration := stats[1]
     max_charges      := i32(stats[2])
 
-    flask_slot := cw.EquipSlot.Flask1 if kind == .Health else cw.EquipSlot.Flask2
+    flask_slot := EquipSlot.Flask1 if kind == .Health else EquipSlot.Flask2
 
-    id := cw.world_create_entity(w)
-    cw.world_set_item(w, id, cw.ItemComp{
+    id := world_create_entity(w)
+    comp_set(w, id, .Item, ItemComp{
         slot      = flask_slot,
         rarity    = r,
         grid_w    = 1,
@@ -113,7 +112,7 @@ create_flask_item :: proc(w: ^cw.World, kind: cw.FlaskKind, size: cw.FlaskSize, 
         pack_x    = -1,
         pack_y    = -1,
     })
-    cw.world_set_flask(w, id, cw.FlaskComp{
+    comp_set(w, id, .Flask, FlaskComp{
         kind             = kind,
         size             = size,
         recover_amount   = recover_amount,
@@ -125,17 +124,17 @@ create_flask_item :: proc(w: ^cw.World, kind: cw.FlaskKind, size: cw.FlaskSize, 
 }
 
 
-flask_comp_from_save :: proc(slot: cw.EquipSlot, size: cw.FlaskSize, rarity: cw.ItemRarity, saved_charges: int) -> cw.FlaskComp {
-    kind := cw.FlaskKind.Health if slot == .Flask1 else cw.FlaskKind.Energy
+flask_comp_from_save :: proc(slot: EquipSlot, size: FlaskSize, rarity: ItemRarity, saved_charges: int) -> FlaskComp {
+    kind := FlaskKind.Health if slot == .Flask1 else FlaskKind.Energy
     ri   := min(int(rarity), 1)
     si   := clamp(int(size), 0, 2)
-    stats  := FLASK_STATS[kind][cw.FlaskSize(si)][ri]
+    stats  := FLASK_STATS[kind][FlaskSize(si)][ri]
     max_ch := i32(stats[2])
     ch     := i32(saved_charges)
     if ch <= 0 || ch > max_ch { ch = max_ch }
-    return cw.FlaskComp{
+    return FlaskComp{
         kind             = kind,
-        size             = cw.FlaskSize(si),
+        size             = FlaskSize(si),
         recover_amount   = stats[0],
         recover_duration = stats[1],
         charges          = ch,
@@ -143,7 +142,7 @@ flask_comp_from_save :: proc(slot: cw.EquipSlot, size: cw.FlaskSize, rarity: cw.
     }
 }
 
-roll_affixes :: proc(item: ^cw.ItemComp) {
+roll_affixes :: proc(item: ^ItemComp) {
     if item == nil { return }
 
 
@@ -155,26 +154,26 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
     if to_add == 0 || base_count >= len(item.affixes) { return }
 
 
-    armor_pool  := [?]cw.AffixType{
+    armor_pool  := [?]AffixType{
         .BonusHP, .Armor, .BonusMoveSpeed, .BonusEnergy, .HealthRegen,
         .BonusStrength, .BonusDexterity, .BonusScience,
         .BonusEnergyRegen, .ReduceEnergyCost,
         .ResistPhysical, .ResistNecrotic, .ResistFire, .ResistGalvanic, .ResistPoison,
     }
-    weapon_pool := [?]cw.AffixType{
+    weapon_pool := [?]AffixType{
         .BonusDamage, .BonusFireRate, .BonusReloadSpeed,
         .BonusProjSpeed, .BonusPierce, .BonusAmmo,
         .BonusDexterity, .BonusScience, .ReduceEnergyCost,
         .ResistPhysical, .ResistFire, .ResistPoison,
     }
-    melee_pool  := [?]cw.AffixType{
+    melee_pool  := [?]AffixType{
         .BonusDamage, .BonusMoveSpeed, .BonusHP,
         .BonusMeleeDamage, .BonusMeleeRange, .BonusMeleeSpeed,
         .BonusStrength, .BonusDexterity, .ReduceEnergyCost,
         .ResistPhysical, .ResistNecrotic, .ResistGalvanic,
     }
 
-    pool_slice: []cw.AffixType
+    pool_slice: []AffixType
     switch item.slot {
     case .Head, .Chest, .Boots:             pool_slice = armor_pool[:]
     case .WeaponPrimary, .WeaponOffhand:
@@ -186,7 +185,7 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
     if len(pool_slice) == 0 { return }
 
 
-    pool_copy := make([]cw.AffixType, len(pool_slice), context.temp_allocator)
+    pool_copy := make([]AffixType, len(pool_slice), context.temp_allocator)
     pool_len  := 0
     for at in pool_slice {
         already := false
@@ -220,12 +219,12 @@ roll_affixes :: proc(item: ^cw.ItemComp) {
         case:
             val = affix_value_for_rarity(item.rarity)
         }
-        item.affixes[base_count + i] = cw.Affix{ type = at, value = val }
+        item.affixes[base_count + i] = Affix{ type = at, value = val }
     }
     item.affix_count = u8(base_count + n)
 }
 
-roll_rarity :: proc() -> cw.ItemRarity {
+roll_rarity :: proc() -> ItemRarity {
     r := rand.int_max(100)
     switch {
     case r < 50: return .Normal
@@ -240,48 +239,48 @@ roll_rarity :: proc() -> cw.ItemRarity {
 BACKPACK_CELL_SIZE :: 36
 
 backpack_can_place :: proc(
-    inv:       ^cw.InventoryComp,
-    item:      ^cw.ItemComp,
+    inv:       ^InventoryComp,
+    item:      ^ItemComp,
     col, row:  int,
-    except_id: int = cw.INVALID_ENTITY,
+    except_id: int = INVALID_ENTITY,
 ) -> bool {
     if col < 0 || row < 0                         { return false }
-    if col + item.grid_w > cw.BACKPACK_COLS       { return false }
-    if row + item.grid_h > cw.BACKPACK_ROWS       { return false }
+    if col + item.grid_w > BACKPACK_COLS       { return false }
+    if row + item.grid_h > BACKPACK_ROWS       { return false }
 
     for dy in 0..<item.grid_h {
         for dx in 0..<item.grid_w {
-            cell := inv.backpack[(row + dy) * cw.BACKPACK_COLS + (col + dx)]
-            if cell != cw.INVALID_ENTITY && cell != except_id { return false }
+            cell := inv.backpack[(row + dy) * BACKPACK_COLS + (col + dx)]
+            if cell != INVALID_ENTITY && cell != except_id { return false }
         }
     }
     return true
 }
 
-backpack_place :: proc(inv: ^cw.InventoryComp, item: ^cw.ItemComp, item_id: int, col, row: int) {
+backpack_place :: proc(inv: ^InventoryComp, item: ^ItemComp, item_id: int, col, row: int) {
     item.pack_x = col
     item.pack_y = row
     for dy in 0..<item.grid_h {
         for dx in 0..<item.grid_w {
-            inv.backpack[(row + dy) * cw.BACKPACK_COLS + (col + dx)] = item_id
+            inv.backpack[(row + dy) * BACKPACK_COLS + (col + dx)] = item_id
         }
     }
 }
 
-backpack_remove :: proc(inv: ^cw.InventoryComp, item: ^cw.ItemComp) {
+backpack_remove :: proc(inv: ^InventoryComp, item: ^ItemComp) {
     if item.pack_x < 0 { return }
     for dy in 0..<item.grid_h {
         for dx in 0..<item.grid_w {
-            inv.backpack[(item.pack_y + dy) * cw.BACKPACK_COLS + (item.pack_x + dx)] = cw.INVALID_ENTITY
+            inv.backpack[(item.pack_y + dy) * BACKPACK_COLS + (item.pack_x + dx)] = INVALID_ENTITY
         }
     }
     item.pack_x = -1
     item.pack_y = -1
 }
 
-backpack_find_free :: proc(inv: ^cw.InventoryComp, item: ^cw.ItemComp) -> (col, row: int, ok: bool) {
-    for r in 0..<cw.BACKPACK_ROWS {
-        for c in 0..<cw.BACKPACK_COLS {
+backpack_find_free :: proc(inv: ^InventoryComp, item: ^ItemComp) -> (col, row: int, ok: bool) {
+    for r in 0..<BACKPACK_ROWS {
+        for c in 0..<BACKPACK_COLS {
             if backpack_can_place(inv, item, c, r) {
                 return c, r, true
             }
@@ -291,7 +290,7 @@ backpack_find_free :: proc(inv: ^cw.InventoryComp, item: ^cw.ItemComp) -> (col, 
 }
 
 
-LootRaritySet :: bit_set[cw.ItemRarity]
+LootRaritySet :: bit_set[ItemRarity]
 
 
 MAX_BASE_AFFIXES :: 4
@@ -299,10 +298,10 @@ MAX_BASE_AFFIXES :: 4
 LootDef :: struct {
     name:               string,
     icon:               string,
-    slot:               cw.EquipSlot,
+    slot:               EquipSlot,
     grid_w:             int,
     grid_h:             int,
-    mutation_type:      cw.MutationType,
+    mutation_type:      MutationType,
     serum_value:        int,
     desc:               string,
     req_str:            u8,
@@ -316,9 +315,9 @@ LootDef :: struct {
     melee_cooldown_max: f32,
     rarities:           LootRaritySet,
     roll_weight:        int,
-    base_affixes:       [MAX_BASE_AFFIXES]cw.Affix,
+    base_affixes:       [MAX_BASE_AFFIXES]Affix,
     base_affix_count:   u8,
-    weapon_archetype:   cw.WeaponArchetype,
+    weapon_archetype:   WeaponArchetype,
 
 
     base_damage:      f32,
@@ -433,10 +432,10 @@ loot_find_by_name :: proc(name: string) -> ^LootDef {
 }
 
 
-roll_rarity_allowed :: proc(mask: LootRaritySet) -> cw.ItemRarity {
+roll_rarity_allowed :: proc(mask: LootRaritySet) -> ItemRarity {
 
 
-    WEIGHTS := [cw.ItemRarity]int{
+    WEIGHTS := [ItemRarity]int{
         .Normal    = 750,
         .Rare      = 220,
         .Epic      = 8,
@@ -444,11 +443,11 @@ roll_rarity_allowed :: proc(mask: LootRaritySet) -> cw.ItemRarity {
         .Unique    = 1,
     }
     total := 0
-    for r in cw.ItemRarity { if r in mask { total += WEIGHTS[r] } }
+    for r in ItemRarity { if r in mask { total += WEIGHTS[r] } }
     if total == 0 { return .Normal }
     pick := rand.int_max(total)
     acc  := 0
-    for r in cw.ItemRarity {
+    for r in ItemRarity {
         if r not_in mask { continue }
         acc += WEIGHTS[r]
         if pick < acc { return r }
@@ -482,7 +481,7 @@ _csv_parse_line :: proc(line: string, fields: ^[dynamic]string) {
 }
 
 @(private = "file")
-_parse_equip_slot :: proc(s: string) -> cw.EquipSlot {
+_parse_equip_slot :: proc(s: string) -> EquipSlot {
     switch s {
     case "Head":          return .Head
     case "Chest":         return .Chest
@@ -499,7 +498,7 @@ _parse_equip_slot :: proc(s: string) -> cw.EquipSlot {
 }
 
 @(private = "file")
-_parse_rarity :: proc(s: string) -> cw.ItemRarity {
+_parse_rarity :: proc(s: string) -> ItemRarity {
     switch s {
     case "Normal":    return .Normal
     case "Rare":      return .Rare
@@ -525,7 +524,7 @@ _parse_rarity_set :: proc(s: string) -> LootRaritySet {
 }
 
 @(private = "file")
-_parse_affix_type :: proc(s: string) -> cw.AffixType {
+_parse_affix_type :: proc(s: string) -> AffixType {
     switch s {
     case "BonusHP":          return .BonusHP
     case "Armor":            return .Armor
@@ -556,7 +555,7 @@ _parse_affix_type :: proc(s: string) -> cw.AffixType {
 }
 
 @(private = "file")
-_parse_weapon_archetype :: proc(s: string) -> cw.WeaponArchetype {
+_parse_weapon_archetype :: proc(s: string) -> WeaponArchetype {
     switch s {
     case "Pistol":  return .Pistol
     case "Rifle":   return .Rifle
@@ -570,7 +569,7 @@ _parse_weapon_archetype :: proc(s: string) -> cw.WeaponArchetype {
 
 
 @(private = "file")
-_parse_affix_list :: proc(s: string, out: []cw.Affix) -> u8 {
+_parse_affix_list :: proc(s: string, out: []Affix) -> u8 {
     count := 0
     entry_start := 0
     for i in 0..=len(s) {
@@ -589,7 +588,7 @@ _parse_affix_list :: proc(s: string, out: []cw.Affix) -> u8 {
             val, ok := strconv.parse_f64(entry[colon+1:])
             if !ok { continue }
             if count >= len(out) { break }
-            out[count] = cw.Affix{ type = atype, value = f32(val) }
+            out[count] = Affix{ type = atype, value = f32(val) }
             count += 1
         }
     }
@@ -597,7 +596,7 @@ _parse_affix_list :: proc(s: string, out: []cw.Affix) -> u8 {
 }
 
 
-spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64, forced_rarity: Maybe(cw.ItemRarity) = nil) {
+spawn_loot_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64, forced_rarity: Maybe(ItemRarity) = nil) {
     if len(g_loot_table) == 0 { return }
 
 
@@ -635,10 +634,10 @@ spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64, forced_rarit
     }
     if def == nil { return }
 
-    item_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, item_id, cw.TransformComp{ position = pos })
+    item_id := world_create_entity(w)
+    comp_set(w, item_id, .Transform, TransformComp{ position = pos })
 
-    item_comp := cw.item_empty()
+    item_comp := item_empty()
     item_comp.slot               = def.slot
     if fr, ok := forced_rarity.?; ok {
         item_comp.rarity = fr
@@ -670,16 +669,16 @@ spawn_loot_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64, forced_rarit
     item_comp.affix_count = def.base_affix_count
     for i in 0..<int(def.base_affix_count) { item_comp.affixes[i] = def.base_affixes[i] }
     roll_affixes(&item_comp)
-    cw.world_set_item(w, item_id, item_comp)
+    comp_set(w, item_id, .Item, item_comp)
 
-    rc: cw.RenderConfigComp
-    cw.render_config_set_name(&rc, def.name)
-    cw.render_config_set_icon(&rc, def.icon)
-    cw.render_config_set_desc(&rc, def.desc)
-    cw.world_set_render_config(w, item_id, rc)
+    rc: RenderConfigComp
+    render_config_set_name(&rc, def.name)
+    render_config_set_icon(&rc, def.icon)
+    render_config_set_desc(&rc, def.desc)
+    comp_set(w, item_id, .RenderConfig, rc)
 
-    cw.world_set_ground_item(w, item_id)
-    cw.world_set_fog_of_war(w, item_id)
+    comp_add(w, item_id, .GroundItem)
+    comp_add(w, item_id, .FogOfWar)
 }
 
 
@@ -692,7 +691,7 @@ ITEM_DROP_CHANCE_EPIC      :: f32(0.0080)
 ITEM_DROP_CHANCE_RARE      :: f32(0.1300)
 ITEM_DROP_CHANCE_NORMAL    :: f32(0.6300)
 
-spawn_serum_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
+spawn_serum_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64) {
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
 
@@ -706,29 +705,29 @@ spawn_serum_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
     def := serum3 if (serum3 != nil && rand.float32() < 0.25) else serum1
     if def == nil { return }
 
-    item_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, item_id, cw.TransformComp{ position = world_pos })
+    item_id := world_create_entity(w)
+    comp_set(w, item_id, .Transform, TransformComp{ position = world_pos })
 
-    item_comp              := cw.item_empty()
+    item_comp              := item_empty()
     item_comp.slot          = def.slot
     item_comp.rarity        = .Epic
     item_comp.serum_value   = def.serum_value
     item_comp.grid_w        = 1
     item_comp.grid_h        = 1
-    cw.world_set_item(w, item_id, item_comp)
+    comp_set(w, item_id, .Item, item_comp)
 
-    rc: cw.RenderConfigComp
-    cw.render_config_set_name(&rc, def.name)
-    cw.render_config_set_icon(&rc, def.icon)
-    cw.render_config_set_desc(&rc, def.desc)
-    cw.world_set_render_config(w, item_id, rc)
+    rc: RenderConfigComp
+    render_config_set_name(&rc, def.name)
+    render_config_set_icon(&rc, def.icon)
+    render_config_set_desc(&rc, def.desc)
+    comp_set(w, item_id, .RenderConfig, rc)
 
-    cw.world_set_ground_item(w, item_id)
-    cw.world_set_fog_of_war(w, item_id)
+    comp_add(w, item_id, .GroundItem)
+    comp_add(w, item_id, .FogOfWar)
 }
 
 
-ABILITY_DROP_POOL :: [?]cw.AbilityType{
+ABILITY_DROP_POOL :: [?]AbilityType{
 
     .CadavericSpasm, .OsseousSlam, .NecroticSurge, .CrushingGrip,
 
@@ -743,7 +742,7 @@ ABILITY_DROP_POOL :: [?]cw.AbilityType{
 ABILITY_DROP_CHANCE :: f32(0.02)
 
 
-spawn_ability_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
+spawn_ability_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64) {
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
     pool := ABILITY_DROP_POOL
@@ -752,61 +751,61 @@ spawn_ability_drop :: proc(w: ^cw.World, world_pos: [3]f32, seed: u64) {
 }
 
 @(private = "file")
-_spawn_ability_item :: proc(w: ^cw.World, world_pos: [3]f32, at: cw.AbilityType) {
+_spawn_ability_item :: proc(w: ^World, world_pos: [3]f32, at: AbilityType) {
     if at == .None { return }
     if int(at) >= len(ABILITY_DEFS) { return }
     def := ABILITY_DEFS[at]
 
-    item_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, item_id, cw.TransformComp{ position = world_pos })
+    item_id := world_create_entity(w)
+    comp_set(w, item_id, .Transform, TransformComp{ position = world_pos })
 
-    item               := cw.item_empty()
+    item               := item_empty()
     item.slot           = .Ability1
     item.ability_type   = at
     item.ability_level  = 1
     item.grid_w         = 1
     item.grid_h         = 1
     item.rarity         = .Epic
-    cw.world_set_item(w, item_id, item)
+    comp_set(w, item_id, .Item, item)
 
-    rc: cw.RenderConfigComp
-    cw.render_config_set_name(&rc, def.name)
-    cw.render_config_set_icon(&rc, "ability_active")
-    cw.render_config_set_desc(&rc, def.desc)
-    cw.world_set_render_config(w, item_id, rc)
+    rc: RenderConfigComp
+    render_config_set_name(&rc, def.name)
+    render_config_set_icon(&rc, "ability_active")
+    render_config_set_desc(&rc, def.desc)
+    comp_set(w, item_id, .RenderConfig, rc)
 
-    cw.world_set_ground_item(w, item_id)
-    cw.world_set_fog_of_war(w, item_id)
+    comp_add(w, item_id, .GroundItem)
+    comp_add(w, item_id, .FogOfWar)
 }
 
 
-create_ability_item :: proc(w: ^cw.World, at: cw.AbilityType) -> int {
-    if at == .None                   { return cw.INVALID_ENTITY }
-    if int(at) >= len(ABILITY_DEFS)  { return cw.INVALID_ENTITY }
+create_ability_item :: proc(w: ^World, at: AbilityType) -> int {
+    if at == .None                   { return INVALID_ENTITY }
+    if int(at) >= len(ABILITY_DEFS)  { return INVALID_ENTITY }
     def := ABILITY_DEFS[at]
 
-    item_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, item_id, cw.TransformComp{})
+    item_id := world_create_entity(w)
+    comp_set(w, item_id, .Transform, TransformComp{})
 
-    item              := cw.item_empty()
+    item              := item_empty()
     item.slot          = .Ability1
     item.ability_type  = at
     item.ability_level = 1
     item.grid_w        = 1
     item.grid_h        = 1
     item.rarity        = .Epic
-    cw.world_set_item(w, item_id, item)
+    comp_set(w, item_id, .Item, item)
 
-    rc: cw.RenderConfigComp
-    cw.render_config_set_name(&rc, def.name)
-    cw.render_config_set_icon(&rc, "ability_active")
-    cw.render_config_set_desc(&rc, def.desc)
-    cw.world_set_render_config(w, item_id, rc)
+    rc: RenderConfigComp
+    render_config_set_name(&rc, def.name)
+    render_config_set_icon(&rc, "ability_active")
+    render_config_set_desc(&rc, def.desc)
+    comp_set(w, item_id, .RenderConfig, rc)
 
     return item_id
 }
 
-give_class_starter_items :: proc(w: ^cw.World, pid: int, class_idx: int) {
+give_class_starter_items :: proc(w: ^World, pid: int, class_idx: int) {
     ci := clamp(class_idx, 0, 3)
 
     // Ensure the visual reflects the chosen class immediately.
@@ -816,8 +815,8 @@ give_class_starter_items :: proc(w: ^cw.World, pid: int, class_idx: int) {
     g_player_stem = stems[ci]
     g_selected_class_idx = ci
 
-    if cw.world_has_component(w, pid, .Stats) {
-        st            := cw.world_get_stats(w, pid)
+    if world_has_component(w, pid, .Stats) {
+        st            := comp_get(w, pid, .Stats, StatsComp)
         st.strength    = CLASS_BASE_STR[ci]
         st.dexterity   = CLASS_BASE_DEX[ci]
         st.science     = CLASS_BASE_SCI[ci]
@@ -826,8 +825,8 @@ give_class_starter_items :: proc(w: ^cw.World, pid: int, class_idx: int) {
         st.base_speed  = CLASS_BASE_SPEED[ci]
     }
 
-    if cw.world_has_component(w, pid, .Health) {
-        h            := cw.world_get_health(w, pid)
+    if world_has_component(w, pid, .Health) {
+        h            := comp_get(w, pid, .Health, HealthComp)
         h.max         = CLASS_BASE_HP[ci]
         h.current     = CLASS_BASE_HP[ci]
         h.max_energy  = CLASS_BASE_ENERGY[ci]
@@ -836,31 +835,32 @@ give_class_starter_items :: proc(w: ^cw.World, pid: int, class_idx: int) {
 
     give_starter_items(w, pid)
 
-    switch ci {
-    case 1:
-        _give_class_weapon(w, pid, .Shotgun, cw.Affix{})
-    case 2:
-        _give_class_weapon(w, pid, .Pistol, cw.Affix{type = .BonusFireRate, value = 0.30})
+    // Each class gets its one archetype (see CLASS_WEAPON_ARCHETYPE). Sheriff keeps a
+    // fast-draw fire-rate affix on her starter pistol.
+    extra := Affix{}
+    if ci == 2 { extra = Affix{ type = .BonusFireRate, value = 0.30 } }
+    if ci >= 0 && ci < 4 {
+        _give_class_weapon(w, pid, CLASS_WEAPON_ARCHETYPE[ci], extra)
     }
 
     at    := CLASS_STARTER_ABILITIES[ci]
     ab_id := create_ability_item(w, at)
-    if cw.world_is_valid(w, ab_id) && cw.world_has_component(w, pid, .Inventory) {
-        inv := cw.world_get_inventory(w, pid)
-        inv.equipped[int(cw.EquipSlot.Ability1)] = ab_id
+    if world_is_valid(w, ab_id) && world_has_component(w, pid, .Inventory) {
+        inv := comp_get(w, pid, .Inventory, InventoryComp)
+        inv.equipped[int(EquipSlot.Ability1)] = ab_id
     }
 }
 
 @(private = "file")
-_give_class_weapon :: proc(w: ^cw.World, pid: int, archetype: cw.WeaponArchetype, extra_affix: cw.Affix) {
-    if !cw.world_has_component(w, pid, .Inventory) { return }
+_give_class_weapon :: proc(w: ^World, pid: int, archetype: WeaponArchetype, extra_affix: Affix) {
+    if !world_has_component(w, pid, .Inventory) { return }
 
-    inv     := cw.world_get_inventory(w, pid)
-    old_wep := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-    if cw.world_is_valid(w, old_wep) {
-        cw.world_destroy_entity(w, old_wep)
-        inv = cw.world_get_inventory(w, pid)
-        inv.equipped[int(cw.EquipSlot.WeaponPrimary)] = cw.INVALID_ENTITY
+    inv     := comp_get(w, pid, .Inventory, InventoryComp)
+    old_wep := inv.equipped[int(EquipSlot.WeaponPrimary)]
+    if world_is_valid(w, old_wep) {
+        world_destroy_entity(w, old_wep)
+        inv = comp_get(w, pid, .Inventory, InventoryComp)
+        inv.equipped[int(EquipSlot.WeaponPrimary)] = INVALID_ENTITY
     }
 
     for &d in g_loot_table {
@@ -868,10 +868,10 @@ _give_class_weapon :: proc(w: ^cw.World, pid: int, archetype: cw.WeaponArchetype
         if d.weapon_archetype != archetype { continue }
         if .Normal not_in d.rarities       { continue }
 
-        wep_id := cw.world_create_entity(w)
-        if !cw.world_is_valid(w, wep_id) { break }
+        wep_id := world_create_entity(w)
+        if !world_is_valid(w, wep_id) { break }
 
-        item_comp                 := cw.item_empty()
+        item_comp                 := item_empty()
         item_comp.slot             = .WeaponPrimary
         item_comp.rarity           = .Normal
         item_comp.grid_w           = d.grid_w
@@ -894,23 +894,23 @@ _give_class_weapon :: proc(w: ^cw.World, pid: int, archetype: cw.WeaponArchetype
 
         if extra_affix.type != .None {
             idx := int(item_comp.affix_count)
-            if idx < cw.MAX_AFFIXES {
+            if idx < MAX_AFFIXES {
                 item_comp.affixes[idx]  = extra_affix
                 item_comp.affix_count  += 1
             }
         }
 
         roll_affixes(&item_comp)
-        cw.world_set_item(w, wep_id, item_comp)
+        comp_set(w, wep_id, .Item, item_comp)
 
-        rc: cw.RenderConfigComp
-        cw.render_config_set_name(&rc, d.name)
-        cw.render_config_set_icon(&rc, d.icon)
-        cw.render_config_set_desc(&rc, d.desc)
-        cw.world_set_render_config(w, wep_id, rc)
+        rc: RenderConfigComp
+        render_config_set_name(&rc, d.name)
+        render_config_set_icon(&rc, d.icon)
+        render_config_set_desc(&rc, d.desc)
+        comp_set(w, wep_id, .RenderConfig, rc)
 
-        inv = cw.world_get_inventory(w, pid)
-        inv.equipped[int(cw.EquipSlot.WeaponPrimary)] = wep_id
+        inv = comp_get(w, pid, .Inventory, InventoryComp)
+        inv.equipped[int(EquipSlot.WeaponPrimary)] = wep_id
         break
     }
 }
@@ -924,22 +924,22 @@ loot_seed :: proc(tick: u64, entity_id: int) -> u64 {
 }
 
 
-give_starter_items :: proc(w: ^cw.World, pid: int) {
-    if !cw.world_has_component(w, pid, .Inventory) { return }
-    inv := cw.world_get_inventory(w, pid)
+give_starter_items :: proc(w: ^World, pid: int) {
+    if !world_has_component(w, pid, .Inventory) { return }
+    inv := comp_get(w, pid, .Inventory, InventoryComp)
 
 
     hf_id := create_flask_item(w, .Health, .Small, .Normal)
-    if cw.world_is_valid(w, hf_id) {
-        inv = cw.world_get_inventory(w, pid)
-        inv.equipped[int(cw.EquipSlot.Flask1)] = hf_id
+    if world_is_valid(w, hf_id) {
+        inv = comp_get(w, pid, .Inventory, InventoryComp)
+        inv.equipped[int(EquipSlot.Flask1)] = hf_id
     }
 
 
     ef_id := create_flask_item(w, .Energy, .Small, .Normal)
-    if cw.world_is_valid(w, ef_id) {
-        inv = cw.world_get_inventory(w, pid)
-        inv.equipped[int(cw.EquipSlot.Flask2)] = ef_id
+    if world_is_valid(w, ef_id) {
+        inv = comp_get(w, pid, .Inventory, InventoryComp)
+        inv.equipped[int(EquipSlot.Flask2)] = ef_id
     }
 
 
@@ -948,10 +948,10 @@ give_starter_items :: proc(w: ^cw.World, pid: int) {
         if d.weapon_archetype != .Pistol     { continue }
         if .Normal not_in d.rarities         { continue }
 
-        wep_id := cw.world_create_entity(w)
-        if !cw.world_is_valid(w, wep_id)    { break }
+        wep_id := world_create_entity(w)
+        if !world_is_valid(w, wep_id)    { break }
 
-        item_comp                  := cw.item_empty()
+        item_comp                  := item_empty()
         item_comp.slot              = .WeaponPrimary
         item_comp.rarity            = .Normal
         item_comp.grid_w            = d.grid_w
@@ -972,16 +972,16 @@ give_starter_items :: proc(w: ^cw.World, pid: int) {
         item_comp.affix_count       = d.base_affix_count
         for i in 0..<int(d.base_affix_count) { item_comp.affixes[i] = d.base_affixes[i] }
         roll_affixes(&item_comp)
-        cw.world_set_item(w, wep_id, item_comp)
+        comp_set(w, wep_id, .Item, item_comp)
 
-        rc: cw.RenderConfigComp
-        cw.render_config_set_name(&rc, d.name)
-        cw.render_config_set_icon(&rc, d.icon)
-        cw.render_config_set_desc(&rc, d.desc)
-        cw.world_set_render_config(w, wep_id, rc)
+        rc: RenderConfigComp
+        render_config_set_name(&rc, d.name)
+        render_config_set_icon(&rc, d.icon)
+        render_config_set_desc(&rc, d.desc)
+        comp_set(w, wep_id, .RenderConfig, rc)
 
-        inv = cw.world_get_inventory(w, pid)
-        inv.equipped[int(cw.EquipSlot.WeaponPrimary)] = wep_id
+        inv = comp_get(w, pid, .Inventory, InventoryComp)
+        inv.equipped[int(EquipSlot.WeaponPrimary)] = wep_id
         break
     }
 }

@@ -1,27 +1,26 @@
 package main
 
-import cw   "clockwork"
 import rl   "vendor:raylib"
 import fmt  "core:fmt"
 import clay "../clay"
 
-g_quest_board_npc_id: int = cw.INVALID_ENTITY
+g_quest_board_npc_id: int = INVALID_ENTITY
 
-update_quest_board :: proc(w: ^cw.World) {
+update_quest_board :: proc(w: ^World) {
     if g_playing_state != .Hub { return }
     if ui_has(.QuestBoard)     { return }
 
-    if !cw.world_is_valid(w, w.player_id)                  { return }
-    if !cw.world_has_component(w, w.player_id, .Transform) { return }
+    if !world_is_valid(w, w.player_id)                  { return }
+    if !world_has_component(w, w.player_id, .Transform) { return }
 
-    player_pos := cw.world_get_transform(w, w.player_id).position
-    npc_ids    := cw.world_query(w, cw.query_mask(.NPC, .Transform))
+    player_pos := comp_get(w, w.player_id, .Transform, TransformComp).position
+    npc_ids    := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
 
     for nid in npc_ids {
-        npc := cw.world_get_npc(w, nid)
+        npc := comp_get(w, nid, .NPC, NPCComp)
         if npc.npc_type != .QuestBoard { continue }
-        nt  := cw.world_get_transform(w, nid)
+        nt  := comp_get(w, nid, .Transform, TransformComp)
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         if dx*dx + dy*dy <= npc.interact_radius * npc.interact_radius {
@@ -34,20 +33,20 @@ update_quest_board :: proc(w: ^cw.World) {
     }
 }
 
-draw_quest_board_world :: proc(w: ^cw.World) {
+draw_quest_board_world :: proc(w: ^World) {
     if ui_has(.QuestBoard)                                 { return }
-    if !cw.world_is_valid(w, w.player_id)                 { return }
-    if !cw.world_has_component(w, w.player_id, .Transform) { return }
+    if !world_is_valid(w, w.player_id)                 { return }
+    if !world_has_component(w, w.player_id, .Transform) { return }
 
-    player_pos := cw.world_get_transform(w, w.player_id).position
-    npc_ids    := cw.world_query(w, cw.query_mask(.NPC, .Transform))
+    player_pos := comp_get(w, w.player_id, .Transform, TransformComp).position
+    npc_ids    := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
 
     for nid in npc_ids {
-        npc := cw.world_get_npc(w, nid)
+        npc := comp_get(w, nid, .NPC, NPCComp)
         if npc.npc_type != .QuestBoard { continue }
 
-        nt      := cw.world_get_transform(w, nid)
+        nt      := comp_get(w, nid, .Transform, TransformComp)
         dx      := nt.position[0] - player_pos[0]
         dy      := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
@@ -74,7 +73,7 @@ draw_quest_board_world :: proc(w: ^cw.World) {
     }
 }
 
-draw_quest_board_panel :: proc(w: ^cw.World) {
+draw_quest_board_panel :: proc(w: ^World) {
     sh := f32(rl.GetScreenHeight())
 
     clay.BeginLayout()
@@ -177,7 +176,7 @@ draw_quest_flash :: proc() {
         rl.Color{220, 196, 58, a})
 }
 
-draw_quest_hud :: proc(w: ^cw.World) {
+draw_quest_hud :: proc(w: ^World) {
     if g_playing_state != .Gameplay { return }
 
     track := [?]QuestID{.TheHorde, .Aberration, .TheDeepRun, .ElitePredator, .PerfectRun}

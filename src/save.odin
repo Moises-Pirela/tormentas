@@ -2,7 +2,6 @@ package main
 
 import "core:os"
 import "core:mem"
-import cw "clockwork"
 
 SAVE_PATH        :: "save/player.bin"
 CHAR_SAVE_PATH   :: "save/characters.bin"
@@ -66,14 +65,14 @@ SavedItem :: struct #packed {
     base_proj_speed:    f32,
     base_armor:         f32,
     base_shield:        f32,
-    affixes:            [cw.MAX_AFFIXES]SavedAffix,
+    affixes:            [MAX_AFFIXES]SavedAffix,
 
     name_len: u8,
-    name:     [cw.RENDER_NAME_CAP]u8,
+    name:     [RENDER_NAME_CAP]u8,
     icon_len: u8,
-    icon:     [cw.RENDER_ICON_CAP]u8,
+    icon:     [RENDER_ICON_CAP]u8,
     desc_len: u8,
-    desc:     [cw.RENDER_DESC_CAP]u8,
+    desc:     [RENDER_DESC_CAP]u8,
 }
 
 PlayerSaveFile :: struct #packed {
@@ -110,7 +109,7 @@ PlayerSaveFile :: struct #packed {
     mut_serums:     i32,
     mut_count:      u8,
     _mut_pad:       [3]u8,
-    mut_types:      [cw.MAX_MUTATION_SLOTS]u8,
+    mut_types:      [MAX_MUTATION_SLOTS]u8,
     _mut_align:     u8,
 
     items:          [SAVE_MAX_ITEMS]SavedItem,
@@ -150,7 +149,7 @@ PlayerSaveFileV4 :: struct #packed {
     mut_serums:     i32,
     mut_count:      u8,
     _mut_pad:       [3]u8,
-    mut_types:      [cw.MAX_MUTATION_SLOTS]u8,
+    mut_types:      [MAX_MUTATION_SLOTS]u8,
     _mut_align:     u8,
 
     items:          [SAVE_MAX_ITEMS]SavedItem,
@@ -326,59 +325,59 @@ class_idx_for_slot :: proc(slot_idx: int) -> int {
     return g_selected_class_idx
 }
 
-strip_player_carried :: proc(w: ^cw.World, pid: int) {
-    if !cw.world_is_valid(w, pid)                  { return }
-    if !cw.world_has_component(w, pid, .Inventory) { return }
+strip_player_carried :: proc(w: ^World, pid: int) {
+    if !world_is_valid(w, pid)                  { return }
+    if !world_has_component(w, pid, .Inventory) { return }
 
-    inv := cw.world_get_inventory(w, pid)
+    inv := comp_get(w, pid, .Inventory, InventoryComp)
 
-    for slot_idx in 0..<cw.EQUIP_SLOT_COUNT {
-        slot := cw.EquipSlot(slot_idx)
+    for slot_idx in 0..<EQUIP_SLOT_COUNT {
+        slot := EquipSlot(slot_idx)
         eid  := inv.equipped[slot_idx]
 
 
         if (slot == .Flask1 || slot == .Flask2) &&
-            cw.world_is_valid(w, eid) &&
-            cw.world_has_component(w, eid, .Item) &&
-            cw.world_get_item(w, eid).rarity == .Normal &&
-            cw.world_has_component(w, eid, .Flask) {
-            fc         := cw.world_get_flask(w, eid)
+            world_is_valid(w, eid) &&
+            world_has_component(w, eid, .Item) &&
+            comp_get(w, eid, .Item, ItemComp).rarity == .Normal &&
+            world_has_component(w, eid, .Flask) {
+            fc         := comp_get(w, eid, .Flask, FlaskComp)
             fc.charges  = fc.max_charges
             continue
         }
 
-        inv.equipped[slot_idx] = cw.INVALID_ENTITY
+        inv.equipped[slot_idx] = INVALID_ENTITY
     }
 
-    for &cell in inv.backpack { cell = cw.INVALID_ENTITY }
+    for &cell in inv.backpack { cell = INVALID_ENTITY }
 
-    if cw.world_has_component(w, pid, .Wallet) {
-        cw.world_get_wallet(w, pid).gold = 0
+    if world_has_component(w, pid, .Wallet) {
+        comp_get(w, pid, .Wallet, WalletComp).gold = 0
     }
 }
 
-compute_extract_value :: proc(w: ^cw.World, pid: int) -> int {
+compute_extract_value :: proc(w: ^World, pid: int) -> int {
     total := 0
-    if cw.world_has_component(w, pid, .Wallet) {
-        total += cw.world_get_wallet(w, pid).gold
+    if world_has_component(w, pid, .Wallet) {
+        total += comp_get(w, pid, .Wallet, WalletComp).gold
     }
-    if !cw.world_has_component(w, pid, .Inventory) { return total }
-    inv  := cw.world_get_inventory(w, pid)
+    if !world_has_component(w, pid, .Inventory) { return total }
+    inv  := comp_get(w, pid, .Inventory, InventoryComp)
     seen: map[int]bool
     defer delete(seen)
     for eid in inv.equipped {
-        if eid == cw.INVALID_ENTITY               { continue }
+        if eid == INVALID_ENTITY               { continue }
         if seen[eid]                              { continue }
         seen[eid] = true
-        if !cw.world_has_component(w, eid, .Item) { continue }
-        total += item_gold_value(cw.world_get_item(w, eid))
+        if !world_has_component(w, eid, .Item) { continue }
+        total += item_gold_value(comp_get(w, eid, .Item, ItemComp))
     }
     for cell in inv.backpack {
-        if cell == cw.INVALID_ENTITY               { continue }
+        if cell == INVALID_ENTITY               { continue }
         if seen[cell]                              { continue }
         seen[cell] = true
-        if !cw.world_has_component(w, cell, .Item) { continue }
-        item := cw.world_get_item(w, cell)
+        if !world_has_component(w, cell, .Item) { continue }
+        item := comp_get(w, cell, .Item, ItemComp)
         if item.serum_value > 0                    { continue }
         total += item_gold_value(item)
     }
@@ -386,7 +385,7 @@ compute_extract_value :: proc(w: ^cw.World, pid: int) -> int {
 }
 
 @(private = "file")
-_build_player_save :: proc(w: ^cw.World, pid: int) -> PlayerSaveFile {
+_build_player_save :: proc(w: ^World, pid: int) -> PlayerSaveFile {
     save: PlayerSaveFile
     save.magic      = SAVE_MAGIC
     save.version    = SAVE_VERSION
@@ -401,8 +400,8 @@ _build_player_save :: proc(w: ^cw.World, pid: int) -> PlayerSaveFile {
 
     save.quest_completed = g_quest_completed[g_session.local_slot]
 
-    if cw.world_has_component(w, pid, .Stats) {
-        st              := cw.world_get_stats(w, pid)
+    if world_has_component(w, pid, .Stats) {
+        st              := comp_get(w, pid, .Stats, StatsComp)
         save.level       = i32(st.level)
         save.xp          = st.xp
         save.xp_next     = st.xp_next
@@ -415,15 +414,15 @@ _build_player_save :: proc(w: ^cw.World, pid: int) -> PlayerSaveFile {
         save.base_speed  = st.base_speed
     }
 
-    if cw.world_has_component(w, pid, .Health) {
-        h                   := cw.world_get_health(w, pid)
+    if world_has_component(w, pid, .Health) {
+        h                   := comp_get(w, pid, .Health, HealthComp)
         save.current_hp      = h.current
         save.current_energy  = h.energy
         save.current_shield  = h.shield
     }
 
-    if cw.world_has_component(w, pid, .Wallet) {
-        save.wallet_gold = i32(cw.world_get_wallet(w, pid).gold)
+    if world_has_component(w, pid, .Wallet) {
+        save.wallet_gold = i32(comp_get(w, pid, .Wallet, WalletComp).gold)
     }
 
     st := local_stash()
@@ -431,77 +430,77 @@ _build_player_save :: proc(w: ^cw.World, pid: int) -> PlayerSaveFile {
     save.stash_serums = i32(st.serums)
     for i in 0..<st.item_count {
         eid := st.item_ids[i]
-        if !cw.world_is_valid(w, eid)             { continue }
-        if !cw.world_has_component(w, eid, .Item) { continue }
+        if !world_is_valid(w, eid)             { continue }
+        if !world_has_component(w, eid, .Item) { continue }
         if save.stash_item_count >= STASH_MAX_ITEMS { break }
 
         rec := &save.stash_items[save.stash_item_count]
         save.stash_item_count += 1
         rec.is_equipped = 0
-        item := cw.world_get_item(w, eid)
+        item := comp_get(w, eid, .Item, ItemComp)
         rec.pack_x      = i16(item.pack_x)
         rec.pack_y      = i16(item.pack_y)
         _save_fill_item(rec, item)
-        if cw.world_has_component(w, eid, .RenderConfig) {
-            _save_fill_render(rec, cw.world_get_render_config(w, eid))
+        if world_has_component(w, eid, .RenderConfig) {
+            _save_fill_render(rec, comp_get(w, eid, .RenderConfig, RenderConfigComp))
         }
     }
 
-    if cw.world_has_component(w, pid, .MutationContainer) {
-        mc := cw.world_get_mutation(w, pid)
+    if world_has_component(w, pid, .MutationContainer) {
+        mc := comp_get(w, pid, .MutationContainer, MutationContainerComp)
         save.mut_serums = i32(mc.serums)
         save.mut_count  = u8(mc.entity_count)
         for i in 0..<mc.entity_count {
             eid := mc.entities[i]
-            if !cw.world_is_valid(w, eid)              { continue }
-            if !cw.world_has_component(w, eid, .Mut)   { continue }
-            save.mut_types[i] = u8(cw.world_get_mut(w, eid).type_id)
+            if !world_is_valid(w, eid)              { continue }
+            if !world_has_component(w, eid, .Mut)   { continue }
+            save.mut_types[i] = u8(comp_get(w, eid, .Mut, MutComp).type_id)
         }
     }
 
-    if cw.world_has_component(w, pid, .Inventory) {
-        inv := cw.world_get_inventory(w, pid)
+    if world_has_component(w, pid, .Inventory) {
+        inv := comp_get(w, pid, .Inventory, InventoryComp)
 
-        for slot_idx in 0..<cw.EQUIP_SLOT_COUNT {
+        for slot_idx in 0..<EQUIP_SLOT_COUNT {
             eid := inv.equipped[slot_idx]
-            if !cw.world_is_valid(w, eid)             { continue }
-            if !cw.world_has_component(w, eid, .Item) { continue }
+            if !world_is_valid(w, eid)             { continue }
+            if !world_has_component(w, eid, .Item) { continue }
             if save.item_count >= SAVE_MAX_ITEMS       { break }
 
             rec := &save.items[save.item_count]
             save.item_count += 1
             rec.is_equipped    = 1
             rec.equip_slot_idx = u8(slot_idx)
-            _save_fill_item(rec, cw.world_get_item(w, eid))
-            if cw.world_has_component(w, eid, .RenderConfig) {
-                _save_fill_render(rec, cw.world_get_render_config(w, eid))
+            _save_fill_item(rec, comp_get(w, eid, .Item, ItemComp))
+            if world_has_component(w, eid, .RenderConfig) {
+                _save_fill_render(rec, comp_get(w, eid, .RenderConfig, RenderConfigComp))
             }
-            if cw.world_has_component(w, eid, .Flask) {
-                _save_fill_flask(rec, cw.world_get_flask(w, eid))
+            if world_has_component(w, eid, .Flask) {
+                _save_fill_flask(rec, comp_get(w, eid, .Flask, FlaskComp))
             }
         }
 
         seen: map[int]bool
         defer delete(seen)
         for cell in inv.backpack {
-            if cell == cw.INVALID_ENTITY                { continue }
+            if cell == INVALID_ENTITY                { continue }
             if seen[cell]                               { continue }
             seen[cell] = true
-            if !cw.world_has_component(w, cell, .Item) { continue }
+            if !world_has_component(w, cell, .Item) { continue }
             if save.item_count >= SAVE_MAX_ITEMS        { break }
 
             rec  := &save.items[save.item_count]
             save.item_count += 1
-            item := cw.world_get_item(w, cell)
+            item := comp_get(w, cell, .Item, ItemComp)
             rec.is_equipped = 0
             rec.pack_x      = i16(item.pack_x)
             rec.pack_y      = i16(item.pack_y)
             _save_fill_item(rec, item)
-            if cw.world_has_component(w, cell, .RenderConfig) {
-                _save_fill_render(rec, cw.world_get_render_config(w, cell))
+            if world_has_component(w, cell, .RenderConfig) {
+                _save_fill_render(rec, comp_get(w, cell, .RenderConfig, RenderConfigComp))
             }
-            if cw.world_has_component(w, cell, .Flask) {
-                _save_fill_flask(rec, cw.world_get_flask(w, cell))
+            if world_has_component(w, cell, .Flask) {
+                _save_fill_flask(rec, comp_get(w, cell, .Flask, FlaskComp))
             }
         }
     }
@@ -509,7 +508,7 @@ _build_player_save :: proc(w: ^cw.World, pid: int) -> PlayerSaveFile {
     return save
 }
 
-save_player :: proc(w: ^cw.World, pid: int) {
+save_player :: proc(w: ^World, pid: int) {
     if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return }
     save := _build_player_save(w, pid)
     s := &g_char_save.slots[g_active_slot]
@@ -521,7 +520,7 @@ save_player :: proc(w: ^cw.World, pid: int) {
 }
 
 // Returns the local player's current state serialized as raw bytes (temp-allocated).
-player_to_bytes :: proc(w: ^cw.World, pid: int) -> []u8 {
+player_to_bytes :: proc(w: ^World, pid: int) -> []u8 {
     save := _build_player_save(w, pid)
     n    := size_of(PlayerSaveFile)
     out  := make([]u8, n, context.temp_allocator)
@@ -532,9 +531,9 @@ player_to_bytes :: proc(w: ^cw.World, pid: int) -> []u8 {
 // Applies stats, health, wallet, mutations and inventory from a save to a world entity.
 // Does NOT touch stash — stash is local-player only and managed separately.
 @(private = "file")
-_apply_player_save :: proc(w: ^cw.World, pid: int, save: ^PlayerSaveFile) {
-    if cw.world_has_component(w, pid, .Stats) {
-        st             := cw.world_get_stats(w, pid)
+_apply_player_save :: proc(w: ^World, pid: int, save: ^PlayerSaveFile) {
+    if world_has_component(w, pid, .Stats) {
+        st             := comp_get(w, pid, .Stats, StatsComp)
         st.level        = int(save.level)
         st.xp           = save.xp
         st.xp_next      = save.xp_next
@@ -547,38 +546,38 @@ _apply_player_save :: proc(w: ^cw.World, pid: int, save: ^PlayerSaveFile) {
         st.base_speed   = save.base_speed
     }
 
-    if cw.world_has_component(w, pid, .Health) {
-        h        := cw.world_get_health(w, pid)
+    if world_has_component(w, pid, .Health) {
+        h        := comp_get(w, pid, .Health, HealthComp)
         h.current = save.current_hp
         h.energy  = save.current_energy
         h.shield  = save.current_shield
     }
 
-    if cw.world_has_component(w, pid, .Wallet) {
-        cw.world_get_wallet(w, pid).gold = int(save.wallet_gold)
+    if world_has_component(w, pid, .Wallet) {
+        comp_get(w, pid, .Wallet, WalletComp).gold = int(save.wallet_gold)
     }
 
-    if cw.world_has_component(w, pid, .MutationContainer) {
-        mc         := cw.world_get_mutation(w, pid)
+    if world_has_component(w, pid, .MutationContainer) {
+        mc         := comp_get(w, pid, .MutationContainer, MutationContainerComp)
         mc.serums   = int(save.mut_serums)
         for i in 0..<int(save.mut_count) {
-            mutation_restore_direct(w, pid, cw.MutationType(save.mut_types[i]))
+            mutation_restore_direct(w, pid, MutationType(save.mut_types[i]))
         }
     }
 
-    if !cw.world_has_component(w, pid, .Inventory) { return }
+    if !world_has_component(w, pid, .Inventory) { return }
 
     for i in 0..<int(save.item_count) {
         rec     := save.items[i]
         item_id := _load_spawn_saved_item(w, &save.items[i])
-        if item_id == cw.INVALID_ENTITY { continue }
-        inv     := cw.world_get_inventory(w, pid)
+        if item_id == INVALID_ENTITY { continue }
+        inv     := comp_get(w, pid, .Inventory, InventoryComp)
 
         if rec.is_equipped == 1 {
             slot_idx := int(rec.equip_slot_idx)
-            if slot_idx >= 0 && slot_idx < cw.EQUIP_SLOT_COUNT {
-                slot      := cw.EquipSlot(slot_idx)
-                item_comp := cw.world_get_item(w, item_id)
+            if slot_idx >= 0 && slot_idx < EQUIP_SLOT_COUNT {
+                slot      := EquipSlot(slot_idx)
+                item_comp := comp_get(w, item_id, .Item, ItemComp)
                 is_ab_slot := slot >= .Ability1 && slot <= .Ability4
                 if is_ab_slot && item_comp.ability_type == .None {
                     if col, row, ok := backpack_find_free(inv, item_comp); ok {
@@ -589,13 +588,13 @@ _apply_player_save :: proc(w: ^cw.World, pid: int, save: ^PlayerSaveFile) {
                 }
             }
         } else {
-            item_comp := cw.world_get_item(w, item_id)
+            item_comp := comp_get(w, item_id, .Item, ItemComp)
             backpack_place(inv, item_comp, item_id, int(rec.pack_x), int(rec.pack_y))
         }
     }
 }
 
-load_player :: proc(w: ^cw.World, pid: int) -> bool {
+load_player :: proc(w: ^World, pid: int) -> bool {
     if g_active_slot < 0 || g_active_slot >= MAX_CHAR_SLOTS { return false }
 
     slot := &g_char_save.slots[g_active_slot]
@@ -623,15 +622,15 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
     for i in 0..<int(save.stash_item_count) {
         if st.item_count >= STASH_MAX_ITEMS { break }
         item_id := _load_spawn_saved_item(w, &save.stash_items[i])
-        if item_id == cw.INVALID_ENTITY { continue }
-        item := cw.world_get_item(w, item_id)
+        if item_id == INVALID_ENTITY { continue }
+        item := comp_get(w, item_id, .Item, ItemComp)
         col := int(save.stash_items[i].pack_x)
         row := int(save.stash_items[i].pack_y)
         if !stash_can_place(item, col, row) {
             col, row, _ = stash_find_free(item)
         }
         if !stash_place_item(w, item_id, col, row) {
-            cw.world_destroy_entity(w, item_id)
+            world_destroy_entity(w, item_id)
         }
     }
 
@@ -641,7 +640,7 @@ load_player :: proc(w: ^cw.World, pid: int) -> bool {
 
 // Deserializes a remote player's save bytes and applies their state to a world entity.
 // Only stats, items and mutations are applied — stash is not touched.
-load_player_from_bytes :: proc(w: ^cw.World, pid: int, data: []u8) -> bool {
+load_player_from_bytes :: proc(w: ^World, pid: int, data: []u8) -> bool {
     if len(data) < size_of(PlayerSaveFile) { return false }
     save := (^PlayerSaveFile)(raw_data(data))^
     if save.magic != SAVE_MAGIC || save.version != SAVE_VERSION { return false }
@@ -650,19 +649,19 @@ load_player_from_bytes :: proc(w: ^cw.World, pid: int, data: []u8) -> bool {
 }
 
 @(private = "file")
-_load_spawn_saved_item :: proc(w: ^cw.World, rec: ^SavedItem) -> int {
-    item_id := cw.world_create_entity(w)
-    if item_id == cw.INVALID_ENTITY { return cw.INVALID_ENTITY }
+_load_spawn_saved_item :: proc(w: ^World, rec: ^SavedItem) -> int {
+    item_id := world_create_entity(w)
+    if item_id == INVALID_ENTITY { return INVALID_ENTITY }
 
-    item := cw.item_empty()
-    item.slot               = cw.EquipSlot(rec.slot)
-    item.rarity             = cw.ItemRarity(rec.rarity)
-    item.mutation_type      = cw.MutationType(rec.mutation_type)
+    item := item_empty()
+    item.slot               = EquipSlot(rec.slot)
+    item.rarity             = ItemRarity(rec.rarity)
+    item.mutation_type      = MutationType(rec.mutation_type)
 
 
     raw_at := rec.ability_type
     if int(raw_at) >= len(ABILITY_DEFS) { raw_at = 0 }
-    item.ability_type       = cw.AbilityType(raw_at)
+    item.ability_type       = AbilityType(raw_at)
     item.ability_level      = max(1, rec.ability_level)
     item.serum_value        = int(rec.serum_value)
     item.grid_w             = int(rec.grid_w)
@@ -673,7 +672,7 @@ _load_spawn_saved_item :: proc(w: ^cw.World, rec: ^SavedItem) -> int {
     item.affix_count        = rec.affix_count
     item.is_two_handed      = (rec.flags & 0x01) != 0
     item.is_melee           = (rec.flags & 0x02) != 0
-    item.weapon_archetype   = cw.WeaponArchetype(rec.weapon_archetype)
+    item.weapon_archetype   = WeaponArchetype(rec.weapon_archetype)
     item.melee_damage       = rec.melee_damage
     item.melee_range        = rec.melee_range
     item.melee_spread       = rec.melee_spread
@@ -686,33 +685,33 @@ _load_spawn_saved_item :: proc(w: ^cw.World, rec: ^SavedItem) -> int {
     item.base_armor         = rec.base_armor
     item.base_shield        = rec.base_shield
     for j in 0..<int(rec.affix_count) {
-        item.affixes[j] = cw.Affix{
-            type  = cw.AffixType(rec.affixes[j].affix_type),
+        item.affixes[j] = Affix{
+            type  = AffixType(rec.affixes[j].affix_type),
             value = rec.affixes[j].value,
         }
     }
-    cw.world_set_item(w, item_id, item)
+    comp_set(w, item_id, .Item, item)
 
 
     if item.slot == .Flask1 || item.slot == .Flask2 {
-        fc := flask_comp_from_save(item.slot, cw.FlaskSize(rec.req_str), item.rarity, int(rec.req_dex))
-        cw.world_set_flask(w, item_id, fc)
+        fc := flask_comp_from_save(item.slot, FlaskSize(rec.req_str), item.rarity, int(rec.req_dex))
+        comp_set(w, item_id, .Flask, fc)
     }
 
-    rc: cw.RenderConfigComp
+    rc: RenderConfigComp
     rc.name_len = rec.name_len
     copy(rc.display_name[:], rec.name[:])
     rc.icon_len = rec.icon_len
     copy(rc.icon_name[:], rec.icon[:])
     rc.desc_len = rec.desc_len
     copy(rc.desc[:], rec.desc[:])
-    cw.world_set_render_config(w, item_id, rc)
+    comp_set(w, item_id, .RenderConfig, rc)
 
     return item_id
 }
 
 @(private = "file")
-_save_fill_item :: proc(rec: ^SavedItem, item: ^cw.ItemComp) {
+_save_fill_item :: proc(rec: ^SavedItem, item: ^ItemComp) {
     rec.slot               = u8(item.slot)
     rec.rarity             = u8(item.rarity)
     rec.mutation_type      = u8(item.mutation_type)
@@ -751,13 +750,13 @@ _save_fill_item :: proc(rec: ^SavedItem, item: ^cw.ItemComp) {
 
 
 @(private = "file")
-_save_fill_flask :: proc(rec: ^SavedItem, fc: ^cw.FlaskComp) {
+_save_fill_flask :: proc(rec: ^SavedItem, fc: ^FlaskComp) {
     rec.req_str = u8(fc.size)
     rec.req_dex = u8(min(fc.charges, 255))
 }
 
 @(private = "file")
-_save_fill_render :: proc(rec: ^SavedItem, rc: ^cw.RenderConfigComp) {
+_save_fill_render :: proc(rec: ^SavedItem, rc: ^RenderConfigComp) {
     rec.name_len = rc.name_len
     copy(rec.name[:], rc.display_name[:])
     rec.icon_len = rc.icon_len

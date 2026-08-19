@@ -1,27 +1,26 @@
 package main
 
-import cw "clockwork"
 import "core:math/rand"
 
 
-env_container_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+env_container_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
-    ids := cw.world_query(w, cw.query_mask(.Container, .Health))
+    ids := world_query(w, query_mask(.Container, .Health))
     defer delete(ids)
 
     for id in ids {
-        if !cw.world_is_valid(w, id)              { continue }
-        if !cw.world_tag_is_destroy(w, id)        { continue }
+        if !world_is_valid(w, id)              { continue }
+        if !world_tag_is_destroy(w, id)        { continue }
 
-        ct := cw.world_get_container(w, id)
+        ct := comp_get(w, id, .Container, ContainerComp)
         if ct.is_open { continue }
 
-        env_container_open(w, cw.INVALID_ENTITY, id)
+        env_container_open(w, INVALID_ENTITY, id)
     }
 
 
-    ph_ids := cw.world_query(w, cw.query_mask(.Phonograph))
+    ph_ids := world_query(w, query_mask(.Phonograph))
     defer delete(ph_ids)
     for id in ph_ids {
         phonograph_tick(w, id, dt)
@@ -29,11 +28,11 @@ env_container_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 }
 
 
-env_container_open :: proc(w: ^cw.World, player_id: int, container_id: int) {
-    if !cw.world_has_component(w, container_id, .Container) { return }
-    ct := cw.world_get_container(w, container_id)
+env_container_open :: proc(w: ^World, player_id: int, container_id: int) {
+    if !world_has_component(w, container_id, .Container) { return }
+    ct := comp_get(w, container_id, .Container, ContainerComp)
 
-    t := cw.world_get_transform(w, container_id)
+    t := comp_get(w, container_id, .Transform, TransformComp)
     cx := t.position[0]
     cy := t.position[1]
 
@@ -65,7 +64,7 @@ env_container_open :: proc(w: ^cw.World, player_id: int, container_id: int) {
 
 
 @(private = "file")
-container_roll_loot :: proc(w: ^cw.World, table_id: u8, cx, cy: f32) {
+container_roll_loot :: proc(w: ^World, table_id: u8, cx, cy: f32) {
     if len(g_loot_table) == 0 { return }
 
     drop_count := int(min(table_id, 3))

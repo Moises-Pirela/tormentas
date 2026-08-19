@@ -1,7 +1,6 @@
 package main
 
 import rl       "vendor:raylib"
-import cw       "clockwork"
 import p2p      "p2p"
 import "core:os"
 import "core:path/filepath"
@@ -25,25 +24,25 @@ g_session:    p2p.Session
 g_local_hist: p2p.HistoryBuf
 g_stall_acc:  f32
 
-g_sim:        cw.Simulation
+g_sim:        Simulation
 g_sim_alive:  bool
 g_accumulator: f64
 
 g_was_player_alive: bool = true
 
 @(private)
-do_sim_tick :: proc(sim: ^cw.Simulation, local_frame: p2p.InputFrame, dt: f32) -> (ran: bool) {
+do_sim_tick :: proc(sim: ^Simulation, local_frame: p2p.InputFrame, dt: f32) -> (ran: bool) {
     result := p2p.lockstep_advance(&g_session, local_frame, &g_local_hist, &g_stall_acc, dt)
     switch result {
     case .Offline:
         g_staged_input[sim.world.local_player_slot] = local_frame
-        cw.sim_tick(sim, dt)
+        sim_tick(sim, dt)
         return true
     case .Ready:
         lf, rf := p2p.lockstep_consume(&g_session)
         g_staged_input[g_session.local_slot]     = lf
         g_staged_input[1 - g_session.local_slot] = rf
-        cw.sim_tick(sim, dt)
+        sim_tick(sim, dt)
         return true
     case .Stalled:
         return false
@@ -100,7 +99,7 @@ draw_invite_toast :: proc() {
 }
 
 init_game :: proc() {
-    g_sim       = cw.make_default_simulation()
+    g_sim       = make_default_simulation()
     g_sim_alive = true
 
     g_player_names = {}
@@ -110,39 +109,39 @@ init_game :: proc() {
         copy(g_player_names[remote_slot][:], g_session.remote_name[:])
     }
 
-    cw.sim_register_system(&g_sim, { .EarlyUpdate }, stats_system)
-    cw.sim_register_system(&g_sim, { .EarlyUpdate }, player_input_system)
-    cw.sim_register_system(&g_sim, { .EarlyUpdate }, dodge_system)
-    cw.sim_register_system(&g_sim, { .Update      }, animation_system)
-    cw.sim_register_system(&g_sim, { .Update      }, facing_system)
-    cw.sim_register_system(&g_sim, { .Update      }, weapon_system)
+    sim_register_system(&g_sim, { .EarlyUpdate }, stats_system)
+    sim_register_system(&g_sim, { .EarlyUpdate }, player_input_system)
+    sim_register_system(&g_sim, { .EarlyUpdate }, dodge_system)
+    sim_register_system(&g_sim, { .Update      }, animation_system)
+    sim_register_system(&g_sim, { .Update      }, facing_system)
+    sim_register_system(&g_sim, { .Update      }, weapon_system)
 
 
-    cw.sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system)
-    cw.sim_register_system(&g_sim, { .Update      }, ai_system)
-    cw.sim_register_system(&g_sim, { .Update      }, spawn_director_system)
-    cw.sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system)
-    cw.sim_register_system(&g_sim, { .Update      }, reanimated_system)
-    cw.sim_register_system(&g_sim, { .Update      }, ability_system)
-    cw.sim_register_system(&g_sim, { .Update      }, flask_system)
-    cw.sim_register_system(&g_sim, { .Update      }, homing_system)
-    cw.sim_register_system(&g_sim, { .Update      }, trap_system)
-    cw.sim_register_system(&g_sim, { .Update      }, grenade_system)
-    cw.sim_register_system(&g_sim, { .Update      }, extraction_system)
-    cw.sim_register_system(&g_sim, { .Update      }, melee_arc_system)
-    cw.sim_register_system(&g_sim, { .Update      }, projectile_collision_system)
-    cw.sim_register_system(&g_sim, { .Update      }, pickup_system)
-    cw.sim_register_system(&g_sim, { .Update      }, status_effect_system)
-    cw.sim_register_system(&g_sim, { .Update      }, fire_patch_system)
-    cw.sim_register_system(&g_sim, { .Update      }, env_interaction_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, damage_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, barrel_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, env_container_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, entity_separation_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
-    cw.sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system)
+    sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system)
+    sim_register_system(&g_sim, { .Update      }, ai_system)
+    sim_register_system(&g_sim, { .Update      }, spawn_director_system)
+    sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system)
+    sim_register_system(&g_sim, { .Update      }, reanimated_system)
+    sim_register_system(&g_sim, { .Update      }, ability_system)
+    sim_register_system(&g_sim, { .Update      }, flask_system)
+    sim_register_system(&g_sim, { .Update      }, homing_system)
+    sim_register_system(&g_sim, { .Update      }, trap_system)
+    sim_register_system(&g_sim, { .Update      }, grenade_system)
+    sim_register_system(&g_sim, { .Update      }, extraction_system)
+    sim_register_system(&g_sim, { .Update      }, melee_arc_system)
+    sim_register_system(&g_sim, { .Update      }, projectile_collision_system)
+    sim_register_system(&g_sim, { .Update      }, pickup_system)
+    sim_register_system(&g_sim, { .Update      }, status_effect_system)
+    sim_register_system(&g_sim, { .Update      }, fire_patch_system)
+    sim_register_system(&g_sim, { .Update      }, env_interaction_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, damage_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, barrel_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, env_container_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, entity_separation_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system)
 
     w := &g_sim.world
 
@@ -166,8 +165,8 @@ init_game :: proc() {
     }
     hub_apply_quest_npcs(w)
 
-    if cw.world_has_component(&g_sim.world, g_sim.world.player_id, .Health) {
-        h := cw.world_get_health(&g_sim.world, g_sim.world.player_id)
+    if world_has_component(&g_sim.world, g_sim.world.player_id, .Health) {
+        h := comp_get(&g_sim.world, g_sim.world.player_id, .Health, HealthComp)
         h.current = h.max
     }
 
@@ -180,7 +179,7 @@ init_game :: proc() {
 shutdown_game :: proc() {
     if g_sim_alive {
         w := &g_sim.world
-        if cw.world_is_valid(w, w.player_id) &&
+        if world_is_valid(w, w.player_id) &&
            g_playing_state != .DeathScreen {
             save_player(w, w.player_id)
         }
@@ -193,7 +192,7 @@ shutdown_game :: proc() {
     if g_sim_alive {
         fire_system_destroy()
         door_blockers_destroy()
-        cw.destroy_simulation(&g_sim)
+        destroy_simulation(&g_sim)
         g_sim_alive = false
     }
 
@@ -241,7 +240,7 @@ update_playing :: proc(dt: f32) {
     w := &g_sim.world
 
     // After handshake: send our character data to the peer once.
-    if g_session.peer_ready && !g_session.char_data_sent && cw.world_is_valid(w, w.player_id) {
+    if g_session.peer_ready && !g_session.char_data_sent && world_is_valid(w, w.player_id) {
         bytes := player_to_bytes(w, w.player_id)
         p2p.session_send_char_data(&g_session, bytes)
         g_session.char_data_sent = true
@@ -249,9 +248,9 @@ update_playing :: proc(dt: f32) {
 
     minimap_update(w)
 
-    if cw.world_is_valid(w, w.player_id) &&
-       cw.world_has_component(w, w.player_id, .Transform) {
-        set_audio_listener(cw.world_get_transform(w, w.player_id).position)
+    if world_is_valid(w, w.player_id) &&
+       world_has_component(w, w.player_id, .Transform) {
+        set_audio_listener(comp_get(w, w.player_id, .Transform, TransformComp).position)
     }
 
     if input_pressed(.F1) && g_is_host && !g_console_open && !g_anim_ed.open &&
@@ -262,9 +261,12 @@ update_playing :: proc(dt: f32) {
        (g_playing_state == .Editor || g_playing_state == .Gameplay || g_playing_state == .Hub) {
         if g_anim_ed.open { anim_editor_close() } else { anim_editor_open() }
     }
+    if input_pressed(.F6) && !g_console_open && !g_anim_ed.open {
+        dbg_inspector_toggle()
+    }
     update_lighting_widget()
 
-    if !g_console_open && !g_anim_ed.open {
+    if !g_console_open && !g_anim_ed.open && !dbg_inspector_wants_keys() {
 
         switch g_playing_state {
 
@@ -297,7 +299,7 @@ update_playing :: proc(dt: f32) {
                         g_hub_remote_loaded  = true
                     }
                 } else if !g_hub_remote_loaded && g_session.remote_char_ready {
-                    if cw.world_is_valid(w, w.player_ids[remote_slot]) {
+                    if world_is_valid(w, w.player_ids[remote_slot]) {
                         load_player_from_bytes(w, w.player_ids[remote_slot],
                             g_session.remote_char_data[:g_session.remote_char_len])
                         g_hub_remote_loaded = true
@@ -405,9 +407,9 @@ update_playing :: proc(dt: f32) {
 
 
     if g_playing_state == .Gameplay &&
-       cw.world_is_valid(w, w.player_id) &&
-       cw.world_has_component(w, w.player_id, .Respawn) {
-        rsp          := cw.world_get_respawn(w, w.player_id)
+       world_is_valid(w, w.player_id) &&
+       world_has_component(w, w.player_id, .Respawn) {
+        rsp          := comp_get(w, w.player_id, .Respawn, RespawnComp)
         player_alive := rsp.timer <= 0
         if !player_alive && g_was_player_alive {
             on_player_death(w)
@@ -544,6 +546,7 @@ main :: proc() {
         rl.UnloadImage(app_icon)
     }
     rl.SetTargetFPS(60)
+
     rl.SetExitKey(.KEY_NULL)
 
     load_config()
@@ -628,6 +631,7 @@ main :: proc() {
     steam_init()
     defer steam_shutdown()
 
+
     for !rl.WindowShouldClose() && !g_should_exit {
         dt := rl.GetFrameTime()
         defer free_all(context.temp_allocator)
@@ -697,7 +701,7 @@ main :: proc() {
 
 
         {
-            ui_w := (^cw.World)(nil)
+            ui_w := (^World)(nil)
             if g_app_state == .Playing && g_sim_alive {
                 ui_w = &g_sim.world
             }
@@ -708,8 +712,10 @@ main :: proc() {
         draw_anim_editor()
         draw_fade()
         draw_console()
+        dbg_inspector_draw()
         rl.EndDrawing()
     }
 
+    dbg_inspector_shutdown()
     if g_sim_alive { shutdown_game() }
 }

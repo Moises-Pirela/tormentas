@@ -1,7 +1,6 @@
 package main
 
 import "core:math/rand"
-import cw "clockwork"
 
 DIRECTOR_MIN_DIST   :: f32(380)
 BOSS_MIN_DIST       :: f32(520)
@@ -36,7 +35,7 @@ DIRECTOR_ROSTER := [?]DirectorEnemy{
 }
 
 
-ENEMY_MUTATION_POOL :: [?]cw.MutationType{
+ENEMY_MUTATION_POOL :: [?]MutationType{
     .LivingBomb,
     .ToxicFlesh,
     .ThornPact,
@@ -53,16 +52,16 @@ SpawnDirector :: struct {
 }
 
 g_director:           SpawnDirector
-g_boss_id:            int = cw.INVALID_ENTITY
+g_boss_id:            int = INVALID_ENTITY
 g_boss_warning_timer: f32
 
 director_init :: proc() {
     g_director           = {}
-    g_boss_id            = cw.INVALID_ENTITY
+    g_boss_id            = INVALID_ENTITY
     g_boss_warning_timer = 0
 }
 
-spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+spawn_director_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update              { return }
     if g_hub_active                  { return }
     if g_playing_state != .Gameplay  { return }
@@ -78,15 +77,15 @@ spawn_director_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
 @(private = "file")
-_director_apply_tier :: proc(w: ^cw.World, id: int) {
-    if id == cw.INVALID_ENTITY                          { return }
-    if !cw.world_has_component(w, id, .AIAgent)         { return }
+_director_apply_tier :: proc(w: ^World, id: int) {
+    if id == INVALID_ENTITY                          { return }
+    if !world_has_component(w, id, .AIAgent)         { return }
 
     rng_state := rand.create(u64(w.tick) ~ (u64(id) * 0x9e3779b97f4a7c15))
     context.random_generator = rand.default_random_generator(&rng_state)
 
     r    := rand.float32()
-    tier := cw.EnemyTier.Normal
+    tier := EnemyTier.Normal
     mut_count := 0
 
     if r < TIER_LEGENDARY_CHANCE {
@@ -97,16 +96,16 @@ _director_apply_tier :: proc(w: ^cw.World, id: int) {
         mut_count = rand.int_max(2) + 1
     }
 
-    cw.world_get_ai(w, id).tier = tier
+    comp_get(w, id, .AIAgent, AIAgentComp).tier = tier
 
     if mut_count == 0 { return }
 
-    if !cw.world_has_component(w, id, .MutationContainer) {
-        cw.world_set_mutation(w, id, cw.mutation_container_empty())
+    if !world_has_component(w, id, .MutationContainer) {
+        comp_set(w, id, .MutationContainer, mutation_container_empty())
     }
 
     pool    := ENEMY_MUTATION_POOL
-    picked  : [len(ENEMY_MUTATION_POOL)]cw.MutationType
+    picked  : [len(ENEMY_MUTATION_POOL)]MutationType
     n_picked := 0
     attempts := 0
     for n_picked < mut_count && attempts < 20 {
@@ -122,7 +121,7 @@ _director_apply_tier :: proc(w: ^cw.World, id: int) {
 }
 
 @(private = "file")
-_director_tick_boss :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
+_director_tick_boss :: proc(w: ^World, cfg: DirectorConfig, dt: f32) {
     if !cfg.has_boss || g_director.boss_spawned { return }
 
     warning_start := cfg.boss_spawn_at + BOSS_WARNING_LEAD
@@ -145,7 +144,7 @@ _director_tick_boss :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
 }
 
 @(private = "file")
-_director_tick_spawns :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
+_director_tick_spawns :: proc(w: ^World, cfg: DirectorConfig, dt: f32) {
     if g_director.spawn_cd > 0 {
         g_director.spawn_cd -= dt
     }
@@ -159,7 +158,7 @@ _director_tick_spawns :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
 
     if g_director.spawn_cd > 0 { return }
 
-    alive_ids := cw.world_query(w, cw.query_mask(.AIAgent))
+    alive_ids := world_query(w, query_mask(.AIAgent))
     alive     := len(alive_ids)
     delete(alive_ids)
     if alive >= cfg.max_alive { return }
@@ -184,18 +183,18 @@ _director_tick_spawns :: proc(w: ^cw.World, cfg: DirectorConfig, dt: f32) {
     if !ok { return }
 
     id := _director_spawn_enemy(w, chosen.name, wx, wy)
-    if id == cw.INVALID_ENTITY { return }
+    if id == INVALID_ENTITY { return }
 
     g_director.budget  -= chosen.cost
     g_director.spawn_cd = cfg.spawn_interval
 }
 
 @(private = "file")
-_director_pick_anchor :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
+_director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
     player_pos: [2]f32
     pid := w.player_id
-    if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Transform) {
-        p := cw.world_get_transform(w, pid).position
+    if world_is_valid(w, pid) && world_has_component(w, pid, .Transform) {
+        p := comp_get(w, pid, .Transform, TransformComp).position
         player_pos = {p[0], p[1]}
     }
 
@@ -253,14 +252,14 @@ _director_pick_anchor :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
 }
 
 @(private = "file")
-_director_spawn_boss :: proc(w: ^cw.World) {
+_director_spawn_boss :: proc(w: ^World) {
     wx, wy, ok := _find_boss_tile(w)
     if !ok { return }
 
     id := spawn_from_def(w, find_entity_def(g_entity_defs, "enemy_boss"))
-    if id == cw.INVALID_ENTITY { return }
+    if id == INVALID_ENTITY { return }
 
-    cw.world_get_transform(w, id).position = {wx, wy, 0}
+    comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
     g_boss_id = id
     _director_apply_tier(w, id)
 
@@ -269,11 +268,11 @@ _director_spawn_boss :: proc(w: ^cw.World) {
 }
 
 @(private = "file")
-_find_boss_tile :: proc(w: ^cw.World) -> (wx, wy: f32, ok: bool) {
+_find_boss_tile :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
     player_pos: [2]f32
     pid := w.player_id
-    if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Transform) {
-        p := cw.world_get_transform(w, pid).position
+    if world_is_valid(w, pid) && world_has_component(w, pid, .Transform) {
+        p := comp_get(w, pid, .Transform, TransformComp).position
         player_pos = {p[0], p[1]}
     }
 
@@ -311,10 +310,10 @@ _tile_open_3x3 :: proc(tx, ty: int) -> bool {
 }
 
 @(private = "file")
-_director_spawn_enemy :: proc(w: ^cw.World, name: string, wx, wy: f32) -> int {
+_director_spawn_enemy :: proc(w: ^World, name: string, wx, wy: f32) -> int {
     id := spawn_from_def(w, find_entity_def(g_entity_defs, name))
-    if id != cw.INVALID_ENTITY && cw.world_has_component(w, id, .Transform) {
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+    if id != INVALID_ENTITY && world_has_component(w, id, .Transform) {
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
     }
     _director_apply_tier(w, id)
     return id

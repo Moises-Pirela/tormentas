@@ -1,41 +1,40 @@
 package main
 
-import cw "clockwork"
 
-status_is_stationary :: proc(w: ^cw.World, id: int, slot: int) -> bool {
+status_is_stationary :: proc(w: ^World, id: int, slot: int) -> bool {
     moving_input := false
-    if slot >= 0 && slot < cw.MAX_PLAYERS {
+    if slot >= 0 && slot < MAX_PLAYERS {
         f := g_staged_input[slot]
         moving_input = f.move[0]*f.move[0] + f.move[1]*f.move[1] > 0.01
     }
 
     moving_velocity := false
-    if cw.world_has_component(w, id, .Velocity) {
-        vel := cw.world_get_velocity(w, id)
+    if world_has_component(w, id, .Velocity) {
+        vel := comp_get(w, id, .Velocity, VelocityComp)
         moving_velocity = vel.value[0]*vel.value[0] + vel.value[1]*vel.value[1] > 400
     }
 
     dashing := false
-    if cw.world_has_component(w, id, .DodgeState) {
-        dashing = cw.world_get_dodge(w, id).active
+    if world_has_component(w, id, .DodgeState) {
+        dashing = comp_get(w, id, .DodgeState, DodgeComp).active
     }
 
     return !moving_input && !moving_velocity && !dashing
 }
 
-stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .EarlyUpdate { return }
 
-    ids := cw.world_query(w, cw.query_mask(.Stats, .Health))
+    ids := world_query(w, query_mask(.Stats, .Health))
     defer delete(ids)
 
     for id in ids {
-        st := cw.world_get_stats(w, id)
-        h  := cw.world_get_health(w, id)
+        st := comp_get(w, id, .Stats, StatsComp)
+        h  := comp_get(w, id, .Health, HealthComp)
 
         slot := -1
-        if cw.world_has_component(w, id, .Player) {
-            slot = cw.world_get_player(w, id).slot
+        if world_has_component(w, id, .Player) {
+            slot = comp_get(w, id, .Player, PlayerComp).slot
         }
 
         _ = status_is_stationary(w, id, slot)
@@ -69,15 +68,15 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         affix_res_galvanic     := f32(0)
         affix_res_poison       := f32(0)
 
-        if cw.world_has_component(w, id, .Inventory) {
-            inv := cw.world_get_inventory(w, id)
-            for slot_idx in 0..<cw.EQUIP_SLOT_COUNT {
+        if world_has_component(w, id, .Inventory) {
+            inv := comp_get(w, id, .Inventory, InventoryComp)
+            for slot_idx in 0..<EQUIP_SLOT_COUNT {
                 eid := inv.equipped[slot_idx]
-                if eid == cw.INVALID_ENTITY               { continue }
-                if !cw.world_is_valid(w, eid)             { continue }
-                if !cw.world_has_component(w, eid, .Item) { continue }
+                if eid == INVALID_ENTITY               { continue }
+                if !world_is_valid(w, eid)             { continue }
+                if !world_has_component(w, eid, .Item) { continue }
 
-                item := cw.world_get_item(w, eid)
+                item := comp_get(w, eid, .Item, ItemComp)
                 base_armor_sum  += item.base_armor
                 base_shield_sum += item.base_shield
                 for i in 0..<int(item.affix_count) {
@@ -131,11 +130,11 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         move_speed_mult        := f32(1.0)
 
 
-        if cw.world_has_component(w, id, .OverchargeBuff) {
-            ob := cw.world_get_overcharge_buff(w, id)
+        if world_has_component(w, id, .OverchargeBuff) {
+            ob := comp_get(w, id, .OverchargeBuff, OverchargeBuffComp)
             ob.timer += dt
             if ob.timer >= ob.duration {
-                cw.world_clear_overcharge_buff(w, id)
+                comp_rm(w, id, .OverchargeBuff)
             } else {
                 mut_damage_mult  *= ob.damage_mult
                 move_speed_mult  *= ob.speed_mult
@@ -145,63 +144,63 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
 
-        if cw.world_has_component(w, id, .KillHeal) {
-            kh := cw.world_get_kill_heal(w, id)
+        if world_has_component(w, id, .KillHeal) {
+            kh := comp_get(w, id, .KillHeal, KillHealComp)
             kh.timer += dt
             if kh.timer >= kh.duration {
-                cw.world_clear_kill_heal(w, id)
+                comp_rm(w, id, .KillHeal)
             }
         }
 
 
-        if cw.world_has_component(w, id, .MutationContainer) {
-            mc := cw.world_get_mutation(w, id)
+        if world_has_component(w, id, .MutationContainer) {
+            mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
             for i in 0..<mc.entity_count {
                 eid := mc.entities[i]
-                if !cw.world_is_valid(w, eid)          { continue }
+                if !world_is_valid(w, eid)          { continue }
 
-                if cw.world_has_component(w, eid, .MutDamageMult) {
-                    mut_damage_mult *= cw.world_get_mut_damage_mult(w, eid).mult
+                if world_has_component(w, eid, .MutDamageMult) {
+                    mut_damage_mult *= comp_get(w, eid, .MutDamageMult, MutDamageMultComp).mult
                 }
 
-                if cw.world_has_component(w, eid, .MutLockHpToOne) {
+                if world_has_component(w, eid, .MutLockHpToOne) {
                     has_mut_lock_hp_to_one = true
                 }
 
-                if cw.world_has_component(w, eid, .MutBlockHealing) {
+                if world_has_component(w, eid, .MutBlockHealing) {
                     mut_healing_blocked = true
                 }
 
-                if cw.world_has_component(w, eid, .MutMoveSpeedMult) {
-                    move_speed_mult *= cw.world_get_mut_move_speed_mult(w, eid).mult
+                if world_has_component(w, eid, .MutMoveSpeedMult) {
+                    move_speed_mult *= comp_get(w, eid, .MutMoveSpeedMult, MutMoveSpeedMultComp).mult
                 }
 
-                if cw.world_has_component(w, eid, .MutBlockRanged) {
+                if world_has_component(w, eid, .MutBlockRanged) {
                     mut_ranged_blocked = true
                 }
 
-                if cw.world_has_component(w, eid, .MutBlockPickupHeal) {
+                if world_has_component(w, eid, .MutBlockPickupHeal) {
                     mut_pickup_heal_blocked = true
                 }
 
-                if cw.world_has_component(w, eid, .MutBlockPickups) {
+                if world_has_component(w, eid, .MutBlockPickups) {
                     mut_block_pickups = true
                 }
 
-                if cw.world_has_component(w, eid, .MutNonlethalShots) {
+                if world_has_component(w, eid, .MutNonlethalShots) {
                     mut_nonlethal_shots = true
                 }
 
-                if cw.world_has_component(w, eid, .MutDisableActives) {
+                if world_has_component(w, eid, .MutDisableActives) {
                     mut_disable_actives = true
                 }
 
-                if cw.world_has_component(w, eid, .MutPassivePower) {
-                    passive_power *= cw.world_get_mut_passive_power(w, eid).mult
+                if world_has_component(w, eid, .MutPassivePower) {
+                    passive_power *= comp_get(w, eid, .MutPassivePower, MutPassivePowerComp).mult
                 }
 
-                if cw.world_has_component(w, eid, .MutRootOnFire) {
-                    rof := cw.world_get_mut_root_on_fire(w, eid)
+                if world_has_component(w, eid, .MutRootOnFire) {
+                    rof := comp_get(w, eid, .MutRootOnFire, MutRootOnFireComp)
                     if rof.timer > 0 {
                         rof.timer = max(0, rof.timer - dt)
                         if rof.timer > 0 {
@@ -212,21 +211,21 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     }
                 }
 
-                if cw.world_has_component(w, eid, .MutTimedSelfDamage) {
-                    tsd := cw.world_get_mut_timed_self_damage(w, eid)
+                if world_has_component(w, eid, .MutTimedSelfDamage) {
+                    tsd := comp_get(w, eid, .MutTimedSelfDamage, MutTimedSelfDamageComp)
                     tsd.timer += dt
                     if tsd.timer >= tsd.grace && h.current > 1.0 {
-                        cw.world_push_damage(w, id, tsd.dps * dt)
+                        world_push_damage(w, id, tsd.dps * dt)
                     }
                 }
 
-                if cw.world_has_component(w, eid, .MutEarlyDeathThreshold) {
-                    edt := cw.world_get_mut_early_death_threshold(w, eid)
+                if world_has_component(w, eid, .MutEarlyDeathThreshold) {
+                    edt := comp_get(w, eid, .MutEarlyDeathThreshold, MutEarlyDeathThresholdComp)
                     early_death_pct = max(early_death_pct, edt.threshold_pct)
                 }
 
-                if cw.world_has_component(w, eid, .MutMissingHealthDamage) && h.max > 0 {
-                    mhd := cw.world_get_mut_missing_health_damage(w, eid)
+                if world_has_component(w, eid, .MutMissingHealthDamage) && h.max > 0 {
+                    mhd := comp_get(w, eid, .MutMissingHealthDamage, MutMissingHealthDamageComp)
                     missing := 1.0 - (h.current / h.max)
                     missing_hp_damage_mult *= 1.0 + missing * (mhd.max_mult - 1.0) / (1.0 - mhd.floor_hp_pct)
                 }
@@ -259,8 +258,8 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         overcharge_fire_rate := f32(1.0)
         overcharge_reload    := f32(1.0)
-        if cw.world_has_component(w, id, .OverchargeBuff) {
-            ob := cw.world_get_overcharge_buff(w, id)
+        if world_has_component(w, id, .OverchargeBuff) {
+            ob := comp_get(w, id, .OverchargeBuff, OverchargeBuffComp)
             overcharge_fire_rate = ob.fire_rate_mult
             overcharge_reload    = ob.fire_rate_mult
         }
@@ -288,15 +287,15 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         if affix_res_physical > 0 || affix_res_necrotic > 0 || affix_res_fire > 0 ||
            affix_res_galvanic > 0 || affix_res_poison > 0 {
-            cw.world_set_resistance(w, id, cw.ResistanceComp{
+            comp_set(w, id, .Resistance, ResistanceComp{
                 physical = affix_res_physical,
                 necrotic = affix_res_necrotic,
                 fire     = affix_res_fire,
                 galvanic = affix_res_galvanic,
                 poison   = affix_res_poison,
             })
-        } else if cw.world_has_component(w, id, .Resistance) {
-            cw.world_clear_resistance(w, id)
+        } else if world_has_component(w, id, .Resistance) {
+            comp_rm(w, id, .Resistance)
         }
         st.movement_blocked         = movement_blocked
         st.healing_blocked          = mut_healing_blocked
@@ -357,13 +356,13 @@ stats_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 
 
-    da_ids := cw.world_query(w, cw.query_mask(.DamageAmp))
+    da_ids := world_query(w, query_mask(.DamageAmp))
     defer delete(da_ids)
     for eid in da_ids {
-        da := cw.world_get_damage_amp(w, eid)
+        da := comp_get(w, eid, .DamageAmp, DamageAmpComp)
         da.timer -= dt
         if da.timer <= 0 {
-            cw.world_clear_damage_amp(w, eid)
+            comp_rm(w, eid, .DamageAmp)
         }
     }
 }

@@ -1,43 +1,42 @@
 package main
 
 import "core:math"
-import cw "clockwork"
 
-melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+melee_arc_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    arc_ids := cw.world_query(w, cw.query_mask(.MeleeArc, .Transform))
+    arc_ids := world_query(w, query_mask(.MeleeArc, .Transform))
     defer delete(arc_ids)
 
     for arc_id in arc_ids {
-        arc := cw.world_get_melee_arc(w, arc_id)
+        arc := comp_get(w, arc_id, .MeleeArc, MeleeArcComp)
         if arc.hit_applied        { continue }
         if arc.owner_faction == 0 { continue }
 
-        at := cw.world_get_transform(w, arc_id)
+        at := comp_get(w, arc_id, .Transform, TransformComp)
 
-        for slot in 0..<cw.MAX_PLAYERS {
+        for slot in 0..<MAX_PLAYERS {
             pid := w.player_ids[slot]
-            if !cw.world_is_valid(w, pid) { continue }
-            if !cw.world_has_component(w, pid, .Transform) { continue }
+            if !world_is_valid(w, pid) { continue }
+            if !world_has_component(w, pid, .Transform) { continue }
 
-            if cw.world_has_component(w, pid, .Respawn) {
-                if cw.world_get_respawn(w, pid).timer > 0 { continue }
+            if world_has_component(w, pid, .Respawn) {
+                if comp_get(w, pid, .Respawn, RespawnComp).timer > 0 { continue }
             }
 
-            check_pos := cw.world_get_transform(w, pid).position
-            if cw.world_has_component(w, pid, .MutationContainer) {
-                mc := cw.world_get_mutation(w, pid)
+            check_pos := comp_get(w, pid, .Transform, TransformComp).position
+            if world_has_component(w, pid, .MutationContainer) {
+                mc := comp_get(w, pid, .MutationContainer, MutationContainerComp)
                 for mi in 0..<mc.entity_count {
                     meid := mc.entities[mi]
-                    if !cw.world_is_valid(w, meid)                     { continue }
-                    if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
-                    hc := cw.world_get_mut_heart_cage(w, meid)
-                    if cw.world_is_valid(w, hc.heart_id) &&
-                       cw.world_has_component(w, hc.heart_id, .Health) &&
-                       cw.world_has_component(w, hc.heart_id, .Transform) &&
-                       cw.world_get_health(w, hc.heart_id).current > 0 {
-                        check_pos = cw.world_get_transform(w, hc.heart_id).position
+                    if !world_is_valid(w, meid)                     { continue }
+                    if !world_has_component(w, meid, .MutHeartCage) { continue }
+                    hc := comp_get(w, meid, .MutHeartCage, MutHeartCageComp)
+                    if world_is_valid(w, hc.heart_id) &&
+                       world_has_component(w, hc.heart_id, .Health) &&
+                       world_has_component(w, hc.heart_id, .Transform) &&
+                       comp_get(w, hc.heart_id, .Health, HealthComp).current > 0 {
+                        check_pos = comp_get(w, hc.heart_id, .Transform, TransformComp).position
                     }
                     break
                 }
@@ -55,28 +54,28 @@ melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if abs(diff) > arc.arc_spread { continue }
             }
 
-            cw.world_push_damage(w, pid, arc.damage, arc.owner_id)
+            world_push_damage(w, pid, arc.damage, arc.owner_id)
             arc.hit_applied = true
             break
         }
     }
 
-    enemy_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Collider, .Health, .Transform))
+    enemy_ids := world_query(w, query_mask(.AIAgent, .Collider, .Health, .Transform))
     defer delete(enemy_ids)
 
     for arc_id in arc_ids {
-        arc := cw.world_get_melee_arc(w, arc_id)
+        arc := comp_get(w, arc_id, .MeleeArc, MeleeArcComp)
         if arc.hit_applied        { continue }
         if arc.owner_faction != 0 { continue }
 
-        at := cw.world_get_transform(w, arc_id)
+        at := comp_get(w, arc_id, .Transform, TransformComp)
 
         hit_count := 0
         for eid in enemy_ids {
-            col := cw.world_get_collider(w, eid)
+            col := comp_get(w, eid, .Collider, ColliderComp)
             if col.faction == 0 { continue }
 
-            et   := cw.world_get_transform(w, eid)
+            et   := comp_get(w, eid, .Transform, TransformComp)
             dx   := et.position[0] - at.position[0]
             dy   := et.position[1] - at.position[1]
             dist := math.sqrt(dx*dx + dy*dy)
@@ -88,7 +87,7 @@ melee_arc_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 if abs(diff) > arc.arc_spread { continue }
             }
 
-            cw.world_push_damage(w, eid, arc.damage, arc.owner_id)
+            world_push_damage(w, eid, arc.damage, arc.owner_id)
             hit_count += 1
         }
         if hit_count > 0 { play_sfx_at("melee_hit", at.position) }

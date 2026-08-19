@@ -8,7 +8,6 @@ import          "core:fmt"
 import          "core:strings"
 import slice    "core:slice"
 import          "base:runtime"
-import cw       "clockwork"
 import clay     "../clay"
 
 
@@ -119,21 +118,21 @@ update_draw_dmg_numbers :: proc(dt: f32) {
 }
 
 
-draw_extraction_zones :: proc(w: ^cw.World) {
+draw_extraction_zones :: proc(w: ^World) {
     if g_hub_active { return }
 
     time := f32(rl.GetTime())
 
-    ids := cw.world_query(w, cw.query_mask(.Extraction, .Transform))
+    ids := world_query(w, query_mask(.Extraction, .Transform))
     defer delete(ids)
 
     pid := w.player_id
 
     for eid in ids {
-        ext := cw.world_get_extraction(w, eid)
+        ext := comp_get(w, eid, .Extraction, ExtractionComp)
         if ext.activated { continue }
 
-        pos := cw.world_get_transform(w, eid).position
+        pos := comp_get(w, eid, .Transform, TransformComp).position
         cx  := pos[0]
         cy  := pos[1]
         r   := ext.interact_radius
@@ -172,9 +171,9 @@ draw_extraction_zones :: proc(w: ^cw.World) {
             lbl_fs, 0.5,
             rl.Color{ 100, 240, 110, lbl_blink })
 
-        if !cw.world_is_valid(w, pid) { continue }
-        if !cw.world_has_component(w, pid, .Transform) { continue }
-        pt  := cw.world_get_transform(w, pid).position
+        if !world_is_valid(w, pid) { continue }
+        if !world_has_component(w, pid, .Transform) { continue }
+        pt  := comp_get(w, pid, .Transform, TransformComp).position
         dx  := pt[0] - cx
         dy  := pt[1] - cy
         in_zone := (dx*dx + dy*dy) <= r*r
@@ -213,7 +212,7 @@ draw_extraction_zones :: proc(w: ^cw.World) {
 draw_loot_filter_hud :: proc() {
     if g_loot_filter_rarity == .Normal { return }
 
-    filter_labels := [cw.ItemRarity]cstring{
+    filter_labels := [ItemRarity]cstring{
         .Normal    = t(.HUD_FILTER_ALL),
         .Rare      = t(.HUD_FILTER_RARE),
         .Epic      = t(.HUD_FILTER_EPIC),
@@ -316,32 +315,32 @@ draw_boss_warning :: proc() {
 }
 
 
-g_inspected_entity: int = cw.INVALID_ENTITY
+g_inspected_entity: int = INVALID_ENTITY
 
 
-update_entity_hover :: proc(w: ^cw.World) {
+update_entity_hover :: proc(w: ^World) {
     if g_playing_state != .Gameplay || ui_any() {
-        g_inspected_entity = cw.INVALID_ENTITY
+        g_inspected_entity = INVALID_ENTITY
         return
     }
 
     mp         := screen_to_world_cartesian(rl.GetMousePosition())
     best_dist2 := f32(1e30)
-    g_inspected_entity = cw.INVALID_ENTITY
+    g_inspected_entity = INVALID_ENTITY
 
-    ids := cw.world_query(w, cw.query_mask(.Transform, .Health), context.temp_allocator)
+    ids := world_query(w, query_mask(.Transform, .Health), context.temp_allocator)
     for id in ids {
         if is_player_entity(w, id) { continue }
         if is_fog_hidden(w, id)    { continue }
 
-        tr  := cw.world_get_transform(w, id)
+        tr  := comp_get(w, id, .Transform, TransformComp)
         dx  := tr.position[0] - mp.x
         dy  := tr.position[1] - mp.y
         d2  := dx*dx + dy*dy
 
         hit_r := f32(28)
-        if cw.world_has_component(w, id, .Collider) {
-            hit_r = max(cw.world_get_collider(w, id).radius, 20)
+        if world_has_component(w, id, .Collider) {
+            hit_r = max(comp_get(w, id, .Collider, ColliderComp).radius, 20)
         }
         if d2 < hit_r * hit_r && d2 < best_dist2 {
             best_dist2         = d2
@@ -351,22 +350,22 @@ update_entity_hover :: proc(w: ^cw.World) {
 }
 
 
-draw_entity_inspect_hud :: proc(w: ^cw.World) {
+draw_entity_inspect_hud :: proc(w: ^World) {
 
-    if g_boss_id != cw.INVALID_ENTITY && !cw.world_is_valid(w, g_boss_id) {
-        g_boss_id = cw.INVALID_ENTITY
+    if g_boss_id != INVALID_ENTITY && !world_is_valid(w, g_boss_id) {
+        g_boss_id = INVALID_ENTITY
     }
 
 
     show_id := g_inspected_entity
-    if show_id == cw.INVALID_ENTITY || !cw.world_is_valid(w, show_id) {
+    if show_id == INVALID_ENTITY || !world_is_valid(w, show_id) {
         show_id = g_boss_id
     }
-    if show_id == cw.INVALID_ENTITY                  { return }
-    if !cw.world_is_valid(w, show_id)                { return }
-    if !cw.world_has_component(w, show_id, .Health)  { return }
+    if show_id == INVALID_ENTITY                  { return }
+    if !world_is_valid(w, show_id)                { return }
+    if !world_has_component(w, show_id, .Health)  { return }
 
-    h    := cw.world_get_health(w, show_id)
+    h    := comp_get(w, show_id, .Health, HealthComp)
     if h.max <= 0 { return }
     frac := clamp(h.current / h.max, 0, 1)
 
@@ -403,9 +402,9 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
 
 
     name_lbl := cstring("ENEMY")
-    if cw.world_has_component(w, show_id, .RenderConfig) {
-        rc := cw.world_get_render_config(w, show_id)
-        cs := loc_lookup(cw.render_config_name_cstr(rc))
+    if world_has_component(w, show_id, .RenderConfig) {
+        rc := comp_get(w, show_id, .RenderConfig, RenderConfigComp)
+        cs := loc_lookup(render_config_name_cstr(rc))
         if cs != nil && len(cs) > 0 { name_lbl = cs }
     }
     name_fs := uis(13)
@@ -416,24 +415,24 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
         name_fs, 0.5, rl.Color{ 200, 120, 120, 200 })
 
 
-    if cw.world_has_component(w, show_id, .MutationContainer) {
-        mc := cw.world_get_mutation(w, show_id)
+    if world_has_component(w, show_id, .MutationContainer) {
+        mc := comp_get(w, show_id, .MutationContainer, MutationContainerComp)
 
 
         badge_fs  := uis(11)
         dot_r     := f32(4.5)
         gap       := uis(14)
-        b_mt      : [cw.MAX_MUTATION_SLOTS]cw.MutationType
-        b_name    : [cw.MAX_MUTATION_SLOTS]cstring
-        b_sz      : [cw.MAX_MUTATION_SLOTS]rl.Vector2
+        b_mt      : [MAX_MUTATION_SLOTS]MutationType
+        b_name    : [MAX_MUTATION_SLOTS]cstring
+        b_sz      : [MAX_MUTATION_SLOTS]rl.Vector2
         n_b       := 0
         total_w   := f32(0)
 
         for i in 0..<mc.entity_count {
             meid := mc.entities[i]
-            if !cw.world_is_valid(w, meid)            { continue }
-            if !cw.world_has_component(w, meid, .Mut) { continue }
-            mt   := cw.world_get_mut(w, meid).type_id
+            if !world_is_valid(w, meid)            { continue }
+            if !world_has_component(w, meid, .Mut) { continue }
+            mt   := comp_get(w, meid, .Mut, MutComp).type_id
             name := mutation_short_name(mt)
             sz   := rl.MeasureTextEx(g_font_body, name, badge_fs, 0.4)
             b_mt[n_b]   = mt
@@ -464,7 +463,7 @@ draw_entity_inspect_hud :: proc(w: ^cw.World) {
 }
 
 
-draw_boss_hud :: proc(w: ^cw.World) {
+draw_boss_hud :: proc(w: ^World) {
     draw_entity_inspect_hud(w)
 }
 
@@ -632,7 +631,7 @@ clay_measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElement
 }
 
 @(private = "file")
-PLAYER_SLOT_COLORS := [cw.MAX_PLAYERS][3]rl.Color{
+PLAYER_SLOT_COLORS := [MAX_PLAYERS][3]rl.Color{
     { {  55,  55,  70, 255 }, { 100, 100, 120, 255 }, {255,  60,  60, 255} },
     { {  28,  80,  28, 255 }, {  55, 145,  55, 255 }, { 80, 230,  80, 255} },
     { {  28,  55, 100, 255 }, {  55, 100, 180, 255 }, { 80, 170, 255, 255} },
@@ -660,31 +659,31 @@ draw_world_line :: proc(a, b: rl.Vector2, thick: f32, color: rl.Color) {
     rl.DrawLineEx(world_to_iso_v(a), world_to_iso_v(b), thick, color)
 }
 
-is_player_entity :: proc(w: ^cw.World, id: int) -> bool {
+is_player_entity :: proc(w: ^World, id: int) -> bool {
     for pid in w.player_ids {
         if pid == id { return true }
     }
     return false
 }
 
-player_slot_for_id :: proc(w: ^cw.World, id: int) -> int {
-    for slot in 0..<cw.MAX_PLAYERS {
+player_slot_for_id :: proc(w: ^World, id: int) -> int {
+    for slot in 0..<MAX_PLAYERS {
         if w.player_ids[slot] == id { return slot }
     }
     return -1
 }
 
-draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
+draw_entity_visual_info :: proc(w: ^World, id: int) -> EntityVisualInfo {
     info := EntityVisualInfo{sprite_scale = 1.0}
 
-    if cw.world_has_component(w, id, .RenderConfig) {
-        rc := cw.world_get_render_config(w, id)
+    if world_has_component(w, id, .RenderConfig) {
+        rc := comp_get(w, id, .RenderConfig, RenderConfigComp)
         // Player sprite is always driven by g_player_stem (see get_entity_sprite_stem).
         // Skip the stored RenderConfig key for player entities so that load_player
         // or give_class_starter_items setting g_player_stem takes effect immediately
         // without needing a second render_config_set_sprite call.
         if rc.sprite_len > 0 && !is_player_entity(w, id) {
-            info.sprite_key = cw.render_config_sprite_cstr(rc)
+            info.sprite_key = render_config_sprite_cstr(rc)
         }
         if rc.world_size > 0 {
             info.world_size = rc.world_size
@@ -695,14 +694,14 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
     }
 
     if info.world_size <= 0 {
-        if cw.world_has_component(w, id, .Collider) {
-            info.world_size = cw.world_get_collider(w, id).radius * 4.2
+        if world_has_component(w, id, .Collider) {
+            info.world_size = comp_get(w, id, .Collider, ColliderComp).radius * 4.2
         }
         if is_player_entity(w, id) {
             info.world_size = PLAYER_RADIUS * 4.4
         }
-        if cw.world_has_component(w, id, .NPC) {
-            npc := cw.world_get_npc(w, id)
+        if world_has_component(w, id, .NPC) {
+            npc := comp_get(w, id, .NPC, NPCComp)
             switch npc.npc_type {
             case .Shopkeeper:        info.world_size = 64
             case .MutationWorkbench: info.world_size = 78
@@ -719,8 +718,8 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
         if is_player_entity(w, id) {
             // g_player_stem is a string literal (from PLAYER_STEMS) — null-terminated, static lifetime.
             info.sprite_key = cstring(raw_data(g_player_stem))
-        } else if cw.world_has_component(w, id, .NPC) {
-            npc := cw.world_get_npc(w, id)
+        } else if world_has_component(w, id, .NPC) {
+            npc := comp_get(w, id, .NPC, NPCComp)
             switch npc.npc_type {
             case .Shopkeeper:        info.sprite_key = cstring("npc_shopkeeper")
             case .MutationWorkbench: info.sprite_key = cstring("mutation_workbench")
@@ -730,8 +729,8 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
             case .Quartermaster:     info.sprite_key = cstring("npc_shopkeeper")
             case .Surgeon:           info.sprite_key = cstring("npc_shopkeeper")
             }
-        } else if cw.world_has_component(w, id, .AIAgent) {
-            ai := cw.world_get_ai(w, id)
+        } else if world_has_component(w, id, .AIAgent) {
+            ai := comp_get(w, id, .AIAgent, AIAgentComp)
             info.sprite_key = cstring("enemy_ranged") if ai.ai_type == .Ranged else cstring("enemy_melee")
         }
     }
@@ -743,45 +742,45 @@ draw_entity_visual_info :: proc(w: ^cw.World, id: int) -> EntityVisualInfo {
     return info
 }
 
-entity_render_layer :: proc(w: ^cw.World, id: int) -> cw.RenderLayer {
-    if cw.world_has_component(w, id, .RenderConfig) {
-        rc := cw.world_get_render_config(w, id)
+entity_render_layer :: proc(w: ^World, id: int) -> RenderLayer {
+    if world_has_component(w, id, .RenderConfig) {
+        rc := comp_get(w, id, .RenderConfig, RenderConfigComp)
         if rc.render_layer != .None { return rc.render_layer }
     }
-    if cw.world_has_component(w, id, .GroundItem) ||
-       cw.world_has_component(w, id, .ProjectileTag) ||
-       cw.world_has_component(w, id, .MeleeArc) {
+    if world_has_component(w, id, .GroundItem) ||
+       world_has_component(w, id, .ProjectileTag) ||
+       world_has_component(w, id, .MeleeArc) {
         return .WorldFX
     }
     if is_player_entity(w, id) ||
-       cw.world_has_component(w, id, .AIAgent) ||
-       cw.world_has_component(w, id, .NPC) {
+       world_has_component(w, id, .AIAgent) ||
+       world_has_component(w, id, .NPC) {
         return .Sprite
     }
     return .None
 }
 
-entity_blindfire_hidden :: proc(w: ^cw.World, id: int) -> bool {
-    if !cw.world_has_component(w, id, .AIAgent) { return false }
+entity_blindfire_hidden :: proc(w: ^World, id: int) -> bool {
+    if !world_has_component(w, id, .AIAgent) { return false }
     if !player_has_mutation_effect(w, w.player_id, .MutHideEnemySprites) { return false }
-    if !cw.world_has_component(w, w.player_id, .Transform) || !cw.world_has_component(w, id, .Transform) {
+    if !world_has_component(w, w.player_id, .Transform) || !world_has_component(w, id, .Transform) {
         return false
     }
 
     radius := f32(0)
-    if cw.world_has_component(w, w.player_id, .MutationContainer) {
-        mc := cw.world_get_mutation(w, w.player_id)
+    if world_has_component(w, w.player_id, .MutationContainer) {
+        mc := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
         for i in 0..<mc.entity_count {
             mid := mc.entities[i]
-            if !cw.world_is_valid(w, mid) { continue }
-            if !cw.world_has_component(w, mid, .MutUnseenDamageMult) { continue }
-            radius = cw.world_get_mut_unseen_damage_mult(w, mid).vision_radius
+            if !world_is_valid(w, mid) { continue }
+            if !world_has_component(w, mid, .MutUnseenDamageMult) { continue }
+            radius = comp_get(w, mid, .MutUnseenDamageMult, MutUnseenDamageMultComp).vision_radius
             break
         }
     }
     if radius <= 0 { return true }
-    pp := cw.world_get_transform(w, w.player_id).position
-    ep := cw.world_get_transform(w, id).position
+    pp := comp_get(w, w.player_id, .Transform, TransformComp).position
+    ep := comp_get(w, id, .Transform, TransformComp).position
     dx := ep[0] - pp[0]
     dy := ep[1] - pp[1]
     return dx*dx + dy*dy > radius*radius
@@ -798,13 +797,13 @@ draw_iso_arc :: proc(center: rl.Vector2, radius, angle, spread: f32, width: f32,
     }
 }
 
-draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
-    if !cw.world_has_component(w, id, .Transform) || is_fog_hidden(w, id) { return }
-    tr := cw.world_get_transform(w, id)
+draw_entity_world_fx :: proc(w: ^World, id: int) {
+    if !world_has_component(w, id, .Transform) || is_fog_hidden(w, id) { return }
+    tr := comp_get(w, id, .Transform, TransformComp)
     pos := rl.Vector2{ tr.position[0], tr.position[1] }
 
-    if cw.world_has_component(w, id, .GroundItem) && cw.world_has_component(w, id, .Item) {
-        item := cw.world_get_item(w, id)
+    if world_has_component(w, id, .GroundItem) && world_has_component(w, id, .Item) {
+        item := comp_get(w, id, .Item, ItemComp)
 
         alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
         if !alt_held && item.rarity < g_loot_filter_rarity { return }
@@ -817,8 +816,8 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
         return
     }
 
-    if cw.world_has_component(w, id, .ProjectileTag) {
-        p := cw.world_get_projectile(w, id)
+    if world_has_component(w, id, .ProjectileTag) {
+        p := comp_get(w, id, .Projectile, ProjectileComp)
         switch p.visual {
         case .Standard:
             draw_world_circle(pos, 4, rl.Color{ 220, 190, 60, 255 })
@@ -832,11 +831,11 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
         return
     }
 
-    if cw.world_has_component(w, id, .MeleeArc) {
-        arc := cw.world_get_melee_arc(w, id)
+    if world_has_component(w, id, .MeleeArc) {
+        arc := comp_get(w, id, .MeleeArc, MeleeArcComp)
         fade := f32(1)
-        if cw.world_has_component(w, id, .SelfDestruct) && arc.lifetime > 0 {
-            fade = cw.world_get_self_destruct(w, id).timer / arc.lifetime
+        if world_has_component(w, id, .SelfDestruct) && arc.lifetime > 0 {
+            fade = comp_get(w, id, .SelfDestruct, SelfDestructComp).timer / arc.lifetime
         }
         draw_iso_arc(pos, arc.radius - 2, arc.angle, arc.arc_spread, 5, rl.Color{ 215, 90, 20, u8(clamp(fade, 0, 1) * 210) })
         draw_iso_arc(pos, arc.radius, arc.angle, arc.arc_spread, 2, rl.Color{ 255, 165, 60, u8(clamp(fade, 0, 1) * 255) })
@@ -845,8 +844,8 @@ draw_entity_world_fx :: proc(w: ^cw.World, id: int) {
 }
 
 
-draw_ground_item_labels :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.GroundItem, .Item, .Transform),
+draw_ground_item_labels :: proc(w: ^World) {
+    ids := world_query(w, query_mask(.GroundItem, .Item, .Transform),
         context.temp_allocator)
 
     alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
@@ -854,19 +853,19 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
 
     for id in ids {
         if is_fog_hidden(w, id)                             { continue }
-        if !cw.world_has_component(w, id, .RenderConfig)   { continue }
+        if !world_has_component(w, id, .RenderConfig)   { continue }
 
-        item := cw.world_get_item(w, id)
+        item := comp_get(w, id, .Item, ItemComp)
 
 
         if !alt_held && item.rarity < g_loot_filter_rarity { continue }
 
-        tr  := cw.world_get_transform(w, id)
+        tr  := comp_get(w, id, .Transform, TransformComp)
         pos := rl.Vector2{ tr.position[0], tr.position[1] }
         iso := world_to_iso_v(pos)
 
-        rcc  := cw.world_get_render_config(w, id)
-        name := loc_lookup(cw.render_config_name_cstr(rcc))
+        rcc  := comp_get(w, id, .RenderConfig, RenderConfigComp)
+        name := loc_lookup(render_config_name_cstr(rcc))
         if len(name) == 0 { continue }
 
         rc    := rarity_color(item.rarity)
@@ -891,18 +890,18 @@ draw_ground_item_labels :: proc(w: ^cw.World) {
     }
 }
 
-draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base_size: f32, rot: f32, sprite_iso_h: f32) {
+draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_size: f32, rot: f32, sprite_iso_h: f32) {
     slot := player_slot_for_id(w, id)
     is_player := slot >= 0
     show_hp := false
     show_tip := false
-    if cw.world_has_component(w, id, .RenderConfig) {
-        rc := cw.world_get_render_config(w, id)
+    if world_has_component(w, id, .RenderConfig) {
+        rc := comp_get(w, id, .RenderConfig, RenderConfigComp)
         show_hp = rc.show_hp_bar
         show_tip = rc.show_dir_tip
     }
     if is_player { show_tip = true }
-    if cw.world_has_component(w, id, .AIAgent) {
+    if world_has_component(w, id, .AIAgent) {
         show_hp = true
         show_tip = true
     }
@@ -911,7 +910,7 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
         line_col := rl.Color{ 200, 55, 55, 200 }
         if is_player {
             line_col = PLAYER_SLOT_COLORS[slot][2]
-        } else if cw.world_has_component(w, id, .AIAgent) && cw.world_get_ai(w, id).ai_type == .Ranged {
+        } else if world_has_component(w, id, .AIAgent) && comp_get(w, id, .AIAgent, AIAgentComp).ai_type == .Ranged {
             line_col = rl.Color{ 80, 128, 205, 200 }
         }
         tip := rl.Vector2{
@@ -925,8 +924,8 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
 
     sprite_top := sprite_iso_h
 
-    if show_hp && cw.world_has_component(w, id, .Health) {
-        h := cw.world_get_health(w, id)
+    if show_hp && world_has_component(w, id, .Health) {
+        h := comp_get(w, id, .Health, HealthComp)
         if h.max > 0 {
             iso   := world_to_iso_v(pos)
             bar_w := base_size * 0.65
@@ -942,8 +941,8 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
     }
 
 
-    if !is_player && cw.world_has_component(w, id, .MutationContainer) {
-        mc := cw.world_get_mutation(w, id)
+    if !is_player && world_has_component(w, id, .MutationContainer) {
+        mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
         if mc.entity_count > 0 {
             iso   := world_to_iso_v(pos)
             bar_w := base_size * 0.65
@@ -952,9 +951,9 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
             label_fs := f32(9)
             for i in 0..<mc.entity_count {
                 meid := mc.entities[i]
-                if !cw.world_is_valid(w, meid)            { continue }
-                if !cw.world_has_component(w, meid, .Mut) { continue }
-                mt   := cw.world_get_mut(w, meid).type_id
+                if !world_is_valid(w, meid)            { continue }
+                if !world_has_component(w, meid, .Mut) { continue }
+                mt   := comp_get(w, meid, .Mut, MutComp).type_id
                 col  := mutation_visual_color(mt)
                 name := mutation_short_name(mt)
                 lsz  := rl.MeasureTextEx(g_font_body, name, label_fs, 0.4)
@@ -970,9 +969,9 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
             n      := 0
             for i in 0..<mc.entity_count {
                 meid := mc.entities[i]
-                if !cw.world_is_valid(w, meid)            { continue }
-                if !cw.world_has_component(w, meid, .Mut) { continue }
-                mt  := cw.world_get_mut(w, meid).type_id
+                if !world_is_valid(w, meid)            { continue }
+                if !world_has_component(w, meid, .Mut) { continue }
+                mt  := comp_get(w, meid, .Mut, MutComp).type_id
                 col := mutation_visual_color(mt)
                 rl.DrawCircleV({ dot_x0 + f32(n) * 7, dot_y }, 2.5, col)
                 n += 1
@@ -997,33 +996,33 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
             name_fs, 0.5, rl.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
 
-        if cw.world_has_component(w, id, .MutationContainer) {
-            mc_hc := cw.world_get_mutation(w, id)
+        if world_has_component(w, id, .MutationContainer) {
+            mc_hc := comp_get(w, id, .MutationContainer, MutationContainerComp)
             for hi in 0..<mc_hc.entity_count {
                 hmeid := mc_hc.entities[hi]
-                if !cw.world_is_valid(w, hmeid)                     { continue }
-                if !cw.world_has_component(w, hmeid, .MutHeartCage) { continue }
-                hc    := cw.world_get_mut_heart_cage(w, hmeid)
+                if !world_is_valid(w, hmeid)                     { continue }
+                if !world_has_component(w, hmeid, .MutHeartCage) { continue }
+                hc    := comp_get(w, hmeid, .MutHeartCage, MutHeartCageComp)
                 t_now := f32(rl.GetTime())
                 hrad  := f32(12.0)
 
 
                 hworld: rl.Vector2
-                if cw.world_is_valid(w, hc.heart_id) &&
-                   cw.world_has_component(w, hc.heart_id, .Transform) {
-                    ht    := cw.world_get_transform(w, hc.heart_id)
+                if world_is_valid(w, hc.heart_id) &&
+                   world_has_component(w, hc.heart_id, .Transform) {
+                    ht    := comp_get(w, hc.heart_id, .Transform, TransformComp)
                     hworld = { ht.position[0], ht.position[1] }
                 } else {
-                    r      := cw.HEART_CAGE_ORBIT_RADIUS
+                    r      := HEART_CAGE_ORBIT_RADIUS
                     hworld  = { pos.x + math.cos(hc.orbit_angle) * r,
                                  pos.y + math.sin(hc.orbit_angle) * r }
                 }
 
-                heart_alive := cw.world_is_valid(w, hc.heart_id) &&
-                               cw.world_has_component(w, hc.heart_id, .Health) &&
-                               cw.world_get_health(w, hc.heart_id).current > 0
+                heart_alive := world_is_valid(w, hc.heart_id) &&
+                               world_has_component(w, hc.heart_id, .Health) &&
+                               comp_get(w, hc.heart_id, .Health, HealthComp).current > 0
                 if heart_alive {
-                    hh     := cw.world_get_health(w, hc.heart_id)
+                    hh     := comp_get(w, hc.heart_id, .Health, HealthComp)
                     hiso   := world_to_iso_v(hworld)
                     hp_pct := hh.current / hh.max
                     pulse  := f32(0.8) + f32(0.2) * math.sin(t_now * 5.0)
@@ -1048,16 +1047,16 @@ draw_entity_sprite_overlays :: proc(w: ^cw.World, id: int, pos: rl.Vector2, base
     }
 }
 
-draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
-    if !cw.world_has_component(w, id, .Transform) || is_fog_hidden(w, id) || entity_blindfire_hidden(w, id) { return }
+draw_entity_sprite_visual :: proc(w: ^World, id: int) {
+    if !world_has_component(w, id, .Transform) || is_fog_hidden(w, id) || entity_blindfire_hidden(w, id) { return }
 
-    if cw.world_has_component(w, id, .Openable) && cw.world_get_openable(w, id).is_open { return }
-    tr := cw.world_get_transform(w, id)
+    if world_has_component(w, id, .Openable) && comp_get(w, id, .Openable, OpenableComp).is_open { return }
+    tr := comp_get(w, id, .Transform, TransformComp)
     pos := rl.Vector2{ tr.position[0], tr.position[1] }
     rot := tr.rotation
 
-    if cw.world_has_component(w, id, .Respawn) {
-        rsp := cw.world_get_respawn(w, id)
+    if world_has_component(w, id, .Respawn) {
+        rsp := comp_get(w, id, .Respawn, RespawnComp)
         if rsp.timer > 0 && math.sin(rsp.timer * math.PI * 10) <= 0 {
             return
         }
@@ -1067,14 +1066,14 @@ draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     if !vis.ok { return }
 
     tint := rl.WHITE
-    if is_player_entity(w, id) && cw.world_has_component(w, id, .DodgeState) && cw.world_get_dodge(w, id).active {
+    if is_player_entity(w, id) && world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active {
         tint = rl.Color{ 180, 220, 255, 255 }
-    } else if cw.world_has_component(w, id, .AIAgent) {
-        #partial switch cw.world_get_ai(w, id).tier {
+    } else if world_has_component(w, id, .AIAgent) {
+        #partial switch comp_get(w, id, .AIAgent, AIAgentComp).tier {
         case .Rare:      tint = rl.Color{ 160, 200, 255, 255 }
         case .Legendary: tint = rl.Color{ 255, 215,  50, 255 }
         }
-    } else if cw.world_has_component(w, id, .NPC) && cw.world_get_npc(w, id).npc_type == .MutationWorkbench {
+    } else if world_has_component(w, id, .NPC) && comp_get(w, id, .NPC, NPCComp).npc_type == .MutationWorkbench {
         tint = rl.Color{ 250, 242, 255, 255 }
     }
     tint = color_mix(tint, rl.WHITE, get_hit_flash_intensity(id) * 0.75)
@@ -1091,15 +1090,34 @@ draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
 
 
     top_down := is_player_entity(w, id) ||
-        (cw.world_has_component(w, id, .RenderConfig) &&
-         cw.world_get_render_config(w, id).top_down_sprite)
+        (world_has_component(w, id, .RenderConfig) &&
+         comp_get(w, id, .RenderConfig, RenderConfigComp).top_down_sprite)
 
     sprite_iso_h := vis.world_size * ISO_SPRITE_Y * anchor[1]
     if entry, ok := get_or_load_entity_sprite(vis.sprite_key); ok {
         src := anim_source_rect(w, id, entry.src, string(vis.sprite_key)) if !entry.from_rt else entry.src
         if top_down {
             if src.width > 0 { sprite_iso_h = vis.world_size * src.height / src.width * anchor[1] }
-            draw_player_sprite(entry.tex, src, pos, vis.world_size, tint, anchor)
+            // Face movement while moving, aim while standing still. Screen-x of a world
+            // vector is (x - y) under the iso projection (screen_x = wx - wy); art faces
+            // screen-left unflipped, so we flip when screen-x < 0.
+            in_dodge := world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active
+            flip_x: bool
+            if in_dodge {
+                // Facing is locked for the dodge. The dash moves backward (opposite facing),
+                // so the locked facing is the negation of the dodge direction's screen-x.
+                dd     := comp_get(w, id, .DodgeState, DodgeComp).direction
+                flip_x  = -(dd[0] - dd[1]) < 0
+            } else {
+                flip_x = (math.cos(rot) - math.sin(rot)) < 0
+                if world_has_component(w, id, .Velocity) {
+                    vel := comp_get(w, id, .Velocity, VelocityComp).value
+                    if vel[0]*vel[0] + vel[1]*vel[1] > ANIM_WALK_SPEED_THRESH*ANIM_WALK_SPEED_THRESH {
+                        flip_x = (vel[0] - vel[1]) < 0
+                    }
+                }
+            }
+            draw_player_sprite(entry.tex, src, pos, vis.world_size, tint, anchor, flip_x)
         } else {
             draw_entity_sprite_quad_ex(entry.tex, src, pos, vis.world_size, rot, tint, ISO_SPRITE_Y, anchor)
         }
@@ -1107,15 +1125,15 @@ draw_entity_sprite_visual :: proc(w: ^cw.World, id: int) {
     draw_entity_sprite_overlays(w, id, pos, vis.world_size, rot, sprite_iso_h)
 }
 
-draw_entities :: proc(w: ^cw.World, pass: cw.RenderLayer) {
-    ids := cw.world_query(w, cw.query_mask(.Transform))
+draw_entities :: proc(w: ^World, pass: RenderLayer) {
+    ids := world_query(w, query_mask(.Transform))
     defer delete(ids)
 
     if pass == .Sprite {
         SpriteSort :: struct { id: int, depth: f32 }
         temp := make([]SpriteSort, len(ids), context.temp_allocator)
         for i in 0..<len(ids) {
-            t := cw.world_get_transform(w, ids[i]).position
+            t := comp_get(w, ids[i], .Transform, TransformComp).position
             temp[i] = SpriteSort{ ids[i], iso_depth_sort_y(t[0], t[1]) }
         }
         slice.sort_by(temp, proc(a, b: SpriteSort) -> bool { return a.depth < b.depth })
@@ -1133,7 +1151,7 @@ draw_entities :: proc(w: ^cw.World, pass: cw.RenderLayer) {
     }
 }
 
-draw_player :: proc(w: ^cw.World) {
+draw_player :: proc(w: ^World) {
 
 }
 
@@ -1141,23 +1159,23 @@ draw_floor :: proc() {
 
 }
 
-draw_enemies :: proc(w: ^cw.World) {
+draw_enemies :: proc(w: ^World) {
 
 }
 
-draw_world_npcs :: proc(w: ^cw.World) {
+draw_world_npcs :: proc(w: ^World) {
 
 }
 
-draw_melee_arcs :: proc(w: ^cw.World) {
+draw_melee_arcs :: proc(w: ^World) {
 
 }
 
-draw_projectiles :: proc(w: ^cw.World) {
+draw_projectiles :: proc(w: ^World) {
 
 }
 
-draw_ground_items :: proc(w: ^cw.World) {
+draw_ground_items :: proc(w: ^World) {
 
 }
 
@@ -1172,7 +1190,7 @@ ability_trait_color :: proc(trait: AbilityTrait) -> rl.Color {
     return rl.Color{ 140, 134, 120, 255 }
 }
 
-rarity_color :: proc(rarity: cw.ItemRarity) -> rl.Color {
+rarity_color :: proc(rarity: ItemRarity) -> rl.Color {
     switch rarity {
     case .Normal:    return rl.Color{ 160, 155, 148, 255 }
     case .Rare:      return rl.Color{  75, 135, 210, 255 }
@@ -1184,7 +1202,7 @@ rarity_color :: proc(rarity: cw.ItemRarity) -> rl.Color {
 }
 
 
-mutation_visual_color :: proc(mt: cw.MutationType) -> rl.Color {
+mutation_visual_color :: proc(mt: MutationType) -> rl.Color {
     #partial switch mt {
     case .LivingBomb:  return rl.Color{ 255, 120,  30, 255 }
     case .ToxicFlesh:  return rl.Color{  80, 200,  60, 255 }
@@ -1196,7 +1214,7 @@ mutation_visual_color :: proc(mt: cw.MutationType) -> rl.Color {
 
 
 @(private = "file")
-mutation_short_name :: proc(mt: cw.MutationType) -> cstring {
+mutation_short_name :: proc(mt: MutationType) -> cstring {
     #partial switch mt {
     case .LivingBomb:  return "LIVING BOMB"
     case .ToxicFlesh:  return "TOXIC FLESH"
@@ -1904,13 +1922,15 @@ draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl
 }
 
 
-draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, tint: rl.Color, anchor: [2]f32 = {0.5, 1.0}) {
+draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, tint: rl.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
     iso    := world_to_iso_v(pos)
     aspect := src.height / src.width
     iso_h  := world_size * aspect
     dst    := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
     origin := rl.Vector2{ world_size * anchor[0], iso_h * anchor[1] }
-    rl.DrawTexturePro(tex, src, dst, origin, 0.0, tint)
+    s      := src
+    if flip_x { s.width = -s.width }   // negative source width mirrors horizontally
+    rl.DrawTexturePro(tex, s, dst, origin, 0.0, tint)
 }
 
 
@@ -1951,20 +1971,20 @@ draw_text_wrapped :: proc(
     return cur_y - y
 }
 
-draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
-    if !cw.world_is_valid(w, item_id)             { return }
-    if !cw.world_has_component(w, item_id, .Item) { return }
+draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
+    if !world_is_valid(w, item_id)             { return }
+    if !world_has_component(w, item_id, .Item) { return }
 
-    item := cw.world_get_item(w, item_id)
+    item := comp_get(w, item_id, .Item, ItemComp)
     rc   := rarity_color(item.rarity)
 
     has_desc := false
     desc_str: cstring = ""
-    if cw.world_has_component(w, item_id, .RenderConfig) {
-        rcc := cw.world_get_render_config(w, item_id)
+    if world_has_component(w, item_id, .RenderConfig) {
+        rcc := comp_get(w, item_id, .RenderConfig, RenderConfigComp)
         if rcc.desc_len > 0 {
             has_desc = true
-            desc_str = loc_lookup(cw.render_config_desc_cstr(rcc))
+            desc_str = loc_lookup(render_config_desc_cstr(rcc))
         }
     }
 
@@ -2020,10 +2040,10 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         rl.Color{ rc.r, rc.g, rc.b, 100 })
 
     icon_drawn := false
-    if cw.world_has_component(w, item_id, .RenderConfig) {
-        rcc := cw.world_get_render_config(w, item_id)
+    if world_has_component(w, item_id, .RenderConfig) {
+        rcc := comp_get(w, item_id, .RenderConfig, RenderConfigComp)
         if rcc.icon_len > 0 {
-            tex, ok := get_or_load_icon(cw.render_config_icon_cstr(rcc))
+            tex, ok := get_or_load_icon(render_config_icon_cstr(rcc))
             if ok {
                 src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
                 dst := rl.Rectangle{ f32(icon_x), f32(icon_y), f32(IS), f32(IS) }
@@ -2049,14 +2069,14 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     fs13 := uis(13)
     text_w := f32(TW) - (tx2 - f32(tx)) - uis(8)
 
-    if cw.world_has_component(w, item_id, .RenderConfig) {
-        rcc  := cw.world_get_render_config(w, item_id)
-        name := loc_lookup(cw.render_config_name_cstr(rcc))
+    if world_has_component(w, item_id, .RenderConfig) {
+        rcc  := comp_get(w, item_id, .RenderConfig, RenderConfigComp)
+        name := loc_lookup(render_config_name_cstr(rcc))
         rl.DrawTextEx(g_font_body, name, { tx2, ty2 }, fs15, 0.5,
             rl.Color{ rc.r, rc.g, rc.b, 245 })
     }
 
-    rarity_labels := [cw.ItemRarity]cstring{
+    rarity_labels := [ItemRarity]cstring{
         .Normal    = "Normal",
         .Rare      = "Rare",
         .Epic      = "Epic",
@@ -2075,13 +2095,13 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
         cd_buf[len(cd_s)] = 0
         rl.DrawTextEx(g_font_body, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
-    } else if cw.world_has_component(w, item_id, .Flask) {
+    } else if world_has_component(w, item_id, .Flask) {
 
-        fc := cw.world_get_flask(w, item_id)
+        fc := comp_get(w, item_id, .Flask, FlaskComp)
 
-        if !cw.world_has_component(w, item_id, .RenderConfig) {
-            size_names := [cw.FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
-            kind_names := [cw.FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
+        if !world_has_component(w, item_id, .RenderConfig) {
+            size_names := [FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
+            kind_names := [FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
             name_buf: [40]u8
             ns := fmt.bprintf(name_buf[:39], "%s %s Flask",
                 size_names[fc.size], kind_names[fc.kind])
@@ -2107,7 +2127,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         chg_col := COL_AFFIX if fc.charges > 0 else COL_MUTED
         rl.DrawTextEx(g_font_body, cstring(&chg_buf[0]), { tx2, ty2 + uis(78) }, fs13, 0.5, chg_col)
     } else {
-        slot_labels := [cw.EquipSlot]cstring{
+        slot_labels := [EquipSlot]cstring{
             .Head          = "Slot: Head",
             .Chest         = "Slot: Chest",
             .Boots         = "Slot: Boots",
@@ -2123,7 +2143,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         }
         rl.DrawTextEx(g_font_body, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
-        archetype_labels := [cw.WeaponArchetype]cstring{
+        archetype_labels := [WeaponArchetype]cstring{
             .None    = "",
             .Pistol  = "Pistol",
             .Rifle   = "Rifle",
@@ -2203,9 +2223,9 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
 
     if req_count > 0 {
         player_str, player_dex, player_sci: int
-        if cw.world_is_valid(w, w.player_id) &&
-           cw.world_has_component(w, w.player_id, .Stats) {
-            st         := cw.world_get_stats(w, w.player_id)
+        if world_is_valid(w, w.player_id) &&
+           world_has_component(w, w.player_id, .Stats) {
+            st         := comp_get(w, w.player_id, .Stats, StatsComp)
             player_str  = st.strength
             player_dex  = st.dexterity
             player_sci  = st.science
@@ -2242,7 +2262,7 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
         }
     }
 
-    affix_type_labels := [cw.AffixType]string{
+    affix_type_labels := [AffixType]string{
         .None             = "",
         .BonusHP          = "Max HP",
         .Armor            = "Armor",
@@ -2309,44 +2329,44 @@ draw_item_tooltip :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
     }
 }
 
-equipped_item_for_compare :: proc(w: ^cw.World, item_id: int) -> int {
-    if !cw.world_is_valid(w, w.player_id)                  { return cw.INVALID_ENTITY }
-    if !cw.world_has_component(w, w.player_id, .Inventory) { return cw.INVALID_ENTITY }
-    if !cw.world_is_valid(w, item_id)                      { return cw.INVALID_ENTITY }
-    if !cw.world_has_component(w, item_id, .Item)          { return cw.INVALID_ENTITY }
+equipped_item_for_compare :: proc(w: ^World, item_id: int) -> int {
+    if !world_is_valid(w, w.player_id)                  { return INVALID_ENTITY }
+    if !world_has_component(w, w.player_id, .Inventory) { return INVALID_ENTITY }
+    if !world_is_valid(w, item_id)                      { return INVALID_ENTITY }
+    if !world_has_component(w, item_id, .Item)          { return INVALID_ENTITY }
 
-    inv  := cw.world_get_inventory(w, w.player_id)
-    item := cw.world_get_item(w, item_id)
+    inv  := comp_get(w, w.player_id, .Inventory, InventoryComp)
+    item := comp_get(w, item_id, .Item, ItemComp)
 
     slot := item.slot
     if slot == .WeaponOffhand {
-        eid := inv.equipped[int(cw.EquipSlot.WeaponOffhand)]
-        return eid if eid != item_id else cw.INVALID_ENTITY
+        eid := inv.equipped[int(EquipSlot.WeaponOffhand)]
+        return eid if eid != item_id else INVALID_ENTITY
     }
     if slot == .WeaponPrimary {
-        eid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-        return eid if eid != item_id else cw.INVALID_ENTITY
+        eid := inv.equipped[int(EquipSlot.WeaponPrimary)]
+        return eid if eid != item_id else INVALID_ENTITY
     }
     if slot == .Ability1 || slot == .Ability2 || slot == .Ability3 || slot == .Ability4 {
-        ability_slots := [4]cw.EquipSlot{ .Ability1, .Ability2, .Ability3, .Ability4 }
+        ability_slots := [4]EquipSlot{ .Ability1, .Ability2, .Ability3, .Ability4 }
         for s in ability_slots {
             eid := inv.equipped[int(s)]
-            if eid != cw.INVALID_ENTITY && eid != item_id {
+            if eid != INVALID_ENTITY && eid != item_id {
                 return eid
             }
         }
-        return cw.INVALID_ENTITY
+        return INVALID_ENTITY
     }
 
     eid := inv.equipped[int(slot)]
-    return eid if eid != item_id else cw.INVALID_ENTITY
+    return eid if eid != item_id else INVALID_ENTITY
 }
 
-draw_item_tooltip_or_compare :: proc(w: ^cw.World, item_id: int, mx, my: f32) {
+draw_item_tooltip_or_compare :: proc(w: ^World, item_id: int, mx, my: f32) {
     compare_key := rl.KeyboardKey(g_binds.ui.compare_tooltip)
-    equipped_id := equipped_item_for_compare(w, item_id) if input_down(compare_key) else cw.INVALID_ENTITY
+    equipped_id := equipped_item_for_compare(w, item_id) if input_down(compare_key) else INVALID_ENTITY
 
-    if equipped_id == cw.INVALID_ENTITY {
+    if equipped_id == INVALID_ENTITY {
         draw_item_tooltip(w, item_id, mx, my)
         return
     }
@@ -2385,24 +2405,24 @@ draw_levelup_flash :: proc() {
 }
 
 
-draw_enemy_mutation_auras :: proc(w: ^cw.World) {
+draw_enemy_mutation_auras :: proc(w: ^World) {
     t   := f32(rl.GetTime())
-    ids := cw.world_query(w, cw.query_mask(.MutationContainer, .Transform, .AIAgent),
+    ids := world_query(w, query_mask(.MutationContainer, .Transform, .AIAgent),
                           context.temp_allocator)
     for id in ids {
         if is_player_entity(w, id) { continue }
         if is_fog_hidden(w, id)    { continue }
 
-        tr  := cw.world_get_transform(w, id)
+        tr  := comp_get(w, id, .Transform, TransformComp)
         pos := rl.Vector2{ tr.position[0], tr.position[1] }
 
-        mc := cw.world_get_mutation(w, id)
+        mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
         for i in 0..<mc.entity_count {
             meid := mc.entities[i]
-            if !cw.world_is_valid(w, meid) { continue }
+            if !world_is_valid(w, meid) { continue }
 
 
-            if cw.world_has_component(w, meid, .MutOnDeathExplode) {
+            if world_has_component(w, meid, .MutOnDeathExplode) {
                 pulse := f32(0.87) + f32(0.13) * math.sin(t * 1.4 * math.PI * 2)
                 r     := f32(38) * pulse
                 col   := mutation_visual_color(.LivingBomb)
@@ -2411,8 +2431,8 @@ draw_enemy_mutation_auras :: proc(w: ^cw.World) {
             }
 
 
-            if cw.world_has_component(w, meid, .MutProximityDamage) {
-                pd    := cw.world_get_mut_proximity_damage(w, meid)
+            if world_has_component(w, meid, .MutProximityDamage) {
+                pd    := comp_get(w, meid, .MutProximityDamage, MutProximityDamageComp)
                 pulse := f32(0.45) + f32(0.45) * math.sin(t * math.PI * 0.7)
                 alpha := u8(clamp(pulse * 120, 0, 255))
                 col   := mutation_visual_color(.ToxicFlesh)
@@ -2420,15 +2440,15 @@ draw_enemy_mutation_auras :: proc(w: ^cw.World) {
             }
 
 
-            if cw.world_has_component(w, meid, .MutThornPact) {
+            if world_has_component(w, meid, .MutThornPact) {
                 col := mutation_visual_color(.ThornPact)
                 draw_world_circle_lines(pos, 40, rl.Color{ col.r, col.g, col.b, 115 })
                 draw_world_circle_lines(pos, 47, rl.Color{ col.r, col.g, col.b,  42 })
             }
 
 
-            if cw.world_has_component(w, meid, .MutBlackLung) {
-                bl := cw.world_get_mut_black_lung(w, meid)
+            if world_has_component(w, meid, .MutBlackLung) {
+                bl := comp_get(w, meid, .MutBlackLung, MutBlackLungComp)
                 if bl.pressure > 5 {
                     frac  := bl.pressure / 100.0
                     r     := bl.radius * frac

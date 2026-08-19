@@ -3,11 +3,10 @@ package main
 import "core:math"
 import "core:fmt"
 import rl "vendor:raylib"
-import cw "clockwork"
 
 STASH_INTERACT_PROMPT_DIST :: f32(85)
 
-g_stash_npc_id: int = cw.INVALID_ENTITY
+g_stash_npc_id: int = INVALID_ENTITY
 g_stash_grid_bb: rl.Rectangle
 
 stash_has_room :: proc() -> bool {
@@ -21,7 +20,7 @@ stash_index_of :: proc(item_id: int) -> int {
     return -1
 }
 
-stash_can_place :: proc(item: ^cw.ItemComp, col, row: int, except_id := cw.INVALID_ENTITY) -> bool {
+stash_can_place :: proc(item: ^ItemComp, col, row: int, except_id := INVALID_ENTITY) -> bool {
     if item == nil { return false }
     if col < 0 || row < 0 { return false }
     if col + item.grid_w > STASH_COLS { return false }
@@ -30,13 +29,13 @@ stash_can_place :: proc(item: ^cw.ItemComp, col, row: int, except_id := cw.INVAL
     for dy in 0..<item.grid_h {
         for dx in 0..<item.grid_w {
             cell := local_stash().grid[(row + dy) * STASH_COLS + (col + dx)]
-            if cell != cw.INVALID_ENTITY && cell != except_id { return false }
+            if cell != INVALID_ENTITY && cell != except_id { return false }
         }
     }
     return true
 }
 
-stash_place_existing :: proc(item: ^cw.ItemComp, item_id, col, row: int) {
+stash_place_existing :: proc(item: ^ItemComp, item_id, col, row: int) {
     item.pack_x = col
     item.pack_y = row
     for dy in 0..<item.grid_h {
@@ -61,15 +60,15 @@ stash_remove_id :: proc(item_id: int) {
             local_stash().item_ids[i] = local_stash().item_ids[i + 1]
         }
         local_stash().item_count -= 1
-        local_stash().item_ids[local_stash().item_count] = cw.INVALID_ENTITY
+        local_stash().item_ids[local_stash().item_count] = INVALID_ENTITY
     }
 
     for &cell in local_stash().grid {
-        if cell == item_id { cell = cw.INVALID_ENTITY }
+        if cell == item_id { cell = INVALID_ENTITY }
     }
 }
 
-stash_find_free :: proc(item: ^cw.ItemComp) -> (col, row: int, ok: bool) {
+stash_find_free :: proc(item: ^ItemComp) -> (col, row: int, ok: bool) {
     for r in 0..<STASH_ROWS {
         for c in 0..<STASH_COLS {
             if stash_can_place(item, c, r) {
@@ -80,17 +79,17 @@ stash_find_free :: proc(item: ^cw.ItemComp) -> (col, row: int, ok: bool) {
     return 0, 0, false
 }
 
-stash_place_item :: proc(w: ^cw.World, item_id, col, row: int) -> bool {
-    if !cw.world_is_valid(w, item_id)             { return false }
-    if !cw.world_has_component(w, item_id, .Item) { return false }
-    item := cw.world_get_item(w, item_id)
+stash_place_item :: proc(w: ^World, item_id, col, row: int) -> bool {
+    if !world_is_valid(w, item_id)             { return false }
+    if !world_has_component(w, item_id, .Item) { return false }
+    item := comp_get(w, item_id, .Item, ItemComp)
     if !stash_can_place(item, col, row)           { return false }
     if !stash_add_id(item_id)                     { return false }
     stash_place_existing(item, item_id, col, row)
-    if cw.world_has_component(w, item_id, .GroundItem) {
-        cw.world_clear_ground_item(w, item_id)
+    if world_has_component(w, item_id, .GroundItem) {
+        comp_rm(w, item_id, .GroundItem)
     }
-    cw.entity_sig_clear(&w.entities[item_id].signature, .Transform)
+    comp_rm(w, item_id, .Transform)
     return true
 }
 
@@ -104,7 +103,7 @@ stash_mouse_to_cell :: proc(mx, my: f32) -> (col, row: int, ok: bool) {
     return col, row, true
 }
 
-stash_place_dragged_at_mouse :: proc(w: ^cw.World, item_id: int) -> bool {
+stash_place_dragged_at_mouse :: proc(w: ^World, item_id: int) -> bool {
     mp := rl.GetMousePosition()
     col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
     if !hit { return false }
@@ -117,24 +116,24 @@ stash_place_dragged_at_mouse :: proc(w: ^cw.World, item_id: int) -> bool {
     return false
 }
 
-stash_return_dragged_to_origin :: proc(w: ^cw.World, item_id: int) -> bool {
-    if !cw.world_is_valid(w, item_id) || !cw.world_has_component(w, item_id, .Item) { return false }
-    item := cw.world_get_item(w, item_id)
+stash_return_dragged_to_origin :: proc(w: ^World, item_id: int) -> bool {
+    if !world_is_valid(w, item_id) || !world_has_component(w, item_id, .Item) { return false }
+    item := comp_get(w, item_id, .Item, ItemComp)
     if stash_place_item(w, item_id, g_drag_origin_x, g_drag_origin_y) { return true }
     c, r, ok := stash_find_free(item)
     if ok { return stash_place_item(w, item_id, c, r) }
     return false
 }
 
-stash_deposit_item :: proc(w: ^cw.World, item_id: int) -> bool {
+stash_deposit_item :: proc(w: ^World, item_id: int) -> bool {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid)                     { return false }
-    if !cw.world_has_component(w, pid, .Inventory)    { return false }
-    if !cw.world_is_valid(w, item_id)                 { return false }
-    if !cw.world_has_component(w, item_id, .Item)     { return false }
+    if !world_is_valid(w, pid)                     { return false }
+    if !world_has_component(w, pid, .Inventory)    { return false }
+    if !world_is_valid(w, item_id)                 { return false }
+    if !world_has_component(w, item_id, .Item)     { return false }
 
-    inv  := cw.world_get_inventory(w, pid)
-    item := cw.world_get_item(w, item_id)
+    inv  := comp_get(w, pid, .Inventory, InventoryComp)
+    item := comp_get(w, item_id, .Item, ItemComp)
     col, row, ok := stash_find_free(item)
     if !ok || !stash_has_room() {
         play_sfx("ui_deny")
@@ -143,7 +142,7 @@ stash_deposit_item :: proc(w: ^cw.World, item_id: int) -> bool {
 
     backpack_remove(inv, item)
     for &slot in inv.equipped {
-        if slot == item_id { slot = cw.INVALID_ENTITY }
+        if slot == item_id { slot = INVALID_ENTITY }
     }
 
     if !stash_place_item(w, item_id, col, row) {
@@ -158,17 +157,17 @@ stash_deposit_item :: proc(w: ^cw.World, item_id: int) -> bool {
     return true
 }
 
-stash_deposit_all_carried :: proc(w: ^cw.World) -> int {
+stash_deposit_all_carried :: proc(w: ^World) -> int {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid)                  { return 0 }
-    if !cw.world_has_component(w, pid, .Inventory) { return 0 }
+    if !world_is_valid(w, pid)                  { return 0 }
+    if !world_has_component(w, pid, .Inventory) { return 0 }
 
-    inv := cw.world_get_inventory(w, pid)
-    ids: [cw.EQUIP_SLOT_COUNT + cw.BACKPACK_COLS * cw.BACKPACK_ROWS]int
+    inv := comp_get(w, pid, .Inventory, InventoryComp)
+    ids: [EQUIP_SLOT_COUNT + BACKPACK_COLS * BACKPACK_ROWS]int
     count := 0
 
     for eid in inv.equipped {
-        if eid == cw.INVALID_ENTITY { continue }
+        if eid == INVALID_ENTITY { continue }
         exists := false
         for i in 0..<count {
             if ids[i] == eid { exists = true; break }
@@ -177,7 +176,7 @@ stash_deposit_all_carried :: proc(w: ^cw.World) -> int {
     }
 
     for eid in inv.backpack {
-        if eid == cw.INVALID_ENTITY { continue }
+        if eid == INVALID_ENTITY { continue }
         exists := false
         for i in 0..<count {
             if ids[i] == eid { exists = true; break }
@@ -192,19 +191,19 @@ stash_deposit_all_carried :: proc(w: ^cw.World) -> int {
     return deposited
 }
 
-find_nearby_stash :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, ok: bool) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Transform) { return }
+find_nearby_stash :: proc(w: ^World) -> (id: int, pos: [3]f32, ok: bool) {
+    if !world_is_valid(w, w.player_id) { return }
+    if !world_has_component(w, w.player_id, .Transform) { return }
 
-    player_pos := cw.world_get_transform(w, w.player_id).position
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
+    player_pos := comp_get(w, w.player_id, .Transform, TransformComp).position
+    npc_ids := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
 
     best_dist_sq := f32(1e30)
     for nid in npc_ids {
-        npc := cw.world_get_npc(w, nid)
+        npc := comp_get(w, nid, .NPC, NPCComp)
         if npc.npc_type != .Stash { continue }
-        nt := cw.world_get_transform(w, nid)
+        nt := comp_get(w, nid, .Transform, TransformComp)
         dx := nt.position[0] - player_pos[0]
         dy := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
@@ -219,7 +218,7 @@ find_nearby_stash :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, ok: bool) {
     return
 }
 
-update_stash :: proc(w: ^cw.World) {
+update_stash :: proc(w: ^World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
     id, _, ok := find_nearby_stash(w)
     if ok && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
@@ -228,7 +227,7 @@ update_stash :: proc(w: ^cw.World) {
     }
 }
 
-draw_stash_world :: proc(w: ^cw.World) {
+draw_stash_world :: proc(w: ^World) {
     if ui_has(.Stash) { return }
     _, pos, ok := find_nearby_stash(w)
     if !ok { return }
@@ -243,7 +242,7 @@ draw_stash_world :: proc(w: ^cw.World) {
         fs, 0.5, rl.Color{ 230, 190, 120, pulse })
 }
 
-stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
+stash_draw_grid :: proc(w: ^World, grid_r: rl.Rectangle) {
     cs := i32(g_inv.cell_sz)
     gx := i32(grid_r.x)
     gy := i32(grid_r.y)
@@ -265,9 +264,9 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
         rl.DrawLineEx({ f32(gx), ly }, { f32(gx + STASH_COLS * cs), ly }, 1, COL_RULE)
     }
 
-    if g_drag_item_id != -1 && cw.world_is_valid(w, g_drag_item_id) {
+    if g_drag_item_id != -1 && world_is_valid(w, g_drag_item_id) {
         mp := rl.GetMousePosition()
-        drag_item := cw.world_get_item(w, g_drag_item_id)
+        drag_item := comp_get(w, g_drag_item_id, .Item, ItemComp)
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
             can := stash_can_place(drag_item, col, row)
@@ -285,9 +284,9 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
     for row in 0..<STASH_ROWS {
         for col in 0..<STASH_COLS {
             cell_id := local_stash().grid[row * STASH_COLS + col]
-            if cell_id == cw.INVALID_ENTITY || cell_id == g_drag_item_id { continue }
-            if !cw.world_is_valid(w, cell_id) || !cw.world_has_component(w, cell_id, .Item) { continue }
-            item := cw.world_get_item(w, cell_id)
+            if cell_id == INVALID_ENTITY || cell_id == g_drag_item_id { continue }
+            if !world_is_valid(w, cell_id) || !world_has_component(w, cell_id, .Item) { continue }
+            item := comp_get(w, cell_id, .Item, ItemComp)
             if item.pack_x != col || item.pack_y != row { continue }
 
             rc := rarity_color(item.rarity)
@@ -300,8 +299,8 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
 
             icon_sz := min(iw, ih) - 6
             draw_item_glyph(item.slot, ix + (iw - icon_sz) / 2, iy + 3, icon_sz, rc)
-            if cw.world_has_component(w, cell_id, .RenderConfig) {
-                name := loc_lookup(cw.render_config_name_cstr(cw.world_get_render_config(w, cell_id)))
+            if world_has_component(w, cell_id, .RenderConfig) {
+                name := loc_lookup(render_config_name_cstr(comp_get(w, cell_id, .RenderConfig, RenderConfigComp)))
                 rl.DrawTextEx(g_font_body, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
                     uis(10), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
             }
@@ -309,15 +308,15 @@ stash_draw_grid :: proc(w: ^cw.World, grid_r: rl.Rectangle) {
     }
 }
 
-stash_handle_grid_input :: proc(w: ^cw.World) {
+stash_handle_grid_input :: proc(w: ^World) {
     mp := rl.GetMousePosition()
 
     if rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
             cell_id := local_stash().grid[row * STASH_COLS + col]
-            if cell_id != cw.INVALID_ENTITY && cw.world_is_valid(w, cell_id) && cw.world_has_component(w, cell_id, .Item) {
-                item := cw.world_get_item(w, cell_id)
+            if cell_id != INVALID_ENTITY && world_is_valid(w, cell_id) && world_has_component(w, cell_id, .Item) {
+                item := comp_get(w, cell_id, .Item, ItemComp)
                 g_drag_origin_x   = item.pack_x
                 g_drag_origin_y   = item.pack_y
                 g_drag_from_equip = false
@@ -338,9 +337,9 @@ stash_handle_grid_input :: proc(w: ^cw.World) {
     }
 }
 
-draw_stash_hud :: proc(w: ^cw.World) {
+draw_stash_hud :: proc(w: ^World) {
     if !ui_has(.Stash) { return }
-    if g_stash_npc_id != cw.INVALID_ENTITY && !cw.world_is_valid(w, g_stash_npc_id) {
+    if g_stash_npc_id != INVALID_ENTITY && !world_is_valid(w, g_stash_npc_id) {
         ui_close_top()
         return
     }
@@ -395,7 +394,7 @@ draw_stash_hud :: proc(w: ^cw.World) {
     }
 
     _draw_drag_item(w)
-    if g_hover_item_id != cw.INVALID_ENTITY && g_drag_item_id == -1 {
+    if g_hover_item_id != INVALID_ENTITY && g_drag_item_id == -1 {
         draw_item_tooltip_or_compare(w, g_hover_item_id, mp.x, mp.y)
     }
 }

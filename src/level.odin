@@ -4,7 +4,6 @@ package main
 import "core:os"
 import "core:fmt"
 import "core:math"
-import cw  "clockwork"
 import p2p "p2p"
 
 LEVEL_DIR :: "data/levels"
@@ -50,7 +49,7 @@ LevelLight :: struct {
 
 LevelNPC :: struct {
     tx, ty:   i16,
-    npc_type: cw.NPCType,
+    npc_type: NPCType,
 }
 
 
@@ -83,7 +82,7 @@ LevelSwitch :: struct {
 
 LevelContainer :: struct {
     tx, ty:        i16,
-    kind:          cw.ContainerKind,
+    kind:          ContainerKind,
     loot_table_id: u8,
     gold_min:      u16,
     gold_max:      u16,
@@ -586,7 +585,7 @@ level_load :: proc(n: int) {
                 nx, nxc, nxok := lv_rbi16(raw, cur); if !nxok { break }; cur = nxc
                 ny, nyc, nyok := lv_rbi16(raw, cur); if !nyok { break }; cur = nyc
                 nt, ntc, ntok := lv_rb1(raw, cur); if !ntok { break }; cur = ntc
-                npc_type := cw.NPCType(clamp(int(nt), int(cw.NPCType.Shopkeeper), int(cw.NPCType.AbilityVendor)))
+                npc_type := NPCType(clamp(int(nt), int(NPCType.Shopkeeper), int(NPCType.AbilityVendor)))
                 append(&g_level_data.npcs, LevelNPC{
                     tx = nx,
                     ty = ny,
@@ -768,7 +767,7 @@ level_load :: proc(n: int) {
                 cgx, cgxc, cgxok := lv_rb2  (raw, cur); if !cgxok { break }; cur = cgxc
                 append(&g_level_data.containers, LevelContainer{
                     tx = ctx, ty = cty,
-                    kind          = cw.ContainerKind(clamp(int(cki), 0, 3)),
+                    kind          = ContainerKind(clamp(int(cki), 0, 3)),
                     loot_table_id = clt,
                     gold_min      = cgm,
                     gold_max      = cgx,
@@ -902,8 +901,8 @@ level_load :: proc(n: int) {
     g_wall_mask_dirty = true
 }
 
-level_apply :: proc(w: ^cw.World) {
-    spawn_level_npc :: proc(w: ^cw.World, npc_type: cw.NPCType, wx, wy: f32) -> int {
+level_apply :: proc(w: ^World) {
+    spawn_level_npc :: proc(w: ^World, npc_type: NPCType, wx, wy: f32) -> int {
         def_name := ""
         switch npc_type {
         case .Shopkeeper:
@@ -921,16 +920,16 @@ level_apply :: proc(w: ^cw.World) {
         case .Surgeon:
             def_name = "npc_surgeon"
         }
-        if def_name == "" { return cw.INVALID_ENTITY }
+        if def_name == "" { return INVALID_ENTITY }
 
         id := spawn_from_def(w, find_entity_def(g_entity_defs, def_name))
-        if id == cw.INVALID_ENTITY { return id }
-        if cw.world_has_component(w, id, .Transform) {
-            cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { return id }
+        if world_has_component(w, id, .Transform) {
+            comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
         }
         switch npc_type {
         case .Shopkeeper:
-            cw.world_set_wallet(w, id, cw.WalletComp{ gold = 200 })
+            comp_set(w, id, .Wallet, WalletComp{ gold = 200 })
             shop_roll_stock(w, id, 0)
         case .MutationWorkbench:
         case .Stash:
@@ -951,10 +950,10 @@ level_apply :: proc(w: ^cw.World) {
         wx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
 
-        spawn_enemy :: proc(w: ^cw.World, name: string, wx, wy: f32) -> int {
+        spawn_enemy :: proc(w: ^World, name: string, wx, wy: f32) -> int {
             id := spawn_from_def(w, find_entity_def(g_entity_defs, name))
-            if id != cw.INVALID_ENTITY {
-                cw.world_get_transform(w, id).position = {wx, wy, 0}
+            if id != INVALID_ENTITY {
+                comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
             }
             return id
         }
@@ -965,9 +964,9 @@ level_apply :: proc(w: ^cw.World) {
     for lt in g_level_data.lights {
         wx := f32(int(lt.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(lt.ty) * TILE_SIZE + TILE_SIZE / 2)
-        id := cw.world_create_entity(w)
-        cw.world_set_transform(w, id, cw.TransformComp{ position = {wx, wy, 0} })
-        cw.world_set_point_light(w, id, cw.PointLightComp{
+        id := world_create_entity(w)
+        comp_set(w, id, .Transform, TransformComp{ position = {wx, wy, 0} })
+        comp_set(w, id, .PointLight, PointLightComp{
             color     = { f32(lt.r), f32(lt.g), f32(lt.b) },
             radius    = lt.radius,
             intensity = lt.intensity,
@@ -986,8 +985,8 @@ level_apply :: proc(w: ^cw.World) {
         wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(d.ty) * TILE_SIZE + TILE_SIZE / 2)
         id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_door"))
-        if id == cw.INVALID_ENTITY { continue }
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { continue }
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
 
 
         prompt_cs: cstring
@@ -1001,12 +1000,12 @@ level_apply :: proc(w: ^cw.World) {
 
         prompt: [48]u8
         copy(prompt[:], string(prompt_cs))
-        cw.world_set_interactable(w, id, cw.InteractableComp{
+        comp_set(w, id, .Interactable, InteractableComp{
             radius = f32(TILE_SIZE) * 1.5,
             prompt = prompt,
             active = true,
         })
-        cw.world_set_openable(w, id, cw.OpenableComp{
+        comp_set(w, id, .Openable, OpenableComp{
             is_open      = false,
             tile         = {int(d.tx), int(d.ty)},
             link_id      = d.link_id,
@@ -1015,14 +1014,14 @@ level_apply :: proc(w: ^cw.World) {
 
 
         if d.open_type == .LeverSwitch {
-            cw.world_set_lockable(w, id, cw.LockableComp{
+            comp_set(w, id, .Lockable, LockableComp{
                 key_id    = 0,
                 is_locked = true,
             })
         } else if d.key_id != 0 {
 
             initially_locked := d.is_locked || d.open_type == .None
-            cw.world_set_lockable(w, id, cw.LockableComp{
+            comp_set(w, id, .Lockable, LockableComp{
                 key_id    = d.key_id,
                 is_locked = initially_locked,
             })
@@ -1033,8 +1032,8 @@ level_apply :: proc(w: ^cw.World) {
         wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
         id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_switch"))
-        if id == cw.INVALID_ENTITY { continue }
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { continue }
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
         is_toggle    := (s.flags & 0x01) != 0
         needs_weight := (s.flags & 0x02) != 0
         prompt: [48]u8
@@ -1043,12 +1042,12 @@ level_apply :: proc(w: ^cw.World) {
         } else {
             copy(prompt[:], string(t(.INTERACT_PULL_LEVER)))
         }
-        cw.world_set_interactable(w, id, cw.InteractableComp{
+        comp_set(w, id, .Interactable, InteractableComp{
             radius = f32(TILE_SIZE) * 1.2,
             prompt = prompt,
             active = !needs_weight,
         })
-        cw.world_set_signal_emitter(w, id, cw.SignalEmitterComp{
+        comp_set(w, id, .SignalEmitter, SignalEmitterComp{
             link_id      = s.link_id,
             is_on        = false,
             is_toggle    = is_toggle,
@@ -1062,8 +1061,8 @@ level_apply :: proc(w: ^cw.World) {
         wy := f32(int(c.ty) * TILE_SIZE + TILE_SIZE / 2)
         def_name := "env_chest" if c.kind == .Chest else "env_crate"
         id := spawn_from_def(w, find_entity_def(g_entity_defs, def_name))
-        if id == cw.INVALID_ENTITY { continue }
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { continue }
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
         prompt: [48]u8
         switch c.kind {
         case .Chest:   copy(prompt[:], string(t(.INTERACT_OPEN_CHEST)))
@@ -1071,12 +1070,12 @@ level_apply :: proc(w: ^cw.World) {
         case .Locker:  copy(prompt[:], string(t(.INTERACT_OPEN_LOCKER)))
         case .Cabinet: copy(prompt[:], string(t(.INTERACT_SEARCH_CABINET)))
         }
-        cw.world_set_interactable(w, id, cw.InteractableComp{
+        comp_set(w, id, .Interactable, InteractableComp{
             radius = f32(TILE_SIZE) * 1.2,
             prompt = prompt,
             active = true,
         })
-        cw.world_set_container(w, id, cw.ContainerComp{
+        comp_set(w, id, .Container, ContainerComp{
             kind          = c.kind,
             is_open       = false,
             loot_table_id = c.loot_table_id,
@@ -1089,16 +1088,16 @@ level_apply :: proc(w: ^cw.World) {
         wx := f32(int(li.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(li.ty) * TILE_SIZE + TILE_SIZE / 2)
         id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_lore_item"))
-        if id == cw.INVALID_ENTITY { continue }
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { continue }
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
         prompt: [48]u8
         copy(prompt[:], string(t(.INTERACT_READ_DOCUMENT)))
-        cw.world_set_interactable(w, id, cw.InteractableComp{
+        comp_set(w, id, .Interactable, InteractableComp{
             radius = f32(TILE_SIZE) * 1.2,
             prompt = prompt,
             active = true,
         })
-        cw.world_set_lore_item(w, id, cw.LoreItemComp{
+        comp_set(w, id, .LoreItem, LoreItemComp{
             lore_id = li.lore_id,
             is_read = false,
         })
@@ -1108,16 +1107,16 @@ level_apply :: proc(w: ^cw.World) {
         wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
         id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_phonograph"))
-        if id == cw.INVALID_ENTITY { continue }
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { continue }
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
         prompt: [48]u8
         copy(prompt[:], string(t(.INTERACT_WIND_PHONOGRAPH)))
-        cw.world_set_interactable(w, id, cw.InteractableComp{
+        comp_set(w, id, .Interactable, InteractableComp{
             radius = f32(TILE_SIZE) * 1.5,
             prompt = prompt,
             active = true,
         })
-        cw.world_set_phonograph(w, id, cw.PhonographComp{
+        comp_set(w, id, .Phonograph, PhonographComp{
             recording_id = ph.recording_id,
             is_playing   = false,
         })
@@ -1127,24 +1126,24 @@ level_apply :: proc(w: ^cw.World) {
         wx := f32(int(kp.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
         id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_key"))
-        if id == cw.INVALID_ENTITY { continue }
-        cw.world_get_transform(w, id).position = {wx, wy, 0}
+        if id == INVALID_ENTITY { continue }
+        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
         prompt: [48]u8
         copy(prompt[:], string(t(.INTERACT_TAKE_KEY)))
-        cw.world_set_interactable(w, id, cw.InteractableComp{
+        comp_set(w, id, .Interactable, InteractableComp{
             radius = f32(TILE_SIZE) * 1.0,
             prompt = prompt,
             active = true,
         })
         label: [40]u8
-        cw.world_set_key_pickup(w, id, cw.KeyPickupComp{
+        comp_set(w, id, .KeyPickup, KeyPickupComp{
             key_id = kp.key_id,
             label  = label,
         })
     }
 }
 
-spawn_players :: proc(w: ^cw.World) {
+spawn_players :: proc(w: ^World) {
     slots_to_spawn := 2 if p2p.session_is_online(&g_session) else 1
     ps             := g_level_data.player_start
     SLOT_OFFSET    :: f32(60)
@@ -1160,27 +1159,27 @@ spawn_players :: proc(w: ^cw.World) {
         wep := spawn_from_def(w, find_entity_def(g_entity_defs, "weapon_pistol"))
         pid := spawn_from_def(w, find_entity_def(g_entity_defs, "player"))
 
-        if cw.world_has_component(w, pid, .Transform) {
-            cw.world_get_transform(w, pid).position = sp
+        if world_has_component(w, pid, .Transform) {
+            comp_get(w, pid, .Transform, TransformComp).position = sp
         }
-        cw.world_set_equipment(w, pid, cw.EquipmentComp{ weapon_entity_id = wep })
-        cw.world_set_inventory(w, pid, cw.inventory_make_empty())
-        cw.world_set_respawn(w, pid, cw.RespawnComp{ spawn_pos = sp, delay = RESPAWN_DELAY })
-        cw.world_set_ability(w, pid, cw.AbilityComp{})
-        cw.world_set_mutation(w, pid, cw.mutation_container_empty())
-        cw.world_set_stats(w, pid, cw.StatsComp{
+        comp_set(w, pid, .Equipment, EquipmentComp{ weapon_entity_id = wep })
+        comp_set(w, pid, .Inventory, inventory_make_empty())
+        comp_set(w, pid, .Respawn, RespawnComp{ spawn_pos = sp, delay = RESPAWN_DELAY })
+        comp_set(w, pid, .Ability, AbilityComp{})
+        comp_set(w, pid, .MutationContainer, mutation_container_empty())
+        comp_set(w, pid, .Stats, StatsComp{
             strength    = 1,  dexterity  = 1, science    = 1,
             level       = 1,  xp         = 0, xp_next    = 100.0,
             stat_points = 0,  base_hp    = 100.0,
             base_energy = 100.0, base_speed = 240.0,
         })
-        cw.world_set_player(w, pid, cw.PlayerComp{ slot = slot })
-        cw.world_set_wallet(w, pid, cw.WalletComp{ gold = 0 })
-        cw.world_set_status_effect(w, pid, cw.StatusEffectComp{})
-        cw.world_set_key_ring(w, pid, cw.KeyRingComp{})
+        comp_set(w, pid, .Player, PlayerComp{ slot = slot })
+        comp_set(w, pid, .Wallet, WalletComp{ gold = 0 })
+        comp_set(w, pid, .StatusEffect, StatusEffectComp{})
+        comp_set(w, pid, .KeyRing, KeyRingComp{})
 
-        if slot == 0 && cw.world_has_component(w, pid, .RenderConfig) {
-            cw.render_config_set_sprite(cw.world_get_render_config(w, pid), g_player_stem)
+        if slot == 0 && world_has_component(w, pid, .RenderConfig) {
+            render_config_set_sprite(comp_get(w, pid, .RenderConfig, RenderConfigComp), g_player_stem)
         }
         w.player_ids[slot] = pid
     }
@@ -1194,7 +1193,7 @@ spawn_players :: proc(w: ^cw.World) {
     }
 }
 
-level_clear :: proc(w: ^cw.World) {
+level_clear :: proc(w: ^World) {
     g_pending_level_switch = 0
 
     minimap_clear_explored()
@@ -1204,32 +1203,32 @@ level_clear :: proc(w: ^cw.World) {
     ai_paths_clear()
     door_blockers_clear()
 
-    cw.world_reset(w)
+    world_reset(w)
 
     if ui_has(.Shop) {
         ui_close(.Shop)
     } else {
-        g_shop_npc_id = cw.INVALID_ENTITY
+        g_shop_npc_id = INVALID_ENTITY
     }
     if ui_has(.Stash) {
         ui_close(.Stash)
     } else {
-        g_stash_npc_id = cw.INVALID_ENTITY
+        g_stash_npc_id = INVALID_ENTITY
     }
     if ui_has(.AbilityVendor) {
         ui_close(.AbilityVendor)
     } else {
-        g_ability_vendor_npc_id = cw.INVALID_ENTITY
+        g_ability_vendor_npc_id = INVALID_ENTITY
     }
 }
 
 @(private = "file")
-_clear_all_shop_stock :: proc(w: ^cw.World) {
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC))
+_clear_all_shop_stock :: proc(w: ^World) {
+    npc_ids := world_query(w, query_mask(.NPC))
     defer delete(npc_ids)
     for id in npc_ids {
-        if !cw.world_is_valid(w, id) { continue }
-        npc := cw.world_get_npc(w, id)
+        if !world_is_valid(w, id) { continue }
+        npc := comp_get(w, id, .NPC, NPCComp)
         switch npc.npc_type {
         case .Shopkeeper:
             shop_clear_stock(w, id)
@@ -1241,7 +1240,7 @@ _clear_all_shop_stock :: proc(w: ^cw.World) {
     }
 }
 
-hub_apply :: proc(w: ^cw.World) {
+hub_apply :: proc(w: ^World) {
     has_shopkeeper         := false
     has_mutation_workbench := false
     has_stash              := false
@@ -1265,34 +1264,34 @@ hub_apply :: proc(w: ^cw.World) {
 
     if !has_shopkeeper {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_shopkeeper"))
-        if npc_id != cw.INVALID_ENTITY {
-            if cw.world_has_component(w, npc_id, .Transform) {
-                cw.world_get_transform(w, npc_id).position = HUB_SHOPKEEPER_POS
+        if npc_id != INVALID_ENTITY {
+            if world_has_component(w, npc_id, .Transform) {
+                comp_get(w, npc_id, .Transform, TransformComp).position = HUB_SHOPKEEPER_POS
             }
-            cw.world_set_wallet(w, npc_id, cw.WalletComp{ gold = 200 })
+            comp_set(w, npc_id, .Wallet, WalletComp{ gold = 200 })
             shop_roll_stock(w, npc_id, 0)
         }
     }
 
     if !has_mutation_workbench {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_mutation_workbench"))
-        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
-            cw.world_get_transform(w, npc_id).position = HUB_MUTATION_WORKBENCH_POS
+        if npc_id != INVALID_ENTITY && world_has_component(w, npc_id, .Transform) {
+            comp_get(w, npc_id, .Transform, TransformComp).position = HUB_MUTATION_WORKBENCH_POS
         }
     }
 
     if !has_stash {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_stash"))
-        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
-            cw.world_get_transform(w, npc_id).position = HUB_STASH_POS
+        if npc_id != INVALID_ENTITY && world_has_component(w, npc_id, .Transform) {
+            comp_get(w, npc_id, .Transform, TransformComp).position = HUB_STASH_POS
         }
     }
 
     if !has_ability_vendor {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_ability_vendor"))
-        if npc_id != cw.INVALID_ENTITY {
-            if cw.world_has_component(w, npc_id, .Transform) {
-                cw.world_get_transform(w, npc_id).position = HUB_ABILITY_VENDOR_POS
+        if npc_id != INVALID_ENTITY {
+            if world_has_component(w, npc_id, .Transform) {
+                comp_get(w, npc_id, .Transform, TransformComp).position = HUB_ABILITY_VENDOR_POS
             }
             ability_vendor_roll_stock(w, npc_id, 0)
         }
@@ -1300,19 +1299,19 @@ hub_apply :: proc(w: ^cw.World) {
 
     if !has_quest_board {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_quest_board"))
-        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
-            cw.world_get_transform(w, npc_id).position = HUB_QUEST_BOARD_POS
+        if npc_id != INVALID_ENTITY && world_has_component(w, npc_id, .Transform) {
+            comp_get(w, npc_id, .Transform, TransformComp).position = HUB_QUEST_BOARD_POS
         }
     }
 }
 
-hub_apply_quest_npcs :: proc(w: ^cw.World) {
+hub_apply_quest_npcs :: proc(w: ^World) {
     has_quartermaster := false
     has_surgeon       := false
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC))
+    npc_ids := world_query(w, query_mask(.NPC))
     defer delete(npc_ids)
     for nid in npc_ids {
-        switch cw.world_get_npc(w, nid).npc_type {
+        switch comp_get(w, nid, .NPC, NPCComp).npc_type {
         case .Quartermaster: has_quartermaster = true
         case .Surgeon:       has_surgeon       = true
         case .Shopkeeper, .MutationWorkbench, .Stash, .AbilityVendor, .QuestBoard:
@@ -1321,37 +1320,37 @@ hub_apply_quest_npcs :: proc(w: ^cw.World) {
 
     if quest_is_done(.Aberration) && !has_quartermaster {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_quartermaster"))
-        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
-            cw.world_get_transform(w, npc_id).position = HUB_QUARTERMASTER_POS
+        if npc_id != INVALID_ENTITY && world_has_component(w, npc_id, .Transform) {
+            comp_get(w, npc_id, .Transform, TransformComp).position = HUB_QUARTERMASTER_POS
         }
     }
 
     if quest_is_done(.PerfectRun) && !has_surgeon {
         npc_id := spawn_from_def(w, find_entity_def(g_entity_defs, "npc_surgeon"))
-        if npc_id != cw.INVALID_ENTITY && cw.world_has_component(w, npc_id, .Transform) {
-            cw.world_get_transform(w, npc_id).position = HUB_SURGEON_POS
+        if npc_id != INVALID_ENTITY && world_has_component(w, npc_id, .Transform) {
+            comp_get(w, npc_id, .Transform, TransformComp).position = HUB_SURGEON_POS
         }
     }
 }
 
 
-spawn_extraction_at_tile :: proc(w: ^cw.World, tx, ty: int) {
-    ext_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, ext_id, cw.TransformComp{
+spawn_extraction_at_tile :: proc(w: ^World, tx, ty: int) {
+    ext_id := world_create_entity(w)
+    comp_set(w, ext_id, .Transform, TransformComp{
         position = { f32(tx * TILE_SIZE + TILE_SIZE/2), f32(ty * TILE_SIZE + TILE_SIZE/2), 0 },
     })
-    cw.world_set_extraction(w, ext_id, cw.ExtractionComp{
+    comp_set(w, ext_id, .Extraction, ExtractionComp{
         interact_radius = EXTRACT_RADIUS,
         activate_time   = EXTRACT_TIME,
     })
 }
 
 
-spawn_extraction_point :: proc(w: ^cw.World) {
+spawn_extraction_point :: proc(w: ^World) {
     spawn_extraction_at_tile(w, 12, 7)
 }
 
-level_do_switch :: proc(w: ^cw.World, n: int) {
+level_do_switch :: proc(w: ^World, n: int) {
 
 
     fire_system_reset()
@@ -1377,7 +1376,7 @@ level_do_switch :: proc(w: ^cw.World, n: int) {
 }
 
 
-extraction_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+extraction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update       { return }
     if g_playing_state != .Gameplay { return }
 
@@ -1385,7 +1384,7 @@ extraction_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         g_raid_timer -= dt
         if g_raid_timer <= 0 {
             g_raid_timer = 0
-            if cw.world_is_valid(w, w.player_id) {
+            if world_is_valid(w, w.player_id) {
                 on_player_death(w)
             }
             return
@@ -1393,18 +1392,18 @@ extraction_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 
     pid := w.player_id
-    if !cw.world_is_valid(w, pid)                    { return }
-    if !cw.world_has_component(w, pid, .Transform)   { return }
+    if !world_is_valid(w, pid)                    { return }
+    if !world_has_component(w, pid, .Transform)   { return }
 
-    pt := cw.world_get_transform(w, pid).position
+    pt := comp_get(w, pid, .Transform, TransformComp).position
 
-    ids := cw.world_query(w, cw.query_mask(.Extraction, .Transform))
+    ids := world_query(w, query_mask(.Extraction, .Transform))
     defer delete(ids)
 
     for eid in ids {
-        ext := cw.world_get_extraction(w, eid)
+        ext := comp_get(w, eid, .Extraction, ExtractionComp)
         if ext.activated { continue }
-        et  := cw.world_get_transform(w, eid).position
+        et  := comp_get(w, eid, .Transform, TransformComp).position
         dx  := pt[0] - et[0]
         dy  := pt[1] - et[1]
         dist := math.sqrt(dx*dx + dy*dy)
@@ -1421,7 +1420,7 @@ extraction_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 }
 
-on_player_extract :: proc(w: ^cw.World) {
+on_player_extract :: proc(w: ^World) {
     extract_val := compute_extract_value(w, w.player_id)
     g_lifetime_stats.successful_raids += 1
     if extract_val > int(g_lifetime_stats.max_extract_gold) {
@@ -1432,8 +1431,8 @@ on_player_extract :: proc(w: ^cw.World) {
     }
 
     gold_earned := 0
-    if cw.world_has_component(w, w.player_id, .Wallet) {
-        wallet       := cw.world_get_wallet(w, w.player_id)
+    if world_has_component(w, w.player_id, .Wallet) {
+        wallet       := comp_get(w, w.player_id, .Wallet, WalletComp)
         gold_earned   = wallet.gold
         local_stash().gold += gold_earned
         wallet.gold   = 0
@@ -1442,8 +1441,8 @@ on_player_extract :: proc(w: ^cw.World) {
 
 
     serums_earned := 0
-    if cw.world_has_component(w, w.player_id, .MutationContainer) {
-        mc            := cw.world_get_mutation(w, w.player_id)
+    if world_has_component(w, w.player_id, .MutationContainer) {
+        mc            := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
         serums_earned  = mc.serums - g_raid_serums_start
         if serums_earned < 0 { serums_earned = 0 }
 
@@ -1453,7 +1452,7 @@ on_player_extract :: proc(w: ^cw.World) {
 
     quest_check_all(w)
 
-    if cw.world_is_valid(w, w.player_id) {
+    if world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
 
@@ -1461,27 +1460,27 @@ on_player_extract :: proc(w: ^cw.World) {
 }
 
 
-on_player_death :: proc(w: ^cw.World) {
+on_player_death :: proc(w: ^World) {
     g_lifetime_stats.deaths += 1
     raid_result_gold   = 0
     raid_result_serums = 0
     strip_player_carried(w, w.player_id)
-    if cw.world_is_valid(w, w.player_id) {
+    if world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
     set_playing_state(.DeathScreen)
 }
 
-level_exit_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+level_exit_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate        { return }
     if g_pending_level_switch != 0 { return }
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         pid := w.player_ids[slot]
-        if !cw.world_is_valid(w, pid) { continue }
-        if !cw.world_has_component(w, pid, .Transform) { continue }
+        if !world_is_valid(w, pid) { continue }
+        if !world_has_component(w, pid, .Transform) { continue }
 
-        pos      := cw.world_get_transform(w, pid).position
+        pos      := comp_get(w, pid, .Transform, TransformComp).position
         xPos, yPos := world_to_tile(pos[0], pos[1])
 
         for ex in g_level_data.exits {

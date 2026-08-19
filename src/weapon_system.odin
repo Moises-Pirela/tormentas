@@ -2,12 +2,11 @@ package main
 
 
 import "core:math"
-import cw "clockwork"
 
 
 @(private = "file")
 ArchetypeWeaponParams :: struct {
-    wep_type:         cw.WeaponType,
+    wep_type:         WeaponType,
     damage:           f32,
     fire_rate:        f32,
     projectile_speed: f32,
@@ -17,7 +16,7 @@ ArchetypeWeaponParams :: struct {
 }
 
 @(private = "file")
-ARCHETYPE_WEP_PARAMS := [cw.WeaponArchetype]ArchetypeWeaponParams{
+ARCHETYPE_WEP_PARAMS := [WeaponArchetype]ArchetypeWeaponParams{
 
     .None    = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
     .Pistol  = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
@@ -31,7 +30,7 @@ ARCHETYPE_WEP_PARAMS := [cw.WeaponArchetype]ArchetypeWeaponParams{
 
 
 @(private = "file")
-archetype_pellets :: proc(a: cw.WeaponArchetype) -> (count: int, spread: f32) {
+archetype_pellets :: proc(a: WeaponArchetype) -> (count: int, spread: f32) {
     #partial switch a {
     case .Shotgun: return 5, 0.30
     }
@@ -40,23 +39,23 @@ archetype_pellets :: proc(a: cw.WeaponArchetype) -> (count: int, spread: f32) {
 
 
 @(private = "file")
-equipped_primary_archetype :: proc(w: ^cw.World, holder_id: int) -> cw.WeaponArchetype {
-    if !cw.world_has_component(w, holder_id, .Inventory) { return .None }
-    inv := cw.world_get_inventory(w, holder_id)
-    eid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-    if eid == cw.INVALID_ENTITY                         { return .None }
-    if !cw.world_has_component(w, eid, .Item)           { return .None }
-    return cw.world_get_item(w, eid).weapon_archetype
+equipped_primary_archetype :: proc(w: ^World, holder_id: int) -> WeaponArchetype {
+    if !world_has_component(w, holder_id, .Inventory) { return .None }
+    inv := comp_get(w, holder_id, .Inventory, InventoryComp)
+    eid := inv.equipped[int(EquipSlot.WeaponPrimary)]
+    if eid == INVALID_ENTITY                         { return .None }
+    if !world_has_component(w, eid, .Item)           { return .None }
+    return comp_get(w, eid, .Item, ItemComp).weapon_archetype
 }
 
-weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
 
-    wep_ids := cw.world_query(w, cw.query_mask(.Weapon))
+    wep_ids := world_query(w, query_mask(.Weapon))
     defer delete(wep_ids)
     for id in wep_ids {
-        wp := cw.world_get_weapon_data(w, id)
+        wp := comp_get(w, id, .Weapon, WeaponComp)
         if wp.cooldown > 0 { wp.cooldown -= dt }
         if wp.is_reloading {
             wp.reload_timer -= dt
@@ -65,8 +64,8 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 wp.is_reloading  = false
                 wp.ammo_current  = wp.ammo_max
 
-                if cw.world_has_component(w, w.player_id, .Equipment) {
-                    if cw.world_get_equipment(w, w.player_id).weapon_entity_id == id {
+                if world_has_component(w, w.player_id, .Equipment) {
+                    if comp_get(w, w.player_id, .Equipment, EquipmentComp).weapon_entity_id == id {
                         play_sfx("reload_done")
                     }
                 }
@@ -75,44 +74,44 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 
 
-    inv_ids := cw.world_query(w, cw.query_mask(.Inventory))
+    inv_ids := world_query(w, query_mask(.Inventory))
     defer delete(inv_ids)
     for holder_id in inv_ids {
-        inv := cw.world_get_inventory(w, holder_id)
-        for i in 0..<cw.EQUIP_SLOT_COUNT {
+        inv := comp_get(w, holder_id, .Inventory, InventoryComp)
+        for i in 0..<EQUIP_SLOT_COUNT {
             eid := inv.equipped[i]
-            if eid == cw.INVALID_ENTITY                         { continue }
-            if !cw.world_has_component(w, eid, .Item)           { continue }
-            mi := cw.world_get_item(w, eid)
+            if eid == INVALID_ENTITY                         { continue }
+            if !world_has_component(w, eid, .Item)           { continue }
+            mi := comp_get(w, eid, .Item, ItemComp)
             if !mi.is_melee                                     { continue }
             if mi.melee_cooldown > 0 { mi.melee_cooldown -= dt }
         }
     }
 
 
-    fire_ids := cw.world_query(w, cw.query_mask(.Equipment, .InputState, .Transform))
+    fire_ids := world_query(w, query_mask(.Equipment, .InputState, .Transform))
     defer delete(fire_ids)
 
     for shooter_id in fire_ids {
 
-        if cw.world_has_component(w, shooter_id, .AimLock) { continue }
+        if world_has_component(w, shooter_id, .AimLock) { continue }
 
-        input := cw.world_get_input(w, shooter_id)^
+        input := comp_get(w, shooter_id, .InputState, InputStateComp)^
 
 
         archetype := equipped_primary_archetype(w, shooter_id)
 
-        equip_snap := cw.world_get_equipment(w, shooter_id)^
+        equip_snap := comp_get(w, shooter_id, .Equipment, EquipmentComp)^
         wid        := equip_snap.weapon_entity_id
-        if cw.world_is_valid(w, wid) && cw.world_has_component(w, wid, .Weapon) &&
-           cw.world_has_component(w, shooter_id, .Inventory) {
+        if world_is_valid(w, wid) && world_has_component(w, wid, .Weapon) &&
+           world_has_component(w, shooter_id, .Inventory) {
             p  := ARCHETYPE_WEP_PARAMS[archetype]
 
             {
-                inv  := cw.world_get_inventory(w, shooter_id)
-                peid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-                if peid != cw.INVALID_ENTITY && cw.world_has_component(w, peid, .Item) {
-                    it := cw.world_get_item(w, peid)
+                inv  := comp_get(w, shooter_id, .Inventory, InventoryComp)
+                peid := inv.equipped[int(EquipSlot.WeaponPrimary)]
+                if peid != INVALID_ENTITY && world_has_component(w, peid, .Item) {
+                    it := comp_get(w, peid, .Item, ItemComp)
                     if it.base_damage > 0      { p.damage           = it.base_damage }
                     if it.base_fire_rate > 0   { p.fire_rate        = it.base_fire_rate }
                     if it.base_ammo_max > 0    { p.ammo_max         = int(it.base_ammo_max) }
@@ -120,7 +119,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     if it.base_proj_speed > 0  { p.projectile_speed = it.base_proj_speed }
                 }
             }
-            wp := cw.world_get_weapon_data(w, wid)
+            wp := comp_get(w, wid, .Weapon, WeaponComp)
             wp.type             = p.wep_type
             wp.damage           = p.damage
             wp.fire_rate        = p.fire_rate
@@ -129,8 +128,8 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             wp.reload_time      = p.reload_time
 
             bonus_ammo_pct := f32(0)
-            if cw.world_has_component(w, shooter_id, .Stats) {
-                bonus_ammo_pct = cw.world_get_stats(w, shooter_id).bonus_ammo_pct
+            if world_has_component(w, shooter_id, .Stats) {
+                bonus_ammo_pct = comp_get(w, shooter_id, .Stats, StatsComp).bonus_ammo_pct
             }
             new_ammo_max := int(f32(p.ammo_max) * (1.0 + bonus_ammo_pct)) if p.ammo_max > 0 else 0
             if new_ammo_max != wp.ammo_max {
@@ -143,17 +142,17 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
         melee_handled := false
-        if cw.world_has_component(w, shooter_id, .Inventory) {
-            inv          := cw.world_get_inventory(w, shooter_id)
-            melee_item_id := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-            if melee_item_id != cw.INVALID_ENTITY &&
-               cw.world_has_component(w, melee_item_id, .Item) {
-                mi := cw.world_get_item(w, melee_item_id)
+        if world_has_component(w, shooter_id, .Inventory) {
+            inv          := comp_get(w, shooter_id, .Inventory, InventoryComp)
+            melee_item_id := inv.equipped[int(EquipSlot.WeaponPrimary)]
+            if melee_item_id != INVALID_ENTITY &&
+               world_has_component(w, melee_item_id, .Item) {
+                mi := comp_get(w, melee_item_id, .Item, ItemComp)
                 if mi.is_melee {
                     melee_handled = true
                     if input.fire_pressed && mi.melee_cooldown <= 0 {
 
-                        t_snap       := cw.world_get_transform(w, shooter_id)^
+                        t_snap       := comp_get(w, shooter_id, .Transform, TransformComp)^
                         arc_angle    := t_snap.rotation
                         arc_pos      := t_snap.position
                         m_dmg        := mi.melee_damage
@@ -161,15 +160,15 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         m_spread     := mi.melee_spread
                         m_cd_max     := mi.melee_cooldown_max
                         owner_faction: u8
-                        if cw.world_has_component(w, shooter_id, .Collider) {
-                            owner_faction = cw.world_get_collider(w, shooter_id).faction
+                        if world_has_component(w, shooter_id, .Collider) {
+                            owner_faction = comp_get(w, shooter_id, .Collider, ColliderComp).faction
                         }
                         damage_mult:      f32 = 1.0
                         melee_dmg_mult:   f32 = 1.0
                         melee_range_mult: f32 = 1.0
                         melee_speed_mult: f32 = 1.0
-                        if cw.world_has_component(w, shooter_id, .Stats) {
-                            st := cw.world_get_stats(w, shooter_id)
+                        if world_has_component(w, shooter_id, .Stats) {
+                            st := comp_get(w, shooter_id, .Stats, StatsComp)
                             damage_mult      = st.damage_mult
                             melee_dmg_mult   = st.melee_damage_mult
                             melee_range_mult = st.melee_range_mult
@@ -177,11 +176,11 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                         }
 
                         play_sfx("melee_swing")
-                        arc_id := cw.world_create_entity(w)
-                        cw.world_set_transform(w, arc_id, cw.TransformComp{
+                        arc_id := world_create_entity(w)
+                        comp_set(w, arc_id, .Transform, TransformComp{
                             position = arc_pos,
                         })
-                        cw.world_set_melee_arc(w, arc_id, cw.MeleeArcComp{
+                        comp_set(w, arc_id, .MeleeArc, MeleeArcComp{
                             angle         = arc_angle,
                             arc_spread    = m_spread,
                             radius        = m_range * melee_range_mult,
@@ -190,10 +189,10 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                             owner_faction = owner_faction,
                             lifetime      = 0.18,
                         })
-                        cw.world_set_self_destruct(w, arc_id, cw.SelfDestructComp{ timer = 0.18 })
+                        comp_set(w, arc_id, .SelfDestruct, SelfDestructComp{ timer = 0.18 })
 
 
-                        mi_fresh := cw.world_get_item(w, melee_item_id)
+                        mi_fresh := comp_get(w, melee_item_id, .Item, ItemComp)
                         mi_fresh.melee_cooldown = m_cd_max / melee_speed_mult
                     }
                 }
@@ -202,20 +201,20 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if melee_handled { continue }
 
 
-        equip := cw.world_get_equipment(w, shooter_id)^
+        equip := comp_get(w, shooter_id, .Equipment, EquipmentComp)^
         wid    = equip.weapon_entity_id
-        if !cw.world_is_valid(w, wid)               { continue }
-        if !cw.world_has_component(w, wid, .Weapon) { continue }
+        if !world_is_valid(w, wid)               { continue }
+        if !world_has_component(w, wid, .Weapon) { continue }
 
-        wp := cw.world_get_weapon_data(w, wid)
+        wp := comp_get(w, wid, .Weapon, WeaponComp)
 
         damage_mult:           f32 = 1.0
         fire_rate_mult:        f32 = 1.0
         reload_speed_mult:     f32 = 1.0
         projectile_speed_mult: f32 = 1.0
         ranged_blocked               := false
-        if cw.world_has_component(w, shooter_id, .Stats) {
-            st := cw.world_get_stats(w, shooter_id)
+        if world_has_component(w, shooter_id, .Stats) {
+            st := comp_get(w, shooter_id, .Stats, StatsComp)
             damage_mult           = st.damage_mult
             fire_rate_mult        = st.fire_rate_mult
             reload_speed_mult     = st.reload_speed_mult
@@ -250,16 +249,16 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
         wp_snap := wp^
-        t_snap  := cw.world_get_transform(w, shooter_id)^
+        t_snap  := comp_get(w, shooter_id, .Transform, TransformComp)^
 
         owner_faction: u8
-        if cw.world_has_component(w, shooter_id, .Collider) {
-            owner_faction = cw.world_get_collider(w, shooter_id).faction
+        if world_has_component(w, shooter_id, .Collider) {
+            owner_faction = comp_get(w, shooter_id, .Collider, ColliderComp).faction
         }
 
         pierce_rem := i8(0)
-        if cw.world_has_component(w, shooter_id, .Stats) {
-            pierce_rem = i8(clamp(cw.world_get_stats(w, shooter_id).bonus_pierce, 0, 10))
+        if world_has_component(w, shooter_id, .Stats) {
+            pierce_rem = i8(clamp(comp_get(w, shooter_id, .Stats, StatsComp).bonus_pierce, 0, 10))
         }
 
 
@@ -291,12 +290,12 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 0,
             }
 
-            proj_id := cw.world_create_entity(w)
-            cw.world_set_transform(w, proj_id, cw.TransformComp{
+            proj_id := world_create_entity(w)
+            comp_set(w, proj_id, .Transform, TransformComp{
                 position = origin,
                 rotation = fire_angle,
             })
-            cw.world_set_projectile(w, proj_id, cw.ProjectileComp{
+            comp_set(w, proj_id, .Projectile, ProjectileComp{
                 direction        = dir,
                 speed            = wp_snap.projectile_speed * projectile_speed_mult,
                 lifetime         = wp_snap.projectile_life,
@@ -307,10 +306,10 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 visual           = .Standard if damage_mult > 1.0 else .Smoke,
                 pierce_remaining = pierce_rem,
             })
-            cw.world_set_self_destruct(w, proj_id, cw.SelfDestructComp{
+            comp_set(w, proj_id, .SelfDestruct, SelfDestructComp{
                 timer = wp_snap.projectile_life,
             })
-            cw.world_set_projectile_tag(w, proj_id)
+            comp_add(w, proj_id, .ProjectileTag)
         }
 
         play_sfx("shoot")
@@ -323,7 +322,7 @@ weapon_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         )
 
 
-        wfresh := cw.world_get_weapon_data(w, wid)
+        wfresh := comp_get(w, wid, .Weapon, WeaponComp)
         if wp_snap.fire_rate > 0 {
             wfresh.cooldown = 1.0 / (wp_snap.fire_rate * fire_rate_mult)
         }

@@ -2,7 +2,6 @@ package main
 
 import "core:math"
 import rl "vendor:raylib"
-import cw "clockwork"
 
 
 AI_STATE_IDLE       :: u8(0)
@@ -36,7 +35,7 @@ emit_noise :: proc(pos: [3]f32, radius: f32, strength: f32) {
 }
 
 
-stealth_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+stealth_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     #partial switch event {
     case .EarlyUpdate: _stealth_movement_noise(w)
     case .Update:      _stealth_perception(w, dt)
@@ -46,17 +45,17 @@ stealth_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
 @(private = "file")
-_stealth_movement_noise :: proc(w: ^cw.World) {
-    for slot in 0..<cw.MAX_PLAYERS {
+_stealth_movement_noise :: proc(w: ^World) {
+    for slot in 0..<MAX_PLAYERS {
         pid := w.player_ids[slot]
-        if !cw.world_is_valid(w, pid)                { continue }
-        if !cw.world_has_component(w, pid, .Velocity) { continue }
+        if !world_is_valid(w, pid)                { continue }
+        if !world_has_component(w, pid, .Velocity) { continue }
 
-        vel := cw.world_get_velocity(w, pid)
+        vel := comp_get(w, pid, .Velocity, VelocityComp)
         spd := math.sqrt(vel.value[0]*vel.value[0] + vel.value[1]*vel.value[1])
         if spd < 8 { continue }
 
-        pos      := cw.world_get_transform(w, pid).position
+        pos      := comp_get(w, pid, .Transform, TransformComp).position
         radius   := spd * 0.6
         strength := STEALTH_NOISE_MED * (spd / f32(MOVE_SPEED))
         emit_noise(pos, radius, strength)
@@ -65,15 +64,15 @@ _stealth_movement_noise :: proc(w: ^cw.World) {
 
 
 @(private = "file")
-_stealth_perception :: proc(w: ^cw.World, dt: f32) {
+_stealth_perception :: proc(w: ^World, dt: f32) {
     dark := g_light_ambient <= STEALTH_DARK_THRESH
 
-    ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform))
+    ids := world_query(w, query_mask(.AIAgent, .Transform))
     defer delete(ids)
 
     for id in ids {
-        ai := cw.world_get_ai(w, id)
-        t  := cw.world_get_transform(w, id)
+        ai := comp_get(w, id, .AIAgent, AIAgentComp)
+        t  := comp_get(w, id, .Transform, TransformComp)
 
 
         if ai.state == AI_STATE_ATTACK { continue }
@@ -180,8 +179,8 @@ _stealth_angle_diff :: proc(a, b: f32) -> f32 {
 }
 
 
-draw_stealth_indicators :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform))
+draw_stealth_indicators :: proc(w: ^World) {
+    ids := world_query(w, query_mask(.AIAgent, .Transform))
     defer delete(ids)
 
     ICON_FS :: f32(15)
@@ -192,10 +191,10 @@ draw_stealth_indicators :: proc(w: ^cw.World) {
     for id in ids {
         if is_fog_hidden(w, id) { continue }
 
-        ai := cw.world_get_ai(w, id)
+        ai := comp_get(w, id, .AIAgent, AIAgentComp)
         if ai.state == AI_STATE_IDLE || ai.state == AI_STATE_ATTACK { continue }
 
-        t   := cw.world_get_transform(w, id)
+        t   := comp_get(w, id, .Transform, TransformComp)
         iso := world_to_iso_xy(t.position[0], t.position[1])
 
         bx  := iso.x - BAR_W * 0.5

@@ -2,7 +2,6 @@ package main
 
 
 import "core:math"
-import cw "clockwork"
 
 
 AbilityTrait :: enum u8 {
@@ -69,7 +68,7 @@ AbilityExecComp :: struct {
     p1:               f32,
     p2:               f32,
 
-    status:           cw.StatusEffectType,
+    status:           StatusEffectType,
     status_dur:       f32,
     status_str:       f32,
 
@@ -98,7 +97,7 @@ AbilityDef :: struct {
 }
 
 
-ABILITY_DEFS := [cw.AbilityType]AbilityDef{
+ABILITY_DEFS := [AbilityType]AbilityDef{
 
     .None = {},
 
@@ -342,7 +341,7 @@ ABILITY_DEFS := [cw.AbilityType]AbilityDef{
 }
 
 
-ability_slot_to_equip :: proc(slot_idx: int) -> cw.EquipSlot {
+ability_slot_to_equip :: proc(slot_idx: int) -> EquipSlot {
     switch slot_idx {
     case 0: return .Ability1
     case 1: return .Ability2
@@ -352,47 +351,47 @@ ability_slot_to_equip :: proc(slot_idx: int) -> cw.EquipSlot {
     return .Ability1
 }
 
-player_ability_in_slot :: proc(w: ^cw.World, player_id: int, slot_idx: int) -> cw.AbilityType {
-    if !cw.world_has_component(w, player_id, .Inventory) { return .None }
-    inv  := cw.world_get_inventory(w, player_id)
+player_ability_in_slot :: proc(w: ^World, player_id: int, slot_idx: int) -> AbilityType {
+    if !world_has_component(w, player_id, .Inventory) { return .None }
+    inv  := comp_get(w, player_id, .Inventory, InventoryComp)
     eq   := ability_slot_to_equip(slot_idx)
     iid  := inv.equipped[eq]
-    if !cw.world_is_valid(w, iid) { return .None }
-    if !cw.world_has_component(w, iid, .Item) { return .None }
-    raw := cw.world_get_item(w, iid).ability_type
+    if !world_is_valid(w, iid) { return .None }
+    if !world_has_component(w, iid, .Item) { return .None }
+    raw := comp_get(w, iid, .Item, ItemComp).ability_type
 
     if int(raw) >= len(ABILITY_DEFS) { return .None }
     return raw
 }
 
-player_has_ability :: proc(w: ^cw.World, player_id: int, at: cw.AbilityType) -> bool {
+player_has_ability :: proc(w: ^World, player_id: int, at: AbilityType) -> bool {
     if at == .None { return false }
-    for i in 0..<cw.ABILITY_SLOT_COUNT {
+    for i in 0..<ABILITY_SLOT_COUNT {
         if player_ability_in_slot(w, player_id, i) == at { return true }
     }
     return false
 }
 
 
-ability_item_level :: proc(w: ^cw.World, player_id: int, slot_idx: int) -> int {
-    if !cw.world_has_component(w, player_id, .Inventory) { return 1 }
-    inv := cw.world_get_inventory(w, player_id)
+ability_item_level :: proc(w: ^World, player_id: int, slot_idx: int) -> int {
+    if !world_has_component(w, player_id, .Inventory) { return 1 }
+    inv := comp_get(w, player_id, .Inventory, InventoryComp)
     eq  := ability_slot_to_equip(slot_idx)
     iid := inv.equipped[eq]
-    if !cw.world_is_valid(w, iid)             { return 1 }
-    if !cw.world_has_component(w, iid, .Item) { return 1 }
-    lv := int(cw.world_get_item(w, iid).ability_level)
+    if !world_is_valid(w, iid)             { return 1 }
+    if !world_has_component(w, iid, .Item) { return 1 }
+    lv := int(comp_get(w, iid, .Item, ItemComp).ability_level)
     return max(1, lv)
 }
 
 
-ability_base_damage :: proc(w: ^cw.World, id: int, def: ^AbilityDef, level: int, exec_p1: f32) -> f32 {
+ability_base_damage :: proc(w: ^World, id: int, def: ^AbilityDef, level: int, exec_p1: f32) -> f32 {
     level_bonus := 1.0 + f32(max(0, level - 1)) * def.level_scale
 
     stat_mult: f32 = 1.0
     sci_val:   int = 0
-    if cw.world_has_component(w, id, .Stats) {
-        st        := cw.world_get_stats(w, id)
+    if world_has_component(w, id, .Stats) {
+        st        := comp_get(w, id, .Stats, StatsComp)
         stat_mult  = st.damage_mult
         sci_val    = st.science
     }
@@ -402,19 +401,19 @@ ability_base_damage :: proc(w: ^cw.World, id: int, def: ^AbilityDef, level: int,
     case .Weapon:
 
         weapon_dmg: f32 = 0
-        if cw.world_has_component(w, id, .Equipment) {
-            equip := cw.world_get_equipment(w, id)
+        if world_has_component(w, id, .Equipment) {
+            equip := comp_get(w, id, .Equipment, EquipmentComp)
             wid   := equip.weapon_entity_id
-            if cw.world_is_valid(w, wid) && cw.world_has_component(w, wid, .Weapon) {
-                weapon_dmg = cw.world_get_weapon_data(w, wid).damage
+            if world_is_valid(w, wid) && world_has_component(w, wid, .Weapon) {
+                weapon_dmg = comp_get(w, wid, .Weapon, WeaponComp).damage
             }
         }
 
-        if weapon_dmg == 0 && cw.world_has_component(w, id, .Inventory) {
-            inv  := cw.world_get_inventory(w, id)
-            peid := inv.equipped[int(cw.EquipSlot.WeaponPrimary)]
-            if cw.world_is_valid(w, peid) && cw.world_has_component(w, peid, .Item) {
-                weapon_dmg = cw.world_get_item(w, peid).melee_damage
+        if weapon_dmg == 0 && world_has_component(w, id, .Inventory) {
+            inv  := comp_get(w, id, .Inventory, InventoryComp)
+            peid := inv.equipped[int(EquipSlot.WeaponPrimary)]
+            if world_is_valid(w, peid) && world_has_component(w, peid, .Item) {
+                weapon_dmg = comp_get(w, peid, .Item, ItemComp).melee_damage
             }
         }
 
@@ -432,9 +431,9 @@ ability_base_damage :: proc(w: ^cw.World, id: int, def: ^AbilityDef, level: int,
 
 
 @(private = "file")
-_maybe_apply_status :: proc(w: ^cw.World, enemy_id: int, exec: AbilityExecComp) {
-    if exec.status == cw.StatusEffectType(0) { return }
-    cw.status_effect_apply(w, enemy_id, cw.StatusEffect{
+_maybe_apply_status :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
+    if exec.status == StatusEffectType(0) { return }
+    status_effect_apply(w, enemy_id, StatusEffect{
         type            = exec.status,
         application     = .Base,
         stack_behavior  = .Refresh,
@@ -445,15 +444,15 @@ _maybe_apply_status :: proc(w: ^cw.World, enemy_id: int, exec: AbilityExecComp) 
 
 
 @(private = "file")
-_maybe_stamp_damage_amp :: proc(w: ^cw.World, enemy_id: int, exec: AbilityExecComp) {
+_maybe_stamp_damage_amp :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
     if exec.damage_amp_mult <= 0 { return }
-    if cw.world_has_component(w, enemy_id, .DamageAmp) {
+    if world_has_component(w, enemy_id, .DamageAmp) {
 
-        da := cw.world_get_damage_amp(w, enemy_id)
+        da := comp_get(w, enemy_id, .DamageAmp, DamageAmpComp)
         da.mult  *= exec.damage_amp_mult
         da.timer  = max(da.timer, exec.damage_amp_dur)
     } else {
-        cw.world_set_damage_amp(w, enemy_id, cw.DamageAmpComp{
+        comp_set(w, enemy_id, .DamageAmp, DamageAmpComp{
             mult  = exec.damage_amp_mult,
             timer = exec.damage_amp_dur,
         })
@@ -462,44 +461,44 @@ _maybe_stamp_damage_amp :: proc(w: ^cw.World, enemy_id: int, exec: AbilityExecCo
 
 
 @(private = "file")
-_maybe_stamp_contagion :: proc(w: ^cw.World, enemy_id: int, exec: AbilityExecComp) {
+_maybe_stamp_contagion :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
     if !exec.spread_on_poison_death { return }
     if exec.status != .Poison       { return }
-    cw.world_set_contagion_tag(w, enemy_id)
+    comp_add(w, enemy_id, .ContagionTag)
 }
 
 
 MAX_SPAWNS :: 24
 
 @(private = "file")
-ability_spawn_projectile :: proc(w: ^cw.World, shooter_id: int,
+ability_spawn_projectile :: proc(w: ^World, shooter_id: int,
                                   dir: [3]f32, damage: f32, pierce: i8 = 0) {
 
     proj_speed: f32 = 380
     proj_life:  f32 = 1.8
 
-    if cw.world_has_component(w, shooter_id, .Equipment) {
-        equip := cw.world_get_equipment(w, shooter_id)
+    if world_has_component(w, shooter_id, .Equipment) {
+        equip := comp_get(w, shooter_id, .Equipment, EquipmentComp)
         wid   := equip.weapon_entity_id
-        if cw.world_is_valid(w, wid) && cw.world_has_component(w, wid, .Weapon) {
-            wp         := cw.world_get_weapon_data(w, wid)
+        if world_is_valid(w, wid) && world_has_component(w, wid, .Weapon) {
+            wp         := comp_get(w, wid, .Weapon, WeaponComp)
             proj_speed  = wp.projectile_speed
             proj_life   = wp.projectile_life
         }
     }
 
     proj_speed_mult: f32 = 1.0
-    if cw.world_has_component(w, shooter_id, .Stats) {
-        proj_speed_mult = cw.world_get_stats(w, shooter_id).projectile_speed_mult
+    if world_has_component(w, shooter_id, .Stats) {
+        proj_speed_mult = comp_get(w, shooter_id, .Stats, StatsComp).projectile_speed_mult
     }
 
     owner_faction: u8
-    if cw.world_has_component(w, shooter_id, .Collider) {
-        owner_faction = cw.world_get_collider(w, shooter_id).faction
+    if world_has_component(w, shooter_id, .Collider) {
+        owner_faction = comp_get(w, shooter_id, .Collider, ColliderComp).faction
     }
 
-    if !cw.world_has_component(w, shooter_id, .Transform) { return }
-    t_snap := cw.world_get_transform(w, shooter_id)^
+    if !world_has_component(w, shooter_id, .Transform) { return }
+    t_snap := comp_get(w, shooter_id, .Transform, TransformComp)^
 
     spawn_offset :: PLAYER_RADIUS + 6
     origin := [3]f32{
@@ -508,9 +507,9 @@ ability_spawn_projectile :: proc(w: ^cw.World, shooter_id: int,
         0,
     }
 
-    proj_id := cw.world_create_entity(w)
-    cw.world_set_transform(w, proj_id, cw.TransformComp{ position = origin })
-    cw.world_set_projectile(w, proj_id, cw.ProjectileComp{
+    proj_id := world_create_entity(w)
+    comp_set(w, proj_id, .Transform, TransformComp{ position = origin })
+    comp_set(w, proj_id, .Projectile, ProjectileComp{
         direction        = dir,
         speed            = proj_speed * proj_speed_mult,
         lifetime         = proj_life,
@@ -521,8 +520,8 @@ ability_spawn_projectile :: proc(w: ^cw.World, shooter_id: int,
         visual           = .Standard,
         pierce_remaining = pierce,
     })
-    cw.world_set_self_destruct(w, proj_id, cw.SelfDestructComp{ timer = proj_life })
-    cw.world_set_projectile_tag(w, proj_id)
+    comp_set(w, proj_id, .SelfDestruct, SelfDestructComp{ timer = proj_life })
+    comp_add(w, proj_id, .ProjectileTag)
     play_sfx("shoot")
 }
 
@@ -538,23 +537,23 @@ _trait_color :: proc(trait: AbilityTrait) -> (er, eg, eb: u8) {
 }
 
 @(private = "file")
-ability_blast_aoe :: proc(w: ^cw.World, shooter_id: int, radius, damage: f32,
+ability_blast_aoe :: proc(w: ^World, shooter_id: int, radius, damage: f32,
                            trait: AbilityTrait = .None,
                            exec: AbilityExecComp = {}) {
-    if !cw.world_has_component(w, shooter_id, .Transform) { return }
-    origin := cw.world_get_transform(w, shooter_id).position
+    if !world_has_component(w, shooter_id, .Transform) { return }
+    origin := comp_get(w, shooter_id, .Transform, TransformComp).position
 
-    enemy_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Health, .Transform))
+    enemy_ids := world_query(w, query_mask(.AIAgent, .Health, .Transform))
     defer delete(enemy_ids)
 
     hit_any := false
     r2      := radius * radius
     for eid in enemy_ids {
-        et := cw.world_get_transform(w, eid)
+        et := comp_get(w, eid, .Transform, TransformComp)
         dx := et.position[0] - origin[0]
         dy := et.position[1] - origin[1]
         if dx*dx + dy*dy <= r2 {
-            cw.world_push_damage(w, eid, damage, shooter_id)
+            world_push_damage(w, eid, damage, shooter_id)
             _maybe_apply_status(w, eid, exec)
             _maybe_stamp_damage_amp(w, eid, exec)
             _maybe_stamp_contagion(w, eid, exec)
@@ -569,22 +568,22 @@ ability_blast_aoe :: proc(w: ^cw.World, shooter_id: int, radius, damage: f32,
 
 
 @(private = "file")
-ability_blast_cone :: proc(w: ^cw.World, shooter_id: int,
+ability_blast_cone :: proc(w: ^World, shooter_id: int,
                             half_angle_rad, range, damage: f32,
                             trait: AbilityTrait = .None,
                             exec: AbilityExecComp = {}) {
-    if !cw.world_has_component(w, shooter_id, .Transform) { return }
-    t      := cw.world_get_transform(w, shooter_id)
+    if !world_has_component(w, shooter_id, .Transform) { return }
+    t      := comp_get(w, shooter_id, .Transform, TransformComp)
     origin := t.position
     rot    := t.rotation
 
-    enemy_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Health, .Transform))
+    enemy_ids := world_query(w, query_mask(.AIAgent, .Health, .Transform))
     defer delete(enemy_ids)
 
     hit_any := false
     r2      := range * range
     for eid in enemy_ids {
-        et := cw.world_get_transform(w, eid)
+        et := comp_get(w, eid, .Transform, TransformComp)
         dx := et.position[0] - origin[0]
         dy := et.position[1] - origin[1]
         dist_sq := dx*dx + dy*dy
@@ -598,7 +597,7 @@ ability_blast_cone :: proc(w: ^cw.World, shooter_id: int,
         for diff < -math.PI { diff += 2.0 * math.PI }
 
         if math.abs(diff) <= half_angle_rad {
-            cw.world_push_damage(w, eid, damage, shooter_id)
+            world_push_damage(w, eid, damage, shooter_id)
             _maybe_apply_status(w, eid, exec)
             _maybe_stamp_damage_amp(w, eid, exec)
             _maybe_stamp_contagion(w, eid, exec)
@@ -612,25 +611,25 @@ ability_blast_cone :: proc(w: ^cw.World, shooter_id: int,
 }
 
 
-ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
-    if !cw.world_is_valid(w, w.player_id)                { return }
-    if !cw.world_has_component(w, w.player_id, .Ability) { return }
+    if !world_is_valid(w, w.player_id)                { return }
+    if !world_has_component(w, w.player_id, .Ability) { return }
 
     id := w.player_id
 
-    if cw.world_has_component(w, id, .Respawn) &&
-       cw.world_get_respawn(w, id).timer > 0 { return }
+    if world_has_component(w, id, .Respawn) &&
+       comp_get(w, id, .Respawn, RespawnComp).timer > 0 { return }
 
-    ab_snap := cw.world_get_ability(w, id)^
-    input   := cw.world_get_input(w, id)^
+    ab_snap := comp_get(w, id, .Ability, AbilityComp)^
+    input   := comp_get(w, id, .InputState, InputStateComp)^
 
-    if !cw.world_has_component(w, id, .Transform) { return }
-    t_snap := cw.world_get_transform(w, id)^
+    if !world_has_component(w, id, .Transform) { return }
+    t_snap := comp_get(w, id, .Transform, TransformComp)^
 
     cooldown_mult: f32 = 1.0
-    if cw.world_has_component(w, id, .Stats) {
-        st := cw.world_get_stats(w, id)
+    if world_has_component(w, id, .Stats) {
+        st := comp_get(w, id, .Stats, StatsComp)
         if st.active_abilities_blocked { return }
         cooldown_mult = st.ability_cooldown_mult
     }
@@ -644,7 +643,7 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
     facing := [3]f32{ math.cos(t_snap.rotation), math.sin(t_snap.rotation), 0 }
 
-    inputs_pressed := [cw.ABILITY_SLOT_COUNT]bool{
+    inputs_pressed := [ABILITY_SLOT_COUNT]bool{
         input.skill1_pressed,
         input.skill2_pressed,
         input.skill3_pressed,
@@ -661,7 +660,7 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         cnt^ += 1
     }
 
-    for slot_idx in 0..<cw.ABILITY_SLOT_COUNT {
+    for slot_idx in 0..<ABILITY_SLOT_COUNT {
         ab_type := player_ability_in_slot(w, id, slot_idx)
         if ab_type == .None { continue }
 
@@ -724,11 +723,11 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     st.charging    = false
                     st.burst_timer = 0
 
-                    cw.world_clear_aim_lock(w, id)
+                    comp_rm(w, id, .AimLock)
                 }
 
 
-                cw.world_get_transform(w, id).rotation += SPIN_ANGULAR_VELOCITY * dt
+                comp_get(w, id, .Transform, TransformComp).rotation += SPIN_ANGULAR_VELOCITY * dt
             } else {
 
                 st.charge_timer -= dt
@@ -759,11 +758,11 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
         effective_energy_cost := def.energy_cost
-        if def.energy_cost > 0 && cw.world_has_component(w, id, .Stats) {
-            effective_energy_cost *= cw.world_get_stats(w, id).energy_cost_mult
+        if def.energy_cost > 0 && world_has_component(w, id, .Stats) {
+            effective_energy_cost *= comp_get(w, id, .Stats, StatsComp).energy_cost_mult
         }
-        if effective_energy_cost > 0 && cw.world_has_component(w, id, .Health) {
-            h_en := cw.world_get_health(w, id)
+        if effective_energy_cost > 0 && world_has_component(w, id, .Health) {
+            h_en := comp_get(w, id, .Health, HealthComp)
             if h_en.energy < effective_energy_cost {
                 play_sfx("no_energy")
                 continue
@@ -832,7 +831,7 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     did_activate    = true
                     play_sfx("ability_fan")
 
-                    cw.world_set_aim_lock(w, id)
+                    comp_add(w, id, .AimLock)
                 }
 
             case .PrimeDodge:
@@ -856,24 +855,24 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             case .DetonateStatus:
 
-                if cw.world_has_component(w, id, .Transform) {
-                    origin  := cw.world_get_transform(w, id).position
+                if world_has_component(w, id, .Transform) {
+                    origin  := comp_get(w, id, .Transform, TransformComp).position
                     dmg     := ability_base_damage(w, id, def, level, ex.p1)
                     scan_r2 := ex.p2 * ex.p2
-                    ids     := cw.world_query(w, cw.query_mask(.AIAgent, .Health, .Transform, .StatusEffect))
+                    ids     := world_query(w, query_mask(.AIAgent, .Health, .Transform, .StatusEffect))
                     defer delete(ids)
                     detonated := false
                     for eid in ids {
-                        et := cw.world_get_transform(w, eid)
+                        et := comp_get(w, eid, .Transform, TransformComp)
                         dx := et.position[0] - origin[0]
                         dy := et.position[1] - origin[1]
                         if dx*dx + dy*dy > scan_r2 { continue }
-                        sec := cw.world_get_status_effects(w, eid)
-                        if !cw.status_effect_is_active(sec, ex.status) { continue }
-                        cw.world_push_damage(w, eid, dmg, id)
+                        sec := comp_get(w, eid, .StatusEffect, StatusEffectComp)
+                        if !status_effect_is_active(sec, ex.status) { continue }
+                        world_push_damage(w, eid, dmg, id)
                         push_explosion(et.position[0], et.position[1], 60, 255, 160, 30)
 
-                        cw.status_effect_get(sec, ex.status).duration = 0
+                        status_effect_get(sec, ex.status).duration = 0
                         detonated = true
                     }
                     if detonated { play_sfx("ability_fan") }
@@ -882,22 +881,22 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             case .HomingVolley:
 
-                if cw.world_has_component(w, id, .Transform) {
-                    t_hv    := cw.world_get_transform(w, id)
+                if world_has_component(w, id, .Transform) {
+                    t_hv    := comp_get(w, id, .Transform, TransformComp)
                     n_proj  := int(ex.p1)
                     dmg     := ability_base_damage(w, id, def, level, 1.0)
                     spread  :: f32(0.5)
 
                     owner_faction: u8
-                    if cw.world_has_component(w, id, .Collider) {
-                        owner_faction = cw.world_get_collider(w, id).faction
+                    if world_has_component(w, id, .Collider) {
+                        owner_faction = comp_get(w, id, .Collider, ColliderComp).faction
                     }
 
                     proj_speed: f32 = 280
                     proj_life:  f32 = 3.0
                     proj_speed_mult: f32 = 1.0
-                    if cw.world_has_component(w, id, .Stats) {
-                        proj_speed_mult = cw.world_get_stats(w, id).projectile_speed_mult
+                    if world_has_component(w, id, .Stats) {
+                        proj_speed_mult = comp_get(w, id, .Stats, StatsComp).projectile_speed_mult
                     }
 
                     for i in 0..<n_proj {
@@ -910,9 +909,9 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                             0,
                         }
 
-                        pid := cw.world_create_entity(w)
-                        cw.world_set_transform(w, pid, cw.TransformComp{ position = origin })
-                        cw.world_set_projectile(w, pid, cw.ProjectileComp{
+                        pid := world_create_entity(w)
+                        comp_set(w, pid, .Transform, TransformComp{ position = origin })
+                        comp_set(w, pid, .Projectile, ProjectileComp{
                             direction     = dir,
                             speed         = proj_speed * proj_speed_mult,
                             lifetime      = proj_life,
@@ -922,13 +921,13 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                             owner_faction = owner_faction,
                             visual        = .Standard,
                         })
-                        cw.world_set_homing(w, pid, cw.HomingComp{
+                        comp_set(w, pid, .Homing, HomingComp{
                             turn_rate  = ex.p2,
                             seek_range = 600,
                             owner_id   = id,
                         })
-                        cw.world_set_self_destruct(w, pid, cw.SelfDestructComp{ timer = proj_life })
-                        cw.world_set_projectile_tag(w, pid)
+                        comp_set(w, pid, .SelfDestruct, SelfDestructComp{ timer = proj_life })
+                        comp_add(w, pid, .ProjectileTag)
                     }
                     play_sfx("ability_fan")
                 }
@@ -936,14 +935,14 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             case .PlaceTrap:
 
-                if cw.world_has_component(w, id, .Transform) {
-                    t_pt := cw.world_get_transform(w, id)
+                if world_has_component(w, id, .Transform) {
+                    t_pt := comp_get(w, id, .Transform, TransformComp)
                     dmg  := ability_base_damage(w, id, def, level, ex.p2)
                     er, eg, eb := _trait_color(def.trait)
 
-                    trap_id := cw.world_create_entity(w)
-                    cw.world_set_transform(w, trap_id, cw.TransformComp{ position = t_pt.position })
-                    cw.world_set_proximity_trigger(w, trap_id, cw.ProximityTriggerComp{
+                    trap_id := world_create_entity(w)
+                    comp_set(w, trap_id, .Transform, TransformComp{ position = t_pt.position })
+                    comp_set(w, trap_id, .ProximityTrigger, ProximityTriggerComp{
                         arm_timer  = 0.5,
                         radius     = ex.p1,
                         damage     = dmg,
@@ -963,7 +962,7 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 case .Overcharged:
 
                     dur := def.cd_max * 0.5
-                    cw.world_set_overcharge_buff(w, id, cw.OverchargeBuffComp{
+                    comp_set(w, id, .OverchargeBuff, OverchargeBuffComp{
                         speed_mult     = ex.p1,
                         fire_rate_mult = ex.p2,
                         damage_mult    = 1.25,
@@ -974,7 +973,7 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 case .NecroticSurge:
 
                     base_heal := ability_base_damage(w, id, def, level, 0.3)
-                    cw.world_set_kill_heal(w, id, cw.KillHealComp{
+                    comp_set(w, id, .KillHeal, KillHealComp{
                         amount   = base_heal,
                         duration = ex.p2,
                         timer    = 0,
@@ -1001,9 +1000,9 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     er, eg, eb = 160, 100, 255
                 }
 
-                gid := cw.world_create_entity(w)
-                cw.world_set_transform(w, gid, t_snap)
-                cw.world_set_grenade(w, gid, cw.GrenadeComp{
+                gid := world_create_entity(w)
+                comp_set(w, gid, .Transform, t_snap)
+                comp_set(w, gid, .Grenade, GrenadeComp{
                     owner_id         = id,
                     target           = input.mouse_world,
                     speed            = 360,
@@ -1022,8 +1021,8 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 play_sfx("ability_fan")
 
             case .HealSelf:
-                if cw.world_has_component(w, id, .Health) {
-                    h    := cw.world_get_health(w, id)
+                if world_has_component(w, id, .Health) {
+                    h    := comp_get(w, id, .Health, HealthComp)
                     heal := ex.p1 * (1.0 + f32(max(0, level - 1)) * def.level_scale)
                     h.current = min(h.current + heal, h.max)
                 }
@@ -1031,11 +1030,11 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 play_sfx("levelup")
 
             case .InstantReload:
-                if cw.world_has_component(w, id, .Equipment) {
-                    equip := cw.world_get_equipment(w, id)
+                if world_has_component(w, id, .Equipment) {
+                    equip := comp_get(w, id, .Equipment, EquipmentComp)
                     wid   := equip.weapon_entity_id
-                    if cw.world_is_valid(w, wid) && cw.world_has_component(w, wid, .Weapon) {
-                        wc             := cw.world_get_weapon_data(w, wid)
+                    if world_is_valid(w, wid) && world_has_component(w, wid, .Weapon) {
+                        wc             := comp_get(w, wid, .Weapon, WeaponComp)
                         wc.ammo_current = wc.ammo_max
                         wc.is_reloading = false
                         wc.reload_timer = 0
@@ -1052,7 +1051,7 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
             case .CooldownReset:
                 reduction := ex.p1
-                for other_idx in 0..<cw.ABILITY_SLOT_COUNT {
+                for other_idx in 0..<ABILITY_SLOT_COUNT {
                     if other_idx == slot_idx { continue }
                     ab_snap.slots[other_idx].cooldown *= (1.0 - reduction)
                 }
@@ -1064,8 +1063,8 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if did_activate {
             st.cooldown = cd_max
 
-            if effective_energy_cost > 0 && cw.world_has_component(w, id, .Health) {
-                h_en        := cw.world_get_health(w, id)
+            if effective_energy_cost > 0 && world_has_component(w, id, .Health) {
+                h_en        := comp_get(w, id, .Health, HealthComp)
                 h_en.energy  = max(0, h_en.energy - effective_energy_cost)
             }
         }
@@ -1077,8 +1076,8 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         if fire_proj_exec.damage_amp_mult > 0 {
             proj_id := w.last_created
-            if cw.world_is_valid(w, proj_id) {
-                cw.world_set_damage_amp_on_hit(w, proj_id, cw.DamageAmpOnHitComp{
+            if world_is_valid(w, proj_id) {
+                comp_set(w, proj_id, .DamageAmpOnHit, DamageAmpOnHitComp{
                     mult = fire_proj_exec.damage_amp_mult,
                     dur  = fire_proj_exec.damage_amp_dur,
                 })
@@ -1086,6 +1085,6 @@ ability_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
     }
 
-    ab_live := cw.world_get_ability(w, id)
+    ab_live := comp_get(w, id, .Ability, AbilityComp)
     ab_live.slots = ab_snap.slots
 }

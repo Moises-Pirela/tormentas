@@ -3,7 +3,6 @@ package main
 import rl   "vendor:raylib"
 import      "core:fmt"
 import      "core:math"
-import cw   "clockwork"
 import clay "../clay"
 
 
@@ -36,19 +35,19 @@ mutation_branch_name :: proc(branch: MutationBranch) -> cstring {
 }
 
 @(private="file")
-find_nearby_mutation_workbench :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, ok: bool) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Transform) { return }
+find_nearby_mutation_workbench :: proc(w: ^World) -> (id: int, pos: [3]f32, ok: bool) {
+    if !world_is_valid(w, w.player_id) { return }
+    if !world_has_component(w, w.player_id, .Transform) { return }
 
-    player_pos := cw.world_get_transform(w, w.player_id).position
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
+    player_pos := comp_get(w, w.player_id, .Transform, TransformComp).position
+    npc_ids := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
 
     best_dist_sq := f32(1e30)
     for nid in npc_ids {
-        npc := cw.world_get_npc(w, nid)
+        npc := comp_get(w, nid, .NPC, NPCComp)
         if npc.npc_type != .MutationWorkbench { continue }
-        nt := cw.world_get_transform(w, nid)
+        nt := comp_get(w, nid, .Transform, TransformComp)
         dx := nt.position[0] - player_pos[0]
         dy := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
@@ -63,7 +62,7 @@ find_nearby_mutation_workbench :: proc(w: ^cw.World) -> (id: int, pos: [3]f32, o
     return
 }
 
-update_mutation_workbench :: proc(w: ^cw.World) {
+update_mutation_workbench :: proc(w: ^World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
     if _, _, ok := find_nearby_mutation_workbench(w); ok && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
         g_mut_tab = .Corpus
@@ -71,7 +70,7 @@ update_mutation_workbench :: proc(w: ^cw.World) {
     }
 }
 
-draw_mutation_workbench_world :: proc(w: ^cw.World) {
+draw_mutation_workbench_world :: proc(w: ^World) {
     if ui_has(.MutationTree) { return }
     _, pos, ok := find_nearby_mutation_workbench(w)
     if !ok { return }
@@ -87,9 +86,9 @@ draw_mutation_workbench_world :: proc(w: ^cw.World) {
 }
 
 
-update_mutation_tree :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .MutationContainer) { return }
+update_mutation_tree :: proc(w: ^World) {
+    if !world_is_valid(w, w.player_id) { return }
+    if !world_has_component(w, w.player_id, .MutationContainer) { return }
 
     // Tab/card/reset clicks and wheel scrolling are handled in draw_mutation_tree
     // (Clay immediate-mode + wired scroll); only ESC-to-close stays here.
@@ -100,12 +99,12 @@ update_mutation_tree :: proc(w: ^cw.World) {
 }
 
 
-draw_mutation_tree :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .MutationContainer) { return }
+draw_mutation_tree :: proc(w: ^World) {
+    if !world_is_valid(w, w.player_id) { return }
+    if !world_has_component(w, w.player_id, .MutationContainer) { return }
 
     ui_scrim(165)
-    mc := cw.world_get_mutation(w, w.player_id)
+    mc := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
 
     pw      := uis(MUT_PANEL_W)
     ph      := uis(MUT_PANEL_H)
@@ -143,7 +142,7 @@ draw_mutation_tree :: proc(w: ^cw.World) {
         // Scrollable card list (grows to fill remaining height; footer sits below it)
         ui_scroll_begin("MutScroll")
         ui_vstack_begin("MutList", u16(uis(MUT_CARD_GAP)))
-        for mt in cw.MutationType {
+        for mt in MutationType {
             if mt == .None { continue }
             def := &MUTATION_DEFS[mt]
             if def.branch != g_mut_tab { continue }

@@ -1,7 +1,6 @@
 package main
 
 import rl  "vendor:raylib"
-import cw  "clockwork"
 
 AppState :: enum {
     MainMenu,
@@ -40,7 +39,7 @@ mark_combat :: proc() { g_combat_timer = COMBAT_MUSIC_HOLD }
 
 // Resolves the desired music state from app/playing state, boss presence, and recent
 // combat, then hands it to the crossfading music system (which no-ops if unchanged).
-update_music_state :: proc(w: ^cw.World) {
+update_music_state :: proc(w: ^World) {
     dt := rl.GetFrameTime()
     if g_combat_timer > 0 { g_combat_timer = max(g_combat_timer - dt, 0) }
 
@@ -55,7 +54,7 @@ update_music_state :: proc(w: ^cw.World) {
         case .DeathScreen, .Editor:
             state = .None
         case .Gameplay:
-            if g_boss_id != cw.INVALID_ENTITY && cw.world_is_valid(w, g_boss_id) {
+            if g_boss_id != INVALID_ENTITY && world_is_valid(w, g_boss_id) {
                 state = .Boss
             } else if g_combat_timer > 0 {
                 state = .Combat
@@ -89,8 +88,8 @@ g_hub_remote_loaded:  bool
 
 stash_make_empty :: proc() -> Stash {
     s := Stash{}
-    for &id in s.item_ids { id = cw.INVALID_ENTITY }
-    for &cell in s.grid { cell = cw.INVALID_ENTITY }
+    for &id in s.item_ids { id = INVALID_ENTITY }
+    for &cell in s.grid { cell = INVALID_ENTITY }
     return s
 }
 
@@ -129,7 +128,7 @@ DISCONNECT_MSG_DURATION :: f32(4.0)
 g_should_exit: bool
 
 
-g_loot_filter_rarity: cw.ItemRarity = .Normal
+g_loot_filter_rarity: ItemRarity = .Normal
 
 g_selected_class_idx: int = 0
 

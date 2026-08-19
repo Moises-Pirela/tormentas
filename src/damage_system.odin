@@ -1,7 +1,6 @@
 package main
 
 import "core:math/rand"
-import cw "clockwork"
 
 @(private = "file")
 DropPending :: struct { pos: [3]f32, seed: u64, entity_id: int, was_boss: bool }
@@ -10,7 +9,7 @@ RESPAWN_DELAY      :: f32(2.0)
 XP_PER_KILL        :: f32(20)
 LEVELUP_FLASH_TIME :: f32(2.5)
 
-damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
     pending_drops       := make([dynamic]DropPending, context.temp_allocator)
@@ -25,31 +24,31 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             for i in 0..<bomb_skip_n { if bomb_skip[i] == ev.target_id { skip = true; break } }
             if skip { continue }
         }
-        if !cw.world_is_valid(w, ev.target_id)               { continue }
-        if !cw.world_has_component(w, ev.target_id, .Health) { continue }
+        if !world_is_valid(w, ev.target_id)               { continue }
+        if !world_has_component(w, ev.target_id, .Health) { continue }
 
         // Keep combat music alive while the local player is dealing or taking damage.
         if ev.amount > 0 && (ev.target_id == w.player_id || ev.source_id == w.player_id) {
             mark_combat()
         }
 
-        h := cw.world_get_health(w, ev.target_id)
+        h := comp_get(w, ev.target_id, .Health, HealthComp)
         amount := ev.amount
 
 
         if ev.amount > 0 && ev.kind == .Physical &&
-           cw.world_has_component(w, ev.target_id, .Stats) {
-            amount *= (1.0 - cw.world_get_stats(w, ev.target_id).armor)
+           world_has_component(w, ev.target_id, .Stats) {
+            amount *= (1.0 - comp_get(w, ev.target_id, .Stats, StatsComp).armor)
         }
 
 
-        if ev.amount > 0 && cw.world_has_component(w, ev.target_id, .DamageAmp) {
-            amount *= cw.world_get_damage_amp(w, ev.target_id).mult
+        if ev.amount > 0 && world_has_component(w, ev.target_id, .DamageAmp) {
+            amount *= comp_get(w, ev.target_id, .DamageAmp, DamageAmpComp).mult
         }
 
 
-        if ev.amount > 0 && cw.world_has_component(w, ev.target_id, .Resistance) {
-            res := cw.world_get_resistance(w, ev.target_id)
+        if ev.amount > 0 && world_has_component(w, ev.target_id, .Resistance) {
+            res := comp_get(w, ev.target_id, .Resistance, ResistanceComp)
             resist := f32(0)
             #partial switch ev.kind {
             case .Physical:  resist = res.physical
@@ -70,18 +69,18 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
         if amount > 0 && ev.source_id != 0 &&
-           cw.world_has_component(w, ev.source_id, .MutationContainer) &&
-           cw.world_has_component(w, ev.target_id, .AIAgent) {
-            src_mc := cw.world_get_mutation(w, ev.source_id)
+           world_has_component(w, ev.source_id, .MutationContainer) &&
+           world_has_component(w, ev.target_id, .AIAgent) {
+            src_mc := comp_get(w, ev.source_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<src_mc.entity_count {
                 meid := src_mc.entities[mi]
-                if !cw.world_is_valid(w, meid) { continue }
-                if cw.world_has_component(w, meid, .MutUnseenDamageMult) {
-                    udm := cw.world_get_mut_unseen_damage_mult(w, meid)
-                    if cw.world_has_component(w, ev.source_id, .Transform) &&
-                       cw.world_has_component(w, ev.target_id, .Transform) {
-                        pp := cw.world_get_transform(w, ev.source_id).position
-                        ep := cw.world_get_transform(w, ev.target_id).position
+                if !world_is_valid(w, meid) { continue }
+                if world_has_component(w, meid, .MutUnseenDamageMult) {
+                    udm := comp_get(w, meid, .MutUnseenDamageMult, MutUnseenDamageMultComp)
+                    if world_has_component(w, ev.source_id, .Transform) &&
+                       world_has_component(w, ev.target_id, .Transform) {
+                        pp := comp_get(w, ev.source_id, .Transform, TransformComp).position
+                        ep := comp_get(w, ev.target_id, .Transform, TransformComp).position
                         dx := ep[0] - pp[0]
                         dy := ep[1] - pp[1]
                         dist_sq := dx*dx + dy*dy
@@ -94,29 +93,29 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+        if amount > 0 && world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                          { continue }
-                if !cw.world_has_component(w, meid, .MutDamageTakenMult) { continue }
-                amount *= cw.world_get_mut_damage_taken_mult(w, meid).mult
+                if !world_is_valid(w, meid)                          { continue }
+                if !world_has_component(w, meid, .MutDamageTakenMult) { continue }
+                amount *= comp_get(w, meid, .MutDamageTakenMult, MutDamageTakenMultComp).mult
                 break
             }
         }
 
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+        if amount > 0 && world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                     { continue }
-                if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
-                hc := cw.world_get_mut_heart_cage(w, meid)
+                if !world_is_valid(w, meid)                     { continue }
+                if !world_has_component(w, meid, .MutHeartCage) { continue }
+                hc := comp_get(w, meid, .MutHeartCage, MutHeartCageComp)
 
                 if ev.source_id == ev.target_id { continue }
-                if cw.world_is_valid(w, hc.heart_id) &&
-                   cw.world_has_component(w, hc.heart_id, .Health) {
-                    hh := cw.world_get_health(w, hc.heart_id)
+                if world_is_valid(w, hc.heart_id) &&
+                   world_has_component(w, hc.heart_id, .Health) {
+                    hh := comp_get(w, hc.heart_id, .Health, HealthComp)
                     if hh.current > 0 {
                         hh.current = max(0, hh.current - amount)
                         if hh.current <= 0 {
@@ -129,13 +128,13 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
         }
 
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+        if amount > 0 && world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                         { continue }
-                if !cw.world_has_component(w, meid, .MutStationaryShield) { continue }
-                ss := cw.world_get_mut_stationary_shield(w, meid)
+                if !world_is_valid(w, meid)                         { continue }
+                if !world_has_component(w, meid, .MutStationaryShield) { continue }
+                ss := comp_get(w, meid, .MutStationaryShield, MutStationaryShieldComp)
                 if ss.shield > 0 {
                     absorbed := min(ss.shield, amount)
                     ss.shield -= absorbed
@@ -146,13 +145,13 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
         is_crit := false
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .AIAgent) {
+        if amount > 0 && world_has_component(w, ev.target_id, .AIAgent) {
             best_crit := f32(0.05)
-            for slot in 0..<cw.MAX_PLAYERS {
+            for slot in 0..<MAX_PLAYERS {
                 pid := w.player_ids[slot]
-                if !cw.world_is_valid(w, pid) { continue }
-                if !cw.world_has_component(w, pid, .Stats) { continue }
-                c := cw.world_get_stats(w, pid).crit_chance
+                if !world_is_valid(w, pid) { continue }
+                if !world_has_component(w, pid, .Stats) { continue }
+                c := comp_get(w, pid, .Stats, StatsComp).crit_chance
                 if c > best_crit { best_crit = c }
             }
 
@@ -173,32 +172,32 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
         if amount < 0 &&
-           cw.world_has_component(w, ev.target_id, .Stats) &&
-           cw.world_get_stats(w, ev.target_id).healing_blocked {
+           world_has_component(w, ev.target_id, .Stats) &&
+           comp_get(w, ev.target_id, .Stats, StatsComp).healing_blocked {
             amount = 0
         }
 
         if amount < 0 && ev.source_id == 0 &&
-           cw.world_has_component(w, ev.target_id, .Stats) &&
-           cw.world_get_stats(w, ev.target_id).pickup_healing_blocked {
+           world_has_component(w, ev.target_id, .Stats) &&
+           comp_get(w, ev.target_id, .Stats, StatsComp).pickup_healing_blocked {
             amount = 0
         }
 
-        if amount < 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+        if amount < 0 && world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                     { continue }
-                if !cw.world_has_component(w, meid, .MutThornPact) { continue }
-                tp     := cw.world_get_mut_thorn_pact(w, meid)
+                if !world_is_valid(w, meid)                     { continue }
+                if !world_has_component(w, meid, .MutThornPact) { continue }
+                tp     := comp_get(w, meid, .MutThornPact, MutThornPactComp)
                 amount *= tp.slow_heal_mult
                 break
             }
         }
 
         force_death := false
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .Stats) {
-            threshold := h.max * cw.world_get_stats(w, ev.target_id).deadman_early_death_pct
+        if amount > 0 && world_has_component(w, ev.target_id, .Stats) {
+            threshold := h.max * comp_get(w, ev.target_id, .Stats, StatsComp).deadman_early_death_pct
             if h.current - amount < threshold {
                 h.current  = 0
                 force_death = true
@@ -206,10 +205,10 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
 
-        if !force_death && amount > 0 && cw.world_has_component(w, ev.target_id, .AIAgent) {
+        if !force_death && amount > 0 && world_has_component(w, ev.target_id, .AIAgent) {
             if ev.source_id != 0 &&
-               cw.world_has_component(w, ev.source_id, .Stats) &&
-               cw.world_get_stats(w, ev.source_id).nonlethal_shots {
+               world_has_component(w, ev.source_id, .Stats) &&
+               comp_get(w, ev.source_id, .Stats, StatsComp).nonlethal_shots {
                 if h.current - amount <= 0 {
                     h.current = 1
                     continue
@@ -219,26 +218,26 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
         if amount > 0 && ev.source_id != 0 &&
-           cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+           world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                     { continue }
-                if !cw.world_has_component(w, meid, .MutThornPact) { continue }
-                tp := cw.world_get_mut_thorn_pact(w, meid)
-                cw.world_push_damage(w, ev.source_id, amount * tp.reflect_pct, ev.target_id)
+                if !world_is_valid(w, meid)                     { continue }
+                if !world_has_component(w, meid, .MutThornPact) { continue }
+                tp := comp_get(w, meid, .MutThornPact, MutThornPactComp)
+                world_push_damage(w, ev.source_id, amount * tp.reflect_pct, ev.target_id)
                 break
             }
         }
 
 
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+        if amount > 0 && world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                     { continue }
-                if !cw.world_has_component(w, meid, .MutBlackLung) { continue }
-                bl := cw.world_get_mut_black_lung(w, meid)
+                if !world_is_valid(w, meid)                     { continue }
+                if !world_has_component(w, meid, .MutBlackLung) { continue }
+                bl := comp_get(w, meid, .MutBlackLung, MutBlackLungComp)
                 bl.pressure = min(bl.pressure + bl.gain_per_hit, 100)
                 break
             }
@@ -255,27 +254,27 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
 
-        if cw.world_has_component(w, ev.target_id, .Stats) &&
-           cw.world_get_stats(w, ev.target_id).hp_locked_to_one {
+        if world_has_component(w, ev.target_id, .Stats) &&
+           comp_get(w, ev.target_id, .Stats, StatsComp).hp_locked_to_one {
             if h.current > 1 { h.current = 1 }
         }
 
         if amount > 0 && ev.source_id != 0 &&
-           cw.world_has_component(w, ev.source_id, .MutationContainer) &&
-           cw.world_has_component(w, ev.target_id, .AIAgent) {
-            src_mc := cw.world_get_mutation(w, ev.source_id)
+           world_has_component(w, ev.source_id, .MutationContainer) &&
+           world_has_component(w, ev.target_id, .AIAgent) {
+            src_mc := comp_get(w, ev.source_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<src_mc.entity_count {
                 meid := src_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                 { continue }
-                if !cw.world_has_component(w, meid, .MutLifesteal) { continue }
-                ls := cw.world_get_mut_lifesteal(w, meid)
-                cw.world_push_heal(w, ev.source_id, ls.hp_per_hit)
+                if !world_is_valid(w, meid)                 { continue }
+                if !world_has_component(w, meid, .MutLifesteal) { continue }
+                ls := comp_get(w, meid, .MutLifesteal, MutLifestealComp)
+                world_push_heal(w, ev.source_id, ls.hp_per_hit)
                 break
             }
         }
 
-        if amount > 0 && cw.world_has_component(w, ev.target_id, .Transform) {
-            pos := cw.world_get_transform(w, ev.target_id).position
+        if amount > 0 && world_has_component(w, ev.target_id, .Transform) {
+            pos := comp_get(w, ev.target_id, .Transform, TransformComp).position
             push_dmg_number(pos[0], pos[1], amount, ev.target_id != w.player_id, is_crit)
         }
 
@@ -288,45 +287,45 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
 
         bomb_triggered := false
-        if cw.world_has_component(w, ev.target_id, .MutationContainer) {
-            tgt_mc := cw.world_get_mutation(w, ev.target_id)
+        if world_has_component(w, ev.target_id, .MutationContainer) {
+            tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
-                if !cw.world_is_valid(w, meid)                         { continue }
-                if !cw.world_has_component(w, meid, .MutOnDeathExplode) { continue }
-                ode := cw.world_get_mut_on_death_explode(w, meid)
+                if !world_is_valid(w, meid)                         { continue }
+                if !world_has_component(w, meid, .MutOnDeathExplode) { continue }
+                ode := comp_get(w, meid, .MutOnDeathExplode, MutOnDeathExplodeComp)
                 if ode.timer > 0                                        { continue }
-                tgt_h := cw.world_get_health(w, ev.target_id)
+                tgt_h := comp_get(w, ev.target_id, .Health, HealthComp)
                 exp_dmg := tgt_h.max * ode.damage_pct
-                if cw.world_has_component(w, ev.target_id, .Transform) {
-                    epos := cw.world_get_transform(w, ev.target_id).position
+                if world_has_component(w, ev.target_id, .Transform) {
+                    epos := comp_get(w, ev.target_id, .Transform, TransformComp).position
                     r2   := ode.radius * ode.radius
                     if is_player_entity(w, ev.target_id) {
 
-                        ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
+                        ai_ids := world_query(w, query_mask(.AIAgent, .Transform), context.temp_allocator)
                         for ai_id in ai_ids {
-                            ap  := cw.world_get_transform(w, ai_id).position
+                            ap  := comp_get(w, ai_id, .Transform, TransformComp).position
                             dx  := ap[0] - epos[0]
                             dy  := ap[1] - epos[1]
                             if dx*dx + dy*dy <= r2 {
-                                cw.world_push_damage(w, ai_id, exp_dmg, ev.target_id)
+                                world_push_damage(w, ai_id, exp_dmg, ev.target_id)
                             }
                         }
                         camera_shake(5)
                         push_explosion(epos[0], epos[1], ode.radius, 255, 140, 30)
                     } else {
 
-                        for pslot in 0..<cw.MAX_PLAYERS {
+                        for pslot in 0..<MAX_PLAYERS {
                             ppid := w.player_ids[pslot]
-                            if !cw.world_is_valid(w, ppid)                  { continue }
-                            if !cw.world_has_component(w, ppid, .Transform) { continue }
-                            if cw.world_has_component(w, ppid, .Respawn) &&
-                               cw.world_get_respawn(w, ppid).timer > 0      { continue }
-                            pp  := cw.world_get_transform(w, ppid).position
+                            if !world_is_valid(w, ppid)                  { continue }
+                            if !world_has_component(w, ppid, .Transform) { continue }
+                            if world_has_component(w, ppid, .Respawn) &&
+                               comp_get(w, ppid, .Respawn, RespawnComp).timer > 0      { continue }
+                            pp  := comp_get(w, ppid, .Transform, TransformComp).position
                             dx  := pp[0] - epos[0]
                             dy  := pp[1] - epos[1]
                             if dx*dx + dy*dy <= r2 {
-                                cw.world_push_damage(w, ppid, exp_dmg, ev.target_id)
+                                world_push_damage(w, ppid, exp_dmg, ev.target_id)
                             }
                         }
                         push_explosion(epos[0], epos[1], ode.radius, 220, 60, 60)
@@ -347,31 +346,31 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             continue
         }
 
-        if !bomb_triggered && cw.world_has_component(w, ev.target_id, .Respawn) {
-            rsp := cw.world_get_respawn(w, ev.target_id)
+        if !bomb_triggered && world_has_component(w, ev.target_id, .Respawn) {
+            rsp := comp_get(w, ev.target_id, .Respawn, RespawnComp)
             if rsp.timer <= 0 {
                 rsp.timer = rsp.delay
                 play_sfx("player_death")
             }
         } else if !bomb_triggered {
 
-            if cw.world_has_component(w, ev.target_id, .Reanimated) {
-                cw.world_tag_destroy(w, ev.target_id)
+            if world_has_component(w, ev.target_id, .Reanimated) {
+                world_tag_destroy(w, ev.target_id)
                 continue
             }
 
 
             is_heart := false
-            heart_check: for pslot in 0..<cw.MAX_PLAYERS {
+            heart_check: for pslot in 0..<MAX_PLAYERS {
                 ppid := w.player_ids[pslot]
-                if !cw.world_is_valid(w, ppid)                          { continue }
-                if !cw.world_has_component(w, ppid, .MutationContainer) { continue }
-                ppmc := cw.world_get_mutation(w, ppid)
+                if !world_is_valid(w, ppid)                          { continue }
+                if !world_has_component(w, ppid, .MutationContainer) { continue }
+                ppmc := comp_get(w, ppid, .MutationContainer, MutationContainerComp)
                 for mi in 0..<ppmc.entity_count {
                     meid := ppmc.entities[mi]
-                    if !cw.world_is_valid(w, meid)                     { continue }
-                    if !cw.world_has_component(w, meid, .MutHeartCage) { continue }
-                    if cw.world_get_mut_heart_cage(w, meid).heart_id == ev.target_id {
+                    if !world_is_valid(w, meid)                     { continue }
+                    if !world_has_component(w, meid, .MutHeartCage) { continue }
+                    if comp_get(w, meid, .MutHeartCage, MutHeartCageComp).heart_id == ev.target_id {
                         heart_killed_player = true
                         is_heart            = true
                     }
@@ -379,14 +378,14 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
             }
             if is_heart {
-                cw.world_tag_destroy(w, ev.target_id)
+                world_tag_destroy(w, ev.target_id)
                 continue
             }
 
             was_reanimated := false
-            if cw.world_has_component(w, ev.target_id, .AIAgent) {
+            if world_has_component(w, ev.target_id, .AIAgent) {
                 g_lifetime_stats.enemies_killed += 1
-                ai := cw.world_get_ai(w, ev.target_id)
+                ai := comp_get(w, ev.target_id, .AIAgent, AIAgentComp)
                 if ai.tier == .Legendary {
                     g_lifetime_stats.elites_killed += 1
                 }
@@ -395,27 +394,27 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
 
 
-                for pslot in 0..<cw.MAX_PLAYERS {
+                for pslot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[pslot]
-                    if !cw.world_is_valid(w, ppid)                          { continue }
-                    if !cw.world_has_component(w, ppid, .MutationContainer) { continue }
-                    cc_mc := cw.world_get_mutation(w, ppid)
+                    if !world_is_valid(w, ppid)                          { continue }
+                    if !world_has_component(w, ppid, .MutationContainer) { continue }
+                    cc_mc := comp_get(w, ppid, .MutationContainer, MutationContainerComp)
                     for mi in 0..<cc_mc.entity_count {
                         meid := cc_mc.entities[mi]
-                        if !cw.world_is_valid(w, meid)                        { continue }
-                        if !cw.world_has_component(w, meid, .MutCarrionCrown) { continue }
-                        cc := cw.world_get_mut_carrion_crown(w, meid)
+                        if !world_is_valid(w, meid)                        { continue }
+                        if !world_has_component(w, meid, .MutCarrionCrown) { continue }
+                        cc := comp_get(w, meid, .MutCarrionCrown, MutCarrionCrownComp)
                         living := 0
-                        for si in 0..<cw.CARRION_MAX_SERVANTS {
-                            if cw.world_is_valid(w, cc.servant_ids[si]) { living += 1 }
+                        for si in 0..<CARRION_MAX_SERVANTS {
+                            if world_is_valid(w, cc.servant_ids[si]) { living += 1 }
                         }
-                        if living < cw.CARRION_MAX_SERVANTS {
+                        if living < CARRION_MAX_SERVANTS {
                             rng := rand.create(loot_seed(w.tick, ev.target_id) ~ 0xfeedface_cafebabe)
                             context.random_generator = rand.default_random_generator(&rng)
                             if rand.float32() < 0.30 {
                                 _reanimate_enemy(w, ev.target_id, ppid)
-                                for si in 0..<cw.CARRION_MAX_SERVANTS {
-                                    if !cw.world_is_valid(w, cc.servant_ids[si]) {
+                                for si in 0..<CARRION_MAX_SERVANTS {
+                                    if !world_is_valid(w, cc.servant_ids[si]) {
                                         cc.servant_ids[si] = ev.target_id
                                         break
                                     }
@@ -429,8 +428,8 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
 
                 death_pos: [3]f32
-                if cw.world_has_component(w, ev.target_id, .Transform) {
-                    death_pos = cw.world_get_transform(w, ev.target_id).position
+                if world_has_component(w, ev.target_id, .Transform) {
+                    death_pos = comp_get(w, ev.target_id, .Transform, TransformComp).position
                     if !was_reanimated {
                         append(&pending_drops, DropPending{
                             pos       = death_pos,
@@ -441,54 +440,54 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     }
                 }
 
-                for pslot in 0..<cw.MAX_PLAYERS {
+                for pslot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[pslot]
-                    if !cw.world_is_valid(w, ppid)                          { continue }
-                    if !cw.world_has_component(w, ppid, .MutationContainer) { continue }
-                    kh_mc := cw.world_get_mutation(w, ppid)
+                    if !world_is_valid(w, ppid)                          { continue }
+                    if !world_has_component(w, ppid, .MutationContainer) { continue }
+                    kh_mc := comp_get(w, ppid, .MutationContainer, MutationContainerComp)
                     for mi in 0..<kh_mc.entity_count {
                         meid := kh_mc.entities[mi]
-                        if !cw.world_is_valid(w, meid)                  { continue }
-                        if !cw.world_has_component(w, meid, .MutKillHeal) { continue }
-                        kh := cw.world_get_mut_kill_heal(w, meid)
-                        if cw.world_has_component(w, ppid, .Health) {
-                            ph := cw.world_get_health(w, ppid)
-                            cw.world_push_heal(w, ppid, ph.max * kh.heal_pct)
+                        if !world_is_valid(w, meid)                  { continue }
+                        if !world_has_component(w, meid, .MutKillHeal) { continue }
+                        kh := comp_get(w, meid, .MutKillHeal, MutKillHealComp)
+                        if world_has_component(w, ppid, .Health) {
+                            ph := comp_get(w, ppid, .Health, HealthComp)
+                            world_push_heal(w, ppid, ph.max * kh.heal_pct)
                         }
                         break
                     }
                 }
 
 
-                for slot in 0..<cw.MAX_PLAYERS {
+                for slot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[slot]
-                    if !cw.world_is_valid(w, ppid)                      { continue }
-                    if !cw.world_has_component(w, ppid, .KillHeal)      { continue }
-                    kh := cw.world_get_kill_heal(w, ppid)
+                    if !world_is_valid(w, ppid)                      { continue }
+                    if !world_has_component(w, ppid, .KillHeal)      { continue }
+                    kh := comp_get(w, ppid, .KillHeal, KillHealComp)
                     if kh.timer < kh.duration &&
-                       cw.world_has_component(w, ppid, .Health) {
-                        if cw.world_has_component(w, ppid, .Stats) &&
-                           cw.world_get_stats(w, ppid).healing_blocked { continue }
-                        ph := cw.world_get_health(w, ppid)
+                       world_has_component(w, ppid, .Health) {
+                        if world_has_component(w, ppid, .Stats) &&
+                           comp_get(w, ppid, .Stats, StatsComp).healing_blocked { continue }
+                        ph := comp_get(w, ppid, .Health, HealthComp)
                         ph.current = min(ph.current + kh.amount, ph.max)
                     }
                 }
 
 
-                if cw.world_has_component(w, ev.target_id, .ContagionTag) {
-                    cw.world_clear_contagion_tag(w, ev.target_id)
-                    if cw.world_has_component(w, ev.target_id, .Transform) {
-                        dead_pos := cw.world_get_transform(w, ev.target_id).position
+                if world_has_component(w, ev.target_id, .ContagionTag) {
+                    comp_rm(w, ev.target_id, .ContagionTag)
+                    if world_has_component(w, ev.target_id, .Transform) {
+                        dead_pos := comp_get(w, ev.target_id, .Transform, TransformComp).position
                         spread_r2 :: f32(160 * 160)
-                        near := cw.world_query(w, cw.query_mask(.AIAgent, .Transform),
+                        near := world_query(w, query_mask(.AIAgent, .Transform),
                                                context.temp_allocator)
                         for nid in near {
                             if nid == ev.target_id { continue }
-                            np  := cw.world_get_transform(w, nid).position
+                            np  := comp_get(w, nid, .Transform, TransformComp).position
                             dx  := np[0] - dead_pos[0]
                             dy  := np[1] - dead_pos[1]
                             if dx*dx + dy*dy <= spread_r2 {
-                                cw.status_effect_apply(w, nid, cw.StatusEffect{
+                                status_effect_apply(w, nid, StatusEffect{
                                     type           = .Poison,
                                     application    = .Base,
                                     stack_behavior = .Refresh,
@@ -501,10 +500,10 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
 
 
-                if cw.world_has_component(w, ev.source_id, .Ability) &&
-                   cw.world_has_component(w, ev.source_id, .Inventory) {
-                    ab := cw.world_get_ability(w, ev.source_id)
-                    for sli in 0..<cw.ABILITY_SLOT_COUNT {
+                if world_has_component(w, ev.source_id, .Ability) &&
+                   world_has_component(w, ev.source_id, .Inventory) {
+                    ab := comp_get(w, ev.source_id, .Ability, AbilityComp)
+                    for sli in 0..<ABILITY_SLOT_COUNT {
                         ab_type := player_ability_in_slot(w, ev.source_id, sli)
                         if ab_type == .None { continue }
                         def := &ABILITY_DEFS[ab_type]
@@ -522,29 +521,29 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 }
 
 
-                for slot in 0..<cw.MAX_PLAYERS {
+                for slot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[slot]
-                    if !cw.world_is_valid(w, ppid)                      { continue }
-                    if !cw.world_has_component(w, ppid, .Inventory)     { continue }
-                    inv := cw.world_get_inventory(w, ppid)
-                    flask_slots := []cw.EquipSlot{ .Flask1, .Flask2 }
+                    if !world_is_valid(w, ppid)                      { continue }
+                    if !world_has_component(w, ppid, .Inventory)     { continue }
+                    inv := comp_get(w, ppid, .Inventory, InventoryComp)
+                    flask_slots := []EquipSlot{ .Flask1, .Flask2 }
                     for fs in flask_slots {
                         fid := inv.equipped[int(fs)]
-                        if !cw.world_is_valid(w, fid)                   { continue }
-                        if !cw.world_has_component(w, fid, .Flask)      { continue }
-                        fc := cw.world_get_flask(w, fid)
+                        if !world_is_valid(w, fid)                   { continue }
+                        if !world_has_component(w, fid, .Flask)      { continue }
+                        fc := comp_get(w, fid, .Flask, FlaskComp)
                         if fc.charges < fc.max_charges {
                             fc.charges += 1
                         }
                     }
                 }
 
-                for slot in 0..<cw.MAX_PLAYERS {
+                for slot in 0..<MAX_PLAYERS {
                     pid := w.player_ids[slot]
-                    if !cw.world_is_valid(w, pid) { continue }
-                    if !cw.world_has_component(w, pid, .Stats) { continue }
+                    if !world_is_valid(w, pid) { continue }
+                    if !world_has_component(w, pid, .Stats) { continue }
 
-                    st := cw.world_get_stats(w, pid)
+                    st := comp_get(w, pid, .Stats, StatsComp)
                     st.xp += XP_PER_KILL
                     if pid == w.player_id { ui_mark_dirty(.Stats) }
                     leveled := false
@@ -557,8 +556,8 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                     }
                     if leveled {
 
-                        if cw.world_has_component(w, pid, .Health) {
-                            health := cw.world_get_health(w, pid)
+                        if world_has_component(w, pid, .Health) {
+                            health := comp_get(w, pid, .Health, HealthComp)
                             health.current = health.max
                             health.energy  = health.max_energy
                         }
@@ -573,14 +572,14 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 quest_check_all(w)
             }
             if ev.target_id == g_boss_id {
-                g_boss_id = cw.INVALID_ENTITY
+                g_boss_id = INVALID_ENTITY
             }
             if !was_reanimated {
-                cw.world_tag_destroy(w, ev.target_id)
+                world_tag_destroy(w, ev.target_id)
             }
         }
     }
-    cw.world_clear_damage_events(w)
+    world_clear_damage_events(w)
 
 
     if heart_killed_player && g_playing_state == .Gameplay {
@@ -595,15 +594,15 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         context.random_generator = rand.default_random_generator(&drop_rng)
         roll := rand.float32()
         if roll < ITEM_DROP_CHANCE_UNIQUE {
-            spawn_loot_drop(w, d.pos, d.seed, cw.ItemRarity.Unique)
+            spawn_loot_drop(w, d.pos, d.seed, ItemRarity.Unique)
         } else if roll < ITEM_DROP_CHANCE_LEGENDARY {
-            spawn_loot_drop(w, d.pos, d.seed, cw.ItemRarity.Legendary)
+            spawn_loot_drop(w, d.pos, d.seed, ItemRarity.Legendary)
         } else if roll < ITEM_DROP_CHANCE_EPIC {
-            spawn_loot_drop(w, d.pos, d.seed, cw.ItemRarity.Epic)
+            spawn_loot_drop(w, d.pos, d.seed, ItemRarity.Epic)
         } else if roll < ITEM_DROP_CHANCE_RARE {
-            spawn_loot_drop(w, d.pos, d.seed, cw.ItemRarity.Rare)
+            spawn_loot_drop(w, d.pos, d.seed, ItemRarity.Rare)
         } else if roll < ITEM_DROP_CHANCE_NORMAL {
-            spawn_loot_drop(w, d.pos, d.seed, cw.ItemRarity.Normal)
+            spawn_loot_drop(w, d.pos, d.seed, ItemRarity.Normal)
         }
 
 
@@ -634,11 +633,11 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         }
     }
 
-    rsp_ids := cw.world_query(w, cw.query_mask(.Respawn))
+    rsp_ids := world_query(w, query_mask(.Respawn))
     defer delete(rsp_ids)
 
     for id in rsp_ids {
-        rsp := cw.world_get_respawn(w, id)
+        rsp := comp_get(w, id, .Respawn, RespawnComp)
         if rsp.timer <= 0 { continue }
 
         rsp.timer -= dt
@@ -647,17 +646,17 @@ damage_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         rsp.timer = 0
         if id == w.player_id { play_sfx("player_respawn") }
 
-        if cw.world_has_component(w, id, .Health) {
-            h := cw.world_get_health(w, id)
+        if world_has_component(w, id, .Health) {
+            h := comp_get(w, id, .Health, HealthComp)
             h.current            = h.max
         }
-        if cw.world_has_component(w, id, .Transform) {
-            t := cw.world_get_transform(w, id)
+        if world_has_component(w, id, .Transform) {
+            t := comp_get(w, id, .Transform, TransformComp)
             t.position = rsp.spawn_pos
             t.rotation = 0
         }
-        if cw.world_has_component(w, id, .Velocity) {
-            cw.world_get_velocity(w, id).value = {}
+        if world_has_component(w, id, .Velocity) {
+            comp_get(w, id, .Velocity, VelocityComp).value = {}
         }
     }
 }

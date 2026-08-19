@@ -5,7 +5,6 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import cw "clockwork"
 
 TransformDef :: struct {
     position: [3]f32,
@@ -27,7 +26,7 @@ ColliderDef :: struct {
 }
 
 WeaponDef :: struct {
-    type:             cw.WeaponType,
+    type:             WeaponType,
     damage:           f32,
     fire_rate:        f32,
     projectile_speed: f32,
@@ -44,7 +43,7 @@ AIAgentDef :: struct {
     cooldown_max: f32,
     speed:        f32,
     damage:       f32,
-    ai_type:      cw.AIType,
+    ai_type:      AIType,
     pellet_count: int,
     spread_angle: f32,
 }
@@ -60,14 +59,14 @@ RenderConfigDef :: struct {
     sprite_name:     string,
     sprite_scale:    f32,
     world_size:      f32,
-    render_layer:    cw.RenderLayer,
+    render_layer:    RenderLayer,
     show_hp_bar:     bool,
     show_dir_tip:    bool,
     top_down_sprite: bool,
 }
 
 NPCDef :: struct {
-    npc_type:        cw.NPCType,
+    npc_type:        NPCType,
     interact_radius: f32,
 }
 
@@ -119,7 +118,7 @@ MutProximityDamageDef :: struct {
     radius:          f32,
     dps:             f32,
     self_fraction:   f32,
-    effect_type:     cw.StatusEffectType,
+    effect_type:     StatusEffectType,
     effect_strength: f32,
     effect_duration: f32,
     light_r:         f32,
@@ -579,22 +578,22 @@ find_entity_def :: proc(defs: []EntityDef, name: string) -> ^EntityDef {
     return nil
 }
 
-spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
-    if def == nil { return cw.INVALID_ENTITY }
+spawn_from_def :: proc(w: ^World, def: ^EntityDef) -> int {
+    if def == nil { return INVALID_ENTITY }
 
-    id := cw.world_create_entity(w)
+    id := world_create_entity(w)
 
     if t, ok := def.transform.?; ok {
-        cw.world_set_transform(w, id, cw.TransformComp{
+        comp_set(w, id, .Transform, TransformComp{
             position = t.position,
             rotation = t.rotation,
         })
     }
     if def.has_velocity {
-        cw.world_set_velocity(w, id, cw.VelocityComp{})
+        comp_set(w, id, .Velocity, VelocityComp{})
     }
     if h, ok := def.health.?; ok {
-        cw.world_set_health(w, id, cw.HealthComp{
+        comp_set(w, id, .Health, HealthComp{
             current    = h.current,
             max        = h.max,
             energy     = h.energy,
@@ -602,17 +601,17 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         })
     }
     if def.has_input {
-        cw.world_set_input(w, id, cw.InputStateComp{})
+        comp_set(w, id, .InputState, InputStateComp{})
     }
     if c, ok := def.collider.?; ok {
-        cw.world_set_collider(w, id, cw.ColliderComp{
+        comp_set(w, id, .Collider, ColliderComp{
             radius     = c.radius,
             faction    = c.faction,
             is_trigger = c.is_trigger,
         })
     }
     if wp, ok := def.weapon.?; ok {
-        cw.world_set_weapon_data(w, id, cw.WeaponComp{
+        comp_set(w, id, .Weapon, WeaponComp{
             type             = wp.type,
             damage           = wp.damage,
             fire_rate        = wp.fire_rate,
@@ -628,7 +627,7 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         })
     }
     if a, ok := def.ai_agent.?; ok {
-        cw.world_set_ai(w, id, cw.AIAgentComp{
+        comp_set(w, id, .AIAgent, AIAgentComp{
             state        = a.state,
             aggro_range  = a.aggro_range,
             attack_range = a.attack_range,
@@ -641,17 +640,17 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         })
     }
     if d, ok := def.dodge.?; ok {
-        cw.world_set_dodge(w, id, cw.DodgeComp{
+        comp_set(w, id, .DodgeState, DodgeComp{
             duration     = d.duration,
             speed        = d.speed,
             cooldown_max = d.cooldown,
         })
     }
     if rc, ok := def.render_cfg.?; ok {
-        comp: cw.RenderConfigComp
-        cw.render_config_set_name(&comp, rc.display_name)
+        comp: RenderConfigComp
+        render_config_set_name(&comp, rc.display_name)
         if len(rc.sprite_name) > 0 {
-            cw.render_config_set_sprite(&comp, rc.sprite_name)
+            render_config_set_sprite(&comp, rc.sprite_name)
         }
         comp.sprite_scale = rc.sprite_scale if rc.sprite_scale > 0 else 1.0
         comp.world_size   = rc.world_size
@@ -659,88 +658,88 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         comp.show_hp_bar  = rc.show_hp_bar
         comp.show_dir_tip    = rc.show_dir_tip
         comp.top_down_sprite = rc.top_down_sprite
-        cw.world_set_render_config(w, id, comp)
+        comp_set(w, id, .RenderConfig, comp)
 
-        cw.world_set_anim_state(w, id, cw.AnimStateComp{})
+        comp_set(w, id, .AnimState, AnimStateComp{})
     }
     if def.has_fog_of_war {
-        cw.world_set_fog_of_war(w, id)
+        comp_add(w, id, .FogOfWar)
     }
     if n, ok := def.npc.?; ok {
-        cw.world_set_npc(w, id, cw.NPCComp{
+        comp_set(w, id, .NPC, NPCComp{
             npc_type        = n.npc_type,
             interact_radius = n.interact_radius,
         })
     }
     if md, ok := def.mut_damage_mult.?; ok {
-        cw.world_set_mut_damage_mult(w, id, cw.MutDamageMultComp{
+        comp_set(w, id, .MutDamageMult, MutDamageMultComp{
             mult = md.mult,
         })
     }
     if def.has_mut_lock_hp_to_one {
-        cw.world_set_mut_lock_hp_to_one(w, id)
+        comp_add(w, id, .MutLockHpToOne)
     }
     if mr, ok := def.mut_root_on_fire.?; ok {
-        cw.world_set_mut_root_on_fire(w, id, cw.MutRootOnFireComp{
+        comp_set(w, id, .MutRootOnFire, MutRootOnFireComp{
             duration                 = mr.duration,
             damage_mult_while_rooted = mr.damage_mult_while_rooted,
             projectile_speed_mult    = mr.projectile_speed_mult,
         })
     }
     if tsd, ok := def.mut_timed_self_damage.?; ok {
-        cw.world_set_mut_timed_self_damage(w, id, cw.MutTimedSelfDamageComp{
+        comp_set(w, id, .MutTimedSelfDamage, MutTimedSelfDamageComp{
             grace = tsd.grace,
             dps   = tsd.dps,
         })
     }
     if def.has_mut_block_healing {
-        cw.world_set_mut_block_healing(w, id)
+        comp_add(w, id, .MutBlockHealing)
     }
     if msm, ok := def.mut_move_speed_mult.?; ok {
-        cw.world_set_mut_move_speed_mult(w, id, cw.MutMoveSpeedMultComp{ mult = msm.mult })
+        comp_set(w, id, .MutMoveSpeedMult, MutMoveSpeedMultComp{ mult = msm.mult })
     }
     if def.has_mut_block_ranged {
-        cw.world_set_mut_block_ranged(w, id)
+        comp_add(w, id, .MutBlockRanged)
     }
     if def.has_mut_block_pickup_heal {
-        cw.world_set_mut_block_pickup_heal(w, id)
+        comp_add(w, id, .MutBlockPickupHeal)
     }
     if sgm, ok := def.mut_serum_gain_mult.?; ok {
-        cw.world_set_mut_serum_gain_mult(w, id, cw.MutSerumGainMultComp{ mult = sgm.mult })
+        comp_set(w, id, .MutSerumGainMult, MutSerumGainMultComp{ mult = sgm.mult })
     }
     if def.has_mut_block_pickups {
-        cw.world_set_mut_block_pickups(w, id)
+        comp_add(w, id, .MutBlockPickups)
     }
     if def.has_mut_nonlethal_shots {
-        cw.world_set_mut_nonlethal_shots(w, id)
+        comp_add(w, id, .MutNonlethalShots)
     }
     if def.has_mut_disable_actives {
-        cw.world_set_mut_disable_actives(w, id)
+        comp_add(w, id, .MutDisableActives)
     }
     if edt, ok := def.mut_early_death_threshold.?; ok {
-        cw.world_set_mut_early_death_threshold(w, id, cw.MutEarlyDeathThresholdComp{
+        comp_set(w, id, .MutEarlyDeathThreshold, MutEarlyDeathThresholdComp{
             threshold_pct = edt.threshold_pct,
         })
     }
     if mhd, ok := def.mut_missing_health_damage.?; ok {
-        cw.world_set_mut_missing_health_damage(w, id, cw.MutMissingHealthDamageComp{
+        comp_set(w, id, .MutMissingHealthDamage, MutMissingHealthDamageComp{
             max_mult     = mhd.max_mult,
             floor_hp_pct = mhd.floor_hp_pct,
         })
     }
     if mpp, ok := def.mut_passive_power.?; ok {
-        cw.world_set_mut_passive_power(w, id, cw.MutPassivePowerComp{
+        comp_set(w, id, .MutPassivePower, MutPassivePowerComp{
             mult = mpp.mult,
         })
     }
     if kh, ok := def.mut_kill_heal.?; ok {
-        cw.world_set_mut_kill_heal(w, id, cw.MutKillHealComp{ heal_pct = kh.heal_pct })
+        comp_set(w, id, .MutKillHeal, MutKillHealComp{ heal_pct = kh.heal_pct })
     }
     if ls, ok := def.mut_lifesteal.?; ok {
-        cw.world_set_mut_lifesteal(w, id, cw.MutLifestealComp{ hp_per_hit = ls.hp_per_hit })
+        comp_set(w, id, .MutLifesteal, MutLifestealComp{ hp_per_hit = ls.hp_per_hit })
     }
     if pd, ok := def.mut_proximity_damage.?; ok {
-        cw.world_set_mut_proximity_damage(w, id, cw.MutProximityDamageComp{
+        comp_set(w, id, .MutProximityDamage, MutProximityDamageComp{
             radius          = pd.radius,
             dps             = pd.dps,
             self_fraction   = pd.self_fraction,
@@ -753,33 +752,33 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         })
     }
     if ode, ok := def.mut_on_death_explode.?; ok {
-        cw.world_set_mut_on_death_explode(w, id, cw.MutOnDeathExplodeComp{
+        comp_set(w, id, .MutOnDeathExplode, MutOnDeathExplodeComp{
             radius       = ode.radius,
             damage_pct   = ode.damage_pct,
             cooldown_max = ode.cooldown_max,
         })
     }
     if ss, ok := def.mut_stationary_shield.?; ok {
-        cw.world_set_mut_stationary_shield(w, id, cw.MutStationaryShieldComp{
+        comp_set(w, id, .MutStationaryShield, MutStationaryShieldComp{
             shield_max = ss.shield_max,
             regen_rate = ss.regen_rate,
         })
     }
     if edc, ok := def.mut_extra_dodge_charges.?; ok {
-        cw.world_set_mut_extra_dodge_charges(w, id, cw.MutExtraDodgeChargesComp{
+        comp_set(w, id, .MutExtraDodgeCharges, MutExtraDodgeChargesComp{
             count        = edc.count,
             charges      = edc.count,
             recharge_max = edc.recharge_max,
         })
     }
     if dtm, ok := def.mut_damage_taken_mult.?; ok {
-        cw.world_set_mut_damage_taken_mult(w, id, cw.MutDamageTakenMultComp{ mult = dtm.mult })
+        comp_set(w, id, .MutDamageTakenMult, MutDamageTakenMultComp{ mult = dtm.mult })
     }
     if def.has_mut_wall_phase {
-        cw.world_set_mut_wall_phase(w, id)
+        comp_add(w, id, .MutWallPhase)
     }
     if bm, ok := def.mut_body_melee.?; ok {
-        cw.world_set_mut_body_melee(w, id, cw.MutBodyMeleeComp{
+        comp_set(w, id, .MutBodyMelee, MutBodyMeleeComp{
             damage       = bm.damage,
             arc_angle    = bm.arc_angle,
             range        = bm.range,
@@ -787,16 +786,16 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
         })
     }
     if ct, ok := def.mut_corpse_trigger.?; ok {
-        cw.world_set_mut_corpse_trigger(w, id, cw.MutCorpseTriggerComp{
+        comp_set(w, id, .MutCorpseTrigger, MutCorpseTriggerComp{
             radius = ct.radius,
             dps    = ct.dps,
         })
     }
     if def.has_mut_hide_enemy_sprites {
-        cw.world_set_mut_hide_enemy_sprites(w, id)
+        comp_add(w, id, .MutHideEnemySprites)
     }
     if udm, ok := def.mut_unseen_damage_mult.?; ok {
-        cw.world_set_mut_unseen_damage_mult(w, id, cw.MutUnseenDamageMultComp{
+        comp_set(w, id, .MutUnseenDamageMult, MutUnseenDamageMultComp{
             mult          = udm.mult,
             vision_radius = udm.vision_radius,
         })
@@ -804,7 +803,7 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
 
 
     if len(def.mutations) > 0 {
-        cw.world_set_mutation(w, id, cw.mutation_container_empty())
+        comp_set(w, id, .MutationContainer, mutation_container_empty())
         for name in def.mutations {
             mt := mutation_name_to_type(name)
             if mt != .None {
@@ -814,7 +813,7 @@ spawn_from_def :: proc(w: ^cw.World, def: ^EntityDef) -> int {
     }
 
     if fc, ok := def.flammbles.?; ok {
-        cw.world_set_flammable(w, id, cw.FlammableComp{
+        comp_set(w, id, .Flammable, FlammableComp{
             isImmune = fc.is_immune
         })
     }

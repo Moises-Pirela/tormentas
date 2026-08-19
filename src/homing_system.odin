@@ -2,18 +2,17 @@ package main
 
 
 import "core:math"
-import cw "clockwork"
 
-homing_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+homing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    homing_ids := cw.world_query(w, cw.query_mask(.Homing, .Projectile, .Transform))
+    homing_ids := world_query(w, query_mask(.Homing, .Projectile, .Transform))
     defer delete(homing_ids)
 
     for pid in homing_ids {
-        h  := cw.world_get_homing(w, pid)
-        pr := cw.world_get_projectile(w, pid)
-        pt := cw.world_get_transform(w, pid)
+        h  := comp_get(w, pid, .Homing, HomingComp)
+        pr := comp_get(w, pid, .Projectile, ProjectileComp)
+        pt := comp_get(w, pid, .Transform, TransformComp)
 
 
         best_dist_sq := h.seek_range * h.seek_range
@@ -22,9 +21,9 @@ homing_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         target_dx    := f32(0)
         target_dy    := f32(0)
 
-        ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
+        ai_ids := world_query(w, query_mask(.AIAgent, .Transform), context.temp_allocator)
         for eid in ai_ids {
-            et := cw.world_get_transform(w, eid)
+            et := comp_get(w, eid, .Transform, TransformComp)
             dx := et.position[0] - pt.position[0]
             dy := et.position[1] - pt.position[1]
             d2 := dx*dx + dy*dy

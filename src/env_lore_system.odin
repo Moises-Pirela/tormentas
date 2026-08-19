@@ -2,7 +2,6 @@ package main
 
 import "core:encoding/json"
 import "core:os"
-import cw "clockwork"
 
 
 MAX_LORE_PAGES    :: 128
@@ -149,9 +148,9 @@ lore_get_recording :: proc(id: u8) -> (^Recording, bool) {
 }
 
 
-phonograph_tick :: proc(w: ^cw.World, entity_id: int, dt: f32) {
-    if !cw.world_has_component(w, entity_id, .Phonograph) { return }
-    ph := cw.world_get_phonograph(w, entity_id)
+phonograph_tick :: proc(w: ^World, entity_id: int, dt: f32) {
+    if !world_has_component(w, entity_id, .Phonograph) { return }
+    ph := comp_get(w, entity_id, .Phonograph, PhonographComp)
     if !ph.is_playing { return }
 
     ph.play_timer -= dt

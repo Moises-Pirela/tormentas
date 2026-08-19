@@ -1,6 +1,5 @@
 package main
 
-import cw "clockwork"
 
 QuestID :: enum u8 {
     SurvivorsMark,
@@ -53,7 +52,7 @@ quest_mark_done :: proc(id: QuestID) {
     local_quest_completed()^ |= (1 << u8(id))
 }
 
-quest_progress :: proc(id: QuestID, w: ^cw.World) -> (current, target: int) {
+quest_progress :: proc(id: QuestID, w: ^World) -> (current, target: int) {
     ls := g_lifetime_stats
     switch id {
     case .SurvivorsMark:
@@ -63,9 +62,9 @@ quest_progress :: proc(id: QuestID, w: ^cw.World) -> (current, target: int) {
     case .Aberration:
         return int(ls.bosses_killed), 1
     case .Bloodlines:
-        if cw.world_is_valid(w, w.player_id) &&
-           cw.world_has_component(w, w.player_id, .MutationContainer) {
-            mc := cw.world_get_mutation(w, w.player_id)
+        if world_is_valid(w, w.player_id) &&
+           world_has_component(w, w.player_id, .MutationContainer) {
+            mc := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
             return mc.entity_count, 5
         }
         return 0, 5
@@ -76,9 +75,9 @@ quest_progress :: proc(id: QuestID, w: ^cw.World) -> (current, target: int) {
     case .PerfectRun:
         return int(ls.max_extract_gold), 500
     case .FinalForm:
-        if cw.world_is_valid(w, w.player_id) &&
-           cw.world_has_component(w, w.player_id, .MutationContainer) {
-            mc := cw.world_get_mutation(w, w.player_id)
+        if world_is_valid(w, w.player_id) &&
+           world_has_component(w, w.player_id, .MutationContainer) {
+            mc := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
             return mc.entity_count, 10
         }
         return 0, 10
@@ -86,7 +85,7 @@ quest_progress :: proc(id: QuestID, w: ^cw.World) -> (current, target: int) {
     return 0, 1
 }
 
-quest_check_all :: proc(w: ^cw.World) {
+quest_check_all :: proc(w: ^World) {
     last_title: cstring
     any_done := false
 
@@ -99,10 +98,10 @@ quest_check_all :: proc(w: ^cw.World) {
         def := &QUEST_DEFS[int(qi)]
 
         pid := w.player_id
-        if cw.world_is_valid(w, pid) &&
-           cw.world_has_component(w, pid, .Stats) &&
+        if world_is_valid(w, pid) &&
+           world_has_component(w, pid, .Stats) &&
            def.reward_stats > 0 {
-            st := cw.world_get_stats(w, pid)
+            st := comp_get(w, pid, .Stats, StatsComp)
             st.stat_points = st.stat_points + def.reward_stats
             ui_mark_dirty(.Stats)
         }
@@ -119,7 +118,7 @@ quest_check_all :: proc(w: ^cw.World) {
         g_quest_flash_title = last_title
         play_sfx("levelup")
         pid := w.player_id
-        if cw.world_is_valid(w, pid) {
+        if world_is_valid(w, pid) {
             save_player(w, pid)
         }
     }

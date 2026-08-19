@@ -11,15 +11,21 @@ $Out  = Join-Path $Root 'bin\tormentas.exe'
 $Dist = Join-Path $Root 'dist\tormentas'
 $Odin = 'C:\ODIN\odin.exe'
 $Res  = Join-Path $Root 'data\app\tormentas.rc'
+$Cw   = Join-Path (Split-Path -Parent $Root) 'clockwork-ecs'
 
 New-Item -ItemType Directory -Force -Path (Join-Path $Root 'bin') | Out-Null
 
+if (-not (Test-Path (Join-Path $Cw 'clockwork'))) {
+    Write-Host "[BUILD] clockwork-ecs not found at $Cw"
+    exit 1
+}
+
 if ($Mode -eq 'release') {
     Write-Host '[BUILD] Release : -o:aggressive -subsystem:windows'
-    & $Odin build $Src "-out:$Out" '-o:aggressive' '-subsystem:windows' "-resource:$Res"
+    & $Odin build $Src "-out:$Out" "-collection:cw=$Cw" '-o:aggressive' '-subsystem:windows' "-resource:$Res"
 } else {
     Write-Host '[BUILD] Debug : -o:none -debug -vet'
-    & $Odin build $Src "-out:$Out" '-o:none' '-debug' '-vet' "-resource:$Res"
+    & $Odin build $Src "-out:$Out" "-collection:cw=$Cw" '-o:none' '-debug' '-vet' "-resource:$Res"
 }
 
 if ($LASTEXITCODE -ne 0) {

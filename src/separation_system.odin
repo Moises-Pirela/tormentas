@@ -1,28 +1,27 @@
 package main
 
 
-import cw   "clockwork"
 import      "core:math"
 
-entity_separation_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+entity_separation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
-    ids := cw.world_query(w, cw.query_mask(.Transform, .Collider))
+    ids := world_query(w, query_mask(.Transform, .Collider))
     defer delete(ids)
 
     n := len(ids)
     for i in 0..<n {
         a    := ids[i]
-        ca   := cw.world_get_collider(w, a)
+        ca   := comp_get(w, a, .Collider, ColliderComp)
         if ca.is_trigger { continue }
-        ta   := cw.world_get_transform(w, a)
+        ta   := comp_get(w, a, .Transform, TransformComp)
         ra   := ca.radius
 
         for j in i+1..<n {
             b  := ids[j]
-            cb := cw.world_get_collider(w, b)
+            cb := comp_get(w, b, .Collider, ColliderComp)
             if cb.is_trigger { continue }
-            tb := cw.world_get_transform(w, b)
+            tb := comp_get(w, b, .Transform, TransformComp)
             rb := cb.radius
 
             dx      := ta.position[0] - tb.position[0]

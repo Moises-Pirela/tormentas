@@ -1,40 +1,39 @@
 package main
 
-import cw  "clockwork"
 import     "core:math"
 
-wall_collision_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+wall_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
-    ids := cw.world_query(w, cw.query_mask(.Transform, .Collider))
+    ids := world_query(w, query_mask(.Transform, .Collider))
     defer delete(ids)
 
     for id in ids {
         if player_has_mutation_effect(w, id, .MutWallPhase) { continue }
-        t := cw.world_get_transform(w, id)
-        r := cw.world_get_collider(w, id).radius
+        t := comp_get(w, id, .Transform, TransformComp)
+        r := comp_get(w, id, .Collider, ColliderComp).radius
         resolve_wall_overlap(t, r)
     }
 }
 
-projectile_wall_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+projectile_wall_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
 
-    ids := cw.world_query(w, cw.query_mask(.ProjectileTag, .Transform))
+    ids := world_query(w, query_mask(.ProjectileTag, .Transform))
     defer delete(ids)
 
     for id in ids {
-        if cw.world_tag_is_destroy(w, id) { continue }
-        t      := cw.world_get_transform(w, id)
+        if world_tag_is_destroy(w, id) { continue }
+        t      := comp_get(w, id, .Transform, TransformComp)
         tx, ty := world_to_tile(t.position[0], t.position[1])
         if tile_base(tile_at(tx, ty)) != .Floor {
-            cw.world_tag_destroy(w, id)
+            world_tag_destroy(w, id)
         }
     }
 }
 
 @(private = "file")
-resolve_wall_overlap :: proc(t: ^cw.TransformComp, radius: f32) {
+resolve_wall_overlap :: proc(t: ^TransformComp, radius: f32) {
     cx := t.position[0]
     cy := t.position[1]
 

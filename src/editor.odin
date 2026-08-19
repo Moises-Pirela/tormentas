@@ -4,7 +4,6 @@ import rl  "vendor:raylib"
 import     "core:fmt"
 import     "core:math"
 import     "core:os"
-import cw  "clockwork"
 import p2p "p2p"
 
 ED_NAME_LEN   :: 32
@@ -122,7 +121,7 @@ ed_build_palette :: proc() {
 
     ki := 0
 
-    add :: proc(brush: EditorBrush, cat: EditorCategory, label: cstring,
+    pal_add :: proc(brush: EditorBrush, cat: EditorCategory, label: cstring,
                 bg: rl.Color, ki: ^int) {
         if g_ed_palette_n >= len(g_ed_palette) { return }
         hotkeys := ED_PAL_HOTKEYS
@@ -139,35 +138,35 @@ ed_build_palette :: proc() {
 
     for tt in TileType {
         #partial switch tt {
-        case .Floor:  add(.Floor,  .Environment, "Floor",  {26, 24, 20, 255}, &ki)
-        case .Wall:   add(.Wall,   .Environment, "Wall",   {52, 46, 38, 255}, &ki)
-        case .Water:  add(.Water,  .Environment, "Water",  {18, 42, 80,  255}, &ki)
-        case .Pillar: add(.Pillar, .Environment, "Pillar", {62, 54, 44, 255}, &ki)
+        case .Floor:  pal_add(.Floor,  .Environment, "Floor",  {26, 24, 20, 255}, &ki)
+        case .Wall:   pal_add(.Wall,   .Environment, "Wall",   {52, 46, 38, 255}, &ki)
+        case .Water:  pal_add(.Water,  .Environment, "Water",  {18, 42, 80,  255}, &ki)
+        case .Pillar: pal_add(.Pillar, .Environment, "Pillar", {62, 54, 44, 255}, &ki)
         }
     }
 
     n_floors := g_tile_variant_count[int(TileType.Floor)]
-    if n_floors >= 1 { add(.Floor1, .Environment, "Flr-1", {34, 30, 24, 255}, &ki) }
-    if n_floors >= 2 { add(.Floor2, .Environment, "Flr-2", {40, 36, 28, 255}, &ki) }
-    if n_floors >= 3 { add(.Floor3, .Environment, "Flr-3", {46, 40, 32, 255}, &ki) }
-    if n_floors >= 4 { add(.Floor4, .Environment, "Flr-4", {52, 46, 36, 255}, &ki) }
+    if n_floors >= 1 { pal_add(.Floor1, .Environment, "Flr-1", {34, 30, 24, 255}, &ki) }
+    if n_floors >= 2 { pal_add(.Floor2, .Environment, "Flr-2", {40, 36, 28, 255}, &ki) }
+    if n_floors >= 3 { pal_add(.Floor3, .Environment, "Flr-3", {46, 40, 32, 255}, &ki) }
+    if n_floors >= 4 { pal_add(.Floor4, .Environment, "Flr-4", {52, 46, 36, 255}, &ki) }
 
     n_walls := g_tile_variant_count[int(TileType.Wall)]
-    if n_walls >= 1 { add(.Wall1, .Environment, "Wll-1", {62, 54, 44, 255}, &ki) }
-    if n_walls >= 2 { add(.Wall2, .Environment, "Wll-2", {70, 60, 48, 255}, &ki) }
-    if n_walls >= 3 { add(.Wall3, .Environment, "Wll-3", {78, 66, 52, 255}, &ki) }
+    if n_walls >= 1 { pal_add(.Wall1, .Environment, "Wll-1", {62, 54, 44, 255}, &ki) }
+    if n_walls >= 2 { pal_add(.Wall2, .Environment, "Wll-2", {70, 60, 48, 255}, &ki) }
+    if n_walls >= 3 { pal_add(.Wall3, .Environment, "Wll-3", {78, 66, 52, 255}, &ki) }
 
     n_pillars := g_tile_variant_count[int(TileType.Pillar)]
-    if n_pillars >= 1 { add(.Pillar1, .Environment, "Pil-1", {72, 64, 52, 255}, &ki) }
-    if n_pillars >= 2 { add(.Pillar2, .Environment, "Pil-2", {80, 70, 56, 255}, &ki) }
+    if n_pillars >= 1 { pal_add(.Pillar1, .Environment, "Pil-1", {72, 64, 52, 255}, &ki) }
+    if n_pillars >= 2 { pal_add(.Pillar2, .Environment, "Pil-2", {80, 70, 56, 255}, &ki) }
 
-    add(.HubCollision, .Environment, "HubColl", { 90, 20, 20, 255}, &ki)
-    add(.HubWalkable,  .Environment, "HubWalk", { 20, 90, 20, 255}, &ki)
+    pal_add(.HubCollision, .Environment, "HubColl", { 90, 20, 20, 255}, &ki)
+    pal_add(.HubWalkable,  .Environment, "HubWalk", { 20, 90, 20, 255}, &ki)
 
-    add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
-    add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
+    pal_add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
+    pal_add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
 
-    if module_count() > 0 { add(.Module, .Environment, "Module", {28, 40, 62, 255}, &ki) }
+    if module_count() > 0 { pal_add(.Module, .Environment, "Module", {28, 40, 62, 255}, &ki) }
 
 
     entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, cat: EditorCategory, ok: bool) {
@@ -186,16 +185,16 @@ ed_build_palette :: proc() {
     for &def in g_entity_defs {
         b, lbl, bg, cat, ok := entity_to_brush(def.name)
         if !ok { continue }
-        add(b, cat, lbl, bg, &ki)
+        pal_add(b, cat, lbl, bg, &ki)
     }
-    add(.Shopkeeper,       .Entities, "Shop",    {84, 64, 28, 255}, &ki)
-    add(.MutationWorkbench,.Entities, "Mutator", {76, 34, 84, 255}, &ki)
-    add(.ExitTile,         .Entities, "Exit",    {16, 56, 24, 255}, &ki)
-    add(.PlayerStart,      .Entities, "Start",   {80, 64, 12, 255}, &ki)
-    add(.Light,            .Entities, "Light",   {80, 70, 20, 255}, &ki)
-    add(.FireBarrel,       .Entities, "FireBar", {90, 36, 10, 255}, &ki)
-    add(.WaterBarrel,      .Entities, "WtrBar",  {12, 52, 90, 255}, &ki)
-    add(.Erase,            .Entities, "Erase",   {55, 18, 18, 255}, &ki)
+    pal_add(.Shopkeeper,       .Entities, "Shop",    {84, 64, 28, 255}, &ki)
+    pal_add(.MutationWorkbench,.Entities, "Mutator", {76, 34, 84, 255}, &ki)
+    pal_add(.ExitTile,         .Entities, "Exit",    {16, 56, 24, 255}, &ki)
+    pal_add(.PlayerStart,      .Entities, "Start",   {80, 64, 12, 255}, &ki)
+    pal_add(.Light,            .Entities, "Light",   {80, 70, 20, 255}, &ki)
+    pal_add(.FireBarrel,       .Entities, "FireBar", {90, 36, 10, 255}, &ki)
+    pal_add(.WaterBarrel,      .Entities, "WtrBar",  {12, 52, 90, 255}, &ki)
+    pal_add(.Erase,            .Entities, "Erase",   {55, 18, 18, 255}, &ki)
 }
 
 @(private = "file")
@@ -328,7 +327,7 @@ update_editor :: proc(dt: f32) {
     mp       := rl.GetMousePosition()
     over_tab := rl.CheckCollisionPointRec(mp, tab_rect)
     over_pal := rl.CheckCollisionPointRec(mp, ed_pal_panel_rect())
-    over_ui  := over_tab || over_pal || (g_ed_panel_open && mp.x >= panel_x) || ed_insp_over_ui()
+    over_ui  := over_tab || over_pal || (g_ed_panel_open && mp.x >= panel_x) || ed_insp_over_ui() || dbg_inspector_wants_mouse()
 
     if rl.IsMouseButtonPressed(.LEFT) && over_tab {
         g_ed_panel_open = !g_ed_panel_open
@@ -847,7 +846,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
                 enemy_type = et,
             })
         case .Shopkeeper, .MutationWorkbench:
-            npc_type := cw.NPCType.Shopkeeper
+            npc_type := NPCType.Shopkeeper
             if EditorBrush(op.brush) == .MutationWorkbench {
                 npc_type = .MutationWorkbench
             }

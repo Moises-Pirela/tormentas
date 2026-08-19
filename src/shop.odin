@@ -3,7 +3,6 @@ package main
 import "core:math/rand"
 import "core:fmt"
 import rl   "vendor:raylib"
-import cw   "clockwork"
 import clay "../clay"
 
 
@@ -20,7 +19,7 @@ ShopEntry :: struct {
 }
 
 
-RARITY_PRICE_MULT := [cw.ItemRarity]int{
+RARITY_PRICE_MULT := [ItemRarity]int{
     .Normal    = 1,
     .Rare      = 2,
     .Epic      = 4,
@@ -61,16 +60,16 @@ g_shop_stock:     [MAX_NPC_ENTITIES][MAX_SHOP_STOCK]StockSlot
 g_shop_stk_count: [MAX_NPC_ENTITIES]int
 
 
-g_shop_npc_id:  int = cw.INVALID_ENTITY
+g_shop_npc_id:  int = INVALID_ENTITY
 
 
-spawn_gold_drop :: proc(w: ^cw.World, world_pos: [3]f32, amount: int) {
+spawn_gold_drop :: proc(w: ^World, world_pos: [3]f32, amount: int) {
     if amount <= 0 { return }
-    id := cw.world_create_entity(w)
-    cw.world_set_transform(w, id, cw.TransformComp{ position = world_pos })
-    cw.world_set_gold(w, id, cw.GoldComp{ amount = amount })
-    cw.world_set_ground_item(w, id)
-    cw.world_set_fog_of_war(w, id)
+    id := world_create_entity(w)
+    comp_set(w, id, .Transform, TransformComp{ position = world_pos })
+    comp_set(w, id, .Gold, GoldComp{ amount = amount })
+    comp_add(w, id, .GroundItem)
+    comp_add(w, id, .FogOfWar)
 }
 
 
@@ -82,7 +81,7 @@ gold_drop_amount :: proc(tick: u64, entity_id: int) -> int {
 }
 
 
-shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
+shop_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
     g_shop_stk_count[slot_idx] = 0
 
@@ -106,10 +105,10 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
         if def == nil { continue }
 
 
-        item_id := cw.world_create_entity(w)
-        cw.world_set_transform(w, item_id, cw.TransformComp{})
+        item_id := world_create_entity(w)
+        comp_set(w, item_id, .Transform, TransformComp{})
 
-        item_comp := cw.item_empty()
+        item_comp := item_empty()
         item_comp.slot               = def.slot
         item_comp.rarity             = roll_rarity()
         item_comp.mutation_type      = def.mutation_type
@@ -136,13 +135,13 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
         item_comp.affix_count        = def.base_affix_count
         for affix in 0..<int(def.base_affix_count) { item_comp.affixes[affix] = def.base_affixes[affix] }
         roll_affixes(&item_comp)
-        cw.world_set_item(w, item_id, item_comp)
+        comp_set(w, item_id, .Item, item_comp)
 
-        rc: cw.RenderConfigComp
-        cw.render_config_set_name(&rc, def.name)
-        cw.render_config_set_icon(&rc, def.icon)
-        cw.render_config_set_desc(&rc, def.desc)
-        cw.world_set_render_config(w, item_id, rc)
+        rc: RenderConfigComp
+        render_config_set_name(&rc, def.name)
+        render_config_set_icon(&rc, def.icon)
+        render_config_set_desc(&rc, def.desc)
+        comp_set(w, item_id, .RenderConfig, rc)
 
         price := cat.base_price * RARITY_PRICE_MULT[item_comp.rarity]
         g_shop_stock[slot_idx][i] = StockSlot{
@@ -154,13 +153,13 @@ shop_roll_stock :: proc(w: ^cw.World, npc_id: int, level_num: int) {
 }
 
 
-shop_clear_stock :: proc(w: ^cw.World, npc_id: int) {
+shop_clear_stock :: proc(w: ^World, npc_id: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
     n := g_shop_stk_count[slot_idx]
     for i in 0..<n {
         eid := g_shop_stock[slot_idx][i].item_entity
-        if cw.world_is_valid(w, eid) {
-            cw.world_destroy_entity(w, eid)
+        if world_is_valid(w, eid) {
+            world_destroy_entity(w, eid)
         }
         g_shop_stock[slot_idx][i] = {}
     }
@@ -171,11 +170,11 @@ shop_clear_stock :: proc(w: ^cw.World, npc_id: int) {
 SHOP_INTERACT_PROMPT_DIST :: f32(85)
 
 
-update_shop :: proc(w: ^cw.World) {
+update_shop :: proc(w: ^World) {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid) { return }
-    if !cw.world_has_component(w, pid, .Transform) { return }
-    player_pos := cw.world_get_transform(w, pid).position
+    if !world_is_valid(w, pid) { return }
+    if !world_has_component(w, pid, .Transform) { return }
+    player_pos := comp_get(w, pid, .Transform, TransformComp).position
 
     if ui_has(.Shop) {
         _update_shop_panel(w)
@@ -184,12 +183,12 @@ update_shop :: proc(w: ^cw.World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
 
 
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
+    npc_ids := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
     for nid in npc_ids {
-        npc := cw.world_get_npc(w, nid)
+        npc := comp_get(w, nid, .NPC, NPCComp)
         if npc.npc_type != .Shopkeeper { continue }
-        nt  := cw.world_get_transform(w, nid)
+        nt  := comp_get(w, nid, .Transform, TransformComp)
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         if dx*dx + dy*dy <= npc.interact_radius * npc.interact_radius {
@@ -203,26 +202,26 @@ update_shop :: proc(w: ^cw.World) {
 }
 
 
-draw_shop_world :: proc(w: ^cw.World) {
-    if !cw.world_has_component(w, w.player_id, .Transform) { return }
-    player_pos := cw.world_get_transform(w, w.player_id).position
+draw_shop_world :: proc(w: ^World) {
+    if !world_has_component(w, w.player_id, .Transform) { return }
+    player_pos := comp_get(w, w.player_id, .Transform, TransformComp).position
 
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform, .RenderConfig))
+    npc_ids := world_query(w, query_mask(.NPC, .Transform, .RenderConfig))
     defer delete(npc_ids)
 
     for nid in npc_ids {
-        npc := cw.world_get_npc(w, nid)
+        npc := comp_get(w, nid, .NPC, NPCComp)
         if npc.npc_type != .Shopkeeper { continue }
 
-        nt  := cw.world_get_transform(w, nid)
+        nt  := comp_get(w, nid, .Transform, TransformComp)
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
 
 
         pos := world_to_iso_xy(nt.position[0], nt.position[1])
-        rc   := cw.world_get_render_config(w, nid)
-        name := loc_lookup(cw.render_config_name_cstr(rc))
+        rc   := comp_get(w, nid, .RenderConfig, RenderConfigComp)
+        name := loc_lookup(render_config_name_cstr(rc))
         nfs  := f32(10)
         nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.5)
         rl.DrawTextEx(g_font_body, name,
@@ -244,21 +243,21 @@ draw_shop_world :: proc(w: ^cw.World) {
 }
 
 
-draw_shop_hud :: proc(w: ^cw.World) {
+draw_shop_hud :: proc(w: ^World) {
     if !ui_has(.Shop) { return }
-    if !cw.world_is_valid(w, g_shop_npc_id) {
+    if !world_is_valid(w, g_shop_npc_id) {
         ui_close_top()
         return
     }
 
     pid := w.player_id
 
-    rc       := cw.world_get_render_config(w, g_shop_npc_id)
-    npc_name := loc_lookup(cw.render_config_name_cstr(rc))
+    rc       := comp_get(w, g_shop_npc_id, .RenderConfig, RenderConfigComp)
+    npc_name := loc_lookup(render_config_name_cstr(rc))
 
     wallet_gold := 0
-    if cw.world_is_valid(w, pid) && cw.world_has_component(w, pid, .Wallet) {
-        wallet_gold = cw.world_get_wallet(w, pid).gold
+    if world_is_valid(w, pid) && world_has_component(w, pid, .Wallet) {
+        wallet_gold = comp_get(w, pid, .Wallet, WalletComp).gold
     }
 
     slot_idx := g_shop_npc_id % MAX_NPC_ENTITIES
@@ -291,7 +290,7 @@ draw_shop_hud :: proc(w: ^cw.World) {
         for i in 0..<n {
             ss := &g_shop_stock[slot_idx][i]
 
-            if ss.item_entity == cw.INVALID_ENTITY || !cw.world_is_valid(w, ss.item_entity) {
+            if ss.item_entity == INVALID_ENTITY || !world_is_valid(w, ss.item_entity) {
                 ui_hstack_begin(fmt.tprintf("ShopSold%d", i), 0, u16(uis(8)), .Center)
                 ui_grow(fmt.tprintf("ShopSoldL%d", i))
                 ui_label(fmt.tprintf("ShopSoldT%d", i), string(t(.SHOP_SOLD_OUT)), uis(11), COL_MUTED)
@@ -300,8 +299,8 @@ draw_shop_hud :: proc(w: ^cw.World) {
                 continue
             }
 
-            item := cw.world_get_item(w, ss.item_entity)
-            irc  := cw.world_get_render_config(w, ss.item_entity)
+            item := comp_get(w, ss.item_entity, .Item, ItemComp)
+            irc  := comp_get(w, ss.item_entity, .RenderConfig, RenderConfigComp)
             rc_col := rarity_color(item.rarity)
             can_afford := wallet_gold >= ss.price
 
@@ -310,9 +309,9 @@ draw_shop_hud :: proc(w: ^cw.World) {
                 ui_box(fmt.tprintf("ShopIcon%d", i), uis(36), uis(36), rl.Color{ 40, 34, 22, 255 }, 2)
                 ui_vstack_begin(fmt.tprintf("ShopInfo%d", i), u16(uis(3)))
                 ui_label(fmt.tprintf("ShopName%d", i),
-                    string(loc_lookup(cw.render_config_name_cstr(irc))), uis(12), rc_col)
+                    string(loc_lookup(render_config_name_cstr(irc))), uis(12), rc_col)
                 ui_label(fmt.tprintf("ShopDesc%d", i),
-                    string(loc_lookup(cw.render_config_desc_cstr(irc))), uis(9), COL_MUTED)
+                    string(loc_lookup(render_config_desc_cstr(irc))), uis(9), COL_MUTED)
                 ui_vstack_end()
                 ui_grow(fmt.tprintf("ShopRowSpc%d", i))
                 price_col := rl.Color{255, 215, 50, 255} if can_afford else rl.Color{180, 80, 60, 255}
@@ -346,31 +345,31 @@ draw_shop_hud :: proc(w: ^cw.World) {
 
 
 @(private = "file")
-_update_shop_panel :: proc(w: ^cw.World) {
+_update_shop_panel :: proc(w: ^World) {
 
 
-    if g_sell_item_id != cw.INVALID_ENTITY {
+    if g_sell_item_id != INVALID_ENTITY {
         _shop_sell(w, g_sell_item_id)
-        g_sell_item_id = cw.INVALID_ENTITY
+        g_sell_item_id = INVALID_ENTITY
     }
 }
 
 @(private = "file")
-_shop_buy :: proc(w: ^cw.World, stock_i: int) {
+_shop_buy :: proc(w: ^World, stock_i: int) {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid) { return }
-    if !cw.world_has_component(w, pid, .Inventory) { return }
-    if !cw.world_has_component(w, pid, .Wallet)    { return }
+    if !world_is_valid(w, pid) { return }
+    if !world_has_component(w, pid, .Inventory) { return }
+    if !world_has_component(w, pid, .Wallet)    { return }
 
     slot_idx := g_shop_npc_id % MAX_NPC_ENTITIES
     ss       := &g_shop_stock[slot_idx][stock_i]
-    if ss.item_entity == cw.INVALID_ENTITY { return }
+    if ss.item_entity == INVALID_ENTITY { return }
 
-    wallet := cw.world_get_wallet(w, pid)
+    wallet := comp_get(w, pid, .Wallet, WalletComp)
     if wallet.gold < ss.price { return }
 
-    inv  := cw.world_get_inventory(w, pid)
-    item := cw.world_get_item(w, ss.item_entity)
+    inv  := comp_get(w, pid, .Inventory, InventoryComp)
+    item := comp_get(w, ss.item_entity, .Item, ItemComp)
 
     col, row, fits := backpack_find_free(inv, item)
     if !fits {
@@ -380,22 +379,22 @@ _shop_buy :: proc(w: ^cw.World, stock_i: int) {
 
     wallet.gold -= ss.price
     backpack_place(inv, item, ss.item_entity, col, row)
-    ss.item_entity = cw.INVALID_ENTITY
+    ss.item_entity = INVALID_ENTITY
     play_sfx("pickup")
     ui_mark_dirty(.Shop)
     ui_mark_dirty(.Inventory)
-    if cw.world_is_valid(w, pid) {
+    if world_is_valid(w, pid) {
         save_player(w, pid)
     }
 }
 
 
-shop_sell_price :: proc(item: ^cw.ItemComp, base_price: int) -> int {
+shop_sell_price :: proc(item: ^ItemComp, base_price: int) -> int {
     p := int(f32(base_price * RARITY_PRICE_MULT[item.rarity]) * SELL_RATIO)
     return max(p, 1)
 }
 
-item_gold_value :: proc(item: ^cw.ItemComp) -> int {
+item_gold_value :: proc(item: ^ItemComp) -> int {
     base := 25
     for ce in SHOP_CATALOGUE {
         def := loot_find_by_name(ce.item_name)
@@ -409,16 +408,16 @@ item_gold_value :: proc(item: ^cw.ItemComp) -> int {
 }
 
 @(private = "file")
-_shop_sell :: proc(w: ^cw.World, item_id: int) {
+_shop_sell :: proc(w: ^World, item_id: int) {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid)                   { return }
-    if !cw.world_has_component(w, pid, .Inventory)  { return }
-    if !cw.world_has_component(w, pid, .Wallet)     { return }
-    if !cw.world_is_valid(w, item_id)               { return }
-    if !cw.world_has_component(w, item_id, .Item)   { return }
+    if !world_is_valid(w, pid)                   { return }
+    if !world_has_component(w, pid, .Inventory)  { return }
+    if !world_has_component(w, pid, .Wallet)     { return }
+    if !world_is_valid(w, item_id)               { return }
+    if !world_has_component(w, item_id, .Item)   { return }
 
-    inv  := cw.world_get_inventory(w, pid)
-    item := cw.world_get_item(w, item_id)
+    inv  := comp_get(w, pid, .Inventory, InventoryComp)
+    item := comp_get(w, item_id, .Item, ItemComp)
 
 
     base_price := 25
@@ -437,19 +436,19 @@ _shop_sell :: proc(w: ^cw.World, item_id: int) {
     backpack_remove(inv, item)
 
     for &slot in inv.equipped {
-        if slot == item_id { slot = cw.INVALID_ENTITY }
+        if slot == item_id { slot = INVALID_ENTITY }
     }
 
-    wallet := cw.world_get_wallet(w, pid)
+    wallet := comp_get(w, pid, .Wallet, WalletComp)
     wallet.gold += sell_val
     play_sfx("pickup")
     ui_mark_dirty(.Shop)
     ui_mark_dirty(.Inventory)
 
-    cw.world_destroy_entity(w, item_id)
+    world_destroy_entity(w, item_id)
 
     save_player(w, pid)
 }
 
 
-g_sell_item_id: int = cw.INVALID_ENTITY
+g_sell_item_id: int = INVALID_ENTITY

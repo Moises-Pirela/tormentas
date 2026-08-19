@@ -3,7 +3,6 @@ package main
 import rl  "vendor:raylib"
 import     "core:fmt"
 import     "core:math"
-import cw  "clockwork"
 import p2p "p2p"
 
 
@@ -194,7 +193,7 @@ ed_insp_draw_panel :: proc() {
 
     eid := _insp_find_entity_id(g_ed_sel.tx, g_ed_sel.ty)
     eid_buf: [24]u8
-    if eid != cw.INVALID_ENTITY {
+    if eid != INVALID_ENTITY {
         s := fmt.bprintf(eid_buf[:23], "Entity ID:  #%d", eid)
         eid_buf[len(s)] = 0
     } else {
@@ -560,7 +559,7 @@ ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
         for &c in g_level_data.containers {
             if c.tx == tx && c.ty == ty {
                 switch op.field {
-                case 0: c.kind          = cw.ContainerKind(op.value)
+                case 0: c.kind          = ContainerKind(op.value)
                 case 1: c.loot_table_id = u8(op.value)
                 case 2: c.gold_min      = u16(op.value)
                 case 3: c.gold_max      = u16(op.value)
@@ -597,7 +596,7 @@ ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
     case .NPC:
         for &npc in g_level_data.npcs {
             if npc.tx == tx && npc.ty == ty {
-                if op.field == 0 { npc.npc_type = cw.NPCType(op.value) }
+                if op.field == 0 { npc.npc_type = NPCType(op.value) }
                 return
             }
         }
@@ -664,7 +663,7 @@ _insp_container :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
             kind_val   := u8(c.kind)
             kind_names := []cstring{"Chest", "Crate", "Locker", "Cabinet"}
             _insp_dropdown(mp, x, cy, w, "Kind",       &kind_val, kind_names, 0, 3, u8(EditorSelKind.Container), 0)
-            c.kind = cw.ContainerKind(kind_val)
+            c.kind = ContainerKind(kind_val)
 
             _insp_spin_u8( mp, x, cy, w, "Loot Table",  &c.loot_table_id, 0, 255, u8(EditorSelKind.Container), 1)
             _insp_spin_u16(mp, x, cy, w, "Gold Min",    &c.gold_min,      0, 9999, u8(EditorSelKind.Container), 2)
@@ -734,7 +733,7 @@ _insp_npc :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
             nt_val   := u8(npc.npc_type)
             nt_names := []cstring{"Shopkeeper", "Mutator", "Stash", "AbilityVendor"}
             _insp_dropdown(mp, x, cy, w, "NPC Type", &nt_val, nt_names, 0, 3, u8(EditorSelKind.NPC), 0)
-            npc.npc_type = cw.NPCType(nt_val)
+            npc.npc_type = NPCType(nt_val)
             return
         }
     }
@@ -770,19 +769,19 @@ _insp_barrel :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
 
 @(private = "file")
 _insp_find_entity_id :: proc(tx, ty: i16) -> int {
-    if !g_sim_alive { return cw.INVALID_ENTITY }
+    if !g_sim_alive { return INVALID_ENTITY }
     w  := &g_sim.world
     wx := f32(int(tx) * TILE_SIZE + TILE_SIZE / 2)
     wy := f32(int(ty) * TILE_SIZE + TILE_SIZE / 2)
     for &e in w.entities {
-        if !cw.entity_is_active(e) { continue }
-        if !cw.world_has_component(w, e.id, .Transform) { continue }
-        tr := cw.world_get_transform(w, e.id)
+        if !entity_is_active(e) { continue }
+        if !world_has_component(w, e.id, .Transform) { continue }
+        tr := comp_get(w, e.id, .Transform, TransformComp)
         if abs(tr.position.x - wx) < 0.5 && abs(tr.position.y - wy) < 0.5 {
             return e.id
         }
     }
-    return cw.INVALID_ENTITY
+    return INVALID_ENTITY
 }
 
 

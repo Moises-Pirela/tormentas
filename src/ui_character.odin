@@ -3,16 +3,15 @@ package main
 
 import rl   "vendor:raylib"
 import clay "../clay"
-import cw   "clockwork"
 import      "core:fmt"
 
 @(private = "file") CHAR_PW :: f32(380)
 
-draw_stats_screen :: proc(w: ^cw.World) {
-    if !cw.world_is_valid(w, w.player_id) { return }
-    if !cw.world_has_component(w, w.player_id, .Stats) { return }
+draw_stats_screen :: proc(w: ^World) {
+    if !world_is_valid(w, w.player_id) { return }
+    if !world_has_component(w, w.player_id, .Stats) { return }
 
-    st := cw.world_get_stats(w, w.player_id)
+    st := comp_get(w, w.player_id, .Stats, StatsComp)
 
     PW   := uis(CHAR_PW)
     HPAD := u16(uis(20))
@@ -290,7 +289,7 @@ draw_stats_screen :: proc(w: ^cw.World) {
             st.stat_points -= 1
             play_sfx("stat_up")
             ui_mark_dirty(.Stats)
-            if cw.world_is_valid(w, w.player_id) {
+            if world_is_valid(w, w.player_id) {
                 save_player(w, w.player_id)
             }
             break

@@ -1,7 +1,6 @@
 package main
 
 import rl  "vendor:raylib"
-import cw  "clockwork"
 import     "core:math"
 import     "core:fmt"
 
@@ -60,7 +59,19 @@ CLASS_BASE_HP     := [4]f32 { 100, 130,  90,  80 }
 CLASS_BASE_ENERGY := [4]f32 { 130,  70,  80, 140 }
 CLASS_BASE_SPEED  := [4]f32 { 220, 230, 270, 225 }
 
-CLASS_STARTER_ABILITIES := [4]cw.AbilityType{
+// Each class wields exactly one weapon archetype — the one drawn in its sprite. This is
+// the single source of truth (starter weapon, equip restriction). Order: Nurse, PR1S,
+// Sheriff, SRBrain.
+CLASS_WEAPON_ARCHETYPE := [4]WeaponArchetype{ .Pistol, .Shotgun, .Pistol, .Pistol }
+
+// The local player's class weapon archetype (used to gate weapon equipping).
+player_class_archetype :: proc() -> WeaponArchetype {
+    ci := class_idx_for_slot(g_active_slot)
+    if ci < 0 || ci >= 4 { return .Pistol }
+    return CLASS_WEAPON_ARCHETYPE[ci]
+}
+
+CLASS_STARTER_ABILITIES := [4]AbilityType{
     .CarbolicSpray,
     .OsseousSlam,
     .RapidDischarge,
@@ -283,8 +294,8 @@ _cs_draw_sprite_frame :: proc(stem: string, dest_r: rl.Rectangle, anim_t: f32, t
     src := entry.src
 
     adef, has_def := get_or_load_anim_def(stem)
-    if has_def && adef.has_clip[cw.AnimStateName.Idle] && adef.frame_width > 0 {
-        clip := adef.clips[cw.AnimStateName.Idle]
+    if has_def && adef.has_clip[AnimStateName.Idle] && adef.frame_width > 0 {
+        clip := adef.clips[AnimStateName.Idle]
         fps  := clip.fps if clip.fps > 0 else 6
         fc   := max(clip.frame_count, 1)
         total_dur := f32(fc) / fps

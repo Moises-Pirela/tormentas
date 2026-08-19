@@ -2,7 +2,6 @@ package main
 
 
 import rl "vendor:raylib"
-import cw "clockwork"
 
 
 UIPanel :: enum {
@@ -227,7 +226,7 @@ ui_update :: proc(dt: f32) {
 }
 
 
-ui_draw :: proc(w: ^cw.World) {
+ui_draw :: proc(w: ^World) {
     if g_ui.count == 0 { return }
 
     sw := f32(rl.GetScreenWidth())
@@ -256,7 +255,7 @@ ui_draw :: proc(w: ^cw.World) {
 
 
 @(private = "file")
-_ui_draw_panel :: proc(panel: UIPanel, w: ^cw.World) {
+_ui_draw_panel :: proc(panel: UIPanel, w: ^World) {
     switch panel {
     case .Inventory:
         if w == nil { return }
@@ -321,13 +320,13 @@ _ui_on_close :: proc(panel: UIPanel) {
     case .PauseMenu:
         g_paused = false
     case .Shop:
-        g_shop_npc_id = cw.INVALID_ENTITY
+        g_shop_npc_id = INVALID_ENTITY
     case .Stash:
-        g_stash_npc_id = cw.INVALID_ENTITY
+        g_stash_npc_id = INVALID_ENTITY
     case .AbilityVendor:
-        g_ability_vendor_npc_id = cw.INVALID_ENTITY
+        g_ability_vendor_npc_id = INVALID_ENTITY
     case .QuestBoard:
-        g_quest_board_npc_id = cw.INVALID_ENTITY
+        g_quest_board_npc_id = INVALID_ENTITY
     case .Keybinds:
         g_rebind_idx = -1
     case .Inventory, .Stats, .MutationTree, .Settings, .LevelSelect,

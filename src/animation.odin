@@ -5,7 +5,6 @@ import "core:math"
 import "core:os"
 import "core:strings"
 import rl  "vendor:raylib"
-import cw  "clockwork"
 
 @(private = "file")
 json_f32 :: proc(v: json.Value) -> f32 {
@@ -17,7 +16,7 @@ json_f32 :: proc(v: json.Value) -> f32 {
     return 0
 }
 
-ANIM_STATE_COUNT :: len(cw.AnimStateName)
+ANIM_STATE_COUNT :: len(AnimStateName)
 
 AnimClipDef :: struct {
     start_frame: int,
@@ -109,7 +108,7 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
     }
 
     if states_obj, sok := root["states"].(json.Object); sok {
-        for si in cw.AnimStateName {
+        for si in AnimStateName {
             name := ANIM_STATE_NAMES[si]
             clip_val, clip_ok := states_obj[name]
             if !clip_ok { continue }
@@ -143,25 +142,25 @@ anim_def_cache_evict :: proc(stem: string) {
 
 ANIM_WALK_SPEED_THRESH :: f32(8.0)
 
-animation_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+animation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    ids := cw.world_query(w, cw.query_mask(.AnimState, .Transform))
+    ids := world_query(w, query_mask(.AnimState, .Transform))
     defer delete(ids)
 
     for id in ids {
-        anim := cw.world_get_anim_state(w, id)
+        anim := comp_get(w, id, .AnimState, AnimStateComp)
 
-        desired := cw.AnimStateName.Idle
+        desired := AnimStateName.Idle
 
-        if cw.world_has_component(w, id, .Respawn) &&
-           cw.world_get_respawn(w, id).timer > 0 {
+        if world_has_component(w, id, .Respawn) &&
+           comp_get(w, id, .Respawn, RespawnComp).timer > 0 {
             desired = .Death
-        } else if cw.world_has_component(w, id, .DodgeState) &&
-                  cw.world_get_dodge(w, id).active {
+        } else if world_has_component(w, id, .DodgeState) &&
+                  comp_get(w, id, .DodgeState, DodgeComp).active {
             desired = .Dodge
-        } else if cw.world_has_component(w, id, .Velocity) {
-            vel := cw.world_get_velocity(w, id).value
+        } else if world_has_component(w, id, .Velocity) {
+            vel := comp_get(w, id, .Velocity, VelocityComp).value
             speed := math.sqrt(vel[0]*vel[0] + vel[1]*vel[1])
             if speed > ANIM_WALK_SPEED_THRESH {
                 desired = .Walk
@@ -180,7 +179,7 @@ animation_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         state := anim.current_state
         if !adef.has_clip[state] {
-            if adef.has_clip[cw.AnimStateName.Idle] { state = .Idle } else { continue }
+            if adef.has_clip[AnimStateName.Idle] { state = .Idle } else { continue }
         }
 
         clip := adef.clips[state]
@@ -221,24 +220,24 @@ PLAYER_STEMS :: [?]string{
 
 g_player_stem: string = PLAYER_STEMS[2]
 
-get_entity_sprite_stem :: proc(w: ^cw.World, id: int) -> string {
-    if cw.world_has_component(w, id, .RenderConfig) {
-        rc := cw.world_get_render_config(w, id)
+get_entity_sprite_stem :: proc(w: ^World, id: int) -> string {
+    if world_has_component(w, id, .RenderConfig) {
+        rc := comp_get(w, id, .RenderConfig, RenderConfigComp)
         if rc.sprite_len > 0 {
             return string(rc.sprite_name[:rc.sprite_len])
         }
     }
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         if id == w.player_ids[slot] { return g_player_stem }
     }
-    if cw.world_has_component(w, id, .AIAgent) {
-        ai := cw.world_get_ai(w, id)
+    if world_has_component(w, id, .AIAgent) {
+        ai := comp_get(w, id, .AIAgent, AIAgentComp)
         if ai.ai_type == .Ranged { return "enemy_ranged" }
         return ENEMY_STEM
     }
-    if cw.world_has_component(w, id, .NPC) {
-        if cw.world_get_npc(w, id).npc_type == .MutationWorkbench {
+    if world_has_component(w, id, .NPC) {
+        if comp_get(w, id, .NPC, NPCComp).npc_type == .MutationWorkbench {
             return WORKBENCH_STEM
         }
         return NPC_STEM
@@ -246,8 +245,8 @@ get_entity_sprite_stem :: proc(w: ^cw.World, id: int) -> string {
     return ENEMY_STEM
 }
 
-anim_source_rect :: proc(w: ^cw.World, id: int, full_src: rl.Rectangle, sprite_stem: string) -> rl.Rectangle {
-    if !cw.world_has_component(w, id, .AnimState) {
+anim_source_rect :: proc(w: ^World, id: int, full_src: rl.Rectangle, sprite_stem: string) -> rl.Rectangle {
+    if !world_has_component(w, id, .AnimState) {
         return full_src
     }
 
@@ -256,10 +255,10 @@ anim_source_rect :: proc(w: ^cw.World, id: int, full_src: rl.Rectangle, sprite_s
         return full_src
     }
 
-    anim := cw.world_get_anim_state(w, id)
+    anim := comp_get(w, id, .AnimState, AnimStateComp)
     state := anim.current_state
     if !adef.has_clip[state] {
-        if adef.has_clip[cw.AnimStateName.Idle] { state = .Idle } else { return full_src }
+        if adef.has_clip[AnimStateName.Idle] { state = .Idle } else { return full_src }
     }
 
     clip := adef.clips[state]

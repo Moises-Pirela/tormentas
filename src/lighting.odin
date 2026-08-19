@@ -4,7 +4,6 @@ import rl "vendor:raylib"
 import "core:math"
 import "core:fmt"
 import "core:c"
-import cw "clockwork"
 
 g_light_widget_open: bool
 
@@ -602,12 +601,12 @@ draw_wall_sun_shadows :: proc() {
 }
 
 
-draw_player_contact_shadow :: proc(w: ^cw.World) {
+draw_player_contact_shadow :: proc(w: ^World) {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid) { return }
-    if !cw.world_has_component(w, pid, .Transform) { return }
+    if !world_is_valid(w, pid) { return }
+    if !world_has_component(w, pid, .Transform) { return }
 
-    tr  := cw.world_get_transform(w, pid)
+    tr  := comp_get(w, pid, .Transform, TransformComp)
     pos := rl.Vector2{ tr.position[0], tr.position[1] }
 
     vis := draw_entity_visual_info(w, pid)
@@ -622,19 +621,19 @@ draw_player_contact_shadow :: proc(w: ^cw.World) {
     rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 0.5, max(radius * 0.20, 1), rl.Color{ 4, 4, 2, 160 })
 }
 
-draw_entity_sprite_shadows :: proc(w: ^cw.World) {
+draw_entity_sprite_shadows :: proc(w: ^World) {
     dir := sun_dir()
-    ids := cw.world_query(w, cw.query_mask(.Transform))
+    ids := world_query(w, query_mask(.Transform))
     defer delete(ids)
 
     for id in ids {
-        if cw.world_has_component(w, id, .ProjectileTag) { continue }
-        if cw.world_has_component(w, id, .MeleeArc)      { continue }
-        if cw.world_has_component(w, id, .GroundItem)    { continue }
-        if cw.world_has_component(w, id, .PointLight)    { continue }
+        if world_has_component(w, id, .ProjectileTag) { continue }
+        if world_has_component(w, id, .MeleeArc)      { continue }
+        if world_has_component(w, id, .GroundItem)    { continue }
+        if world_has_component(w, id, .PointLight)    { continue }
         if is_fog_hidden(w, id)                           { continue }
 
-        tr := cw.world_get_transform(w, id)
+        tr := comp_get(w, id, .Transform, TransformComp)
         pos := rl.Vector2{ tr.position[0], tr.position[1] }
         rot := tr.rotation
 
@@ -644,8 +643,8 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
         }
         radius := vis.world_size * 0.22
 
-        if cw.world_has_component(w, id, .Respawn) &&
-           cw.world_get_respawn(w, id).timer > 0 {
+        if world_has_component(w, id, .Respawn) &&
+           comp_get(w, id, .Respawn, RespawnComp).timer > 0 {
             continue
         }
 
@@ -680,8 +679,8 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
             }
         }
 
-        top_down := cw.world_has_component(w, id, .RenderConfig) &&
-            cw.world_get_render_config(w, id).top_down_sprite
+        top_down := world_has_component(w, id, .RenderConfig) &&
+            comp_get(w, id, .RenderConfig, RenderConfigComp).top_down_sprite
 
         for i in 0..<4 {
             t_frac := f32(i) / 3.0
@@ -701,7 +700,7 @@ draw_entity_sprite_shadows :: proc(w: ^cw.World) {
     }
 }
 
-draw_directional_shadow_mask :: proc(w: ^cw.World) {
+draw_directional_shadow_mask :: proc(w: ^World) {
     ensure_lighting_render_targets()
     if g_shadow_rt.id == 0 { return }
 
@@ -737,11 +736,11 @@ draw_directional_world_composite :: proc() {
     rl.EndShaderMode()
 }
 
-draw_directional_sprite_composite :: proc(w: ^cw.World) {
+draw_directional_sprite_composite :: proc(w: ^World) {
     ensure_lighting_render_targets()
     if g_sprite_rt.id == 0 || g_shadow_rt.id == 0 { return }
 
-    light_ids := cw.world_query(w, cw.query_mask(.PointLight, .Transform))
+    light_ids := world_query(w, query_mask(.PointLight, .Transform))
     defer delete(light_ids)
 
     light_count := min(len(light_ids), MAX_POINT_LIGHTS)
@@ -753,8 +752,8 @@ draw_directional_sprite_composite :: proc(w: ^cw.World) {
 
     for i in 0..<light_count {
         id := light_ids[i]
-        t  := cw.world_get_transform(w, id)
-        pl := cw.world_get_point_light(w, id)
+        t  := comp_get(w, id, .Transform, TransformComp)
+        pl := comp_get(w, id, .PointLight, PointLightComp)
         positions[i]   = { t.position[0], t.position[1] }
         colors[i]      = pl.color
         radii[i]       = pl.radius
@@ -848,8 +847,8 @@ draw_world_god_rays :: proc() {
     rl.EndBlendMode()
 }
 
-draw_fog_and_lights :: proc(w: ^cw.World) {
-    ids := cw.world_query(w, cw.query_mask(.PointLight, .Transform))
+draw_fog_and_lights :: proc(w: ^World) {
+    ids := world_query(w, query_mask(.PointLight, .Transform))
     defer delete(ids)
 
     count := min(len(ids), MAX_POINT_LIGHTS)
@@ -861,8 +860,8 @@ draw_fog_and_lights :: proc(w: ^cw.World) {
 
     for i in 0..<count {
         id := ids[i]
-        t  := cw.world_get_transform(w, id)
-        pl := cw.world_get_point_light(w, id)
+        t  := comp_get(w, id, .Transform, TransformComp)
+        pl := comp_get(w, id, .PointLight, PointLightComp)
         positions[i]   = { t.position[0], t.position[1] }
         colors[i]      = pl.color
         radii[i]       = pl.radius
@@ -880,14 +879,14 @@ draw_fog_and_lights :: proc(w: ^cw.World) {
     player_pos    := [2]f32{ 0, 0 }
     vision_radius := f32(0)
     vision_fade   := f32(0)
-    if cw.world_is_valid(w, w.player_id) &&
-       cw.world_has_component(w, w.player_id, .Transform) {
-        pp := cw.world_get_transform(w, w.player_id).position
+    if world_is_valid(w, w.player_id) &&
+       world_has_component(w, w.player_id, .Transform) {
+        pp := comp_get(w, w.player_id, .Transform, TransformComp).position
         player_pos = { pp[0], pp[1] }
         vision_radius = FOG_VISION_RADIUS
         vision_fade   = FOG_FADE_WIDTH
-        if cw.world_has_component(w, w.player_id, .Stats) {
-            vision_radius += cw.world_get_stats(w, w.player_id).vision_bonus
+        if world_has_component(w, w.player_id, .Stats) {
+            vision_radius += comp_get(w, w.player_id, .Stats, StatsComp).vision_bonus
         }
     }
 

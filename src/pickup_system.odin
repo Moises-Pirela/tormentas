@@ -1,90 +1,89 @@
 package main
 
 import "core:math"
-import cw "clockwork"
 
 PICKUP_RADIUS :: f32(32)
 
-pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+pickup_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    gold_ids := cw.world_query(w, cw.query_mask(.GroundItem, .Transform, .Gold))
+    gold_ids := world_query(w, query_mask(.GroundItem, .Transform, .Gold))
     defer delete(gold_ids)
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         pid := w.player_ids[slot]
-        if !cw.world_is_valid(w, pid)                   { continue }
-        if !cw.world_has_component(w, pid, .Wallet)     { continue }
-        if !cw.world_has_component(w, pid, .Transform)  { continue }
-        if cw.world_has_component(w, pid, .Stats) &&
-           cw.world_get_stats(w, pid).pickups_blocked   { continue }
-        if cw.world_has_component(w, pid, .Respawn) &&
-           cw.world_get_respawn(w, pid).timer > 0       { continue }
+        if !world_is_valid(w, pid)                   { continue }
+        if !world_has_component(w, pid, .Wallet)     { continue }
+        if !world_has_component(w, pid, .Transform)  { continue }
+        if world_has_component(w, pid, .Stats) &&
+           comp_get(w, pid, .Stats, StatsComp).pickups_blocked   { continue }
+        if world_has_component(w, pid, .Respawn) &&
+           comp_get(w, pid, .Respawn, RespawnComp).timer > 0       { continue }
 
-        player_pos := cw.world_get_transform(w, pid).position
-        wallet     := cw.world_get_wallet(w, pid)
+        player_pos := comp_get(w, pid, .Transform, TransformComp).position
+        wallet     := comp_get(w, pid, .Wallet, WalletComp)
 
         for gid in gold_ids {
-            if !cw.world_has_component(w, gid, .GroundItem) { continue }
+            if !world_has_component(w, gid, .GroundItem) { continue }
 
-            t  := cw.world_get_transform(w, gid)
+            t  := comp_get(w, gid, .Transform, TransformComp)
             dx := t.position[0] - player_pos[0]
             dy := t.position[1] - player_pos[1]
             if dx*dx + dy*dy > PICKUP_RADIUS * PICKUP_RADIUS { continue }
 
-            gold_comp := cw.world_get_gold(w, gid)
+            gold_comp := comp_get(w, gid, .Gold, GoldComp)
             wallet.gold += gold_comp.amount
             if pid == w.player_id { play_sfx("pickup") }
-            cw.world_tag_destroy(w, gid)
+            world_tag_destroy(w, gid)
         }
     }
 
     if ui_has(.Inventory) || ui_has(.Shop) || ui_has(.Stash) { return }
 
-    ground_ids := cw.world_query(w, cw.query_mask(.GroundItem, .Transform, .Item))
+    ground_ids := world_query(w, query_mask(.GroundItem, .Transform, .Item))
     defer delete(ground_ids)
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         pid := w.player_ids[slot]
-        if !cw.world_is_valid(w, pid) { continue }
-        if !cw.world_has_component(w, pid, .Inventory) { continue }
-        if cw.world_has_component(w, pid, .Stats) &&
-           cw.world_get_stats(w, pid).pickups_blocked { continue }
+        if !world_is_valid(w, pid) { continue }
+        if !world_has_component(w, pid, .Inventory) { continue }
+        if world_has_component(w, pid, .Stats) &&
+           comp_get(w, pid, .Stats, StatsComp).pickups_blocked { continue }
 
-        if cw.world_has_component(w, pid, .Respawn) {
-            if cw.world_get_respawn(w, pid).timer > 0 { continue }
+        if world_has_component(w, pid, .Respawn) {
+            if comp_get(w, pid, .Respawn, RespawnComp).timer > 0 { continue }
         }
 
-        player_pos := cw.world_get_transform(w, pid).position
-        inv        := cw.world_get_inventory(w, pid)
+        player_pos := comp_get(w, pid, .Transform, TransformComp).position
+        inv        := comp_get(w, pid, .Inventory, InventoryComp)
 
         for gid in ground_ids {
-            if !cw.world_has_component(w, gid, .GroundItem) { continue }
+            if !world_has_component(w, gid, .GroundItem) { continue }
 
-            t  := cw.world_get_transform(w, gid)
+            t  := comp_get(w, gid, .Transform, TransformComp)
             dx := t.position[0] - player_pos[0]
             dy := t.position[1] - player_pos[1]
             if math.sqrt(dx*dx + dy*dy) > PICKUP_RADIUS { continue }
 
-            item := cw.world_get_item(w, gid)
+            item := comp_get(w, gid, .Item, ItemComp)
 
             if item.serum_value > 0 {
-                if cw.world_has_component(w, pid, .MutationContainer) {
-                    mc := cw.world_get_mutation(w, pid)
+                if world_has_component(w, pid, .MutationContainer) {
+                    mc := comp_get(w, pid, .MutationContainer, MutationContainerComp)
                     serum_mult := f32(1.0)
-                    if cw.world_has_component(w, pid, .MutationContainer) {
-                        pmc := cw.world_get_mutation(w, pid)
+                    if world_has_component(w, pid, .MutationContainer) {
+                        pmc := comp_get(w, pid, .MutationContainer, MutationContainerComp)
                         for i in 0..<pmc.entity_count {
                             meid := pmc.entities[i]
-                            if !cw.world_is_valid(w, meid) { continue }
-                            if cw.world_has_component(w, meid, .MutSerumGainMult) {
-                                serum_mult *= cw.world_get_mut_serum_gain_mult(w, meid).mult
+                            if !world_is_valid(w, meid) { continue }
+                            if world_has_component(w, meid, .MutSerumGainMult) {
+                                serum_mult *= comp_get(w, meid, .MutSerumGainMult, MutSerumGainMultComp).mult
                             }
                         }
                     }
                     mc.serums += int(f32(item.serum_value) * serum_mult)
                 }
-                cw.world_tag_destroy(w, gid)
+                world_tag_destroy(w, gid)
                 if pid == w.player_id { play_sfx("pickup") }
                 continue
             }
@@ -96,12 +95,12 @@ pickup_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             if !ok { continue }
 
             backpack_place(inv, item, gid, col, row)
-            cw.world_clear_ground_item(w, gid)
+            comp_rm(w, gid, .GroundItem)
             if pid == w.player_id {
                 play_sfx("pickup")
                 ui_mark_dirty(.Inventory)
             }
-            cw.entity_sig_clear(&w.entities[gid].signature, .Transform)
+            comp_rm(w, gid, .Transform)
         }
     }
 }

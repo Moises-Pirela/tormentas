@@ -2,19 +2,18 @@ package main
 
 
 import "core:math"
-import cw "clockwork"
 import rl "vendor:raylib"
 
 
-trap_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+trap_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    trap_ids := cw.world_query(w, cw.query_mask(.ProximityTrigger, .Transform))
+    trap_ids := world_query(w, query_mask(.ProximityTrigger, .Transform))
     defer delete(trap_ids)
 
     for tid in trap_ids {
-        trap := cw.world_get_proximity_trigger(w, tid)
-        pos  := cw.world_get_transform(w, tid).position
+        trap := comp_get(w, tid, .ProximityTrigger, ProximityTriggerComp)
+        pos  := comp_get(w, tid, .Transform, TransformComp).position
 
 
         if trap.arm_timer > 0 {
@@ -24,18 +23,18 @@ trap_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
         r2     := trap.radius * trap.radius
-        ai_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform), context.temp_allocator)
+        ai_ids := world_query(w, query_mask(.AIAgent, .Transform), context.temp_allocator)
         triggered := false
         for eid in ai_ids {
-            et := cw.world_get_transform(w, eid)
+            et := comp_get(w, eid, .Transform, TransformComp)
             dx := et.position[0] - pos[0]
             dy := et.position[1] - pos[1]
             if dx*dx + dy*dy > r2 { continue }
 
 
-            cw.world_push_damage(w, eid, trap.damage, trap.owner_id)
+            world_push_damage(w, eid, trap.damage, trap.owner_id)
             if trap.status_dur > 0 {
-                cw.status_effect_apply(w, eid, cw.StatusEffect{
+                status_effect_apply(w, eid, StatusEffect{
                     type           = trap.status,
                     application    = .Base,
                     stack_behavior = .Refresh,
@@ -50,21 +49,21 @@ trap_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if triggered {
             push_explosion(pos[0], pos[1], trap.radius, trap.er, trap.eg, trap.eb)
             play_sfx("ability_fan")
-            cw.world_destroy_entity(w, tid)
+            world_destroy_entity(w, tid)
         }
     }
 }
 
 
-draw_traps :: proc(w: ^cw.World) {
-    trap_ids := cw.world_query(w, cw.query_mask(.ProximityTrigger, .Transform))
+draw_traps :: proc(w: ^World) {
+    trap_ids := world_query(w, query_mask(.ProximityTrigger, .Transform))
     defer delete(trap_ids)
 
     for tid in trap_ids {
-        trap := cw.world_get_proximity_trigger(w, tid)
+        trap := comp_get(w, tid, .ProximityTrigger, ProximityTriggerComp)
         pos  := rl.Vector2{
-            cw.world_get_transform(w, tid).position[0],
-            cw.world_get_transform(w, tid).position[1],
+            comp_get(w, tid, .Transform, TransformComp).position[0],
+            comp_get(w, tid, .Transform, TransformComp).position[1],
         }
 
         armed := trap.arm_timer <= 0
@@ -74,7 +73,7 @@ draw_traps :: proc(w: ^cw.World) {
         fill_a   := u8(40)
         edge_a   := u8(120)
         if armed {
-            pulse  = 0.7 + 0.3 * math.sin_f32(f32(cw.world_get_transform(w, tid).rotation))
+            pulse  = 0.7 + 0.3 * math.sin_f32(f32(comp_get(w, tid, .Transform, TransformComp).rotation))
 
 
             fill_a = u8(clamp(f32(fill_a) * pulse, 0, 255))

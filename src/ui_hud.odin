@@ -2,18 +2,17 @@ package main
 
 
 import rl   "vendor:raylib"
-import cw   "clockwork"
 import clay "../clay"
 import      "core:fmt"
 
 
 @(private = "file")
-STATUS_EFFECT_LABELS := [len(cw.StatusEffectType)]string{
+STATUS_EFFECT_LABELS := [len(StatusEffectType)]string{
     "SLOW", "PSN", "BURN", "STUN", "ROOT", "OIL", "WET",
 }
 
 @(private = "file")
-STATUS_EFFECT_COLORS := [len(cw.StatusEffectType)]rl.Color{
+STATUS_EFFECT_COLORS := [len(StatusEffectType)]rl.Color{
     {  80, 160, 220, 255 },
     {  80, 205,  80, 255 },
     { 240, 120,  30, 255 },
@@ -24,11 +23,11 @@ STATUS_EFFECT_COLORS := [len(cw.StatusEffectType)]rl.Color{
 }
 
 
-draw_hud :: proc(w: ^cw.World) {
+draw_hud :: proc(w: ^World) {
     clay.BeginLayout()
 
-    if cw.world_is_valid(w, w.player_id) {
-        h := cw.world_get_health(w, w.player_id)
+    if world_is_valid(w, w.player_id) {
+        h := comp_get(w, w.player_id, .Health, HealthComp)
 
         hp_ratio := clamp(h.current / h.max, 0, 1) if h.max > 0 else f32(0)
         en_ratio := clamp(h.energy / h.max_energy, 0, 1) if h.max_energy > 0 else f32(0)
@@ -36,8 +35,8 @@ draw_hud :: proc(w: ^cw.World) {
 
         shield_ratio := f32(0)
         xp_ratio     := f32(0)
-        if cw.world_has_component(w, w.player_id, .Stats) {
-            st := cw.world_get_stats(w, w.player_id)
+        if world_has_component(w, w.player_id, .Stats) {
+            st := comp_get(w, w.player_id, .Stats, StatsComp)
             if st.shield_max > 0 {
                 shield_ratio = clamp(h.shield / st.shield_max, 0, 1)
             }
@@ -77,16 +76,16 @@ draw_hud :: proc(w: ^cw.World) {
         _hud_fill_ammo_chip(w, &ammo_data.ammo)
 
 
-        chip_data: [cw.ABILITY_SLOT_COUNT]UICustomData
+        chip_data: [ABILITY_SLOT_COUNT]UICustomData
         _hud_fill_ability_chips(w, &chip_data)
 
 
         HUDStatusInfo :: struct { label: string, color: rl.Color, duration: f32 }
-        se_buf: [len(cw.StatusEffectType)]HUDStatusInfo
+        se_buf: [len(StatusEffectType)]HUDStatusInfo
         se_n   := 0
-        if cw.world_has_component(w, w.player_id, .StatusEffect) {
-            sec := cw.world_get_status_effects(w, w.player_id)
-            for et in 0..<len(cw.StatusEffectType) {
+        if world_has_component(w, w.player_id, .StatusEffect) {
+            sec := comp_get(w, w.player_id, .StatusEffect, StatusEffectComp)
+            for et in 0..<len(StatusEffectType) {
                 ef := &sec.effects[et]
                 if ef.duration <= 0 { continue }
                 se_buf[se_n] = HUDStatusInfo{
@@ -110,7 +109,7 @@ draw_hud :: proc(w: ^cw.World) {
         ui_frame_reset()
 
 
-        n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)
+        n_chips  := f32(ABILITY_SLOT_COUNT + 1)
         center_w := CHIP_SZ * n_chips + f32(CHIP_GAP) * (n_chips - 1)
 
         if clay.UI(clay.ID("HUDRoot"))({
@@ -155,7 +154,7 @@ draw_hud :: proc(w: ^cw.World) {
                 if se_n > 0 {
                     SCHIP_W  := uis(36)
                     SCHIP_H  := uis(28)
-                    SCHIP_ID := [len(cw.StatusEffectType)]string{
+                    SCHIP_ID := [len(StatusEffectType)]string{
                         "SE0","SE1","SE2","SE3","SE4","SE5","SE6" }
 
                     if clay.UI(clay.ID("StatusRow"))({
@@ -221,9 +220,9 @@ draw_hud :: proc(w: ^cw.World) {
                     }) {}
 
 
-                    chip_ids := [cw.ABILITY_SLOT_COUNT]string{
+                    chip_ids := [ABILITY_SLOT_COUNT]string{
                         "ChipQ", "ChipE", "ChipF", "ChipG" }
-                    for i in 0..<cw.ABILITY_SLOT_COUNT {
+                    for i in 0..<ABILITY_SLOT_COUNT {
                         if clay.UI(clay.ID(chip_ids[i]))({
                             layout = { sizing = { clay.SizingFixed(CHIP_SZ),
                                                   clay.SizingFixed(CHIP_SZ) } },
@@ -262,14 +261,14 @@ draw_hud :: proc(w: ^cw.World) {
     cmds := clay.EndLayout()
 
     // Draw the chip rail behind the Clay elements (Clay renders on top)
-    if cw.world_is_valid(w, w.player_id) {
+    if world_is_valid(w, w.player_id) {
         sw     := f32(rl.GetScreenWidth())
         sh     := f32(rl.GetScreenHeight())
         CHIP_SZ  := uis(54)
         CHIP_GAP := uis(6)
         HPAD     := uis(6)
         VPAD     := uis(5)
-        n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)
+        n_chips  := f32(ABILITY_SLOT_COUNT + 1)
         center_w := CHIP_SZ * n_chips + CHIP_GAP * (n_chips - 1)
         rail_h   := uis(10)
         rail_x   := (sw - center_w) * 0.5 - HPAD
@@ -293,12 +292,12 @@ draw_hud :: proc(w: ^cw.World) {
 
 
 @(private = "file")
-draw_interact_prompt :: proc(w: ^cw.World) {
-    if g_interact_focused_id == cw.INVALID_ENTITY { return }
-    if !cw.world_is_valid(w, g_interact_focused_id) { return }
-    if !cw.world_has_component(w, g_interact_focused_id, .Interactable) { return }
+draw_interact_prompt :: proc(w: ^World) {
+    if g_interact_focused_id == INVALID_ENTITY { return }
+    if !world_is_valid(w, g_interact_focused_id) { return }
+    if !world_has_component(w, g_interact_focused_id, .Interactable) { return }
 
-    ia := cw.world_get_interactable(w, g_interact_focused_id)
+    ia := comp_get(w, g_interact_focused_id, .Interactable, InteractableComp)
     if !ia.active || ia.prompt[0] == 0 { return }
 
     sw := f32(rl.GetScreenWidth())
@@ -331,25 +330,25 @@ draw_interact_prompt :: proc(w: ^cw.World) {
 
 
 @(private = "file")
-_hud_fill_ammo_chip :: proc(w: ^cw.World, chip: ^UICustomAmmo) {
+_hud_fill_ammo_chip :: proc(w: ^World, chip: ^UICustomAmmo) {
     chip^ = {}
 
-    if !cw.world_has_component(w, w.player_id, .Equipment) { return }
-    equip := cw.world_get_equipment(w, w.player_id)
+    if !world_has_component(w, w.player_id, .Equipment) { return }
+    equip := comp_get(w, w.player_id, .Equipment, EquipmentComp)
     wid   := equip.weapon_entity_id
-    if !cw.world_is_valid(w, wid) { return }
+    if !world_is_valid(w, wid) { return }
 
 
-    if cw.world_has_component(w, wid, .RenderConfig) {
-        rc         := cw.world_get_render_config(w, wid)
-        translated := string(loc_lookup(cw.render_config_name_cstr(rc)))
+    if world_has_component(w, wid, .RenderConfig) {
+        rc         := comp_get(w, wid, .RenderConfig, RenderConfigComp)
+        translated := string(loc_lookup(render_config_name_cstr(rc)))
         n_copy     := min(len(translated), 23)
         copy(chip.wep_name[:], translated[:n_copy])
         chip.wep_name[n_copy] = 0
     }
 
-    if !cw.world_has_component(w, wid, .Weapon) { return }
-    wp := cw.world_get_weapon_data(w, wid)
+    if !world_has_component(w, wid, .Weapon) { return }
+    wp := comp_get(w, wid, .Weapon, WeaponComp)
 
 
     if wp.ammo_max <= 0 {
@@ -375,15 +374,15 @@ _hud_fill_ammo_chip :: proc(w: ^cw.World, chip: ^UICustomAmmo) {
 }
 
 @(private = "file")
-_hud_fill_ability_chips :: proc(w: ^cw.World, chips: ^[cw.ABILITY_SLOT_COUNT]UICustomData) {
-    ab: ^cw.AbilityComp = nil
-    if cw.world_has_component(w, w.player_id, .Ability) {
-        ab = cw.world_get_ability(w, w.player_id)
+_hud_fill_ability_chips :: proc(w: ^World, chips: ^[ABILITY_SLOT_COUNT]UICustomData) {
+    ab: ^AbilityComp = nil
+    if world_has_component(w, w.player_id, .Ability) {
+        ab = comp_get(w, w.player_id, .Ability, AbilityComp)
     }
 
-    key_chars := [cw.ABILITY_SLOT_COUNT]u8{ 'Q', 'E', 'F', 'G' }
+    key_chars := [ABILITY_SLOT_COUNT]u8{ 'Q', 'E', 'F', 'G' }
 
-    for i in 0..<cw.ABILITY_SLOT_COUNT {
+    for i in 0..<ABILITY_SLOT_COUNT {
         chips[i].kind = .AbilityChip
         chip := &chips[i].ability
 
@@ -412,12 +411,12 @@ _hud_fill_ability_chips :: proc(w: ^cw.World, chips: ^[cw.ABILITY_SLOT_COUNT]UIC
 
 
 @(private = "file")
-_draw_flask_charges :: proc(w: ^cw.World) {
+_draw_flask_charges :: proc(w: ^World) {
     pid := w.player_id
-    if !cw.world_is_valid(w, pid)                  { return }
-    if !cw.world_has_component(w, pid, .Inventory) { return }
+    if !world_is_valid(w, pid)                  { return }
+    if !world_has_component(w, pid, .Inventory) { return }
 
-    inv := cw.world_get_inventory(w, pid)
+    inv := comp_get(w, pid, .Inventory, InventoryComp)
 
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
@@ -429,7 +428,7 @@ _draw_flask_charges :: proc(w: ^cw.World) {
     HPAD     := uis(6)
     VPAD     := uis(5)
 
-    n_chips  := f32(cw.ABILITY_SLOT_COUNT + 1)
+    n_chips  := f32(ABILITY_SLOT_COUNT + 1)
     center_w := CHIP_SZ * n_chips + CHIP_GAP * (n_chips - 1)
     hud_w    := ORB_SZ * 2 + center_w + CHIP_GAP * 2 + HPAD * 2
 
@@ -463,8 +462,8 @@ _draw_flask_charges :: proc(w: ^cw.World) {
 
 @(private = "file")
 _draw_flask_pip_row :: proc(
-    w: ^cw.World, inv: ^cw.InventoryComp,
-    slot: cw.EquipSlot, pid: int,
+    w: ^World, inv: ^InventoryComp,
+    slot: EquipSlot, pid: int,
     px, py, pip_r, pip_gap, orb_w: f32,
     col_filled, col_empty: rl.Color,
     key_label: cstring,
@@ -476,18 +475,18 @@ _draw_flask_pip_row :: proc(
         rl.Color{ 160, 150, 130, 180 })
 
 
-    if !cw.world_is_valid(w, fid) || !cw.world_has_component(w, fid, .Flask) {
+    if !world_is_valid(w, fid) || !world_has_component(w, fid, .Flask) {
         rl.DrawTextEx(g_font_body, "empty", { px + uis(20), py }, key_fs, 0.5,
             rl.Color{ 80, 70, 60, 120 })
         return
     }
 
-    fc := cw.world_get_flask(w, fid)
+    fc := comp_get(w, fid, .Flask, FlaskComp)
 
 
     active_glow := false
-    if cw.world_has_component(w, pid, .FlaskEffect) {
-        fe := cw.world_get_flask_effect(w, pid)
+    if world_has_component(w, pid, .FlaskEffect) {
+        fe := comp_get(w, pid, .FlaskEffect, FlaskEffectComp)
         if fc.kind == .Health  && fe.heal_per_sec   > 0 { active_glow = true }
         if fc.kind == .Energy  && fe.energy_per_sec > 0 { active_glow = true }
     }

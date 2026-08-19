@@ -4,7 +4,6 @@ import rl       "vendor:raylib"
 import          "core:fmt"
 import          "core:strings"
 import          "core:strconv"
-import cw       "clockwork"
 
 CONSOLE_MAX_LINES  :: 48
 CONSOLE_LINE_CAP   :: 320
@@ -127,7 +126,7 @@ update_console :: proc(dt: f32) {
     if rl.IsKeyPressed(.ENTER) {
         raw := string(g_console_input[:g_console_in_len])
         console_logf("> %s", raw)
-        w: ^cw.World = nil
+        w: ^World = nil
         if g_sim_alive { w = &g_sim.world }
         _console_exec(w, raw)
         g_console_in_len = 0
@@ -225,7 +224,7 @@ draw_console :: proc() {
 
 
 @(private = "file")
-_console_exec :: proc(w: ^cw.World, raw: string) {
+_console_exec :: proc(w: ^World, raw: string) {
     s := strings.trim_space(raw)
     if len(s) == 0 { return }
 
@@ -247,7 +246,7 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
         console_log("  audio <sub>               reload|list|play <ev>|state <name>|duck")
         console_log("  clear                     clear console log")
         console_log("available mutations:")
-        for mt in cw.MutationType {
+        for mt in MutationType {
             if mt == .None { continue }
             console_logf("    %s", _mut_def_name_from_type(mt))
         }
@@ -259,7 +258,7 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
 
     case "mut":
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) {
+        if !world_is_valid(w, w.player_id) {
             console_log("ERROR: no active player")
             return
         }
@@ -272,8 +271,8 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
             console_logf("player already has %s", args)
             return
         }
-        mc := cw.world_get_mutation(w, w.player_id)
-        if mc.entity_count >= cw.MAX_MUTATION_SLOTS {
+        mc := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
+        if mc.entity_count >= MAX_MUTATION_SLOTS {
             console_log("ERROR: mutation slots full")
             return
         }
@@ -282,40 +281,40 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
 
     case "serums":
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
         n, ok := strconv.parse_int(args)
         if !ok { console_log("ERROR: expected integer"); return }
-        if cw.world_has_component(w, w.player_id, .MutationContainer) {
-            cw.world_get_mutation(w, w.player_id).serums = n
+        if world_has_component(w, w.player_id, .MutationContainer) {
+            comp_get(w, w.player_id, .MutationContainer, MutationContainerComp).serums = n
         }
         console_logf("serums = %d", n)
 
     case "gold":
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
         n, ok := strconv.parse_int(args)
         if !ok { console_log("ERROR: expected integer"); return }
-        if cw.world_has_component(w, w.player_id, .Wallet) {
-            cw.world_get_wallet(w, w.player_id).gold += n
+        if world_has_component(w, w.player_id, .Wallet) {
+            comp_get(w, w.player_id, .Wallet, WalletComp).gold += n
         }
         console_logf("gold += %d", n)
 
     case "hp":
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
         n, ok := strconv.parse_int(args)
         if !ok { console_log("ERROR: expected integer"); return }
-        if cw.world_has_component(w, w.player_id, .Health) {
-            h := cw.world_get_health(w, w.player_id)
+        if world_has_component(w, w.player_id, .Health) {
+            h := comp_get(w, w.player_id, .Health, HealthComp)
             h.current = clamp(f32(n), 0, h.max)
         }
         console_logf("hp = %d", n)
 
     case "kill":
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
-        if cw.world_has_component(w, w.player_id, .Health) {
-            cw.world_get_health(w, w.player_id).current = 0
+        if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        if world_has_component(w, w.player_id, .Health) {
+            comp_get(w, w.player_id, .Health, HealthComp).current = 0
         }
         console_log("player killed")
 
@@ -363,7 +362,7 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
 
 
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
         sep2 := strings.last_index_byte(args, ' ')
         name_part := args
         lv_part   := "1"
@@ -383,44 +382,44 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
         }
         lv, _ := strconv.parse_int(lv_part)
         lv      = clamp(lv, 1, ABILITY_MAX_LEVEL)
-        if cw.world_has_component(w, w.player_id, .Transform) {
-            pos := cw.world_get_transform(w, w.player_id).position
-            iid := cw.world_create_entity(w)
-            cw.world_set_transform(w, iid, cw.TransformComp{ position = pos })
-            item               := cw.item_empty()
+        if world_has_component(w, w.player_id, .Transform) {
+            pos := comp_get(w, w.player_id, .Transform, TransformComp).position
+            iid := world_create_entity(w)
+            comp_set(w, iid, .Transform, TransformComp{ position = pos })
+            item               := item_empty()
             item.slot           = .Ability1
             item.ability_type   = at
             item.ability_level  = u8(lv)
             item.grid_w         = 1
             item.grid_h         = 1
             item.rarity         = .Epic
-            cw.world_set_item(w, iid, item)
+            comp_set(w, iid, .Item, item)
             def := &ABILITY_DEFS[at]
-            rc: cw.RenderConfigComp
-            cw.render_config_set_name(&rc, def.name)
-            cw.render_config_set_icon(&rc, "ability_active")
-            cw.render_config_set_desc(&rc, def.desc)
-            cw.world_set_render_config(w, iid, rc)
-            cw.world_set_ground_item(w, iid)
-            cw.world_set_fog_of_war(w, iid)
+            rc: RenderConfigComp
+            render_config_set_name(&rc, def.name)
+            render_config_set_icon(&rc, "ability_active")
+            render_config_set_desc(&rc, def.desc)
+            comp_set(w, iid, .RenderConfig, rc)
+            comp_add(w, iid, .GroundItem)
+            comp_add(w, iid, .FogOfWar)
             console_logf("spawned %s (lv %d) at player position", def.name, lv)
         }
 
     case "ability_levelup":
 
         if w == nil { console_log("ERROR: no world active"); return }
-        if !cw.world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
+        if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
         slot_n, ok3 := strconv.parse_int(args)
         if !ok3 || slot_n < 1 || slot_n > 4 {
             console_log("usage: ability_levelup <1-4>")
             return
         }
-        if cw.world_has_component(w, w.player_id, .Inventory) {
-            inv  := cw.world_get_inventory(w, w.player_id)
+        if world_has_component(w, w.player_id, .Inventory) {
+            inv  := comp_get(w, w.player_id, .Inventory, InventoryComp)
             eq   := ability_slot_to_equip(slot_n - 1)
             iid  := inv.equipped[eq]
-            if cw.world_is_valid(w, iid) && cw.world_has_component(w, iid, .Item) {
-                item := cw.world_get_item(w, iid)
+            if world_is_valid(w, iid) && world_has_component(w, iid, .Item) {
+                item := comp_get(w, iid, .Item, ItemComp)
                 if item.ability_type != .None {
                     old_lv := max(1, int(item.ability_level))
                     if old_lv >= ABILITY_MAX_LEVEL {
@@ -440,7 +439,7 @@ _console_exec :: proc(w: ^cw.World, raw: string) {
 }
 
 @(private = "file")
-_ability_type_from_name :: proc(raw: string) -> cw.AbilityType {
+_ability_type_from_name :: proc(raw: string) -> AbilityType {
     s := strings.to_lower(raw, context.temp_allocator)
 
     switch s {
@@ -472,7 +471,7 @@ _ability_type_from_name :: proc(raw: string) -> cw.AbilityType {
 }
 
 @(private = "file")
-_mut_type_from_def_name :: proc(name: string) -> cw.MutationType {
+_mut_type_from_def_name :: proc(name: string) -> MutationType {
     switch name {
     case "mut_serrated_hands":   return .SerratedHands
     case "mut_hollow_bones":     return .HollowBones
@@ -499,7 +498,7 @@ _mut_type_from_def_name :: proc(name: string) -> cw.MutationType {
 }
 
 @(private = "file")
-_mut_def_name_from_type :: proc(mt: cw.MutationType) -> string {
+_mut_def_name_from_type :: proc(mt: MutationType) -> string {
     switch mt {
     case .SerratedHands:   return "mut_serrated_hands"
     case .HollowBones:     return "mut_hollow_bones"

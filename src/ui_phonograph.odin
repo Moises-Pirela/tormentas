@@ -2,13 +2,12 @@ package main
 
 import rl   "vendor:raylib"
 import      "core:math"
-import cw   "clockwork"
 
 
 g_phonograph_panel_id:        u8  = 0
-g_phonograph_panel_entity_id: int = cw.INVALID_ENTITY
+g_phonograph_panel_entity_id: int = INVALID_ENTITY
 
-ui_open_phonograph :: proc(recording_id: u8, entity_id: int = cw.INVALID_ENTITY) {
+ui_open_phonograph :: proc(recording_id: u8, entity_id: int = INVALID_ENTITY) {
     g_phonograph_panel_id        = recording_id
     g_phonograph_panel_entity_id = entity_id
     ui_open(.Phonograph)
@@ -28,9 +27,9 @@ draw_phonograph_panel :: proc() {
     is_playing := false
     play_timer := f32(0)
     w := &g_sim.world
-    if cw.world_is_valid(w, g_phonograph_panel_entity_id) &&
-       cw.world_has_component(w, g_phonograph_panel_entity_id, .Phonograph) {
-        ph := cw.world_get_phonograph(w, g_phonograph_panel_entity_id)
+    if world_is_valid(w, g_phonograph_panel_entity_id) &&
+       world_has_component(w, g_phonograph_panel_entity_id, .Phonograph) {
+        ph := comp_get(w, g_phonograph_panel_entity_id, .Phonograph, PhonographComp)
         is_playing = ph.is_playing
         play_timer = ph.play_timer
     }
@@ -38,7 +37,7 @@ draw_phonograph_panel :: proc() {
     rec, rec_ok := lore_get_recording(g_phonograph_panel_id)
 
 
-    if rec_ok && !is_playing && g_phonograph_panel_entity_id != cw.INVALID_ENTITY {
+    if rec_ok && !is_playing && g_phonograph_panel_entity_id != INVALID_ENTITY {
         ui_close(.Phonograph)
         return
     }

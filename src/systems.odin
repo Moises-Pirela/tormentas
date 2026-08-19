@@ -2,10 +2,9 @@ package main
 
 import rl  "vendor:raylib"
 import     "core:math"
-import cw  "clockwork"
 import p2p "p2p"
 
-g_staged_input: [cw.MAX_PLAYERS]p2p.InputFrame
+g_staged_input: [MAX_PLAYERS]p2p.InputFrame
 
 collect_local_input :: proc() -> p2p.InputFrame {
     f: p2p.InputFrame
@@ -28,7 +27,7 @@ collect_local_input :: proc() -> p2p.InputFrame {
     mp    := screen_to_world_cartesian(rl.GetMousePosition())
     f.aim  = { mp.x, mp.y }
 
-    if rl.IsMouseButtonDown(.LEFT)                                { f.actions += {.Fire}     }
+    if rl.IsMouseButtonDown(.LEFT) && !dbg_inspector_wants_mouse() { f.actions += {.Fire}     }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
@@ -39,8 +38,8 @@ collect_local_input :: proc() -> p2p.InputFrame {
     return f
 }
 
-apply_input_frame :: proc(w: ^cw.World, entity_id: int, f: p2p.InputFrame) {
-    cw.world_set_input(w, entity_id, cw.InputStateComp{
+apply_input_frame :: proc(w: ^World, entity_id: int, f: p2p.InputFrame) {
+    comp_set(w, entity_id, .InputState, InputStateComp{
         move             = f.move,
         mouse_world      = { f.aim[0], f.aim[1], 0 },
         fire_pressed     = .Fire     in f.actions,
@@ -54,17 +53,17 @@ apply_input_frame :: proc(w: ^cw.World, entity_id: int, f: p2p.InputFrame) {
     })
 }
 
-player_input_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+player_input_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .EarlyUpdate { return }
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         id := w.player_ids[slot]
-        if !cw.world_is_valid(w, id) { continue }
+        if !world_is_valid(w, id) { continue }
 
-        if cw.world_has_component(w, id, .Respawn) &&
-           cw.world_get_respawn(w, id).timer > 0 {
-            cw.world_set_input(w, id, cw.InputStateComp{})
-            cw.world_set_velocity(w, id, cw.VelocityComp{})
+        if world_has_component(w, id, .Respawn) &&
+           comp_get(w, id, .Respawn, RespawnComp).timer > 0 {
+            comp_set(w, id, .InputState, InputStateComp{})
+            comp_set(w, id, .Velocity, VelocityComp{})
             continue
         }
 
@@ -73,28 +72,28 @@ player_input_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         move := frame.move
         move_speed := f32(MOVE_SPEED)
-        if cw.world_has_component(w, id, .Stats) {
-            st := cw.world_get_stats(w, id)
+        if world_has_component(w, id, .Stats) {
+            st := comp_get(w, id, .Stats, StatsComp)
             move_speed = st.move_speed
             if st.movement_blocked { move = {} }
         }
-        cw.world_set_velocity(w, id, cw.VelocityComp{
+        comp_set(w, id, .Velocity, VelocityComp{
             value = { move[0] * move_speed, move[1] * move_speed, 0 },
         })
     }
 }
 
-dodge_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+dodge_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .EarlyUpdate { return }
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         id := w.player_ids[slot]
-        if !cw.world_is_valid(w, id) { continue }
-        if !cw.world_has_component(w, id, .DodgeState) { continue }
+        if !world_is_valid(w, id) { continue }
+        if !world_has_component(w, id, .DodgeState) { continue }
 
-        input := cw.world_get_input(w, id)
-        dodge := cw.world_get_dodge(w, id)
-        t     := cw.world_get_transform(w, id)
+        input := comp_get(w, id, .InputState, InputStateComp)
+        dodge := comp_get(w, id, .DodgeState, DodgeComp)
+        t     := comp_get(w, id, .Transform, TransformComp)
 
         if dodge.active {
             dodge.timer -= dt
@@ -103,8 +102,8 @@ dodge_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
                 dodge.timer    = 0
                 dodge.cooldown = dodge.cooldown_max
                 reduction      := f32(0)
-                if cw.world_has_component(w, id, .Stats) {
-                    reduction = cw.world_get_stats(w, id).dodge_cooldown_reduction
+                if world_has_component(w, id, .Stats) {
+                    reduction = comp_get(w, id, .Stats, StatsComp).dodge_cooldown_reduction
                 }
                 dodge.cooldown  = max(0, dodge.cooldown - reduction)
             }
@@ -115,13 +114,13 @@ dodge_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         can_dodge_charge := false
         if input.dodge_pressed && !dodge.active && dodge.cooldown > 0 {
-            if cw.world_has_component(w, id, .MutationContainer) {
-                mc := cw.world_get_mutation(w, id)
+            if world_has_component(w, id, .MutationContainer) {
+                mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
                 for mi in 0..<mc.entity_count {
                     meid := mc.entities[mi]
-                    if !cw.world_is_valid(w, meid)                           { continue }
-                    if !cw.world_has_component(w, meid, .MutExtraDodgeCharges) { continue }
-                    edc := cw.world_get_mut_extra_dodge_charges(w, meid)
+                    if !world_is_valid(w, meid)                           { continue }
+                    if !world_has_component(w, meid, .MutExtraDodgeCharges) { continue }
+                    edc := comp_get(w, meid, .MutExtraDodgeCharges, MutExtraDodgeChargesComp)
                     if edc.charges > 0 {
                         edc.charges       -= 1
                         edc.recharge_timer = 0
@@ -135,15 +134,25 @@ dodge_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         if input.dodge_pressed && !dodge.active && (dodge.cooldown <= 0 || can_dodge_charge) {
             dodge.active    = true
             dodge.timer     = dodge.duration
-            dodge.direction = {
-                math.cos(t.rotation),
-                math.sin(t.rotation),
+            // Screen-facing: movement while moving, aim while standing still. Screen-x of a
+            // world vector is (x - y) under the iso projection.
+            face_sx := math.cos(t.rotation) - math.sin(t.rotation)
+            if input.move[0]*input.move[0] + input.move[1]*input.move[1] > 0.0001 {
+                face_sx = input.move[0] - input.move[1]
+            }
+            // Dodge is a backward horizontal screen-dash: opposite the facing on the screen-x
+            // axis, no vertical component yet. World dirs (1,-1)/(−1,1) move purely along screen-x.
+            INV_SQRT2 :: f32(0.7071067811865476)
+            if face_sx > 0 {
+                dodge.direction = { -INV_SQRT2,  INV_SQRT2 }   // facing screen-right -> dash screen-left
+            } else {
+                dodge.direction = {  INV_SQRT2, -INV_SQRT2 }   // facing screen-left  -> dash screen-right
             }
             if id == w.player_id { play_sfx("dodge") }
         }
 
         if dodge.active {
-            cw.world_set_velocity(w, id, cw.VelocityComp{
+            comp_set(w, id, .Velocity, VelocityComp{
                 value = {
                     dodge.direction[0] * dodge.speed,
                     dodge.direction[1] * dodge.speed,
@@ -154,20 +163,23 @@ dodge_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 }
 
-facing_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+facing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
-    for slot in 0..<cw.MAX_PLAYERS {
+    for slot in 0..<MAX_PLAYERS {
         id := w.player_ids[slot]
-        if !cw.world_is_valid(w, id) { continue }
-        if !cw.world_has_component(w, id, .Transform) { continue }
-        if !cw.world_has_component(w, id, .InputState) { continue }
+        if !world_is_valid(w, id) { continue }
+        if !world_has_component(w, id, .Transform) { continue }
+        if !world_has_component(w, id, .InputState) { continue }
 
-        t     := cw.world_get_transform(w, id)
-        input := cw.world_get_input(w, id)
+        t     := comp_get(w, id, .Transform, TransformComp)
+        input := comp_get(w, id, .InputState, InputStateComp)
 
 
-        if cw.world_has_component(w, id, .AimLock) { continue }
+        if world_has_component(w, id, .AimLock) { continue }
+
+        // Lock facing briefly during a dodge so the sprite doesn't spin mid-dash.
+        if world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active { continue }
 
         dx := input.mouse_world[0] - t.position[0]
         dy := input.mouse_world[1] - t.position[1]
@@ -177,11 +189,11 @@ facing_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 }
 
-camera_follow_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+camera_follow_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
     if g_editor_mode { return }
-    if !cw.world_is_valid(w, w.player_id) { return }
+    if !world_is_valid(w, w.player_id) { return }
 
-    pos := cw.world_get_transform(w, w.player_id).position
+    pos := comp_get(w, w.player_id, .Transform, TransformComp).position
     camera_set_target_world(pos[0], pos[1])
 }

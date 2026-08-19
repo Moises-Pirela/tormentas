@@ -1,26 +1,25 @@
 package main
 
-import cw "clockwork"
 import math "core:math"
 
-status_effect_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+status_effect_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     #partial switch event {
     case .Update:
         for id in 0..<len(w.entities) {
-            if !cw.world_is_valid(w, id) { continue }
-            if !cw.world_has_component(w, id, .StatusEffect) { continue }
+            if !world_is_valid(w, id) { continue }
+            if !world_has_component(w, id, .StatusEffect) { continue }
 
-            sec := cw.world_get_status_effects(w, id)
+            sec := comp_get(w, id, .StatusEffect, StatusEffectComp)
 
 
-            if cw.status_effect_is_active(sec, .Wet) {
-                sec.effects[int(cw.StatusEffectType.Burn)].duration  = 0
-                sec.effects[int(cw.StatusEffectType.Oiled)].duration = 0
+            if status_effect_is_active(sec, .Wet) {
+                sec.effects[int(StatusEffectType.Burn)].duration  = 0
+                sec.effects[int(StatusEffectType.Oiled)].duration = 0
             }
 
 
-            for et in 0..<len(cw.StatusEffectType) {
-                stype  := cw.StatusEffectType(et)
+            for et in 0..<len(StatusEffectType) {
+                stype  := StatusEffectType(et)
                 effect := &sec.effects[et]
 
                 if effect.duration <= 0 { continue }
@@ -40,12 +39,12 @@ status_effect_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 }
 
 @(private = "file")
-_apply_poison_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt: f32) {
-    if !cw.world_has_component(w, id, .Health) { return }
+_apply_poison_damage :: proc(w: ^World, id: int, effect: ^StatusEffect, dt: f32) {
+    if !world_has_component(w, id, .Health) { return }
 
-    if !cw.world_has_component(w, id, .Organic) { return }
+    if !world_has_component(w, id, .Organic) { return }
 
-    h := cw.world_get_health(w, id)
+    h := comp_get(w, id, .Health, HealthComp)
 
     damage_per_sec := effect.strength * h.max
     damage_this_tick := damage_per_sec * dt
@@ -59,7 +58,7 @@ _apply_poison_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt
 
     effect.acumulator -= damage_to_apply
 
-    append(&w.damage_events, cw.DamageEvent{
+    append(&w.damage_events, DamageEvent{
         target_id = id,
         amount    = damage_to_apply,
         source_id = int(effect.source_id),
@@ -68,12 +67,12 @@ _apply_poison_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt
 }
 
 @(private = "file")
-_apply_burn_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt: f32) {
+_apply_burn_damage :: proc(w: ^World, id: int, effect: ^StatusEffect, dt: f32) {
 
-    if !cw.world_has_component(w, id, .Health) { return }
-    if !cw.world_has_component(w, id, .Flammable) {return }
+    if !world_has_component(w, id, .Health) { return }
+    if !world_has_component(w, id, .Flammable) {return }
 
-    h := cw.world_get_health(w, id)
+    h := comp_get(w, id, .Health, HealthComp)
 
     damage_per_sec := effect.strength * h.max
     damage_this_tick := damage_per_sec * dt
@@ -86,7 +85,7 @@ _apply_burn_damage :: proc(w: ^cw.World, id: int, effect: ^cw.StatusEffect, dt: 
 
     effect.acumulator -= damage_to_apply
 
-    append(&w.damage_events, cw.DamageEvent{
+    append(&w.damage_events, DamageEvent{
         target_id = id,
         amount    = damage_to_apply,
         source_id = int(effect.source_id),

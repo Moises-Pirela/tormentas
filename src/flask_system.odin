@@ -1,16 +1,15 @@
 package main
 
 
-import cw "clockwork"
 import rl "vendor:raylib"
 
-flask_system :: proc(w: ^cw.World, _ev: cw.SystemEvent, dt: f32) {
-    for slot in 0..<cw.MAX_PLAYERS {
+flask_system :: proc(w: ^World, _ev: SystemEvent, dt: f32) {
+    for slot in 0..<MAX_PLAYERS {
         pid := w.player_ids[slot]
-        if !cw.world_is_valid(w, pid)                  { continue }
-        if !cw.world_has_component(w, pid, .Inventory) { continue }
+        if !world_is_valid(w, pid)                  { continue }
+        if !world_has_component(w, pid, .Inventory) { continue }
 
-        inv := cw.world_get_inventory(w, pid)
+        inv := comp_get(w, pid, .Inventory, InventoryComp)
 
 
         if rl.IsKeyPressed(.ONE) {
@@ -23,23 +22,23 @@ flask_system :: proc(w: ^cw.World, _ev: cw.SystemEvent, dt: f32) {
         }
 
 
-        if cw.world_has_component(w, pid, .FlaskEffect) {
-            fe := cw.world_get_flask_effect(w, pid)
+        if world_has_component(w, pid, .FlaskEffect) {
+            fe := comp_get(w, pid, .FlaskEffect, FlaskEffectComp)
             fe.remaining -= dt
 
             if fe.remaining <= 0 {
-                cw.world_clear_flask_effect(w, pid)
+                comp_rm(w, pid, .FlaskEffect)
             } else {
 
-                if fe.heal_per_sec > 0 && cw.world_has_component(w, pid, .Health) {
-                    h := cw.world_get_health(w, pid)
-                    if !cw.world_has_component(w, pid, .Stats) ||
-                       !cw.world_get_stats(w, pid).healing_blocked {
+                if fe.heal_per_sec > 0 && world_has_component(w, pid, .Health) {
+                    h := comp_get(w, pid, .Health, HealthComp)
+                    if !world_has_component(w, pid, .Stats) ||
+                       !comp_get(w, pid, .Stats, StatsComp).healing_blocked {
                         h.current = min(h.current + fe.heal_per_sec * dt, h.max)
                     }
                 }
-                if fe.energy_per_sec > 0 && cw.world_has_component(w, pid, .Health) {
-                    h := cw.world_get_health(w, pid)
+                if fe.energy_per_sec > 0 && world_has_component(w, pid, .Health) {
+                    h := comp_get(w, pid, .Health, HealthComp)
                     h.energy = min(h.energy + fe.energy_per_sec * dt, h.max_energy)
                 }
             }
@@ -48,12 +47,12 @@ flask_system :: proc(w: ^cw.World, _ev: cw.SystemEvent, dt: f32) {
 }
 
 @(private = "file")
-_try_use_flask :: proc(w: ^cw.World, pid: int, inv: ^cw.InventoryComp, slot: cw.EquipSlot) {
+_try_use_flask :: proc(w: ^World, pid: int, inv: ^InventoryComp, slot: EquipSlot) {
     fid := inv.equipped[int(slot)]
-    if !cw.world_is_valid(w, fid)              { return }
-    if !cw.world_has_component(w, fid, .Flask) { return }
+    if !world_is_valid(w, fid)              { return }
+    if !world_has_component(w, fid, .Flask) { return }
 
-    fc := cw.world_get_flask(w, fid)
+    fc := comp_get(w, fid, .Flask, FlaskComp)
     if fc.charges <= 0 { return }
 
 
@@ -63,8 +62,8 @@ _try_use_flask :: proc(w: ^cw.World, pid: int, inv: ^cw.InventoryComp, slot: cw.
     rate := fc.recover_amount / fc.recover_duration
 
 
-    if cw.world_has_component(w, pid, .FlaskEffect) {
-        fe := cw.world_get_flask_effect(w, pid)
+    if world_has_component(w, pid, .FlaskEffect) {
+        fe := comp_get(w, pid, .FlaskEffect, FlaskEffectComp)
 
         if fc.recover_duration > fe.remaining {
             fe.remaining = fc.recover_duration
@@ -74,11 +73,11 @@ _try_use_flask :: proc(w: ^cw.World, pid: int, inv: ^cw.InventoryComp, slot: cw.
         case .Energy: fe.energy_per_sec += rate
         }
     } else {
-        fe := cw.FlaskEffectComp{ remaining = fc.recover_duration }
+        fe := FlaskEffectComp{ remaining = fc.recover_duration }
         switch fc.kind {
         case .Health: fe.heal_per_sec   = rate
         case .Energy: fe.energy_per_sec = rate
         }
-        cw.world_set_flask_effect(w, pid, fe)
+        comp_set(w, pid, .FlaskEffect, fe)
     }
 }

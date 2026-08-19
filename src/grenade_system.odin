@@ -2,21 +2,20 @@ package main
 
 
 import "core:math"
-import cw "clockwork"
 import rl "vendor:raylib"
 
 
-grenade_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
 
     {
-        grenade_ids := cw.world_query(w, cw.query_mask(.Grenade, .Transform))
+        grenade_ids := world_query(w, query_mask(.Grenade, .Transform))
         defer delete(grenade_ids)
 
         for gid in grenade_ids {
-            g := cw.world_get_grenade(w, gid)
-            t := cw.world_get_transform(w, gid)
+            g := comp_get(w, gid, .Grenade, GrenadeComp)
+            t := comp_get(w, gid, .Transform, TransformComp)
 
             dx   := g.target[0] - t.position[0]
             dy   := g.target[1] - t.position[1]
@@ -35,19 +34,19 @@ grenade_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             } else {
                 t.position = g.target
                 _grenade_detonate(w, gid)
-                cw.world_destroy_entity(w, gid)
+                world_destroy_entity(w, gid)
             }
         }
     }
 
 
     {
-        cloud_ids := cw.world_query(w, cw.query_mask(.PoisonCloud, .Transform))
+        cloud_ids := world_query(w, query_mask(.PoisonCloud, .Transform))
         defer delete(cloud_ids)
 
         for cid in cloud_ids {
-            cl := cw.world_get_poison_cloud(w, cid)
-            t  := cw.world_get_transform(w, cid)
+            cl := comp_get(w, cid, .PoisonCloud, PoisonCloudComp)
+            t  := comp_get(w, cid, .Transform, TransformComp)
 
             cl.duration   -= dt
             cl.tick_timer -= dt
@@ -60,7 +59,7 @@ grenade_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
             }
 
             if cl.duration <= 0 {
-                cw.world_destroy_entity(w, cid)
+                world_destroy_entity(w, cid)
             }
         }
     }
@@ -68,18 +67,18 @@ grenade_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
 @(private = "file")
-_grenade_detonate :: proc(w: ^cw.World, gid: int) {
-    g   := cw.world_get_grenade(w, gid)
-    pos := cw.world_get_transform(w, gid).position
+_grenade_detonate :: proc(w: ^World, gid: int) {
+    g   := comp_get(w, gid, .Grenade, GrenadeComp)
+    pos := comp_get(w, gid, .Transform, TransformComp).position
 
 
-    if g.blink_on_land && cw.world_is_valid(w, g.owner_id) &&
-       cw.world_has_component(w, g.owner_id, .Transform) {
-        ot := cw.world_get_transform(w, g.owner_id)
+    if g.blink_on_land && world_is_valid(w, g.owner_id) &&
+       world_has_component(w, g.owner_id, .Transform) {
+        ot := comp_get(w, g.owner_id, .Transform, TransformComp)
         ot.position = pos
 
-        if cw.world_has_component(w, g.owner_id, .Velocity) {
-            cw.world_get_velocity(w, g.owner_id).value = {}
+        if world_has_component(w, g.owner_id, .Velocity) {
+            comp_get(w, g.owner_id, .Velocity, VelocityComp).value = {}
         }
     }
 
@@ -92,9 +91,9 @@ _grenade_detonate :: proc(w: ^cw.World, gid: int) {
 
 
     if g.cloud_duration > 0 {
-        cloud_id := cw.world_create_entity(w)
-        cw.world_set_transform(w, cloud_id, cw.TransformComp{ position = pos })
-        cw.world_set_poison_cloud(w, cloud_id, cw.PoisonCloudComp{
+        cloud_id := world_create_entity(w)
+        comp_set(w, cloud_id, .Transform, TransformComp{ position = pos })
+        comp_set(w, cloud_id, .PoisonCloud, PoisonCloudComp{
             owner_id         = g.owner_id,
             radius           = g.cloud_radius,
             dps              = g.cloud_dps,
@@ -111,23 +110,23 @@ _grenade_detonate :: proc(w: ^cw.World, gid: int) {
 }
 
 @(private = "file")
-_cloud_damage_nearby :: proc(w: ^cw.World, owner_id: int,
+_cloud_damage_nearby :: proc(w: ^World, owner_id: int,
                               pos: [3]f32, radius, amount: f32,
-                              status: cw.StatusEffectType = .Poison,
+                              status: StatusEffectType = .Poison,
                               status_dur: f32 = 0) {
     r2  := radius * radius
-    ids := cw.world_query(w, cw.query_mask(.AIAgent, .Health, .Transform))
+    ids := world_query(w, query_mask(.AIAgent, .Health, .Transform))
     defer delete(ids)
     for eid in ids {
-        et := cw.world_get_transform(w, eid)
+        et := comp_get(w, eid, .Transform, TransformComp)
         dx := et.position[0] - pos[0]
         dy := et.position[1] - pos[1]
         if dx*dx + dy*dy > r2 { continue }
         if amount > 0 {
-            cw.world_push_damage(w, eid, amount, owner_id)
+            world_push_damage(w, eid, amount, owner_id)
         }
         if status_dur > 0 {
-            cw.status_effect_apply(w, eid, cw.StatusEffect{
+            status_effect_apply(w, eid, StatusEffect{
                 type           = status,
                 application    = .Base,
                 stack_behavior = .Refresh,
@@ -139,17 +138,17 @@ _cloud_damage_nearby :: proc(w: ^cw.World, owner_id: int,
 }
 
 
-draw_grenades_and_clouds :: proc(w: ^cw.World) {
+draw_grenades_and_clouds :: proc(w: ^World) {
 
     {
-        cloud_ids := cw.world_query(w, cw.query_mask(.PoisonCloud, .Transform))
+        cloud_ids := world_query(w, query_mask(.PoisonCloud, .Transform))
         defer delete(cloud_ids)
 
         for cid in cloud_ids {
-            cl  := cw.world_get_poison_cloud(w, cid)
+            cl  := comp_get(w, cid, .PoisonCloud, PoisonCloudComp)
             pos := rl.Vector2{
-                cw.world_get_transform(w, cid).position[0],
-                cw.world_get_transform(w, cid).position[1],
+                comp_get(w, cid, .Transform, TransformComp).position[0],
+                comp_get(w, cid, .Transform, TransformComp).position[1],
             }
 
 
@@ -170,14 +169,14 @@ draw_grenades_and_clouds :: proc(w: ^cw.World) {
 
 
     {
-        grenade_ids := cw.world_query(w, cw.query_mask(.Grenade, .Transform))
+        grenade_ids := world_query(w, query_mask(.Grenade, .Transform))
         defer delete(grenade_ids)
 
         for gid in grenade_ids {
-            g   := cw.world_get_grenade(w, gid)
+            g   := comp_get(w, gid, .Grenade, GrenadeComp)
             pos := rl.Vector2{
-                cw.world_get_transform(w, gid).position[0],
-                cw.world_get_transform(w, gid).position[1],
+                comp_get(w, gid, .Transform, TransformComp).position[0],
+                comp_get(w, gid, .Transform, TransformComp).position[1],
             }
 
             draw_world_circle(pos, 7,  rl.Color{ g.er, g.eg, g.eb, 230 })

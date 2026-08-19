@@ -1,7 +1,6 @@
 package main
 
 
-import cw "clockwork"
 import rl  "vendor:raylib"
 import     "core:math"
 
@@ -87,12 +86,12 @@ fire_system_destroy :: proc() {
 }
 
 
-spawn_barrel :: proc(w: ^cw.World, wx, wy: f32, btype: BarrelType) -> int {
-    id := cw.world_create_entity(w)
-    cw.world_set_transform(w, id, cw.TransformComp{ position = {wx, wy, 0} })
-    cw.world_set_health(w, id, cw.HealthComp{ current = 50, max = 50 })
+spawn_barrel :: proc(w: ^World, wx, wy: f32, btype: BarrelType) -> int {
+    id := world_create_entity(w)
+    comp_set(w, id, .Transform, TransformComp{ position = {wx, wy, 0} })
+    comp_set(w, id, .Health, HealthComp{ current = 50, max = 50 })
 
-    cw.world_set_collider(w, id, cw.ColliderComp{ radius = 12, faction = 2 })
+    comp_set(w, id, .Collider, ColliderComp{ radius = 12, faction = 2 })
     g_barrel_registry[id] = btype
     return id
 }
@@ -124,36 +123,36 @@ _push_water :: proc(wx, wy, radius: f32) {
 
 
 @(private = "file")
-_explode_fire_barrel :: proc(w: ^cw.World, wx, wy: f32) {
+_explode_fire_barrel :: proc(w: ^World, wx, wy: f32) {
     EXP_R :: f32(72)
     push_explosion(wx, wy, EXP_R, 255, 110, 20)
 
     for id in 0..<len(w.entities) {
 
-        if !cw.world_is_valid(w, id)               { continue }
+        if !world_is_valid(w, id)               { continue }
 
-        if !cw.world_has_component(w, id, .Health) { continue }
+        if !world_has_component(w, id, .Health) { continue }
 
 
-        tr := cw.world_get_transform(w, id)
+        tr := comp_get(w, id, .Transform, TransformComp)
         dx := tr.position[0] - wx
         dy := tr.position[1] - wy
         d  := math.sqrt(dx*dx + dy*dy)
         if d < EXP_R {
-            cw.world_push_damage(w, id, 60 * (1 - d/EXP_R), 0)
+            world_push_damage(w, id, 60 * (1 - d/EXP_R), 0)
 
-             if !cw.world_has_component(w, id, .Flammable) || cw.world_get_flammable(w, id).isImmune {
+             if !world_has_component(w, id, .Flammable) || comp_get(w, id, .Flammable, FlammableComp).isImmune {
                 continue
             }
 
-             has_oiled := cw.world_has_component(w, id, .StatusEffect) &&
-                cw.status_effect_is_active(cw.world_get_status_effects(w, id), .Oiled)
+             has_oiled := world_has_component(w, id, .StatusEffect) &&
+                status_effect_is_active(comp_get(w, id, .StatusEffect, StatusEffectComp), .Oiled)
             burn_str := f32(0.05) * (2.0 if has_oiled else 1.0)
             if has_oiled {
-                cw.world_get_status_effects(w, id).effects[int(cw.StatusEffectType.Oiled)].duration = 0
+                comp_get(w, id, .StatusEffect, StatusEffectComp).effects[int(StatusEffectType.Oiled)].duration = 0
             }
 
-            cw.status_effect_apply(w, id, cw.StatusEffect{
+            status_effect_apply(w, id, StatusEffect{
                 type            = .Burn,
                 duration        = 2.5,
                 strength        = burn_str,
@@ -175,7 +174,7 @@ _explode_fire_barrel :: proc(w: ^cw.World, wx, wy: f32) {
 }
 
 @(private = "file")
-_explode_water_barrel :: proc(w: ^cw.World, wx, wy: f32) {
+_explode_water_barrel :: proc(w: ^World, wx, wy: f32) {
     SPLASH_R :: f32(85)
     push_explosion(wx, wy, SPLASH_R * 0.55, 70, 150, 220)
 
@@ -192,13 +191,13 @@ _explode_water_barrel :: proc(w: ^cw.World, wx, wy: f32) {
 
 
     for eid in 0..<len(w.entities) {
-        if !cw.world_is_valid(w, eid)               { continue }
-        if !cw.world_has_component(w, eid, .Health) { continue }
-        tr := cw.world_get_transform(w, eid)
+        if !world_is_valid(w, eid)               { continue }
+        if !world_has_component(w, eid, .Health) { continue }
+        tr := comp_get(w, eid, .Transform, TransformComp)
         dx := tr.position[0] - wx
         dy := tr.position[1] - wy
         if math.sqrt(dx*dx + dy*dy) < SPLASH_R {
-            cw.status_effect_apply(w, eid, cw.StatusEffect{
+            status_effect_apply(w, eid, StatusEffect{
                 type           = .Wet,
                 duration       = 5.0,
                 strength       = 1.0,
@@ -263,16 +262,16 @@ _ignite_oil :: proc(start_tx, start_ty: int) {
 }
 
 
-barrel_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+barrel_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
     for id in 0..<len(w.entities) {
-        if !cw.world_is_valid(w, id)              { continue }
+        if !world_is_valid(w, id)              { continue }
         btype, is_barrel := g_barrel_registry[id]
         if !is_barrel                             { continue }
-        if !cw.world_has_component(w, id, .Health){ continue }
+        if !world_has_component(w, id, .Health){ continue }
 
-        h  := cw.world_get_health(w, id)
-        tr := cw.world_get_transform(w, id)
+        h  := comp_get(w, id, .Health, HealthComp)
+        tr := comp_get(w, id, .Transform, TransformComp)
         if h.current > 0                          { continue }
 
         delete_key(&g_barrel_registry, id)
@@ -281,11 +280,11 @@ barrel_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
         case .Fire:  _explode_fire_barrel(w, wx, wy)
         case .Water: _explode_water_barrel(w, wx, wy)
         }
-        cw.world_destroy_entity(w, id)
+        world_destroy_entity(w, id)
     }
 }
 
-fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
+fire_patch_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
     {
@@ -320,21 +319,21 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
     }
 
     for eid in 0..<len(w.entities) {
-        if !cw.world_is_valid(w, eid)                 { continue }
-        if !cw.world_has_component(w, eid, .Health)   { continue }
-        if !cw.world_has_component(w, eid, .Collider) { continue }
+        if !world_is_valid(w, eid)                 { continue }
+        if !world_has_component(w, eid, .Health)   { continue }
+        if !world_has_component(w, eid, .Collider) { continue }
         _, is_barrel := g_barrel_registry[eid]
         if is_barrel { continue }
 
-        tr := cw.world_get_transform(w, eid)
-        cl := cw.world_get_collider(w, eid)
+        tr := comp_get(w, eid, .Transform, TransformComp)
+        cl := comp_get(w, eid, .Collider, ColliderComp)
 
         for wi in 0..<g_water_n {
             wp := g_water[wi]
             dx := tr.position[0] - wp.pos[0]
             dy := tr.position[1] - wp.pos[1]
             if math.sqrt(dx*dx + dy*dy) < wp.radius + cl.radius {
-                cw.status_effect_apply(w, eid, cw.StatusEffect{
+                status_effect_apply(w, eid, StatusEffect{
                     type           = .Wet,
                     duration       = 4.0,
                     strength       = 1.0,
@@ -346,7 +345,7 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
         etx, ety := world_to_tile(tr.position[0], tr.position[1])
         if overlay_at(etx, ety) == .Oil {
-            cw.status_effect_apply(w, eid, cw.StatusEffect{
+            status_effect_apply(w, eid, StatusEffect{
                 type           = .Oiled,
                 duration       = 3.0,
                 strength       = 1.0,
@@ -387,24 +386,24 @@ fire_patch_system :: proc(w: ^cw.World, event: cw.SystemEvent, dt: f32) {
 
 
         for eid in 0..<len(w.entities) {
-            if !cw.world_is_valid(w, eid)                { continue }
-            if !cw.world_has_component(w, eid, .Health)  { continue }
-            if !cw.world_has_component(w, eid, .Collider){ continue }
-            if (!cw.world_has_component(w, eid, .Flammable) || cw.world_get_flammable(w, eid).isImmune) {
+            if !world_is_valid(w, eid)                { continue }
+            if !world_has_component(w, eid, .Health)  { continue }
+            if !world_has_component(w, eid, .Collider){ continue }
+            if (!world_has_component(w, eid, .Flammable) || comp_get(w, eid, .Flammable, FlammableComp).isImmune) {
                 continue
             }
-            tr := cw.world_get_transform(w, eid)
-            cl := cw.world_get_collider(w, eid)
+            tr := comp_get(w, eid, .Transform, TransformComp)
+            cl := comp_get(w, eid, .Collider, ColliderComp)
             dx := tr.position[0] - fp.pos[0]
             dy := tr.position[1] - fp.pos[1]
             if math.sqrt(dx*dx + dy*dy) < fp.radius + cl.radius {
-                has_oiled := cw.world_has_component(w, eid, .StatusEffect) &&
-                    cw.status_effect_is_active(cw.world_get_status_effects(w, eid), .Oiled)
+                has_oiled := world_has_component(w, eid, .StatusEffect) &&
+                    status_effect_is_active(comp_get(w, eid, .StatusEffect, StatusEffectComp), .Oiled)
                 burn_str := f32(0.03) * (2.0 if has_oiled else 1.0)
                 if has_oiled {
-                    cw.world_get_status_effects(w, eid).effects[int(cw.StatusEffectType.Oiled)].duration = 0
+                    comp_get(w, eid, .StatusEffect, StatusEffectComp).effects[int(StatusEffectType.Oiled)].duration = 0
                 }
-                cw.status_effect_apply(w, eid, cw.StatusEffect{
+                status_effect_apply(w, eid, StatusEffect{
                     type           = .Burn,
                     duration       = 2.5,
                     strength       = burn_str,
@@ -481,26 +480,26 @@ draw_water_puddles :: proc() {
 }
 
 
-draw_status_effects :: proc(w: ^cw.World) {
+draw_status_effects :: proc(w: ^World) {
     tt := f32(rl.GetTime())
     for id in 0..<len(w.entities) {
-        if !cw.world_is_valid(w, id)                     { continue }
-        if !cw.world_has_component(w, id, .StatusEffect) { continue }
-        if !cw.world_has_component(w, id, .Transform)    { continue }
+        if !world_is_valid(w, id)                     { continue }
+        if !world_has_component(w, id, .StatusEffect) { continue }
+        if !world_has_component(w, id, .Transform)    { continue }
 
-        sec := cw.world_get_status_effects(w, id)
-        tr  := cw.world_get_transform(w, id)
+        sec := comp_get(w, id, .StatusEffect, StatusEffectComp)
+        tr  := comp_get(w, id, .Transform, TransformComp)
         p   := rl.Vector2{ tr.position[0], tr.position[1] }
         r   := f32(PLAYER_RADIUS)
-        if cw.world_has_component(w, id, .Collider) {
-            r = cw.world_get_collider(w, id).radius
+        if world_has_component(w, id, .Collider) {
+            r = comp_get(w, id, .Collider, ColliderComp).radius
         }
 
         pulse := f32(math.sin(f64(tt)*6.0)*0.5 + 0.5)
 
 
-        if cw.status_effect_is_active(sec, .Burn) {
-            ef  := cw.status_effect_get(sec, .Burn)
+        if status_effect_is_active(sec, .Burn) {
+            ef  := status_effect_get(sec, .Burn)
             frac := clamp(ef.duration / 2.5, 0, 1)
             ab  := u8(clamp(170 * frac, 30, 170))
 
@@ -512,8 +511,8 @@ draw_status_effects :: proc(w: ^cw.World) {
         }
 
 
-        if cw.status_effect_is_active(sec, .Wet) {
-            ef   := cw.status_effect_get(sec, .Wet)
+        if status_effect_is_active(sec, .Wet) {
+            ef   := status_effect_get(sec, .Wet)
             frac := clamp(ef.duration / 4.0, 0, 1)
             ab   := u8(clamp(140 * frac, 25, 140))
             wave := f32(math.sin(f64(tt)*3.5 + f64(tr.position[0])*0.05)*0.5 + 0.5)
@@ -526,8 +525,8 @@ draw_status_effects :: proc(w: ^cw.World) {
         }
 
 
-        if cw.status_effect_is_active(sec, .Oiled) {
-            ef    := cw.status_effect_get(sec, .Oiled)
+        if status_effect_is_active(sec, .Oiled) {
+            ef    := status_effect_get(sec, .Oiled)
             frac  := clamp(ef.duration / 3.0, 0, 1)
             ab    := u8(clamp(155 * frac, 25, 155))
             sheen := f32(math.sin(f64(tt)*2.2 + f64(tr.position[0])*0.07)*0.5 + 0.5)
@@ -549,10 +548,10 @@ draw_status_effects :: proc(w: ^cw.World) {
 draw_barrels :: proc() {
     w := &g_sim.world
     for id, btype in g_barrel_registry {
-        if !cw.world_is_valid(w, id)                      { continue }
-        if !cw.world_has_component(w, id, .Transform)     { continue }
+        if !world_is_valid(w, id)                      { continue }
+        if !world_has_component(w, id, .Transform)     { continue }
 
-        tr  := cw.world_get_transform(w, id)
+        tr  := comp_get(w, id, .Transform, TransformComp)
         iso := world_to_iso_xy(tr.position[0], tr.position[1])
         ix  := i32(iso.x)
         iy  := i32(iso.y)
@@ -585,8 +584,8 @@ draw_barrels :: proc() {
         rl.DrawCircle(ix, iy - 12, 3, dot_col)
 
 
-        if cw.world_has_component(w, id, .Health) {
-            h      := cw.world_get_health(w, id)
+        if world_has_component(w, id, .Health) {
+            h      := comp_get(w, id, .Health, HealthComp)
             pct    := h.current / h.max
             bar_w  := i32(30)
             bar_x  := ix - bar_w / 2

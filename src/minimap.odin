@@ -1,7 +1,6 @@
 package main
 
 import rl  "vendor:raylib"
-import cw  "clockwork"
 
 // ────────────────────────────────────────────────────────────
 // Constants
@@ -31,7 +30,7 @@ minimap_clear_explored :: proc() {
     g_explored_tiles = make(map[[2]int]bool)
 }
 
-minimap_update :: proc(w: ^cw.World) {
+minimap_update :: proc(w: ^World) {
     // Lazy init
     if g_explored_tiles == nil {
         g_explored_tiles = make(map[[2]int]bool)
@@ -44,11 +43,11 @@ minimap_update :: proc(w: ^cw.World) {
 
     if !g_minimap_visible                                          { return }
     if g_playing_state != .Gameplay && g_playing_state != .Hub    { return }
-    if !cw.world_is_valid(w, w.player_id)                         { return }
-    if !cw.world_has_component(w, w.player_id, .Transform)        { return }
+    if !world_is_valid(w, w.player_id)                         { return }
+    if !world_has_component(w, w.player_id, .Transform)        { return }
 
     // Reveal tiles in a circle around the player
-    pp        := cw.world_get_transform(w, w.player_id).position
+    pp        := comp_get(w, w.player_id, .Transform, TransformComp).position
     ptx, pty  := world_to_tile(pp[0], pp[1])
     R         := MINIMAP_EXPLORE_R
 
@@ -64,7 +63,7 @@ minimap_update :: proc(w: ^cw.World) {
     }
 }
 
-draw_minimap :: proc(w: ^cw.World) {
+draw_minimap :: proc(w: ^World) {
     if !g_minimap_visible                                          { return }
     if g_playing_state != .Gameplay && g_playing_state != .Hub    { return }
     if len(g_tilemap) == 0                                         { return }
@@ -111,10 +110,10 @@ draw_minimap :: proc(w: ^cw.World) {
     }
 
     // ── NPC markers (teal) ───────────────────────────────────
-    npc_ids := cw.world_query(w, cw.query_mask(.NPC, .Transform))
+    npc_ids := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
     for id in npc_ids {
-        t  := cw.world_get_transform(w, id)
+        t  := comp_get(w, id, .Transform, TransformComp)
         tx, ty := world_to_tile(t.position[0], t.position[1])
         if _, explored := g_explored_tiles[[2]int{tx, ty}]; !explored { continue }
         cx := panel_x + f32(tx - MINIMAP_TX_ORIGIN) * tile_px + tile_px * 0.5
@@ -124,12 +123,12 @@ draw_minimap :: proc(w: ^cw.World) {
     }
 
     // ── Enemy markers (red) ──────────────────────────────────
-    enemy_ids := cw.world_query(w, cw.query_mask(.AIAgent, .Transform, .Health))
+    enemy_ids := world_query(w, query_mask(.AIAgent, .Transform, .Health))
     defer delete(enemy_ids)
     for id in enemy_ids {
-        h := cw.world_get_health(w, id)
+        h := comp_get(w, id, .Health, HealthComp)
         if h.current <= 0 { continue }
-        t  := cw.world_get_transform(w, id)
+        t  := comp_get(w, id, .Transform, TransformComp)
         tx, ty := world_to_tile(t.position[0], t.position[1])
         if _, explored := g_explored_tiles[[2]int{tx, ty}]; !explored { continue }
         cx := panel_x + f32(tx - MINIMAP_TX_ORIGIN) * tile_px + tile_px * 0.5
@@ -139,8 +138,8 @@ draw_minimap :: proc(w: ^cw.World) {
     }
 
     // ── Player dot (white with brass glow) ───────────────────
-    if cw.world_is_valid(w, w.player_id) && cw.world_has_component(w, w.player_id, .Transform) {
-        pp       := cw.world_get_transform(w, w.player_id).position
+    if world_is_valid(w, w.player_id) && world_has_component(w, w.player_id, .Transform) {
+        pp       := comp_get(w, w.player_id, .Transform, TransformComp).position
         ptx, pty := world_to_tile(pp[0], pp[1])
         cx       := panel_x + f32(ptx - MINIMAP_TX_ORIGIN) * tile_px + tile_px * 0.5
         cy       := panel_y + f32(pty - MINIMAP_TY_ORIGIN) * tile_px + tile_px * 0.5
