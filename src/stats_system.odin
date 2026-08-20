@@ -1,6 +1,5 @@
 package main
 
-
 status_is_stationary :: proc(w: ^World, id: int, slot: int) -> bool {
     moving_input := false
     if slot >= 0 && slot < MAX_PLAYERS {
@@ -129,7 +128,6 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         missing_hp_damage_mult := f32(1.0)
         move_speed_mult        := f32(1.0)
 
-
         if world_has_component(w, id, .OverchargeBuff) {
             ob := comp_get(w, id, .OverchargeBuff, OverchargeBuffComp)
             ob.timer += dt
@@ -138,11 +136,8 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             } else {
                 mut_damage_mult  *= ob.damage_mult
                 move_speed_mult  *= ob.speed_mult
-
-
             }
         }
-
 
         if world_has_component(w, id, .KillHeal) {
             kh := comp_get(w, id, .KillHeal, KillHealComp)
@@ -151,7 +146,6 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 comp_rm(w, id, .KillHeal)
             }
         }
-
 
         if world_has_component(w, id, .MutationContainer) {
             mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
@@ -229,10 +223,8 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     missing := 1.0 - (h.current / h.max)
                     missing_hp_damage_mult *= 1.0 + missing * (mhd.max_mult - 1.0) / (1.0 - mhd.floor_hp_pct)
                 }
-
             }
         }
-
 
         eff_str := st.strength  + int(affix_str_bonus)
         eff_dex := st.dexterity + int(affix_dex_bonus)
@@ -254,7 +246,6 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             damage_mult           *= root_damage_mult
             projectile_speed_mult *= root_proj_speed_mult
         }
-
 
         overcharge_fire_rate := f32(1.0)
         overcharge_reload    := f32(1.0)
@@ -284,7 +275,6 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         st.energy_cost_mult         = max(0.10, 1.0 - affix_energy_cost_pct)
 
-
         if affix_res_physical > 0 || affix_res_necrotic > 0 || affix_res_fire > 0 ||
            affix_res_galvanic > 0 || affix_res_poison > 0 {
             comp_set(w, id, .Resistance, ResistanceComp{
@@ -311,11 +301,9 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         st.melee_range_mult         = 1.0 + affix_melee_range_pct
         st.melee_speed_mult         = 1.0 + affix_melee_speed_pct
 
-
         old_shield_max := st.shield_max
         st.shield_max   = base_shield_sum
         if st.shield_max > old_shield_max {
-
             h.shield = clamp(h.shield + (st.shield_max - old_shield_max), 0, st.shield_max)
         } else {
             h.shield = clamp(h.shield, 0, st.shield_max)
@@ -344,17 +332,14 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             h.current = 1
         }
 
-
         if st.hp_regen_pct > 0 && !st.healing_blocked && h.current < h.max && h.current > 0 {
             h.current = min(h.current + st.hp_regen_pct * h.max * dt, h.max)
         }
-
 
         if st.energy_regen > 0 && h.energy < h.max_energy {
             h.energy = min(h.energy + st.energy_regen * dt, h.max_energy)
         }
     }
-
 
     da_ids := world_query(w, query_mask(.DamageAmp))
     defer delete(da_ids)

@@ -5,8 +5,6 @@ import       "core:math"
 import slice "core:slice"
 
 TileType :: enum u8 {
-
-
     Floor  = 1,
     Wall   = 2,
     Water  = 3,
@@ -22,7 +20,6 @@ TileType :: enum u8 {
     Pillar1 = 12,
     Pillar2 = 13,
 }
-
 
 TileOverlay :: enum u8 {
     None  = 0,
@@ -58,9 +55,6 @@ tilemap_fill_default :: proc() {
 g_tilemap:     map[[2]int]TileType
 g_overlay_map: map[[2]int]TileOverlay
 
-// Hub cell map at fixed 16-unit resolution, independent of current cell_size.
-// Written by ed_paint_cell at cell granularity; read by the editor overlay.
-// Physics still uses g_tilemap (TILE_SIZE resolution).
 HUB_CELL_RES :: 16
 g_hub_cell_map: map[[2]int]TileType
 
@@ -68,7 +62,6 @@ hub_cell_at :: proc(hx, hy: int) -> TileType {
     v, _ := g_hub_cell_map[[2]int{hx, hy}]
     return v
 }
-
 
 g_door_blockers: map[[2]int]int
 
@@ -84,7 +77,6 @@ TileSpriteEntry :: struct {
 }
 
 MAX_TILE_VARIANTS :: 4
-
 
 g_tile_variants:       [5][MAX_TILE_VARIANTS]TileSpriteEntry
 g_tile_variant_count:  [5]int
@@ -140,7 +132,6 @@ _build_tile_sprite :: proc(tt: TileType) -> TileSpriteEntry {
     }
 }
 
-
 @(private = "file")
 _load_tile_variants :: proc(ti: int, stem: string, tt: TileType) {
     count := 0
@@ -167,7 +158,6 @@ _load_tile_variants :: proc(ti: int, stem: string, tt: TileType) {
         }
     }
     if count == 0 {
-
         g_tile_variants[ti][0] = _build_tile_sprite(tt)
         count = 1
     }
@@ -228,18 +218,6 @@ tile_exists :: proc(tx, ty: int) -> bool {
     return ok
 }
 
-
-wall_has_floor_neighbor :: proc(tx, ty: int) -> bool {
-    for dy in -1..=1 {
-        for dx in -1..=1 {
-            if dx == 0 && dy == 0 { continue }
-            if tile_base(tile_at(tx + dx, ty + dy)) == .Floor { return true }
-        }
-    }
-    return false
-}
-
-
 tile_base :: proc(tt: TileType) -> TileType {
     #partial switch tt {
     case .Floor1, .Floor2, .Floor3, .Floor4:  return .Floor
@@ -248,7 +226,6 @@ tile_base :: proc(tt: TileType) -> TileType {
     }
     return tt
 }
-
 
 @(private = "file")
 _tile_cat_vi :: proc(tt: TileType) -> (cat: int, vi: int) {
@@ -270,14 +247,12 @@ _tile_cat_vi :: proc(tt: TileType) -> (cat: int, vi: int) {
     return int(tt), -1
 }
 
-
 @(private = "file")
 _tile_variant :: proc(tt: TileType, tx, ty: int) -> TileSpriteEntry {
     cat, vi := _tile_cat_vi(tt)
     count   := g_tile_variant_count[cat]
     if count == 0 { return {} }
     if vi >= 0 {
-
         return g_tile_variants[cat][min(vi, count - 1)]
     }
     if count == 1 { return g_tile_variants[cat][0] }
@@ -294,9 +269,7 @@ TileSortEntry :: struct { tx, ty: int, v: TileType }
 draw_tilemap :: proc() {
     t_anim := f32(rl.GetTime())
 
-
     min_x, min_y, max_x, max_y := cartesian_view_bounds(f32(TILE_SIZE))
-
 
     sorted := make([]TileSortEntry, len(g_tilemap), context.temp_allocator)
     n := 0
@@ -318,7 +291,6 @@ draw_tilemap :: proc() {
         center, top, right, bottom, left := iso_tile_bounds(tx, ty)
         entry := _tile_variant(v, tx, ty)
 
-
         dst := rl.Rectangle{
             center.x - ISO_TILE_W,
             center.y - ISO_TILE_H,
@@ -329,7 +301,6 @@ draw_tilemap :: proc() {
         case .Floor:
             floor_src := rl.Rectangle{ 0, 0, entry.src.width, entry.src.width * 0.5 }
             rl.DrawTexturePro(entry.tex, floor_src, dst, {0, 0}, 0, rl.WHITE)
-
 
             switch overlay_at(tx, ty) {
             case .Oil:
@@ -366,14 +337,11 @@ draw_tilemap :: proc() {
                 rl.DrawTriangle(top, left, center,
                     rl.Color{ 200,  70,  8, u8(flicker * 32) })
             case .None:
-
             }
 
         case .Wall:
 
-
             wall_depth := ISO_TILE_W * 0.85
-
 
             floor_e   := _tile_variant(.Floor, tx, ty)
             floor_src := rl.Rectangle{ 0, 0, floor_e.src.width, floor_e.src.width * 0.5 }
@@ -389,13 +357,11 @@ draw_tilemap :: proc() {
             bottom_r := rl.Vector2{ right.x,  right.y  + wall_depth }
             bottom_d := rl.Vector2{ bottom.x, bottom.y + wall_depth }
 
-
             face_r_rect := rl.Rectangle{
                 center.x, right.y - wall_depth,
                 ISO_TILE_W, wall_depth + ISO_TILE_H,
             }
             rl.DrawTexturePro(entry.tex, entry.src, face_r_rect, {0, 0}, 0, rl.Color{ 210, 195, 175, 255 })
-
 
             face_l_rect := rl.Rectangle{
                 left.x, left.y - wall_depth,
@@ -403,14 +369,12 @@ draw_tilemap :: proc() {
             }
             rl.DrawTexturePro(entry.tex, entry.src, face_l_rect, {0, 0}, 0, rl.Color{ 130, 116, 98, 255 })
 
-
             face_col_l := rl.Color{ 0, 0, 0, 60 }
             face_col_r := rl.Color{ 255, 255, 255, 15 }
             rl.DrawTriangle(bottom, left, bottom_l, face_col_l)
             rl.DrawTriangle(bottom, bottom_l, bottom_d, face_col_l)
             rl.DrawTriangle(bottom, right, bottom_r, face_col_r)
             rl.DrawTriangle(bottom, bottom_r, bottom_d, face_col_r)
-
 
             rl.DrawLineV(top, right, rl.Color{ 180, 162, 132, 180 })
             rl.DrawLineV(right, bottom, rl.Color{ 18, 16, 12, 130 })
@@ -443,19 +407,16 @@ draw_tilemap :: proc() {
             rl.DrawTexturePro(floor_pe.tex, floor_src, dst, {0, 0}, 0,
                 rl.Color{ 200, 196, 188, 255 })
 
-
             col_w     := ISO_TILE_W * 0.35
             col_depth := ISO_TILE_W * 1.8
             col_x     := center.x - col_w * 0.5
             col_top_y := center.y - col_depth
-
 
             cap_w   := col_w * 2.0
             cap_h   := col_w
             cap_r   := rl.Rectangle{ center.x - cap_w*0.5, col_top_y, cap_w, cap_h }
             rl.DrawTexturePro(floor_pe.tex, floor_src, cap_r, {0, 0}, 0,
                 rl.Color{ 215, 208, 195, 255 })
-
 
             face_r := rl.Rectangle{ center.x, col_top_y + cap_h, col_w, col_depth - cap_h }
             rl.DrawTexturePro(entry.tex, entry.src, face_r, {0, 0}, 0,
@@ -464,7 +425,6 @@ draw_tilemap :: proc() {
             face_l := rl.Rectangle{ col_x, col_top_y + cap_h, col_w, col_depth - cap_h }
             rl.DrawTexturePro(entry.tex, entry.src, face_l, {0, 0}, 0,
                 rl.Color{ 130, 118, 100, 255 })
-
 
             rl.DrawLineEx({col_x,          col_top_y + cap_h}, {col_x,          center.y}, 1, rl.Color{18,14,10,180})
             rl.DrawLineEx({col_x + col_w*2,col_top_y + cap_h}, {col_x + col_w*2, center.y}, 1, rl.Color{110,94,74,150})

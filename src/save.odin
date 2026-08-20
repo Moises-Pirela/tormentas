@@ -314,9 +314,6 @@ _migrate_player_v4 :: proc(old: ^PlayerSaveFileV4) -> PlayerSaveFile {
     return save
 }
 
-// Returns the class index stored for the given slot (0-3).
-// Falls back to g_selected_class_idx if nothing was persisted yet
-// (e.g. old saves or slots created before the class select was added).
 class_idx_for_slot :: proc(slot_idx: int) -> int {
     if slot_idx >= 0 && slot_idx < MAX_CHAR_SLOTS {
         b := g_char_save.slots[slot_idx]._reserved[0]
@@ -334,7 +331,6 @@ strip_player_carried :: proc(w: ^World, pid: int) {
     for slot_idx in 0..<EQUIP_SLOT_COUNT {
         slot := EquipSlot(slot_idx)
         eid  := inv.equipped[slot_idx]
-
 
         if (slot == .Flask1 || slot == .Flask2) &&
             world_is_valid(w, eid) &&
@@ -519,7 +515,6 @@ save_player :: proc(w: ^World, pid: int) {
     chars_save_all()
 }
 
-// Returns the local player's current state serialized as raw bytes (temp-allocated).
 player_to_bytes :: proc(w: ^World, pid: int) -> []u8 {
     save := _build_player_save(w, pid)
     n    := size_of(PlayerSaveFile)
@@ -528,8 +523,6 @@ player_to_bytes :: proc(w: ^World, pid: int) -> []u8 {
     return out
 }
 
-// Applies stats, health, wallet, mutations and inventory from a save to a world entity.
-// Does NOT touch stash — stash is local-player only and managed separately.
 @(private = "file")
 _apply_player_save :: proc(w: ^World, pid: int, save: ^PlayerSaveFile) {
     if world_has_component(w, pid, .Stats) {
@@ -638,8 +631,6 @@ load_player :: proc(w: ^World, pid: int) -> bool {
     return true
 }
 
-// Deserializes a remote player's save bytes and applies their state to a world entity.
-// Only stats, items and mutations are applied — stash is not touched.
 load_player_from_bytes :: proc(w: ^World, pid: int, data: []u8) -> bool {
     if len(data) < size_of(PlayerSaveFile) { return false }
     save := (^PlayerSaveFile)(raw_data(data))^
@@ -657,7 +648,6 @@ _load_spawn_saved_item :: proc(w: ^World, rec: ^SavedItem) -> int {
     item.slot               = EquipSlot(rec.slot)
     item.rarity             = ItemRarity(rec.rarity)
     item.mutation_type      = MutationType(rec.mutation_type)
-
 
     raw_at := rec.ability_type
     if int(raw_at) >= len(ABILITY_DEFS) { raw_at = 0 }
@@ -691,7 +681,6 @@ _load_spawn_saved_item :: proc(w: ^World, rec: ^SavedItem) -> int {
         }
     }
     comp_set(w, item_id, .Item, item)
-
 
     if item.slot == .Flask1 || item.slot == .Flask2 {
         fc := flask_comp_from_save(item.slot, FlaskSize(rec.req_str), item.rarity, int(rec.req_dex))
@@ -747,7 +736,6 @@ _save_fill_item :: proc(rec: ^SavedItem, item: ^ItemComp) {
         }
     }
 }
-
 
 @(private = "file")
 _save_fill_flask :: proc(rec: ^SavedItem, fc: ^FlaskComp) {

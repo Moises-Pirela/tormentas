@@ -127,12 +127,11 @@ session_poll :: proc(s: ^Session, dt: f32) {
     }
 }
 
-// Called from steam.odin whenever SteamNetConnectionStatusChangedCallback fires.
 session_on_conn_changed :: proc(s: ^Session, ev: ^sw.SteamNetConnectionStatusChangedCallback) {
     socks := sw.NetworkingSockets_SteamAPI()
     switch ev.info.eState {
     case .Connecting:
-        // Host side: new incoming connection on our listen socket
+
         if ev.eOldState == .None && s.listen_sock != 0 &&
            ev.info.hListenSocket == s.listen_sock {
             if sw.NetworkingSockets_AcceptConnection(socks, ev.hConn) == .OK {

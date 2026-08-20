@@ -9,9 +9,6 @@ import p2p "p2p"
 ED_NAME_LEN   :: 32
 ED_MAX_LEVELS :: 100
 META_PATH     :: "data/levels/meta.bin"
-ED_TAB_W      :: f32(22)
-ED_PANEL_W    :: f32(200)
-ED_PANEL_SPD  :: f32(14)
 ED_BANNER_H   :: f32(32)
 
 g_editor_mode: bool
@@ -38,7 +35,6 @@ EditorBrush :: enum u8 {
     FireBarrel  = 16,
     WaterBarrel = 17,
 
-    Door        = 18,
     SwitchLever = 19,
     Chest       = 20,
     Crate       = 21,
@@ -58,180 +54,39 @@ EditorBrush :: enum u8 {
     Pillar1     = 34,
     Pillar2     = 35,
 
-    // Hub-specific: same tile types as Wall/Floor but labelled distinctly
-    // so the intent ("no visible sprite, hub collision only") is clear.
     HubCollision = 36,
     HubWalkable  = 37,
 
-    // Places a prerendered level module (rooms/connectors/landmarks). The active
-    // module is selected via g_ed_module_idx and cycled with , / .
     Module       = 38,
 }
 
-EditorCategory :: enum u8 { Environment, Entities, Interactive }
+g_ed_module_idx:     int
 
-@(private = "file")
-PaletteEntry :: struct {
-    brush:    EditorBrush,
-    category: EditorCategory,
-    label:    cstring,
-    key:      cstring,
-    bg:       rl.Color,
-}
-
-ED_PAL_W      :: f32(130)
-ED_PAL_ITEM_H :: f32(36)
-ED_PAL_PAD    :: f32(6)
-ED_PAL_HOTKEYS :: [14]cstring{"1","2","3","4","5","6","7","8","9","0","","","",""}
-
-@(private = "file") g_ed_palette:        [48]PaletteEntry
-@(private = "file") g_ed_palette_n:      int
-@(private = "file") g_ed_module_idx:     int  // selected module for the Module brush
-@(private = "file") g_ed_pal_scroll:     f32
-@(private = "file") g_ed_cat_collapsed:  [3]bool
-@(private = "file") g_ed_key_id:         int = 0
-
-@(private = "file") g_ed_brush:          EditorBrush = .Floor
-@(private = "file") g_ed_brush_size:    int = TILE_SIZE  // world units, same range/step as cell_size
-@(private = "file") g_ed_slider_id:     int = -1   // which stat-bar slider is being dragged
-              g_ed_cell_size:     int = TILE_SIZE           // world-units per hub cell (steps of 16, min 16)
-              g_ed_grid_cols:     int = DEFAULT_LEVEL_COLS  // hub grid width  in cells
-              g_ed_grid_rows:     int = DEFAULT_LEVEL_ROWS  // hub grid height in cells
-@(private = "file") g_ed_zoom:           f32 = 1.0
-@(private = "file") g_ed_save_msg:       f32
-@(private = "file") g_ed_level:          int = 1
+g_ed_brush:          EditorBrush = .HubCollision
+g_ed_brush_size:     int = TILE_SIZE
+              g_ed_cell_size:     int = TILE_SIZE
+              g_ed_grid_cols:     int = DEFAULT_LEVEL_COLS
+              g_ed_grid_rows:     int = DEFAULT_LEVEL_ROWS
+g_ed_zoom:           f32 = 1.0
+g_ed_grid_visible:   bool = true
+g_ed_save_msg:       f32
+g_ed_level:          int = 1
 @(private = "file") g_ed_target_level:   int = 2
-@(private = "file") g_ed_panel_open:     bool
-@(private = "file") g_ed_panel_anim:     f32
-@(private = "file") g_ed_name_editing:   bool
 @(private = "file") g_ed_meta_loaded:    bool
-@(private = "file") g_ed_level_names:    [ED_MAX_LEVELS+1][ED_NAME_LEN]u8
-@(private = "file") g_ed_level_exists:   [ED_MAX_LEVELS+1]bool
-@(private = "file") g_ed_list_scroll:    int
-@(private = "file") g_ed_filtered:       [ED_MAX_LEVELS+1]int
-@(private = "file") g_ed_filtered_count: int
+@(private = "file") g_ed_inited:         bool
+g_ed_level_names:    [ED_MAX_LEVELS+1][ED_NAME_LEN]u8
+g_ed_level_exists:   [ED_MAX_LEVELS+1]bool
+g_ed_filtered:       [ED_MAX_LEVELS+1]int
+g_ed_filtered_count: int
 
 @(private = "file")
 ed_base_zoom :: proc() -> f32 { return f32(rl.GetScreenHeight()) / 720.0 }
-
-@(private = "file")
-ed_build_palette :: proc() {
-    g_ed_palette_n  = 0
-    g_ed_pal_scroll = 0
-
-    ki := 0
-
-    pal_add :: proc(brush: EditorBrush, cat: EditorCategory, label: cstring,
-                bg: rl.Color, ki: ^int) {
-        if g_ed_palette_n >= len(g_ed_palette) { return }
-        hotkeys := ED_PAL_HOTKEYS
-        g_ed_palette[g_ed_palette_n] = PaletteEntry{
-            brush    = brush,
-            category = cat,
-            label    = label,
-            key      = hotkeys[min(ki^, 10)],
-            bg       = bg,
-        }
-        g_ed_palette_n += 1
-        ki^ += 1
-    }
-
-    for tt in TileType {
-        #partial switch tt {
-        case .Floor:  pal_add(.Floor,  .Environment, "Floor",  {26, 24, 20, 255}, &ki)
-        case .Wall:   pal_add(.Wall,   .Environment, "Wall",   {52, 46, 38, 255}, &ki)
-        case .Water:  pal_add(.Water,  .Environment, "Water",  {18, 42, 80,  255}, &ki)
-        case .Pillar: pal_add(.Pillar, .Environment, "Pillar", {62, 54, 44, 255}, &ki)
-        }
-    }
-
-    n_floors := g_tile_variant_count[int(TileType.Floor)]
-    if n_floors >= 1 { pal_add(.Floor1, .Environment, "Flr-1", {34, 30, 24, 255}, &ki) }
-    if n_floors >= 2 { pal_add(.Floor2, .Environment, "Flr-2", {40, 36, 28, 255}, &ki) }
-    if n_floors >= 3 { pal_add(.Floor3, .Environment, "Flr-3", {46, 40, 32, 255}, &ki) }
-    if n_floors >= 4 { pal_add(.Floor4, .Environment, "Flr-4", {52, 46, 36, 255}, &ki) }
-
-    n_walls := g_tile_variant_count[int(TileType.Wall)]
-    if n_walls >= 1 { pal_add(.Wall1, .Environment, "Wll-1", {62, 54, 44, 255}, &ki) }
-    if n_walls >= 2 { pal_add(.Wall2, .Environment, "Wll-2", {70, 60, 48, 255}, &ki) }
-    if n_walls >= 3 { pal_add(.Wall3, .Environment, "Wll-3", {78, 66, 52, 255}, &ki) }
-
-    n_pillars := g_tile_variant_count[int(TileType.Pillar)]
-    if n_pillars >= 1 { pal_add(.Pillar1, .Environment, "Pil-1", {72, 64, 52, 255}, &ki) }
-    if n_pillars >= 2 { pal_add(.Pillar2, .Environment, "Pil-2", {80, 70, 56, 255}, &ki) }
-
-    pal_add(.HubCollision, .Environment, "HubColl", { 90, 20, 20, 255}, &ki)
-    pal_add(.HubWalkable,  .Environment, "HubWalk", { 20, 90, 20, 255}, &ki)
-
-    pal_add(.Oil,  .Environment, "Oil",  {16, 12,  8, 255}, &ki)
-    pal_add(.Fire, .Environment, "Fire", {80, 24,  6, 255}, &ki)
-
-    if module_count() > 0 { pal_add(.Module, .Environment, "Module", {28, 40, 62, 255}, &ki) }
-
-
-    entity_to_brush :: proc(name: string) -> (brush: EditorBrush, label: cstring, bg: rl.Color, cat: EditorCategory, ok: bool) {
-        switch name {
-        case "enemy_spider": return .SpawnSpider, "Spider", {20, 60, 20, 255}, .Entities, true
-        case "env_door":       return .Door,        "Door",   {52, 34, 16, 255}, .Interactive, true
-        case "env_switch":     return .SwitchLever, "Lever",  {36, 60, 36, 255}, .Interactive, true
-        case "env_chest":      return .Chest,       "Chest",  {70, 56, 14, 255}, .Interactive, true
-        case "env_crate":      return .Crate,       "Crate",  {44, 32, 16, 255}, .Interactive, true
-        case "env_lore_item":  return .LoreItem,    "Lore",   {24, 44, 68, 255}, .Interactive, true
-        case "env_phonograph": return .Phonograph,  "Phono",  {52, 28, 52, 255}, .Interactive, true
-        case "env_key":        return .KeyPickup,   "Key",    {80, 70, 14, 255}, .Interactive, true
-        }
-        return .Erase, "", {}, .Entities, false
-    }
-    for &def in g_entity_defs {
-        b, lbl, bg, cat, ok := entity_to_brush(def.name)
-        if !ok { continue }
-        pal_add(b, cat, lbl, bg, &ki)
-    }
-    pal_add(.Shopkeeper,       .Entities, "Shop",    {84, 64, 28, 255}, &ki)
-    pal_add(.MutationWorkbench,.Entities, "Mutator", {76, 34, 84, 255}, &ki)
-    pal_add(.ExitTile,         .Entities, "Exit",    {16, 56, 24, 255}, &ki)
-    pal_add(.PlayerStart,      .Entities, "Start",   {80, 64, 12, 255}, &ki)
-    pal_add(.Light,            .Entities, "Light",   {80, 70, 20, 255}, &ki)
-    pal_add(.FireBarrel,       .Entities, "FireBar", {90, 36, 10, 255}, &ki)
-    pal_add(.WaterBarrel,      .Entities, "WtrBar",  {12, 52, 90, 255}, &ki)
-    pal_add(.Erase,            .Entities, "Erase",   {55, 18, 18, 255}, &ki)
-}
-
-@(private = "file")
-ed_pal_panel_rect :: proc() -> rl.Rectangle {
-    sh := f32(rl.GetScreenHeight())
-    return rl.Rectangle{
-        x      = 0,
-        y      = uis(ED_BANNER_H),
-        width  = uis(ED_PAL_W),
-        height = sh - uis(ED_BANNER_H),
-    }
-}
-
-@(private = "file")
-ed_pal_content_height :: proc() -> f32 {
-    CAT_H    :: f32(22)
-    total    := f32(0)
-    seen_cat := [3]bool{}
-    for i in 0..<g_ed_palette_n {
-        e := &g_ed_palette[i]
-        if !seen_cat[e.category] {
-            total            += uis(CAT_H)
-            seen_cat[e.category] = true
-        }
-        if !g_ed_cat_collapsed[e.category] {
-            total += uis(ED_PAL_ITEM_H) + uis(ED_PAL_PAD * 0.5)
-        }
-    }
-    return total
-}
 
 @(private = "file")
 ed_level_file :: proc(n: int) -> string {
     return fmt.tprintf("data/levels/level%02d.bin", n)
 }
 
-@(private = "file")
 ed_rebuild_filtered :: proc() {
     g_ed_filtered_count = 0
     for i in 0..<ED_MAX_LEVELS+1 {
@@ -242,7 +97,6 @@ ed_rebuild_filtered :: proc() {
     }
 }
 
-@(private = "file")
 ed_refresh_exists :: proc() {
     for i in 0..<ED_MAX_LEVELS+1 {
         g_ed_level_exists[i] = os.exists(ed_level_file(i))
@@ -250,7 +104,6 @@ ed_refresh_exists :: proc() {
     ed_rebuild_filtered()
 }
 
-@(private = "file")
 ed_meta_save :: proc() {
     os.make_directory("data/levels")
     raw: [(ED_MAX_LEVELS+1) * ED_NAME_LEN]u8
@@ -272,32 +125,31 @@ ed_meta_load :: proc() {
 editor_toggle :: proc() {
     if !g_is_host { return }
     if g_playing_state == .Editor {
-
-
         restore_n := 0 if g_hub_active else max(g_current_raid_level, 1)
+        ed_mode_exit_editor()
         fire_system_reset()
         level_load(restore_n)
         set_playing_state(.Hub if g_hub_active else .Gameplay)
     } else {
         g_ed_level = 0 if g_hub_active else max(g_current_raid_level, 1)
         set_playing_state(.Editor)
+        ed_mode_enter_editor()
     }
-    if g_editor_mode { g_ed_palette_n = 0 }
+    if g_editor_mode { g_ed_inited = false }
 }
 
 update_editor :: proc(dt: f32) {
     if !g_editor_mode { return }
 
-    if g_ed_palette_n == 0 {
-        g_ed_zoom = 1.0
-        g_ed_brush = .Floor
+    if !g_ed_inited {
+        g_ed_inited   = true
+        g_ed_zoom     = 1.0
         g_camera.zoom = ed_base_zoom() * g_ed_zoom
         if !g_ed_meta_loaded {
             ed_meta_load()
             g_ed_meta_loaded = true
         }
         ed_refresh_exists()
-        ed_build_palette()
     }
 
     remote_ops, load_n := p2p.session_drain_editor(&g_session)
@@ -315,163 +167,50 @@ update_editor :: proc(dt: f32) {
     ed_insp_update_anim(dt)
     ed_insp_validate()
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    mp      := rl.GetMousePosition()
+    over_ui := imui_wants_mouse() || ed_insp_over_ui()
 
-    target_anim     := f32(1) if g_ed_panel_open else f32(0)
-    g_ed_panel_anim += (target_anim - g_ed_panel_anim) * min(dt * ED_PANEL_SPD, 1)
+    if ed_gizmo_dragging() || (!over_ui && (g_ed_tool == .Select || g_ed_tool == .Place)) {
+        ed_gizmo_update(mp)
 
-    panel_x  := sw - uis(ED_TAB_W) - uis(ED_PANEL_W) * g_ed_panel_anim
-    tab_rect := rl.Rectangle{sw - uis(ED_TAB_W), uis(ED_BANNER_H), uis(ED_TAB_W), sh - uis(ED_BANNER_H)}
-
-    mp       := rl.GetMousePosition()
-    over_tab := rl.CheckCollisionPointRec(mp, tab_rect)
-    over_pal := rl.CheckCollisionPointRec(mp, ed_pal_panel_rect())
-    over_ui  := over_tab || over_pal || (g_ed_panel_open && mp.x >= panel_x) || ed_insp_over_ui() || dbg_inspector_wants_mouse()
-
-    if rl.IsMouseButtonPressed(.LEFT) && over_tab {
-        g_ed_panel_open = !g_ed_panel_open
-        if g_ed_panel_open { ed_refresh_exists() }
+        if !ed_gizmo_dragging() && rl.IsMouseButtonPressed(.LEFT) && !over_ui {
+            switch g_ed_tool {
+            case .Place:
+                ed_entity_place(screen_to_world_cartesian(mp))
+            case .Select:
+                ed_entity_capture()
+                g_ed_sel_entity = ed_entity_pick(mp)
+                ed_entity_snapshot()
+            case .Paint, .Erase:
+            }
+        }
+        if rl.IsKeyPressed(.DELETE) { ed_entity_delete_selected() }
+        if rl.IsKeyPressed(.ESCAPE) { ed_entity_deselect() }
     }
 
-    if g_ed_panel_open && g_ed_panel_anim > 0.3 {
-        name_rect := rl.Rectangle{
-            panel_x + uis(8), uis(ED_BANNER_H) + uis(52),
-            uis(ED_PANEL_W) - uis(16), uis(20),
-        }
-
-        if rl.IsMouseButtonPressed(.LEFT) {
-            if rl.CheckCollisionPointRec(mp, name_rect) {
-                g_ed_name_editing = true
-            } else if over_ui && g_ed_name_editing {
-                g_ed_name_editing = false
-                ed_meta_save()
-            }
-        }
-
-        if g_ed_name_editing {
-            c := rl.GetCharPressed()
-            for c != 0 {
-                nm  := &g_ed_level_names[g_ed_level]
-                cur := 0
-                for cur < ED_NAME_LEN - 1 && nm[cur] != 0 { cur += 1 }
-                if cur < ED_NAME_LEN - 1 && c >= 32 && c < 127 {
-                    nm[cur] = u8(c)
-                }
-                c = rl.GetCharPressed()
-            }
-            if rl.IsKeyPressed(.BACKSPACE) {
-                nm  := &g_ed_level_names[g_ed_level]
-                cur := 0
-                for cur < ED_NAME_LEN - 1 && nm[cur] != 0 { cur += 1 }
-                if cur > 0 { nm[cur - 1] = 0 }
-            }
-            if rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.ESCAPE) {
-                g_ed_name_editing = false
-                ed_meta_save()
-            }
-        }
-
-        btn_y     := uis(ED_BANNER_H) + uis(82)
-        half_w    := (uis(ED_PANEL_W) - uis(20)) * 0.5
-        save_rect := rl.Rectangle{panel_x + uis(8),             btn_y, half_w, uis(22)}
-        load_rect := rl.Rectangle{panel_x + uis(12) + half_w,   btn_y, half_w, uis(22)}
-        clr_rect  := rl.Rectangle{panel_x + uis(8), btn_y + uis(26), uis(ED_PANEL_W) - uis(16), uis(22)}
-
-        if rl.IsMouseButtonPressed(.LEFT) && rl.CheckCollisionPointRec(mp, save_rect) {
-            g_ed_name_editing = false
-            level_save(g_ed_level)
-            ed_refresh_exists()
-            g_ed_save_msg = 2.0
-        }
-        if rl.IsMouseButtonPressed(.LEFT) && rl.CheckCollisionPointRec(mp, load_rect) {
-            g_ed_name_editing = false
-            level_load(g_ed_level)
-            p2p.session_send_level_load(&g_session, g_ed_level)
-        }
-        if rl.IsMouseButtonPressed(.LEFT) && rl.CheckCollisionPointRec(mp, clr_rect) {
-            g_ed_name_editing = false
-            clr_op := p2p.EditorOp{ action = .ClearAll }
-            ed_apply_op(clr_op)
-            p2p.session_send_editor_op(&g_session, clr_op)
-        }
-
-        LIST_ROW_H :: f32(18)
-        LIST_Y0    :: f32(138)
-        list_start_y := uis(ED_BANNER_H) + uis(LIST_Y0)
-        list_height  := sh - list_start_y - uis(44)
-        list_count   := int(list_height / uis(LIST_ROW_H))
-        if list_count < 1 { list_count = 1 }
-
-        if over_ui {
-            wh := rl.GetMouseWheelMove()
-            if wh != 0 {
-                g_ed_list_scroll -= int(wh)
-                max_sc := g_ed_filtered_count - list_count
-                if max_sc < 0 { max_sc = 0 }
-                g_ed_list_scroll = clamp(g_ed_list_scroll, 0, max_sc)
-            }
-        }
-
-        for row in 0..<list_count {
-            fi := g_ed_list_scroll + row
-            if fi >= g_ed_filtered_count { break }
-            idx  := g_ed_filtered[fi]
-            ry   := list_start_y + f32(row) * uis(LIST_ROW_H)
-            rrec := rl.Rectangle{panel_x + uis(4), ry, uis(ED_PANEL_W) - uis(8), uis(LIST_ROW_H)}
-            if rl.IsMouseButtonPressed(.LEFT) && rl.CheckCollisionPointRec(mp, rrec) {
-                g_ed_name_editing = false
-                g_ed_level = idx
-                ed_rebuild_filtered()
-                level_load(g_ed_level)
-                p2p.session_send_level_load(&g_session, g_ed_level)
-            }
-        }
-
-        new_rect := rl.Rectangle{panel_x + uis(8), sh - uis(36), uis(ED_PANEL_W) - uis(16), uis(24)}
-        if rl.IsMouseButtonPressed(.LEFT) && rl.CheckCollisionPointRec(mp, new_rect) {
-            for i in 1..=ED_MAX_LEVELS {
-                if !g_ed_level_exists[i] {
-                    g_ed_name_editing = false
-                    g_ed_level = i
-                    clr_op := p2p.EditorOp{ action = .ClearAll }
-                    ed_apply_op(clr_op)
-                    p2p.session_send_editor_op(&g_session, clr_op)
-                    level_save(g_ed_level)
-                    ed_refresh_exists()
-                    g_ed_save_msg = 2.0
-                    break
-                }
-            }
-        }
-    }
-
-    if !g_ed_name_editing && !ed_insp_is_text_active() {
+    if !imui_wants_keys() && !ed_insp_is_text_active() {
         PAL_KEYS := [10]rl.KeyboardKey{
             .ONE, .TWO, .THREE, .FOUR, .FIVE,
             .SIX, .SEVEN, .EIGHT, .NINE, .ZERO,
         }
         for ki in 0..<10 {
-            if rl.IsKeyPressed(PAL_KEYS[ki]) && ki < g_ed_palette_n {
-                g_ed_brush = g_ed_palette[ki].brush
+            if rl.IsKeyPressed(PAL_KEYS[ki]) && ki < len(ED_BRUSHES) {
+                g_ed_brush = ED_BRUSHES[ki]
+                g_ed_tool  = .Paint
             }
         }
 
-        // Cycle the active module (Module brush) with , / .
-        if EditorBrush(g_ed_brush) == .Module && module_count() > 0 {
-            if rl.IsKeyPressed(.COMMA)  { g_ed_module_idx = (g_ed_module_idx - 1 + module_count()) %% module_count() }
-            if rl.IsKeyPressed(.PERIOD) { g_ed_module_idx = (g_ed_module_idx + 1) %% module_count() }
+        if rl.IsKeyPressed(.G) { g_ed_grid_visible = !g_ed_grid_visible }
+
+        if g_ed_brush == .Module {
+            if rl.IsKeyPressed(.COMMA)  { ed_cycle_module(-1) }
+            if rl.IsKeyPressed(.PERIOD) { ed_cycle_module(+1) }
         }
 
         shift := rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
-        ctrl  := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
         if shift {
-            // Shift+[ / ] — brush size (steps of cell_size, min = cell_size)
             if rl.IsKeyPressed(.LEFT_BRACKET)  { g_ed_brush_size = max(g_ed_cell_size, g_ed_brush_size - g_ed_cell_size) }
             if rl.IsKeyPressed(.RIGHT_BRACKET) { g_ed_brush_size = min(512,             g_ed_brush_size + g_ed_cell_size) }
-        } else if ctrl {
-            if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_key_id > 0  { g_ed_key_id -= 1 }
-            if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_key_id < 63 { g_ed_key_id += 1 }
         } else {
             if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_target_level > 0  { g_ed_target_level -= 1 }
             if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_target_level < 99 { g_ed_target_level += 1 }
@@ -491,118 +230,6 @@ update_editor :: proc(dt: f32) {
         }
     }
 
-    pal_rect := ed_pal_panel_rect()
-    if over_pal {
-        wh := rl.GetMouseWheelMove()
-        if wh != 0 {
-            content_h := ed_pal_content_height()
-            max_scroll := max(content_h - pal_rect.height, 0)
-            g_ed_pal_scroll = clamp(g_ed_pal_scroll - wh * uis(30), 0, max_scroll)
-        }
-        if rl.IsMouseButtonPressed(.LEFT) {
-            cy   := pal_rect.y + uis(ED_PAL_PAD) - g_ed_pal_scroll
-            seen_cat_pal := [3]bool{}
-            for i in 0..<g_ed_palette_n {
-                e := &g_ed_palette[i]
-                if !seen_cat_pal[e.category] {
-                    hdr_r := rl.Rectangle{ pal_rect.x, cy, pal_rect.width, uis(22) }
-                    if rl.CheckCollisionPointRec(mp, hdr_r) {
-                        g_ed_cat_collapsed[e.category] = !g_ed_cat_collapsed[e.category]
-                    }
-                    cy                          += uis(22)
-                    seen_cat_pal[e.category]     = true
-                }
-                if !g_ed_cat_collapsed[e.category] {
-                    row_r := rl.Rectangle{ pal_rect.x + uis(4), cy,
-                                           pal_rect.width - uis(8), uis(ED_PAL_ITEM_H) }
-                    if rl.CheckCollisionPointRec(mp, row_r) {
-                        g_ed_brush = e.brush
-                    }
-                    cy += uis(ED_PAL_ITEM_H) + uis(ED_PAL_PAD * 0.5)
-                }
-            }
-        }
-    }
-
-    // ── Stat-bar input: spinners + sliders ────────────────────────────────────
-    {
-        pal_r2 := ed_pal_panel_rect()
-        STAT_H :: f32(148)
-        stat_y := pal_r2.y + pal_r2.height - uis(STAT_H)
-        btn_w  := uis(16); btn_h := uis(16)
-        pw     := pal_r2.width
-
-        // Slider helper: handles drag state per id, returns updated value
-        do_slider :: proc(id: int, rect: rl.Rectangle, val: f32, lo, hi: f32,
-                          mp: rl.Vector2, drag_id: ^int) -> f32 {
-            pressed := rl.IsMouseButtonPressed(.LEFT)
-            down    := rl.IsMouseButtonDown(.LEFT)
-            if pressed && rl.CheckCollisionPointRec(mp, rect) { drag_id^ = id }
-            if !down && drag_id^ == id { drag_id^ = -1 }
-            if down && drag_id^ == id {
-                t := clamp((mp.x - rect.x) / rect.width, 0, 1)
-                return lo + t * (hi - lo)
-            }
-            return val
-        }
-
-        // Row 2: brush size ± (steps of cell_size, min = cell_size)
-        if rl.IsMouseButtonPressed(.LEFT) {
-            bsy := stat_y + uis(22)
-            if rl.CheckCollisionPointRec(mp, rl.Rectangle{pal_r2.x + uis(54), bsy, btn_w, btn_h}) {
-                g_ed_brush_size = max(g_ed_cell_size, g_ed_brush_size - g_ed_cell_size)
-            }
-            if rl.CheckCollisionPointRec(mp, rl.Rectangle{pal_r2.x + uis(90), bsy, btn_w, btn_h}) {
-                g_ed_brush_size = min(512, g_ed_brush_size + g_ed_cell_size)
-            }
-
-            // Row 3: cell size ±
-            csy := stat_y + uis(44)
-            if rl.CheckCollisionPointRec(mp, rl.Rectangle{pal_r2.x + uis(54), csy, btn_w, btn_h}) {
-                g_ed_cell_size = max(16, g_ed_cell_size - 16)
-                g_ed_brush_size = max(g_ed_cell_size, (g_ed_brush_size / g_ed_cell_size) * g_ed_cell_size)
-            }
-            if rl.CheckCollisionPointRec(mp, rl.Rectangle{pal_r2.x + uis(90), csy, btn_w, btn_h}) {
-                g_ed_cell_size = min(512, g_ed_cell_size + 16)
-                g_ed_brush_size = max(g_ed_cell_size, (g_ed_brush_size / g_ed_cell_size) * g_ed_cell_size)
-            }
-        }
-
-        // Row 4: grid cols slider  Row 5: grid rows slider
-        pad :: f32(4)
-        slid_x := pal_r2.x + uis(36); slid_w := pw - uis(40)
-        {
-            r := rl.Rectangle{slid_x, stat_y + uis(66), slid_w, uis(13)}
-            v := do_slider(10, r, f32(g_ed_grid_cols), 1, 200, mp, &g_ed_slider_id)
-            g_ed_grid_cols = int(v)
-        }
-        {
-            r := rl.Rectangle{slid_x, stat_y + uis(84), slid_w, uis(13)}
-            v := do_slider(11, r, f32(g_ed_grid_rows), 1, 200, mp, &g_ed_slider_id)
-            g_ed_grid_rows = int(v)
-        }
-
-        // Rows 6-9: cam_lims sliders (world units, display range ±8192)
-        CAM_RANGE :: f32(8192)
-        half_slid := (slid_w - uis(pad)) * 0.5
-        {
-            // min_x
-            r := rl.Rectangle{slid_x, stat_y + uis(104), half_slid, uis(13)}
-            g_level_data.cam_lims[0] = do_slider(20, r, g_level_data.cam_lims[0], -CAM_RANGE, CAM_RANGE, mp, &g_ed_slider_id)
-            // max_x
-            r.x += half_slid + uis(pad)
-            g_level_data.cam_lims[1] = do_slider(21, r, g_level_data.cam_lims[1], -CAM_RANGE, CAM_RANGE, mp, &g_ed_slider_id)
-        }
-        {
-            // min_y
-            r := rl.Rectangle{slid_x, stat_y + uis(122), half_slid, uis(13)}
-            g_level_data.cam_lims[2] = do_slider(22, r, g_level_data.cam_lims[2], -CAM_RANGE, CAM_RANGE, mp, &g_ed_slider_id)
-            // max_y
-            r.x += half_slid + uis(pad)
-            g_level_data.cam_lims[3] = do_slider(23, r, g_level_data.cam_lims[3], -CAM_RANGE, CAM_RANGE, mp, &g_ed_slider_id)
-        }
-    }
-
     wheel := rl.GetMouseWheelMove()
     if wheel != 0 && !over_ui {
         g_ed_zoom = clamp(g_ed_zoom * (1.0 + wheel * 0.12), 0.10, 6.0)
@@ -611,7 +238,7 @@ update_editor :: proc(dt: f32) {
 
     PAN :: f32(400)
     pan_screen: [2]f32
-    if !g_ed_name_editing && !ed_insp_is_text_active() {
+    if !imui_wants_keys() && !ed_insp_is_text_active() {
         if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    { pan_screen[1] -= 1 }
         if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  { pan_screen[1] += 1 }
         if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)  { pan_screen[0] -= 1 }
@@ -633,20 +260,21 @@ update_editor :: proc(dt: f32) {
         g_camera.target.y -= d.y / g_camera.zoom
     }
 
-    if !over_ui {
+    if !over_ui && (g_ed_tool == .Paint || g_ed_tool == .Erase) {
         world_mp := screen_to_world_cartesian(mp)
         tx, ty   := world_to_tile(world_mp.x, world_mp.y)
+        brush    := g_ed_tool == .Erase ? EditorBrush.Erase : g_ed_brush
 
         if g_hub_active {
-            // Hub uses cell-based painting aligned to g_ed_cell_size
             cs     := f32(g_ed_cell_size)
             cell_x := int(math.floor(world_mp.x / cs))
             cell_y := int(math.floor(world_mp.y / cs))
             if rl.IsMouseButtonDown(.LEFT) {
-                r := g_ed_brush_size / g_ed_cell_size / 2
-                for dy in -r..=r {
-                    for dx in -r..=r {
-                        ed_paint_cell(cell_x + dx, cell_y + dy)
+                bx, by, n := ed_brush_footprint(cell_x, cell_y, g_ed_cell_size, ed_paint_snap_held())
+                for dy in 0..<n {
+                    for dx in 0..<n {
+                        if brush == .Erase { ed_erase_cell(bx + dx, by + dy) }
+                        else               { ed_paint_cell(bx + dx, by + dy) }
                     }
                 }
             }
@@ -657,16 +285,15 @@ update_editor :: proc(dt: f32) {
             } else if rl.IsMouseButtonDown(.RIGHT) && !ed_insp_has_selection() {
                 ed_erase_cell(cell_x, cell_y)
             }
-        } else if EditorBrush(g_ed_brush) == .Module {
-            // Discrete placement: one module per click, grid-snapped to the tile.
+        } else if brush == .Module {
             if rl.IsMouseButtonPressed(.LEFT)  { module_place_at(g_ed_module_idx, tx, ty) }
             if rl.IsMouseButtonPressed(.RIGHT) { module_erase_at(tx, ty) }
         } else {
             if rl.IsMouseButtonDown(.LEFT) {
-                r := g_ed_brush_size / TILE_SIZE / 2
-                for dy in -r..=r {
-                    for dx in -r..=r {
-                        ed_paint(tx + dx, ty + dy)
+                bx, by, n := ed_brush_footprint(tx, ty, TILE_SIZE, ed_paint_snap_held())
+                for dy in 0..<n {
+                    for dx in 0..<n {
+                        ed_paint(bx + dx, by + dy, brush)
                     }
                 }
             }
@@ -680,7 +307,7 @@ update_editor :: proc(dt: f32) {
         }
     }
 
-    if !g_ed_name_editing && !ed_insp_is_text_active() && rl.IsKeyPressed(.ESCAPE) {
+    if !imui_wants_keys() && !ed_insp_is_text_active() && rl.IsKeyPressed(.ESCAPE) {
         ed_insp_deselect()
     }
 
@@ -699,22 +326,110 @@ update_editor :: proc(dt: f32) {
 }
 
 @(private = "file")
-ed_paint :: proc(tx, ty: int) {
-
-
+ed_paint :: proc(tx, ty: int, brush: EditorBrush) {
     tl_val := u16(g_ed_target_level & 0xFF)
-    if EditorBrush(g_ed_brush) == .Door {
-        tl_val |= u16(g_ed_key_id & 0xFF) << 8
-    }
     op := p2p.EditorOp{
         action       = .Paint,
-        brush        = u8(g_ed_brush),
+        brush        = u8(brush),
         tx           = i16(tx),
         ty           = i16(ty),
         target_level = tl_val,
     }
     ed_apply_op(op)
     p2p.session_send_editor_op(&g_session, op)
+}
+
+ed_clear_all :: proc() {
+    op := p2p.EditorOp{ action = .ClearAll }
+    ed_apply_op(op)
+    p2p.session_send_editor_op(&g_session, op)
+}
+
+ed_reset_grid_walkable :: proc() {
+    op := p2p.EditorOp{
+        action = .FillWalkable,
+        tx     = i16(g_ed_grid_cols),
+        ty     = i16(g_ed_grid_rows),
+    }
+    ed_apply_op(op)
+    p2p.session_send_editor_op(&g_session, op)
+}
+
+@(private = "file")
+ed_fill_walkable :: proc(cols, rows: int) {
+    ts      := f32(TILE_SIZE)
+    half_cw := f32(cols) * ts * 0.5
+    half_ch := f32(rows) * ts * 0.5
+
+    tx0 := int(math.floor(-half_cw / ts))
+    ty0 := int(math.floor(-half_ch / ts))
+    tx1 := int(math.ceil (  half_cw / ts)) - 1
+    ty1 := int(math.ceil (  half_ch / ts)) - 1
+
+    scale := TILE_SIZE / HUB_CELL_RES
+    for y in ty0..=ty1 {
+        for x in tx0..=tx1 {
+            g_tilemap[[2]int{x, y}] = .Floor
+            delete_key(&g_overlay_map, [2]int{x, y})
+            for sy in 0..<scale {
+                for sx in 0..<scale {
+                    g_hub_cell_map[[2]int{x*scale+sx, y*scale+sy}] = .Floor
+                }
+            }
+        }
+    }
+}
+
+ed_visible_world_aabb :: proc() -> (x0, y0, x1, y1: f32) {
+    sw := f32(rl.GetScreenWidth())
+    sh := f32(rl.GetScreenHeight())
+    c  := [4]rl.Vector2{
+        screen_to_world_cartesian({ 0,  0}),
+        screen_to_world_cartesian({sw,  0}),
+        screen_to_world_cartesian({sw, sh}),
+        screen_to_world_cartesian({ 0, sh}),
+    }
+    x0, y0, x1, y1 = c[0].x, c[0].y, c[0].x, c[0].y
+    for i in 1..<4 {
+        x0 = min(x0, c[i].x); x1 = max(x1, c[i].x)
+        y0 = min(y0, c[i].y); y1 = max(y1, c[i].y)
+    }
+    return
+}
+
+ed_grid_visible_range :: proc(half_cw, half_ch, cs: f32, num_x, num_y: int) -> (gx0, gy0, gx1, gy1: int) {
+    vx0, vy0, vx1, vy1 := ed_visible_world_aabb()
+    gx0 = clamp(int(math.floor((vx0 + half_cw) / cs)), 0, num_x)
+    gx1 = clamp(int(math.ceil ((vx1 + half_cw) / cs)), 0, num_x)
+    gy0 = clamp(int(math.floor((vy0 + half_ch) / cs)), 0, num_y)
+    gy1 = clamp(int(math.ceil ((vy1 + half_ch) / cs)), 0, num_y)
+    return
+}
+
+ed_paint_snap_held :: proc() -> bool {
+    return rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
+}
+
+ed_brush_footprint :: proc(cx, cy, unit: int, snap: bool) -> (x0, y0, n: int) {
+    if snap {
+        n  = max(1, g_ed_brush_size / unit)
+        x0 = cx - (cx %% n)
+        y0 = cy - (cy %% n)
+        return
+    }
+    r := g_ed_brush_size / unit / 2
+    return cx - r, cy - r, 2 * r + 1
+}
+
+ed_cycle_module :: proc(delta: int) {
+    n := module_count()
+    if n == 0 { return }
+    g_ed_module_idx = (g_ed_module_idx + delta + n) %% n
+}
+
+ed_set_cell_size :: proc(v: int) {
+    g_ed_cell_size  = clamp(v, 16, 512)
+    g_ed_brush_size = max(g_ed_cell_size, (g_ed_brush_size / g_ed_cell_size) * g_ed_cell_size)
 }
 
 @(private = "file")
@@ -728,10 +443,6 @@ ed_erase :: proc(tx, ty: int) {
     p2p.session_send_editor_op(&g_session, op)
 }
 
-// Paint all TILE_SIZE tiles that fall within hub cell (cell_x, cell_y).
-// When cell_size == TILE_SIZE this is exactly one tile; when cell_size > TILE_SIZE
-// it fills a block of tiles; when cell_size < TILE_SIZE it fills the one tile
-// Returns the base TileType a brush would write (for g_hub_cell_map).
 @(private = "file")
 ed_brush_hub_tile :: proc(b: EditorBrush) -> TileType {
     #partial switch b {
@@ -739,11 +450,9 @@ ed_brush_hub_tile :: proc(b: EditorBrush) -> TileType {
     case .Water:                                             return .Water
     case .Pillar,.Pillar1,.Pillar2:                         return .Pillar
     }
-    return .Floor  // Floor variants, HubWalkable, Oil, Fire all default to Floor visually
+    return .Floor
 }
 
-// Writes tile data (at TILE_SIZE resolution) AND records fine-grained hub-cell data
-// (at HUB_CELL_RES=16 resolution) so the overlay shows the exact painted area.
 @(private = "file")
 ed_paint_cell :: proc(cell_x, cell_y: int) {
     cs  := f32(g_ed_cell_size)
@@ -756,11 +465,10 @@ ed_paint_cell :: proc(cell_x, cell_y: int) {
     ty1 := int(math.floor((wy0 + cs - 0.1) / ts))
     for ty in ty0..=ty1 {
         for tx in tx0..=tx1 {
-            ed_paint(tx, ty)
+            ed_paint(tx, ty, g_ed_brush)
         }
     }
-    // Update g_hub_cell_map at HUB_CELL_RES resolution so the overlay
-    // reflects the exact cell painted, not the full underlying tile.
+
     tt    := ed_brush_hub_tile(g_ed_brush)
     scale := max(1, g_ed_cell_size / HUB_CELL_RES)
     for sy in 0..<scale {
@@ -803,7 +511,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         case .Floor:   g_tilemap[[2]int{tx, ty}] = .Floor;   delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Wall:    g_tilemap[[2]int{tx, ty}] = .Wall;    delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Water:   g_tilemap[[2]int{tx, ty}] = .Water;   delete_key(&g_overlay_map, [2]int{tx, ty})
-        case .Module:  // placed locally via module_place_at, not a networked tile op
+        case .Module:
         case .Pillar:  g_tilemap[[2]int{tx, ty}] = .Pillar;  delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Floor1:  g_tilemap[[2]int{tx, ty}] = .Floor1;  delete_key(&g_overlay_map, [2]int{tx, ty})
         case .Floor2:  g_tilemap[[2]int{tx, ty}] = .Floor2;  delete_key(&g_overlay_map, [2]int{tx, ty})
@@ -888,21 +596,6 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
                 r = 255, g = 200, b = 100,
                 radius = 120.0, intensity = 1.0,
             })
-        case .Door:
-            link_id := u8(op.target_level & 0xFF)
-            key_id  := u8(op.target_level >> 8)
-            for i := len(g_level_data.doors) - 1; i >= 0; i -= 1 {
-                d := g_level_data.doors[i]
-                if int(d.tx) == tx && int(d.ty) == ty {
-                    unordered_remove(&g_level_data.doors, i)
-                }
-            }
-
-            g_tilemap[[2]int{tx, ty}] = .Wall
-            append(&g_level_data.doors, LevelDoor{
-                tx = i16(tx), ty = i16(ty),
-                link_id = link_id, key_id = key_id,
-            })
         case .SwitchLever:
             param := u8(op.target_level & 0xFF)
             for i := len(g_level_data.switches) - 1; i >= 0; i -= 1 {
@@ -980,6 +673,8 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         ed_apply_erase(tx, ty)
     case .EraseObjects:
         _erase_objects(tx, ty)
+    case .FillWalkable:
+        ed_fill_walkable(max(1, int(op.tx)), max(1, int(op.ty)))
     case .ClearAll:
         tilemap_fill_default()
         clear(&g_level_data.spawns)
@@ -987,7 +682,6 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
-        clear(&g_level_data.doors)
         clear(&g_level_data.switches)
         clear(&g_level_data.containers)
         clear(&g_level_data.lore_items)
@@ -998,7 +692,6 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
 
     g_wall_mask_dirty = true
 }
-
 
 @(private = "file")
 _erase_objects :: proc(tx, ty: int) {
@@ -1030,12 +723,6 @@ _erase_objects :: proc(tx, ty: int) {
         b := g_level_data.barrels[i]
         if int(b.tx) == tx && int(b.ty) == ty {
             unordered_remove(&g_level_data.barrels, i)
-        }
-    }
-    for i := len(g_level_data.doors) - 1; i >= 0; i -= 1 {
-        d := g_level_data.doors[i]
-        if int(d.tx) == tx && int(d.ty) == ty {
-            unordered_remove(&g_level_data.doors, i)
         }
     }
     for i := len(g_level_data.switches) - 1; i >= 0; i -= 1 {
@@ -1070,14 +757,12 @@ _erase_objects :: proc(tx, ty: int) {
     }
 }
 
-
 @(private = "file")
 ed_apply_erase :: proc(tx, ty: int) {
     delete_key(&g_tilemap,    [2]int{tx, ty})
     delete_key(&g_overlay_map,[2]int{tx, ty})
     _erase_objects(tx, ty)
 }
-
 
 @(private = "file")
 ed_erase_objects :: proc(tx, ty: int) {
@@ -1118,7 +803,6 @@ draw_editor_world :: proc() {
     tx1 := int(math.floor(br.x / f32(TILE_SIZE))) + 2
     ty1 := int(math.floor(br.y / f32(TILE_SIZE))) + 2
 
-    // Module placement ghost at the cursor tile.
     if EditorBrush(g_ed_brush) == .Module && module_count() > 0 {
         wc := screen_to_world_cartesian(rl.GetMousePosition())
         mtx, mty := world_to_tile(wc.x, wc.y)
@@ -1126,52 +810,49 @@ draw_editor_world :: proc() {
     }
 
     if g_hub_active {
-        // ── Hub cell grid ──────────────────────────────────────────────────────
-        // The physical bounds are grid_cols × TILE_SIZE by grid_rows × TILE_SIZE
-        // (unchanged by cell size). Cell size only sets the subdivision density:
-        // smaller cell = finer grid lines, larger cell = coarser grid lines.
         cs      := f32(g_ed_cell_size)
-        half_cw := f32(g_ed_grid_cols) * f32(TILE_SIZE) * 0.5   // FIXED physical half-width
-        half_ch := f32(g_ed_grid_rows) * f32(TILE_SIZE) * 0.5   // FIXED physical half-height
+        half_cw := f32(g_ed_grid_cols) * f32(TILE_SIZE) * 0.5
+        half_ch := f32(g_ed_grid_rows) * f32(TILE_SIZE) * 0.5
         num_x   := max(1, int(f32(g_ed_grid_cols) * f32(TILE_SIZE) / cs))
         num_y   := max(1, int(f32(g_ed_grid_rows) * f32(TILE_SIZE) / cs))
-        cell_col := rl.Color{0, 240, 210, 160}   // neon teal grid lines
-        bnd_col  := rl.Color{0, 255, 220, 255}   // neon teal outer boundary (full bright)
+        cell_col := rl.Color{0, 240, 210, 160}
+        bnd_col  := rl.Color{0, 255, 220, 255}
 
-        for gx in 0..<num_x {
-            for gy in 0..<num_y {
+        if g_ed_grid_visible {
+            gx0, gy0, gx1, gy1 := ed_grid_visible_range(half_cw, half_ch, cs, num_x, num_y)
+
+            wy_a := -half_ch + f32(gy0) * cs
+            wy_b := -half_ch + f32(gy1) * cs
+            for gx in gx0..=gx1 {
                 wx := -half_cw + f32(gx) * cs
+                rl.DrawLineEx(world_to_iso_xy(wx, wy_a), world_to_iso_xy(wx, wy_b), lw, cell_col)
+            }
+
+            wx_a := -half_cw + f32(gx0) * cs
+            wx_b := -half_cw + f32(gx1) * cs
+            for gy in gy0..=gy1 {
                 wy := -half_ch + f32(gy) * cs
-                top    := world_to_iso_xy(wx,      wy)
-                right  := world_to_iso_xy(wx + cs, wy)
-                bottom := world_to_iso_xy(wx + cs, wy + cs)
-                left   := world_to_iso_xy(wx,      wy + cs)
-                rl.DrawLineEx(top, right,    lw, cell_col)
-                rl.DrawLineEx(right, bottom, lw, cell_col)
-                rl.DrawLineEx(bottom, left,  lw, cell_col)
-                rl.DrawLineEx(left, top,     lw, cell_col)
+                rl.DrawLineEx(world_to_iso_xy(wx_a, wy), world_to_iso_xy(wx_b, wy), lw, cell_col)
+            }
+
+            corners := [4]rl.Vector2{
+                world_to_iso_xy(-half_cw, -half_ch), world_to_iso_xy(half_cw, -half_ch),
+                world_to_iso_xy( half_cw,  half_ch), world_to_iso_xy(-half_cw,  half_ch),
+            }
+            for i in 0..<4 {
+                rl.DrawLineEx(corners[i], corners[(i+1)%4], lw * 2, bnd_col)
             }
         }
 
-        // Outer boundary (always at the TILE_SIZE-based edges)
-        corners := [4]rl.Vector2{
-            world_to_iso_xy(-half_cw, -half_ch), world_to_iso_xy(half_cw, -half_ch),
-            world_to_iso_xy( half_cw,  half_ch), world_to_iso_xy(-half_cw,  half_ch),
-        }
-        for i in 0..<4 {
-            rl.DrawLineEx(corners[i], corners[(i+1)%4], lw * 2, bnd_col)
-        }
-
-        // Cursor — shows full brush extent (radius in cells)
         {
             world_mp_c := screen_to_world_cartesian(rl.GetMousePosition())
             cur_cx := int(math.floor(world_mp_c.x / cs))
             cur_cy := int(math.floor(world_mp_c.y / cs))
-            r      := g_ed_brush_size / g_ed_cell_size / 2
+            fx, fy, fn := ed_brush_footprint(cur_cx, cur_cy, g_ed_cell_size, ed_paint_snap_held())
             fill_col, brd_col := ed_brush_colors(g_ed_brush)
-            // Outer bounding box of the brush footprint
-            bx0 := f32(cur_cx - r) * cs;  by0 := f32(cur_cy - r) * cs
-            bx1 := f32(cur_cx + r + 1) * cs; by1 := f32(cur_cy + r + 1) * cs
+
+            bx0 := f32(fx) * cs;      by0 := f32(fy) * cs
+            bx1 := f32(fx + fn) * cs; by1 := f32(fy + fn) * cs
             btop    := world_to_iso_xy(bx0, by0)
             bright  := world_to_iso_xy(bx1, by0)
             bbottom := world_to_iso_xy(bx1, by1)
@@ -1184,16 +865,36 @@ draw_editor_world :: proc() {
             rl.DrawLineEx(bleft,   btop,    lw * 2.5, brd_col)
         }
     } else {
-        // Non-hub: standard TILE_SIZE tile grid
-        grid_col := rl.Color{80, 76, 60, 55}
-        for gx in tx0..=tx1 {
+        if g_ed_grid_visible {
+            grid_col := rl.Color{80, 76, 60, 55}
+            ts       := f32(TILE_SIZE)
+
             for gy in ty0..=ty1 {
-                if !tile_exists(gx, gy) { continue }
-                _, top, right, bottom, left := iso_tile_bounds(gx, gy)
-                rl.DrawLineEx(top, right,   lw, grid_col)
-                rl.DrawLineEx(right, bottom,lw, grid_col)
-                rl.DrawLineEx(bottom, left, lw, grid_col)
-                rl.DrawLineEx(left, top,    lw, grid_col)
+                gx := tx0
+                for gx <= tx1 {
+                    if !tile_exists(gx, gy) { gx += 1; continue }
+                    run := gx
+                    for run + 1 <= tx1 && tile_exists(run + 1, gy) { run += 1 }
+                    ax := f32(gx) * ts;        bx := f32(run + 1) * ts
+                    ay := f32(gy) * ts;        by := f32(gy + 1) * ts
+                    rl.DrawLineEx(world_to_iso_xy(ax, ay), world_to_iso_xy(bx, ay), lw, grid_col)
+                    rl.DrawLineEx(world_to_iso_xy(ax, by), world_to_iso_xy(bx, by), lw, grid_col)
+                    gx = run + 1
+                }
+            }
+
+            for gx in tx0..=tx1 {
+                gy := ty0
+                for gy <= ty1 {
+                    if !tile_exists(gx, gy) { gy += 1; continue }
+                    run := gy
+                    for run + 1 <= ty1 && tile_exists(gx, run + 1) { run += 1 }
+                    ax := f32(gx) * ts;        bx := f32(gx + 1) * ts
+                    ay := f32(gy) * ts;        by := f32(run + 1) * ts
+                    rl.DrawLineEx(world_to_iso_xy(ax, ay), world_to_iso_xy(ax, by), lw, grid_col)
+                    rl.DrawLineEx(world_to_iso_xy(bx, ay), world_to_iso_xy(bx, by), lw, grid_col)
+                    gy = run + 1
+                }
             }
         }
     }
@@ -1274,7 +975,6 @@ draw_editor_world :: proc() {
         ring_col  := rl.Color{240, 120,  30, 200} if is_fire else rl.Color{ 70, 160, 255, 200}
         label_cs  := cstring("FB")           if is_fire else cstring("WB")
 
-
         body_h := ts * 0.24
         body_w := ts * 0.22
 
@@ -1300,60 +1000,6 @@ draw_editor_world :: proc() {
             fs * 0.85, 0.5, rl.Color{255, 240, 220, 240})
     }
 
-
-    DOOR_COL :: rl.Color{160, 110, 50, 220}
-    for d in g_level_data.doors {
-        wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
-        wy := f32(int(d.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
-        rl.DrawRectangleLinesEx({ip.x - ts*0.16, ip.y - ts*0.35, ts*0.32, ts*0.38},
-            lw * 2.5, DOOR_COL)
-        rl.DrawRectangleRec({ip.x - ts*0.16, ip.y - ts*0.35, ts*0.32, ts*0.38},
-            rl.Color{DOOR_COL.r, DOOR_COL.g, DOOR_COL.b, 40})
-
-        rl.DrawCircleV({ip.x, ip.y - ts*0.08}, ts*0.04, DOOR_COL)
-        if d.link_id != 0 {
-            buf: [8]u8
-            s := fmt.bprintf(buf[:7], "L%d", d.link_id)
-            buf[len(s)] = 0
-            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
-            rl.DrawTextEx(g_font, cstring(&buf[0]),
-                {ip.x - lsz.x*0.5, ip.y + ts*0.12},
-                fs * 0.8, 0.5, rl.Color{220, 180, 80, 220})
-        }
-        if d.key_id != 0 {
-            buf: [8]u8
-            s := fmt.bprintf(buf[:7], "K%d", d.key_id)
-            buf[len(s)] = 0
-            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
-            rl.DrawTextEx(g_font, cstring(&buf[0]),
-                {ip.x - lsz.x*0.5, ip.y - ts*0.32},
-                fs * 0.8, 0.5, rl.Color{220, 80, 80, 220})
-        }
-
-        switch d.open_type {
-        case .LeverSwitch:
-            badge := cstring("[LV]")
-            bsz := rl.MeasureTextEx(g_font, badge, fs * 0.65, 0.5)
-            rl.DrawTextEx(g_font, badge,
-                {ip.x + ts*0.17 - bsz.x*0.5, ip.y - ts*0.38},
-                fs * 0.65, 0.5, rl.Color{80, 210, 110, 230})
-        case .Key:
-            badge := cstring("[KY]")
-            bsz := rl.MeasureTextEx(g_font, badge, fs * 0.65, 0.5)
-            rl.DrawTextEx(g_font, badge,
-                {ip.x + ts*0.17 - bsz.x*0.5, ip.y - ts*0.38},
-                fs * 0.65, 0.5, rl.Color{230, 160, 60, 230})
-        case .None:
-        }
-
-        if d.is_locked {
-            rl.DrawCircleV({ip.x + ts*0.14, ip.y - ts*0.08}, ts*0.035,
-                rl.Color{220, 55, 55, 210})
-        }
-    }
-
-
     LEVER_COL :: rl.Color{60, 180, 60, 220}
     for s in g_level_data.switches {
         wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
@@ -1378,7 +1024,6 @@ draw_editor_world :: proc() {
                 fs * 0.8, 0.5, rl.Color{120, 240, 120, 220})
         }
     }
-
 
     for c in g_level_data.containers {
         wx := f32(int(c.tx) * TILE_SIZE + TILE_SIZE / 2)
@@ -1407,7 +1052,6 @@ draw_editor_world :: proc() {
             {ip.x - lsz.x*0.5, ip.y - box_h*0.1 - lsz.y*0.5},
             fs * 0.85, 0.5, col)
     }
-
 
     LORE_COL :: rl.Color{80, 160, 220, 220}
     for li in g_level_data.lore_items {
@@ -1441,7 +1085,6 @@ draw_editor_world :: proc() {
             fs * 0.75, 0.5, rl.Color{120, 200, 255, 220})
     }
 
-
     PHONO_COL :: rl.Color{180, 80, 200, 220}
     for ph in g_level_data.phonographs {
         wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
@@ -1467,7 +1110,6 @@ draw_editor_world :: proc() {
             {ip.x - lsz.x*0.5, ip.y - ts*0.38},
             fs * 0.75, 0.5, rl.Color{220, 120, 240, 220})
     }
-
 
     KEY_COL :: rl.Color{245, 210, 30, 230}
     for kp in g_level_data.key_pickups {
@@ -1516,22 +1158,27 @@ draw_editor_world :: proc() {
             fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
     }
 
-
     ed_insp_draw_selection_highlight()
 
-    // Tile brush cursor — only in non-hub mode.
-    // Hub mode has its own cell-sized cursor drawn above.
     if !g_hub_active {
         mp       := rl.GetMousePosition()
         world_mp := screen_to_world_cartesian(mp)
         ctx, cty := world_to_tile(world_mp.x, world_mp.y)
-        center, top, right, bottom, left := iso_tile_bounds(ctx, cty)
+        fx, fy, fn := ed_brush_footprint(ctx, cty, TILE_SIZE, ed_paint_snap_held())
+        tsz := f32(TILE_SIZE)
+        bx0 := f32(fx) * tsz;      by0 := f32(fy) * tsz
+        bx1 := f32(fx + fn) * tsz; by1 := f32(fy + fn) * tsz
+        btop    := world_to_iso_xy(bx0, by0)
+        bright  := world_to_iso_xy(bx1, by0)
+        bbottom := world_to_iso_xy(bx1, by1)
+        bleft   := world_to_iso_xy(bx0, by1)
         fill_col, brd_col := ed_brush_colors(g_ed_brush)
-        iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, fill_col)
-        rl.DrawLineEx(top, right, lw * 2, brd_col)
-        rl.DrawLineEx(right, bottom, lw * 2, brd_col)
-        rl.DrawLineEx(bottom, left, lw * 2, brd_col)
-        rl.DrawLineEx(left, top, lw * 2, brd_col)
+        rl.DrawTriangle(btop, bright, bbottom, fill_col)
+        rl.DrawTriangle(btop, bbottom, bleft,  fill_col)
+        rl.DrawLineEx(btop,    bright,  lw * 2, brd_col)
+        rl.DrawLineEx(bright,  bbottom, lw * 2, brd_col)
+        rl.DrawLineEx(bbottom, bleft,   lw * 2, brd_col)
+        rl.DrawLineEx(bleft,   btop,    lw * 2, brd_col)
     }
 }
 
@@ -1582,7 +1229,6 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     case .Fire:        return { 90,  22,   6,  90}, {240,  80,  15, 210}
     case .FireBarrel:  return {120,  40,   8,  80}, {230,  90,  20, 210}
     case .WaterBarrel: return {  8,  42,  90,  80}, { 60, 150, 230, 210}
-    case .Door:        return { 64,  40,  18,  85}, {160, 110,  50, 210}
     case .SwitchLever: return { 24,  56,  24,  85}, { 60, 160,  60, 210}
     case .Chest:       return { 88,  68,  14,  85}, {210, 175,  40, 210}
     case .Crate:       return { 54,  38,  18,  85}, {150, 110,  55, 210}
@@ -1607,18 +1253,6 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     return {128, 128, 128, 85}, {200, 200, 200, 200}
 }
 
-@(private = "file")
-ed_panel_btn :: proc(mp: rl.Vector2, r: rl.Rectangle, label: cstring,
-                     bg_n, bg_h, brd, text: rl.Color) {
-    hov := rl.CheckCollisionPointRec(mp, r)
-    rl.DrawRectangleRec(r, bg_h if hov else bg_n)
-    rl.DrawRectangleLinesEx(r, uis(1), brd)
-    sz := rl.MeasureTextEx(g_font, label, uis(9), 0.5)
-    rl.DrawTextEx(g_font, label,
-        {r.x + r.width*0.5 - sz.x*0.5, r.y + r.height*0.5 - sz.y*0.5},
-        uis(9), 0.5, text)
-}
-
 draw_editor_hud :: proc() {
     if !g_editor_mode { return }
 
@@ -1635,251 +1269,15 @@ draw_editor_hud :: proc() {
         {sw*0.5 - title_sz.x*0.5, uis(9)}, uis(13), 1,
         rl.Color{220, 190, 80, 255})
 
-    left_hint := cstring("1-0:Brush  LMB:Paint  RMB:Select/EraseObj  WASD:Pan  [/]:ID  Ctrl+[/]:KeyID  Sh+[/]:Sz  -/=:Level")
+    left_hint := cstring("1-6:Brush  LMB:Paint  RMB:Select/EraseObj  WASD:Pan  [/]:ID  ,/.:Module  -/=:Level")
     rl.DrawTextEx(g_font, left_hint, {uis(8), uis(10)}, uis(7.5), 0.5,
         rl.Color{140, 128, 95, 190})
 
-    right_hint := cstring("Scroll:Zoom  Mid:Drag  Ctrl+S:Save  Ctrl+L:Load  F1:Exit")
+    right_hint := cstring("Scroll:Zoom  Mid:Drag  F5:Live  Ctrl+S:Save  Ctrl+L:Load  F1:Exit")
     rhsz := rl.MeasureTextEx(g_font, right_hint, uis(7.5), 0.5)
     rl.DrawTextEx(g_font, right_hint,
-        {sw - rhsz.x - uis(ED_TAB_W) - uis(8), uis(10)}, uis(7.5), 0.5,
+        {sw - rhsz.x - uis(8), uis(10)}, uis(7.5), 0.5,
         rl.Color{140, 128, 95, 190})
-
-    CAT_H     :: f32(22)
-    ITEM_H    :: ED_PAL_ITEM_H
-    PAD       :: ED_PAL_PAD
-    CAT_NAMES := [EditorCategory]cstring{
-        .Environment = "ENVIRONMENT",
-        .Entities    = "ENTITIES",
-        .Interactive = "INTERACTIVE",
-    }
-    CAT_COLS  := [EditorCategory]rl.Color{
-        .Environment = { 40, 110,  60, 255},
-        .Entities    = {110,  60,  40, 255},
-        .Interactive = { 50,  70, 130, 255},
-    }
-
-    pal_r := ed_pal_panel_rect()
-    rl.DrawRectangleRec(pal_r, rl.Color{10, 8, 6, 245})
-    rl.DrawRectangleLinesEx(pal_r, uis(1), rl.Color{80, 70, 45, 180})
-    rl.DrawRectangle(i32(pal_r.x + pal_r.width - uis(1.5)), i32(pal_r.y),
-        i32(uis(1.5)), i32(pal_r.height), rl.Color{150, 130, 60, 200})
-
-    rl.BeginScissorMode(i32(pal_r.x), i32(pal_r.y), i32(pal_r.width), i32(pal_r.height))
-
-    cy           := pal_r.y + uis(PAD) - g_ed_pal_scroll
-    seen_cat_drw := [3]bool{}
-
-    for i in 0..<g_ed_palette_n {
-        entry := &g_ed_palette[i]
-
-        if !seen_cat_drw[entry.category] {
-
-            cat_col  := CAT_COLS[entry.category]
-            hdr_r    := rl.Rectangle{ pal_r.x, cy, pal_r.width, uis(CAT_H) }
-            hdr_bg   := rl.Color{ cat_col.r/2, cat_col.g/2, cat_col.b/2, 220 }
-            rl.DrawRectangleRec(hdr_r, hdr_bg)
-            rl.DrawRectangle(i32(pal_r.x), i32(cy), i32(pal_r.width), i32(uis(2)), cat_col)
-
-            cat_name := CAT_NAMES[entry.category]
-            csz      := rl.MeasureTextEx(g_font, cat_name, uis(8), 1)
-            rl.DrawTextEx(g_font, cat_name,
-                { pal_r.x + uis(22), cy + uis(CAT_H)*0.5 - csz.y*0.5 },
-                uis(8), 1, rl.Color{220, 200, 140, 240})
-
-            arrow := cstring("v") if !g_ed_cat_collapsed[entry.category] else cstring(">")
-            rl.DrawTextEx(g_font, arrow,
-                { pal_r.x + uis(6), cy + uis(CAT_H)*0.5 - uis(5) },
-                uis(9), 1, rl.Color{200, 180, 100, 220})
-
-            cy                           += uis(CAT_H)
-            seen_cat_drw[entry.category]  = true
-        }
-
-        if g_ed_cat_collapsed[entry.category] { continue }
-
-        sel     := g_ed_brush == entry.brush
-        row_r   := rl.Rectangle{ pal_r.x + uis(4), cy, pal_r.width - uis(8), uis(ITEM_H) }
-        brd_col := rl.Color{220, 190, 80, 255} if sel else rl.Color{55, 50, 35, 160}
-        brd_w   := uis(2) if sel else uis(1)
-
-        rl.DrawRectangleRec(row_r, entry.bg)
-        rl.DrawRectangleLinesEx(row_r, brd_w, brd_col)
-
-
-        swatch_sz := uis(ITEM_H - 8)
-        rl.DrawRectangle(
-            i32(row_r.x + uis(4)), i32(cy + (uis(ITEM_H) - swatch_sz)*0.5),
-            i32(swatch_sz), i32(swatch_sz),
-            rl.Color{entry.bg.r + 30, entry.bg.g + 30, entry.bg.b + 30, 255})
-
-
-        name_fs := uis(8.5)
-        lsz     := rl.MeasureTextEx(g_font, entry.label, name_fs, 0.5)
-        lx      := row_r.x + swatch_sz + uis(10)
-        rl.DrawTextEx(g_font, entry.label,
-            { lx, cy + uis(ITEM_H)*0.5 - lsz.y*0.5 },
-            name_fs, 0.5, rl.Color{210, 190, 140, 230})
-
-
-        if entry.key != nil && (cast([^]u8)entry.key)[0] != 0 {
-            rl.DrawTextEx(g_font, entry.key,
-                { row_r.x + row_r.width - uis(12), cy + uis(3) },
-                uis(7.5), 0.5, rl.Color{160, 148, 100, 180})
-        }
-
-        cy += uis(ITEM_H) + uis(PAD * 0.5)
-    }
-
-    rl.EndScissorMode()
-
-
-    // ── Stat bar ─────────────────────────────────────────────────────────────
-    STAT_H_DRAW :: f32(148)
-    stat_y := pal_r.y + pal_r.height - uis(STAT_H_DRAW)
-    rl.DrawRectangle(i32(pal_r.x), i32(stat_y), i32(pal_r.width), i32(uis(STAT_H_DRAW)),
-        rl.Color{8, 6, 4, 220})
-    rl.DrawRectangle(i32(pal_r.x), i32(stat_y), i32(pal_r.width), i32(uis(1)),
-        rl.Color{80, 70, 45, 160})
-
-    mp2      := rl.GetMousePosition()
-    lbl_col  := rl.Color{140, 128, 95, 200}
-    val_col  := COL_PARCH
-    btn_bg   :: rl.Color{30, 25, 15, 255}
-    btn_hot  :: rl.Color{60, 45, 20, 255}
-    btn_brd  :: rl.Color{150, 120, 50, 200}
-    num_buf2 : [16]u8
-
-    ed_stat_btn :: proc(r: rl.Rectangle, label: cstring, mp: rl.Vector2) {
-        hot := rl.CheckCollisionPointRec(mp, r)
-        rl.DrawRectangleRec(r, rl.Color{60, 45, 20, 255} if hot else rl.Color{30, 25, 15, 255})
-        rl.DrawRectangleLinesEx(r, uis(1), rl.Color{150, 120, 50, 200})
-        sz := rl.MeasureTextEx(g_font, label, uis(9), 0.5)
-        rl.DrawTextEx(g_font, label,
-            { r.x + (r.width - sz.x)*0.5, r.y + (r.height - sz.y)*0.5 },
-            uis(9), 0.5, rl.WHITE)
-    }
-
-    // Row 1: level / tile / spawn counts
-    {
-        s := fmt.bprintf(num_buf2[:], "Lv%d  T%d  Sp%d", g_ed_level, len(g_tilemap), len(g_level_data.spawns))
-        num_buf2[len(s)] = 0
-        rl.DrawTextEx(g_font, cstring(&num_buf2[0]), { pal_r.x + uis(5), stat_y + uis(5) }, uis(8), 0.5, rl.Color{150, 138, 100, 210})
-    }
-
-    // Row 2: brush size
-    {
-        ry := stat_y + uis(22); bw := uis(16); bh := uis(16)
-        rl.DrawTextEx(g_font, "Brush sz:", { pal_r.x + uis(4), ry + uis(2) }, uis(8), 0.5, lbl_col)
-        ed_stat_btn(rl.Rectangle{ pal_r.x + uis(54), ry, bw, bh }, "-", mp2)
-        ed_stat_btn(rl.Rectangle{ pal_r.x + uis(90), ry, bw, bh }, "+", mp2)
-        s := fmt.bprintf(num_buf2[:], "%d", g_ed_brush_size); num_buf2[len(s)] = 0
-        nw := rl.MeasureTextEx(g_font, cstring(&num_buf2[0]), uis(9), 0.5)
-        rl.DrawTextEx(g_font, cstring(&num_buf2[0]), { pal_r.x + uis(72) - nw.x*0.5, ry + (bh-nw.y)*0.5 }, uis(9), 0.5, val_col)
-    }
-
-    // Row 3: cell size
-    {
-        ry := stat_y + uis(44); bw := uis(16); bh := uis(16)
-        rl.DrawTextEx(g_font, "Cell sz:", { pal_r.x + uis(4), ry + uis(2) }, uis(8), 0.5, lbl_col)
-        ed_stat_btn(rl.Rectangle{ pal_r.x + uis(54), ry, bw, bh }, "-", mp2)
-        ed_stat_btn(rl.Rectangle{ pal_r.x + uis(90), ry, bw, bh }, "+", mp2)
-        s := fmt.bprintf(num_buf2[:], "%d", g_ed_cell_size); num_buf2[len(s)] = 0
-        nw := rl.MeasureTextEx(g_font, cstring(&num_buf2[0]), uis(9), 0.5)
-        rl.DrawTextEx(g_font, cstring(&num_buf2[0]), { pal_r.x + uis(72) - nw.x*0.5, ry + (bh-nw.y)*0.5 }, uis(9), 0.5, val_col)
-    }
-
-    // Slider draw helper
-    draw_slider :: proc(r: rl.Rectangle, val, lo, hi: f32, label: cstring,
-                        drag_id: int, active_id: int, mp: rl.Vector2) {
-        t   := clamp((val - lo) / (hi - lo), 0, 1)
-        hot := drag_id == active_id || rl.CheckCollisionPointRec(mp, r)
-        rl.DrawRectangleRec(r, rl.Color{18, 14, 8, 240})
-        rl.DrawRectangleLinesEx(r, uis(1), rl.Color{80, 65, 35, 180})
-        fill_col := rl.Color{50, 110, 60, 200} if hot else rl.Color{35, 80, 45, 180}
-        rl.DrawRectangle(i32(r.x), i32(r.y), i32(r.width * t), i32(r.height), fill_col)
-        hx := r.x + r.width * t
-        rl.DrawRectangle(i32(hx) - 1, i32(r.y), 2, i32(r.height), rl.Color{200, 180, 80, 255})
-        lsz := rl.MeasureTextEx(g_font, label, uis(7), 0.5)
-        rl.DrawTextEx(g_font, label,
-            {r.x + (r.width - lsz.x) * 0.5, r.y + (r.height - lsz.y) * 0.5},
-            uis(7), 0.5, rl.Color{200, 190, 150, 230})
-    }
-
-    slid_x2 := pal_r.x + uis(36); slid_w2 := pal_r.width - uis(40)
-    PAD2 :: f32(4)
-
-    // Row 4: grid cols slider
-    {
-        ry  := stat_y + uis(60)
-        rl.DrawTextEx(g_font, "Grid X:", {pal_r.x + uis(2), ry + uis(2)}, uis(7.5), 0.5, lbl_col)
-        s := fmt.bprintf(num_buf2[:], "%d", g_ed_grid_cols); num_buf2[len(s)] = 0
-        r := rl.Rectangle{slid_x2, ry, slid_w2, uis(13)}
-        draw_slider(r, f32(g_ed_grid_cols), 1, 200, cstring(&num_buf2[0]), 10, g_ed_slider_id, mp2)
-    }
-    // Row 5: grid rows slider
-    {
-        ry  := stat_y + uis(78)
-        rl.DrawTextEx(g_font, "Grid Y:", {pal_r.x + uis(2), ry + uis(2)}, uis(7.5), 0.5, lbl_col)
-        s := fmt.bprintf(num_buf2[:], "%d", g_ed_grid_rows); num_buf2[len(s)] = 0
-        r := rl.Rectangle{slid_x2, ry, slid_w2, uis(13)}
-        draw_slider(r, f32(g_ed_grid_rows), 1, 200, cstring(&num_buf2[0]), 11, g_ed_slider_id, mp2)
-    }
-
-    // Row 6: cam X bounds (min / max)
-    {
-        CAM_RANGE :: f32(8192)
-        ry       := stat_y + uis(97)
-        half_slid := (slid_w2 - uis(PAD2)) * 0.5
-        rl.DrawTextEx(g_font, "CamX:", {pal_r.x + uis(2), ry + uis(2)}, uis(7.5), 0.5, lbl_col)
-        // min_x
-        s := fmt.bprintf(num_buf2[:], "%d", int(g_level_data.cam_lims[0])); num_buf2[len(s)] = 0
-        r := rl.Rectangle{slid_x2, ry, half_slid, uis(13)}
-        draw_slider(r, g_level_data.cam_lims[0], -CAM_RANGE, CAM_RANGE, cstring(&num_buf2[0]), 20, g_ed_slider_id, mp2)
-        // max_x
-        s = fmt.bprintf(num_buf2[:], "%d", int(g_level_data.cam_lims[1])); num_buf2[len(s)] = 0
-        r.x += half_slid + uis(PAD2)
-        draw_slider(r, g_level_data.cam_lims[1], -CAM_RANGE, CAM_RANGE, cstring(&num_buf2[0]), 21, g_ed_slider_id, mp2)
-    }
-    // Row 7: cam Y bounds (min / max)
-    {
-        CAM_RANGE :: f32(8192)
-        ry       := stat_y + uis(115)
-        half_slid := (slid_w2 - uis(PAD2)) * 0.5
-        rl.DrawTextEx(g_font, "CamY:", {pal_r.x + uis(2), ry + uis(2)}, uis(7.5), 0.5, lbl_col)
-        // min_y
-        s := fmt.bprintf(num_buf2[:], "%d", int(g_level_data.cam_lims[2])); num_buf2[len(s)] = 0
-        r := rl.Rectangle{slid_x2, ry, half_slid, uis(13)}
-        draw_slider(r, g_level_data.cam_lims[2], -CAM_RANGE, CAM_RANGE, cstring(&num_buf2[0]), 22, g_ed_slider_id, mp2)
-        // max_y
-        s = fmt.bprintf(num_buf2[:], "%d", int(g_level_data.cam_lims[3])); num_buf2[len(s)] = 0
-        r.x += half_slid + uis(PAD2)
-        draw_slider(r, g_level_data.cam_lims[3], -CAM_RANGE, CAM_RANGE, cstring(&num_buf2[0]), 23, g_ed_slider_id, mp2)
-    }
-    // Reset button: zero out cam_lims → revert to level defaults
-    {
-        ry  := stat_y + uis(133)
-        rr  := rl.Rectangle{pal_r.x + uis(4), ry, pal_r.width - uis(8), uis(11)}
-        hot := rl.CheckCollisionPointRec(mp2, rr)
-        rl.DrawRectangleRec(rr, rl.Color{40, 15, 15, 220} if hot else rl.Color{25, 10, 10, 200})
-        rl.DrawRectangleLinesEx(rr, uis(1), rl.Color{120, 50, 50, 180})
-        rs  := cstring("Reset cam to defaults")
-        rsz := rl.MeasureTextEx(g_font, rs, uis(7), 0.5)
-        rl.DrawTextEx(g_font, rs, {rr.x + (rr.width - rsz.x)*0.5, rr.y + (rr.height - rsz.y)*0.5},
-            uis(7), 0.5, rl.Color{200, 150, 150, 230})
-        if hot && rl.IsMouseButtonPressed(.LEFT) {
-            g_level_data.cam_lims = {}
-        }
-    }
-
-
-    sx := uis(ED_PAL_W) + uis(8)
-    zoom_buf: [64]u8
-    zoom_s := fmt.bprintf(zoom_buf[:63], "Zoom %.2fx  ID:%d  KeyID:%d",
-        g_ed_zoom, g_ed_target_level, g_ed_key_id)
-    zoom_buf[len(zoom_s)] = 0
-    rl.DrawTextEx(g_font, cstring(&zoom_buf[0]),
-        { sx, uis(10) }, uis(7.5), 0.5, rl.Color{150, 138, 100, 210})
 
     if g_ed_save_msg > 0 {
         alpha   := u8(clamp(g_ed_save_msg, 0, 1) * 255)
@@ -1890,178 +1288,62 @@ draw_editor_hud :: proc() {
             uis(22), 1, rl.Color{85, 210, 85, alpha})
     }
 
-    tab_x   := sw - uis(ED_TAB_W)
-    tab_col := rl.Color{45, 40, 28, 230} if g_ed_panel_open else rl.Color{30, 26, 20, 230}
-    rl.DrawRectangle(i32(tab_x), i32(uis(ED_BANNER_H)), i32(uis(ED_TAB_W)),
-        i32(sh - uis(ED_BANNER_H)), tab_col)
-    rl.DrawRectangleLinesEx({tab_x, uis(ED_BANNER_H), uis(ED_TAB_W), sh - uis(ED_BANNER_H)},
-        uis(1), rl.Color{120, 104, 60, 180})
-
-    tab_letters := [6]cstring{"L","E","V","E","L","S"}
-    letter_h    := uis(10)
-    total_h     := f32(6) * letter_h + f32(5) * uis(2)
-    start_y     := uis(ED_BANNER_H) + (sh - uis(ED_BANNER_H) - total_h) * 0.5
-    for i in 0..<6 {
-        ls := rl.MeasureTextEx(g_font, tab_letters[i], letter_h, 0.5)
-        rl.DrawTextEx(g_font, tab_letters[i],
-            {tab_x + uis(ED_TAB_W)*0.5 - ls.x*0.5, start_y + f32(i)*(letter_h + uis(2))},
-            letter_h, 0.5, rl.Color{200, 180, 100, 220})
-    }
-
-    if g_ed_panel_anim > 0.005 {
-        panel_x  := sw - uis(ED_TAB_W) - uis(ED_PANEL_W) * g_ed_panel_anim
-        rl.DrawRectangle(i32(panel_x), i32(uis(ED_BANNER_H)),
-            i32(uis(ED_PANEL_W)), i32(sh - uis(ED_BANNER_H)), rl.Color{18, 16, 12, 240})
-        rl.DrawRectangle(i32(panel_x), i32(uis(ED_BANNER_H)),
-            i32(uis(1.5)), i32(sh - uis(ED_BANNER_H)), rl.Color{150, 130, 60, 200})
-
-        mp := rl.GetMousePosition()
-        cy = uis(ED_BANNER_H) + uis(10)
-
-        hdr_cs := cstring("LEVELS")
-        hdr_sz := rl.MeasureTextEx(g_font, hdr_cs, uis(12), 1)
-        rl.DrawTextEx(g_font, hdr_cs,
-            {panel_x + uis(ED_PANEL_W)*0.5 - hdr_sz.x*0.5, cy},
-            uis(12), 1, rl.Color{220, 190, 80, 255})
-        cy += uis(16)
-
-        rl.DrawRectangle(i32(panel_x + uis(8)), i32(cy),
-            i32(uis(ED_PANEL_W) - uis(16)), i32(uis(1)), rl.Color{100, 88, 52, 180})
-        cy += uis(6)
-
-        rl.DrawTextEx(g_font, "NAME:", {panel_x + uis(8), cy}, uis(8), 0.5,
-            rl.Color{150, 138, 100, 210})
-        cy += uis(12)
-
-        name_rect  := rl.Rectangle{panel_x + uis(8), cy, uis(ED_PANEL_W) - uis(16), uis(20)}
-        nm          := &g_ed_level_names[g_ed_level]
-        nm[ED_NAME_LEN - 1] = 0
-        name_cs := cstring(&nm[0])
-
-        field_col := rl.Color{48, 44, 32, 255} if g_ed_name_editing else rl.Color{38, 34, 26, 255}
-        field_brd := rl.Color{220, 190, 80, 200} if g_ed_name_editing else rl.Color{80, 72, 48, 180}
-        rl.DrawRectangleRec(name_rect, field_col)
-        rl.DrawRectangleLinesEx(name_rect, uis(1), field_brd)
-        rl.DrawTextEx(g_font, name_cs,
-            {name_rect.x + uis(4), name_rect.y + uis(4)},
-            uis(9), 0.5, rl.Color{200, 185, 140, 230})
-
-        if g_ed_name_editing && int(rl.GetTime() * 2) % 2 == 0 {
-            name_sz  := rl.MeasureTextEx(g_font, name_cs, uis(9), 0.5)
-            cursor_x := name_rect.x + uis(4) + name_sz.x
-            rl.DrawRectangle(i32(cursor_x), i32(name_rect.y + uis(3)),
-                i32(uis(1.5)), i32(uis(14)), rl.Color{220, 190, 80, 220})
-        }
-        cy += uis(26)
-
-        half_w    := (uis(ED_PANEL_W) - uis(20)) * 0.5
-        save_rect := rl.Rectangle{panel_x + uis(8),            cy, half_w, uis(22)}
-        load_rect := rl.Rectangle{panel_x + uis(12) + half_w,  cy, half_w, uis(22)}
-        ed_panel_btn(mp, save_rect, "SAVE",
-            {30, 48, 30, 220}, {44, 70, 44, 220}, {60, 160, 70, 200}, {100, 220, 110, 230})
-        ed_panel_btn(mp, load_rect, "LOAD",
-            {28, 36, 52, 220}, {40, 54, 76, 220}, {60, 110, 180, 200}, {100, 160, 230, 230})
-        cy += uis(26)
-
-        clr_rect := rl.Rectangle{panel_x + uis(8), cy, uis(ED_PANEL_W) - uis(16), uis(22)}
-        ed_panel_btn(mp, clr_rect, "CLEAR LEVEL",
-            {52, 28, 28, 220}, {74, 40, 40, 220}, {160, 60, 60, 200}, {230, 100, 100, 230})
-        cy += uis(28)
-
-        rl.DrawRectangle(i32(panel_x + uis(8)), i32(cy),
-            i32(uis(ED_PANEL_W) - uis(16)), i32(uis(1)), rl.Color{100, 88, 52, 180})
-        cy += uis(4)
-
-        LIST_ROW_H :: f32(18)
-        list_height := sh - cy - uis(44)
-        list_count  := int(list_height / uis(LIST_ROW_H))
-        if list_count < 1 { list_count = 1 }
-
-        for row in 0..<list_count {
-            fi := g_ed_list_scroll + row
-            if fi >= g_ed_filtered_count { break }
-            idx    := g_ed_filtered[fi]
-            lv     := idx
-            ry     := cy + f32(row) * uis(LIST_ROW_H)
-            is_cur := lv == g_ed_level
-            is_hov := rl.CheckCollisionPointRec(mp,
-                rl.Rectangle{panel_x + uis(4), ry, uis(ED_PANEL_W) - uis(8), uis(LIST_ROW_H)})
-
-            bg: rl.Color
-            if      is_cur { bg = rl.Color{55, 50, 30, 200} }
-            else if is_hov { bg = rl.Color{36, 32, 22, 200} }
-            if bg.a > 0 {
-                rl.DrawRectangle(i32(panel_x + uis(4)), i32(ry),
-                    i32(uis(ED_PANEL_W) - uis(8)), i32(uis(LIST_ROW_H)), bg)
-            }
-
-            dot_exists := g_ed_level_exists[idx]
-            dot_cs  := cstring("*") if dot_exists else cstring("-")
-            dot_col := rl.Color{80, 200, 90, 220} if dot_exists else rl.Color{80, 72, 50, 180}
-            rl.DrawTextEx(g_font, dot_cs, {panel_x + uis(7), ry + uis(3)}, uis(9), 0.5, dot_col)
-
-            num_buf: [8]u8
-            num_s := fmt.bprintf(num_buf[:7], "%d", lv)
-            num_buf[len(num_s)] = 0
-            num_col := rl.Color{220, 200, 120, 255} if is_cur else rl.Color{160, 148, 110, 200}
-            rl.DrawTextEx(g_font, cstring(&num_buf[0]),
-                {panel_x + uis(18), ry + uis(3)}, uis(9), 0.5, num_col)
-
-            lv_nm := &g_ed_level_names[idx]
-            lv_nm[ED_NAME_LEN - 1] = 0
-            if lv_nm[0] != 0 {
-                nm_col := rl.Color{220, 205, 155, 255} if is_cur else rl.Color{185, 170, 128, 210}
-                rl.DrawTextEx(g_font, cstring(&lv_nm[0]),
-                    {panel_x + uis(38), ry + uis(3)}, uis(9), 0.5, nm_col)
-            }
-        }
-
-        new_rect := rl.Rectangle{panel_x + uis(8), sh - uis(36), uis(ED_PANEL_W) - uis(16), uis(24)}
-        ed_panel_btn(mp, new_rect, "+ NEW LEVEL",
-            {28, 44, 28, 220}, {36, 60, 36, 220}, {60, 160, 70, 200}, {100, 220, 110, 230})
-    }
-
-
     ed_insp_draw_panel()
 }
 
-// Called in the post-composite Mode2D pass (no render texture, no Y-flip),
-// so DrawTriangle must use CCW winding, opposite of the g_world_rt pass.
 draw_editor_cell_overlay :: proc() {
     if !g_editor_mode { return }
 
     cell_fill :: proc(top, right, bottom, left: rl.Vector2, col: rl.Color) {
-        // CCW in screen-space (Y-down) — required outside BeginTextureMode
         rl.DrawTriangle(top, bottom, right, col)
         rl.DrawTriangle(top, left,   bottom, col)
     }
 
     if g_hub_active {
+        if !g_ed_grid_visible { return }
+
         cs      := f32(g_ed_cell_size)
         half_cw := f32(g_ed_grid_cols) * f32(TILE_SIZE) * 0.5
         half_ch := f32(g_ed_grid_rows) * f32(TILE_SIZE) * 0.5
         num_x   := max(1, int(f32(g_ed_grid_cols) * f32(TILE_SIZE) / cs))
         num_y   := max(1, int(f32(g_ed_grid_rows) * f32(TILE_SIZE) / cs))
         scale   := max(1, g_ed_cell_size / HUB_CELL_RES)
-        for gx in 0..<num_x {
-            for gy in 0..<num_y {
-                wx := -half_cw + f32(gx) * cs
-                wy := -half_ch + f32(gy) * cs
-                // Cell coordinate at current cell_size, then map to HUB_CELL_RES key
-                vcx := int(math.floor(wx / cs))
-                vcy := int(math.floor(wy / cs))
-                tt  := hub_cell_at(vcx*scale, vcy*scale)
-                base := tile_base(tt)
-                col: rl.Color
-                if      base == .Wall || base == .Pillar { col = rl.Color{220,  40,  40, 120} }
-                else if base == .Floor                   { col = rl.Color{ 40, 200,  60, 120} }
-                else if base == .Water                   { col = rl.Color{ 40, 100, 220, 120} }
-                else                                     { col = rl.Color{ 60, 180,  80,  60} }
-                top    := world_to_iso_xy(wx,      wy)
-                right  := world_to_iso_xy(wx + cs, wy)
-                bottom := world_to_iso_xy(wx + cs, wy + cs)
-                left   := world_to_iso_xy(wx,      wy + cs)
-                cell_fill(top, right, bottom, left, col)
+
+        cell_col :: proc(bcx, bcy, gx, gy, scale: int) -> rl.Color {
+            #partial switch tile_base(hub_cell_at((bcx + gx) * scale, (bcy + gy) * scale)) {
+            case .Wall, .Pillar: return rl.Color{220,  40,  40, 120}
+            case .Floor:         return rl.Color{ 40, 200,  60, 120}
+            case .Water:         return rl.Color{ 40, 100, 220, 120}
+            }
+            return rl.Color{60, 180, 80, 60}
+        }
+
+        gx0, gy0, gx1, gy1 := ed_grid_visible_range(half_cw, half_ch, cs, num_x, num_y)
+
+        step := 1
+        if px := cs * g_camera.zoom; px > 0 {
+            step = max(1, int(math.ceil(4.0 / px)))
+        }
+
+        bcx := int(math.floor(-half_cw / cs))
+        bcy := int(math.floor(-half_ch / cs))
+
+        for gy := gy0; gy < gy1; gy += step {
+            gx := gx0
+            for gx < gx1 {
+                col := cell_col(bcx, bcy, gx, gy, scale)
+                run := gx + step
+                for run < gx1 && cell_col(bcx, bcy, run, gy, scale) == col { run += step }
+
+                wx0 := -half_cw + f32(gx)             * cs
+                wx1 := -half_cw + f32(min(run, gx1))  * cs
+                wy0 := -half_ch + f32(gy)             * cs
+                wy1 := -half_ch + f32(min(gy+step, gy1)) * cs
+                cell_fill(
+                    world_to_iso_xy(wx0, wy0), world_to_iso_xy(wx1, wy0),
+                    world_to_iso_xy(wx1, wy1), world_to_iso_xy(wx0, wy1), col,
+                )
+                gx = run
             }
         }
     } else {

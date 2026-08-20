@@ -1,10 +1,8 @@
 package main
 
-
 import rl   "vendor:raylib"
 import clay "../clay"
 import      "core:fmt"
-
 
 @(private = "file")
 STATUS_EFFECT_LABELS := [len(StatusEffectType)]string{
@@ -22,7 +20,6 @@ STATUS_EFFECT_COLORS := [len(StatusEffectType)]rl.Color{
     { 100, 185, 240, 255 },
 }
 
-
 draw_hud :: proc(w: ^World) {
     clay.BeginLayout()
 
@@ -31,7 +28,6 @@ draw_hud :: proc(w: ^World) {
 
         hp_ratio := clamp(h.current / h.max, 0, 1) if h.max > 0 else f32(0)
         en_ratio := clamp(h.energy / h.max_energy, 0, 1) if h.max_energy > 0 else f32(0)
-
 
         shield_ratio := f32(0)
         xp_ratio     := f32(0)
@@ -45,7 +41,6 @@ draw_hud :: proc(w: ^World) {
             }
         }
 
-
         hp_val_buf: [8]u8
         hp_val_s := fmt.bprintf(hp_val_buf[:7], "%.0f", h.current)
         hp_val_buf[len(hp_val_s)] = 0
@@ -55,10 +50,9 @@ draw_hud :: proc(w: ^World) {
             shield_ratio = shield_ratio,
             fill_col     = rl.Color{ 158, 32, 32, 255 },
             bg_col       = rl.Color{  24,  7,  7, 255 },
-            portrait_idx = 1,  // hp heart icon
+            portrait_idx = 1,
         }}
         copy(hp_orb.orb.value_text[:], hp_val_buf[:])
-
 
         en_val_buf: [8]u8
         en_val_s := fmt.bprintf(en_val_buf[:7], "%.0f", h.energy)
@@ -71,14 +65,11 @@ draw_hud :: proc(w: ^World) {
         }}
         copy(en_orb.orb.value_text[:], en_val_buf[:])
 
-
         ammo_data := UICustomData{ kind = .AmmoChip }
         _hud_fill_ammo_chip(w, &ammo_data.ammo)
 
-
         chip_data: [ABILITY_SLOT_COUNT]UICustomData
         _hud_fill_ability_chips(w, &chip_data)
-
 
         HUDStatusInfo :: struct { label: string, color: rl.Color, duration: f32 }
         se_buf: [len(StatusEffectType)]HUDStatusInfo
@@ -97,7 +88,6 @@ draw_hud :: proc(w: ^World) {
             }
         }
 
-
         ORB_SZ   := uis(80)
         CHIP_SZ  := uis(54)
         CHIP_GAP := u16(uis(6))
@@ -105,9 +95,7 @@ draw_hud :: proc(w: ^World) {
         VPAD     := u16(uis(5))
         HPAD     := u16(uis(6))
 
-
         ui_frame_reset()
-
 
         n_chips  := f32(ABILITY_SLOT_COUNT + 1)
         center_w := CHIP_SZ * n_chips + f32(CHIP_GAP) * (n_chips - 1)
@@ -131,14 +119,11 @@ draw_hud :: proc(w: ^World) {
             border          = { color = ui_clay_color(COL_RULE),
                                 width = { 1, 1, 1, 1, 0 } },
         }) {
-
-
             if clay.UI(clay.ID("HPOrb"))({
                 layout = { sizing = { clay.SizingFixed(ORB_SZ),
                                       clay.SizingFixed(ORB_SZ) } },
                 custom = { customData = ui_push_custom(hp_orb) },
             }) {}
-
 
             if clay.UI(clay.ID("HUDCenter"))({
                 layout = {
@@ -149,8 +134,6 @@ draw_hud :: proc(w: ^World) {
                                        clay.SizingFit() },
                 },
             }) {
-
-
                 if se_n > 0 {
                     SCHIP_W  := uis(36)
                     SCHIP_H  := uis(28)
@@ -203,7 +186,6 @@ draw_hud :: proc(w: ^World) {
                     }
                 }
 
-
                 if clay.UI(clay.ID("ChipRow"))({
                     layout = {
                         layoutDirection = .LeftToRight,
@@ -212,13 +194,11 @@ draw_hud :: proc(w: ^World) {
                         sizing          = { clay.SizingFit(), clay.SizingFit() },
                     },
                 }) {
-
                     if clay.UI(clay.ID("AmmoChip"))({
                         layout = { sizing = { clay.SizingFixed(CHIP_SZ),
                                               clay.SizingFixed(CHIP_SZ) } },
                         custom = { customData = ui_push_custom(ammo_data) },
                     }) {}
-
 
                     chip_ids := [ABILITY_SLOT_COUNT]string{
                         "ChipQ", "ChipE", "ChipF", "ChipG" }
@@ -231,14 +211,11 @@ draw_hud :: proc(w: ^World) {
                     }
                 }
 
-
                 ui_hbar("HUDXP", xp_ratio,
                     rl.Color{ 180, 148, 36, 255 },
                     rl.Color{  28,  22, 10, 255 },
                     XP_H)
-
             }
-
 
             if clay.UI(clay.ID("ENOrb"))({
                 layout = { sizing = { clay.SizingFixed(ORB_SZ),
@@ -254,13 +231,11 @@ draw_hud :: proc(w: ^World) {
                                       clay.SizingFixed(GOLD_SZ) } },
                 custom = { customData = ui_push_custom(gold_data) },
             }) {}
-
         }
     }
 
     cmds := clay.EndLayout()
 
-    // Draw the chip rail behind the Clay elements (Clay renders on top)
     if world_is_valid(w, w.player_id) {
         sw     := f32(rl.GetScreenWidth())
         sh     := f32(rl.GetScreenHeight())
@@ -283,13 +258,10 @@ draw_hud :: proc(w: ^World) {
 
     clay_raylib_render(&cmds)
 
-
     _draw_flask_charges(w)
-
 
     draw_interact_prompt(w)
 }
-
 
 @(private = "file")
 draw_interact_prompt :: proc(w: ^World) {
@@ -309,13 +281,11 @@ draw_interact_prompt :: proc(w: ^World) {
     px := sw * 0.5 - psz.x * 0.5
     py := sh * 0.60 - psz.y
 
-
     rl.DrawTextEx(g_font_body, prompt_cs, {px + uis(1.5), py + uis(1.5)},
         prompt_fs, 1, rl.Color{0, 0, 0, 180})
 
     rl.DrawTextEx(g_font_body, prompt_cs, {px, py},
         prompt_fs, 1, rl.Color{255, 235, 160, 240})
-
 
     key_cs  := cstring("[E]")
     key_fs  := uis(13)
@@ -328,7 +298,6 @@ draw_interact_prompt :: proc(w: ^World) {
         rl.Color{190, 190, 190, 210})
 }
 
-
 @(private = "file")
 _hud_fill_ammo_chip :: proc(w: ^World, chip: ^UICustomAmmo) {
     chip^ = {}
@@ -337,7 +306,6 @@ _hud_fill_ammo_chip :: proc(w: ^World, chip: ^UICustomAmmo) {
     equip := comp_get(w, w.player_id, .Equipment, EquipmentComp)
     wid   := equip.weapon_entity_id
     if !world_is_valid(w, wid) { return }
-
 
     if world_has_component(w, wid, .RenderConfig) {
         rc         := comp_get(w, wid, .RenderConfig, RenderConfigComp)
@@ -349,7 +317,6 @@ _hud_fill_ammo_chip :: proc(w: ^World, chip: ^UICustomAmmo) {
 
     if !world_has_component(w, wid, .Weapon) { return }
     wp := comp_get(w, wid, .Weapon, WeaponComp)
-
 
     if wp.ammo_max <= 0 {
         chip.is_melee  = true
@@ -400,7 +367,6 @@ _hud_fill_ability_chips :: proc(w: ^World, chips: ^[ABILITY_SLOT_COUNT]UICustomD
             chip.charge_glow = false
             chip.dance_glow  = false
 
-
             name_bytes := transmute([]u8)def.name
             n_copy     := min(len(name_bytes), 23)
             copy(chip.name_label[:], name_bytes[:n_copy])
@@ -408,7 +374,6 @@ _hud_fill_ability_chips :: proc(w: ^World, chips: ^[ABILITY_SLOT_COUNT]UICustomD
         }
     }
 }
-
 
 @(private = "file")
 _draw_flask_charges :: proc(w: ^World) {
@@ -420,7 +385,6 @@ _draw_flask_charges :: proc(w: ^World) {
 
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
-
 
     ORB_SZ   := uis(80)
     CHIP_SZ  := uis(54)
@@ -439,9 +403,7 @@ _draw_flask_charges :: proc(w: ^World) {
     pip_r     := uis(5)
     pip_gap   := uis(3)
 
-
     pip_y     := hud_bot - (ORB_SZ + VPAD * 2) - pip_r * 2 - uis(4)
-
 
     _draw_flask_pip_row(w, inv, .Flask1, pid,
         hud_left + HPAD, pip_y,
@@ -449,7 +411,6 @@ _draw_flask_charges :: proc(w: ^World) {
         rl.Color{ 180, 40,  40,  255 },
         rl.Color{ 100, 20,  20,  160 },
         "[1]")
-
 
     en_orb_left := hud_left + HPAD + ORB_SZ + CHIP_GAP + center_w + CHIP_GAP
     _draw_flask_pip_row(w, inv, .Flask2, pid,
@@ -474,7 +435,6 @@ _draw_flask_pip_row :: proc(
     rl.DrawTextEx(g_font_body, key_label, { px, py }, key_fs, 0.5,
         rl.Color{ 160, 150, 130, 180 })
 
-
     if !world_is_valid(w, fid) || !world_has_component(w, fid, .Flask) {
         rl.DrawTextEx(g_font_body, "empty", { px + uis(20), py }, key_fs, 0.5,
             rl.Color{ 80, 70, 60, 120 })
@@ -482,7 +442,6 @@ _draw_flask_pip_row :: proc(
     }
 
     fc := comp_get(w, fid, .Flask, FlaskComp)
-
 
     active_glow := false
     if world_has_component(w, pid, .FlaskEffect) {
@@ -496,7 +455,6 @@ _draw_flask_pip_row :: proc(
         cx := dot_x + f32(i) * (pip_r * 2 + pip_gap) + pip_r
         c  := col_filled if i < int(fc.charges) else col_empty
         if active_glow && i < int(fc.charges) {
-
             c.a = u8(180 + 75 * 0.5 * (1 + rl.GetTime() * 4))
         }
         rl.DrawCircleV({ cx, py + pip_r + uis(1) }, pip_r, c)

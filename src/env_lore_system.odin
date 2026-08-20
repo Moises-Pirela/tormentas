@@ -3,7 +3,6 @@ package main
 import "core:encoding/json"
 import "core:os"
 
-
 MAX_LORE_PAGES    :: 128
 MAX_RECORDINGS    :: 64
 LORE_BODY_LEN     :: 1024
@@ -14,7 +13,6 @@ LorePage :: struct {
     title:   [80]u8,
     body:    [LORE_BODY_LEN]u8,
 }
-
 
 Recording :: struct {
     id:         u8,
@@ -28,7 +26,6 @@ g_lore_db:      [MAX_LORE_PAGES]LorePage
 g_lore_count:   int
 g_recording_db: [MAX_RECORDINGS]Recording
 g_recording_count: int
-
 
 @(private = "file")
 lore_jf32 :: proc(v: json.Value) -> f32 {
@@ -132,7 +129,6 @@ lore_load_recordings :: proc(path: string) {
     }
 }
 
-
 lore_get_page :: proc(id: u8) -> (^LorePage, bool) {
     for i in 0..<g_lore_count {
         if g_lore_db[i].id == id { return &g_lore_db[i], true }
@@ -147,7 +143,6 @@ lore_get_recording :: proc(id: u8) -> (^Recording, bool) {
     return nil, false
 }
 
-
 phonograph_tick :: proc(w: ^World, entity_id: int, dt: f32) {
     if !world_has_component(w, entity_id, .Phonograph) { return }
     ph := comp_get(w, entity_id, .Phonograph, PhonographComp)
@@ -157,6 +152,5 @@ phonograph_tick :: proc(w: ^World, entity_id: int, dt: f32) {
     if ph.play_timer <= 0 {
         ph.is_playing  = false
         ph.play_timer  = 0
-
     }
 }

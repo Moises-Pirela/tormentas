@@ -34,7 +34,6 @@ camera_set_target_world :: proc(wx, wy: f32) {
     g_camera.target = iso
 }
 
-
 screen_dir_to_world_dir :: proc(dir: [2]f32) -> [2]f32 {
     wx := dir[1] + dir[0] * 0.5
     wy := dir[1] - dir[0] * 0.5
@@ -56,7 +55,6 @@ iso_tile_bounds :: proc(tx, ty: int) -> (center: rl.Vector2, top: rl.Vector2, ri
     wx := f32(tx * TILE_SIZE)
     wy := f32(ty * TILE_SIZE)
     center = world_to_iso_xy(wx + f32(TILE_SIZE) * 0.5, wy + f32(TILE_SIZE) * 0.5)
-
 
     half_w := ISO_TILE_W
     half_h := ISO_TILE_H
@@ -97,9 +95,4 @@ iso_draw_shadow_diamond :: proc(center: rl.Vector2, width, height: f32, color: r
         { center.x - hw, center.y },
         color,
     )
-}
-
-iso_shadow_offset :: proc(dir: [2]f32, dist: f32) -> rl.Vector2 {
-    base := world_to_iso_xy(dir[0] * dist, dir[1] * dist)
-    return { base.x, base.y + dist * 0.12 }
 }

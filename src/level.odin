@@ -1,6 +1,5 @@
 package main
 
-
 import "core:os"
 import "core:fmt"
 import "core:math"
@@ -8,9 +7,7 @@ import p2p "p2p"
 
 LEVEL_DIR :: "data/levels"
 
-
 g_available_levels: int
-
 
 level_scan_available :: proc() -> int {
     MAX_SCAN :: 64
@@ -19,7 +16,6 @@ level_scan_available :: proc() -> int {
     }
     return MAX_SCAN
 }
-
 
 EnemySpawnType :: enum u8 {
     Melee  = 1,
@@ -52,26 +48,9 @@ LevelNPC :: struct {
     npc_type: NPCType,
 }
 
-
 LevelBarrel :: struct {
     tx, ty: i16,
     btype:  u8,
-}
-
-
-DoorOpenType :: enum u8 {
-    None        = 0,
-    LeverSwitch = 1,
-    Key         = 2,
-}
-
-LevelDoor :: struct {
-    tx, ty:    i16,
-    link_id:   u8,
-    key_id:    u8,
-    open_type: DoorOpenType,
-    is_locked: bool,
-    label:     [24]u8,
 }
 
 LevelSwitch :: struct {
@@ -110,48 +89,30 @@ LevelData :: struct {
     npcs:         [dynamic]LevelNPC,
     barrels:      [dynamic]LevelBarrel,
 
-    doors:        [dynamic]LevelDoor,
     switches:     [dynamic]LevelSwitch,
     containers:   [dynamic]LevelContainer,
     lore_items:   [dynamic]LevelLoreItem,
     phonographs:  [dynamic]LevelPhonograph,
     key_pickups:  [dynamic]LevelKeyPickup,
     modules:      [dynamic]LevelModule,
+    entities:     [dynamic]LevelEntity,
     player_start: [2]f32,
     lighting:     LevelLightingConfig,
 
-    // Camera clamp bounds in world space [min_x, max_x, min_y, max_y].
-    // All zero = use level-size defaults.
     cam_lims: [4]f32,
 }
 
-level_effective_cam_lims :: proc() -> (min_x, max_x, min_y, max_y: f32) {
-    l := g_level_data.cam_lims
-    if l[0] == 0 && l[1] == 0 && l[2] == 0 && l[3] == 0 {
-        hw := f32(DEFAULT_LEVEL_COLS / 2 * TILE_SIZE)
-        hh := f32(DEFAULT_LEVEL_ROWS / 2 * TILE_SIZE)
-        return -hw, hw, -hh, hh
-    }
-    return l[0], l[1], l[2], l[3]
-}
-
-
 g_entity_defs: []EntityDef
-
 
 g_level_data: LevelData
 
-
 g_pending_level_switch: u16
-
 
 RAID_TIME      :: f32(30 * 60)
 EXTRACT_RADIUS :: f32(3 * TILE_SIZE)
 EXTRACT_TIME   :: f32(30.0)
 
-
 g_raid_timer: f32
-
 
 level_data_init :: proc() {
     g_level_data.spawns       = make([dynamic]SpawnPoint)
@@ -159,13 +120,13 @@ level_data_init :: proc() {
     g_level_data.lights       = make([dynamic]LevelLight)
     g_level_data.npcs         = make([dynamic]LevelNPC)
     g_level_data.barrels      = make([dynamic]LevelBarrel)
-    g_level_data.doors        = make([dynamic]LevelDoor)
     g_level_data.switches     = make([dynamic]LevelSwitch)
     g_level_data.containers   = make([dynamic]LevelContainer)
     g_level_data.lore_items   = make([dynamic]LevelLoreItem)
     g_level_data.phonographs  = make([dynamic]LevelPhonograph)
     g_level_data.key_pickups  = make([dynamic]LevelKeyPickup)
     g_level_data.modules      = make([dynamic]LevelModule)
+    g_level_data.entities     = make([dynamic]LevelEntity)
     g_level_data.lighting     = LIGHTING_CONFIG_DEFAULT
 }
 
@@ -175,20 +136,19 @@ level_data_destroy :: proc() {
     delete(g_level_data.lights)
     delete(g_level_data.npcs)
     delete(g_level_data.barrels)
-    delete(g_level_data.doors)
     delete(g_level_data.switches)
     delete(g_level_data.containers)
     delete(g_level_data.lore_items)
     delete(g_level_data.phonographs)
     delete(g_level_data.key_pickups)
+    level_entities_clear()
+    delete(g_level_data.entities)
 }
-
 
 @(private = "file")
 level_path :: proc(n: int) -> string {
     return fmt.tprintf("%s/level%02d.bin", LEVEL_DIR, n)
 }
-
 
 @(private = "file")
 lv_wb1 :: proc(buf: ^[dynamic]u8, v: u8)  { append(buf, v) }
@@ -206,6 +166,12 @@ lv_wbi16 :: proc(buf: ^[dynamic]u8, v: i16) { lv_wb2(buf, cast(u16)v) }
 
 @(private = "file")
 lv_wbf32 :: proc(buf: ^[dynamic]u8, v: f32) { lv_wb4(buf, transmute(u32)v) }
+
+lv_wstr :: proc(buf: ^[dynamic]u8, s: string) {
+    n := min(len(s), 255)
+    lv_wb1(buf, u8(n))
+    for c in transmute([]u8)s[:n] { lv_wb1(buf, c) }
+}
 
 @(private = "file")
 lv_rb1 :: proc(raw: []u8, cur: int) -> (val: u8, next: int, ok: bool) {
@@ -238,20 +204,25 @@ lv_rbf32 :: proc(raw: []u8, cur: int) -> (val: f32, next: int, ok: bool) {
     return transmute(f32)v, c, o
 }
 
+lv_rstr :: proc(raw: []u8, cur: int) -> (val: string, next: int, ok: bool) {
+    n, c, o := lv_rb1(raw, cur)
+    if !o { return "", cur, false }
+    if c + int(n) > len(raw) { return "", cur, false }
+    buf := make([]u8, int(n), context.temp_allocator)
+    copy(buf, raw[c:c + int(n)])
+    return string(buf), c + int(n), true
+}
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
-LEVEL_VERSION :: u16(13)
-
+LEVEL_VERSION :: u16(15)
 
 level_save :: proc(n: int) {
     os.make_directory(LEVEL_DIR)
 
     buf := make([dynamic]u8, 0, 4096, context.temp_allocator)
 
-
     append(&buf, LEVEL_MAGIC[0], LEVEL_MAGIC[1], LEVEL_MAGIC[2], LEVEL_MAGIC[3])
     lv_wb2(&buf, LEVEL_VERSION)
-
 
     lv_wb4(&buf, u32(len(g_tilemap)))
     for k, v in g_tilemap {
@@ -260,14 +231,12 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(v))
     }
 
-
     lv_wb4(&buf, u32(len(g_level_data.spawns)))
     for sp in g_level_data.spawns {
         lv_wbi16(&buf, sp.tx)
         lv_wbi16(&buf, sp.ty)
         lv_wb1 (&buf, u8(sp.enemy_type))
     }
-
 
     lv_wb4(&buf, u32(len(g_level_data.exits)))
     for ex in g_level_data.exits {
@@ -276,10 +245,8 @@ level_save :: proc(n: int) {
         lv_wb2 (&buf, ex.target_level)
     }
 
-
     lv_wbf32(&buf, g_level_data.player_start[0])
     lv_wbf32(&buf, g_level_data.player_start[1])
-
 
     lv_wb4(&buf, u32(len(g_level_data.npcs)))
     for npc in g_level_data.npcs {
@@ -287,7 +254,6 @@ level_save :: proc(n: int) {
         lv_wbi16(&buf, npc.ty)
         lv_wb1 (&buf, u8(npc.npc_type))
     }
-
 
     lv_wb4(&buf, u32(len(g_level_data.lights)))
     for lt in g_level_data.lights {
@@ -299,7 +265,6 @@ level_save :: proc(n: int) {
         lv_wbf32(&buf, lt.radius)
         lv_wbf32(&buf, lt.intensity)
     }
-
 
     cfg := lighting_config_capture()
     lv_wbf32(&buf, cfg.sun_dir_x)
@@ -338,6 +303,7 @@ level_save :: proc(n: int) {
     lv_wbf32(&buf, cfg.fog_density)
     lv_wbf32(&buf, cfg.fog_scatter)
 
+    lv_wbf32(&buf, cfg.sun_elevation)
 
     lv_wb4(&buf, u32(len(g_level_data.barrels)))
     for b in g_level_data.barrels {
@@ -346,26 +312,12 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, b.btype)
     }
 
-
     lv_wb4(&buf, u32(len(g_overlay_map)))
     for k, v in g_overlay_map {
         lv_wbi16(&buf, i16(k[0]))
         lv_wbi16(&buf, i16(k[1]))
         lv_wb1 (&buf, u8(v))
     }
-
-
-    lv_wb4(&buf, u32(len(g_level_data.doors)))
-    for d in g_level_data.doors {
-        lv_wbi16(&buf, d.tx)
-        lv_wbi16(&buf, d.ty)
-        lv_wb1  (&buf, d.link_id)
-        lv_wb1  (&buf, d.key_id)
-        lv_wb1  (&buf, u8(d.open_type))
-        lv_wb1  (&buf, u8(d.is_locked))
-        for b in d.label { lv_wb1(&buf, b) }
-    }
-
 
     lv_wb4(&buf, u32(len(g_level_data.switches)))
     for s in g_level_data.switches {
@@ -374,7 +326,6 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, s.link_id)
         lv_wb1  (&buf, s.flags)
     }
-
 
     lv_wb4(&buf, u32(len(g_level_data.containers)))
     for c in g_level_data.containers {
@@ -386,14 +337,12 @@ level_save :: proc(n: int) {
         lv_wb2  (&buf, c.gold_max)
     }
 
-
     lv_wb4(&buf, u32(len(g_level_data.lore_items)))
     for li in g_level_data.lore_items {
         lv_wbi16(&buf, li.tx)
         lv_wbi16(&buf, li.ty)
         lv_wb1  (&buf, li.lore_id)
     }
-
 
     lv_wb4(&buf, u32(len(g_level_data.phonographs)))
     for ph in g_level_data.phonographs {
@@ -402,7 +351,6 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, ph.recording_id)
     }
 
-
     lv_wb4(&buf, u32(len(g_level_data.key_pickups)))
     for kp in g_level_data.key_pickups {
         lv_wbi16(&buf, kp.tx)
@@ -410,15 +358,12 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, kp.key_id)
     }
 
-    // ver 10: hub editor grid settings
     lv_wb2(&buf, u16(g_ed_cell_size))
     lv_wb2(&buf, u16(g_ed_grid_cols))
     lv_wb2(&buf, u16(g_ed_grid_rows))
 
-    // ver 11: camera clamp bounds [min_x, max_x, min_y, max_y]
     for v in g_level_data.cam_lims { lv_wbf32(&buf, v) }
 
-    // ver 12: hub cell map at HUB_CELL_RES resolution
     lv_wb4(&buf, u32(len(g_hub_cell_map)))
     for k, v in g_hub_cell_map {
         lv_wbi16(&buf, i16(k[0]))
@@ -426,7 +371,6 @@ level_save :: proc(n: int) {
         lv_wb1  (&buf, u8(v))
     }
 
-    // ver 13: placed prerendered modules (stored by manifest id for stability)
     lv_wb4(&buf, u32(len(g_level_data.modules)))
     for m in g_level_data.modules {
         name := ""
@@ -435,6 +379,21 @@ level_save :: proc(n: int) {
         for c in transmute([]u8)name { lv_wb1(&buf, c) }
         lv_wbi16(&buf, m.tx)
         lv_wbi16(&buf, m.ty)
+    }
+
+    lv_wb4(&buf, u32(len(g_level_data.entities)))
+    for e in g_level_data.entities {
+        lv_wstr(&buf, e.def)
+        lv_wbf32(&buf, e.position[0])
+        lv_wbf32(&buf, e.position[1])
+        lv_wbf32(&buf, e.position[2])
+        lv_wbf32(&buf, e.rotation)
+        lv_wb4(&buf, u32(len(e.overrides)))
+        for o in e.overrides {
+            lv_wb1(&buf, u8(o.component))
+            lv_wstr(&buf, o.path)
+            lv_wstr(&buf, o.value)
+        }
     }
 
     os.write_entire_file(level_path(n), buf[:])
@@ -452,19 +411,18 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
-        clear(&g_level_data.doors)
         clear(&g_level_data.switches)
         clear(&g_level_data.containers)
         clear(&g_level_data.lore_items)
         clear(&g_level_data.phonographs)
         clear(&g_level_data.key_pickups)
         clear(&g_level_data.modules)
+        level_entities_clear()
         g_level_data.player_start = {}
         return
     }
 
     cur := 0
-
 
     if raw[0] != 'T' || raw[1] != 'R' || raw[2] != 'M' || raw[3] != 'T' {
         clear(&g_tilemap)
@@ -474,7 +432,6 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
-        clear(&g_level_data.doors)
         clear(&g_level_data.switches)
         clear(&g_level_data.containers)
         clear(&g_level_data.lore_items)
@@ -485,9 +442,9 @@ level_load :: proc(n: int) {
     }
     cur = 4
 
-
     ver, ver_c, ver_ok := lv_rb2(raw, cur)
-    if !ver_ok || ver < 1 || ver > 13 {
+
+    if !ver_ok || ver < 1 || ver > LEVEL_VERSION {
         clear(&g_tilemap)
         clear(&g_overlay_map)
         clear(&g_level_data.spawns)
@@ -495,7 +452,6 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
-        clear(&g_level_data.doors)
         clear(&g_level_data.switches)
         clear(&g_level_data.containers)
         clear(&g_level_data.lore_items)
@@ -505,7 +461,6 @@ level_load :: proc(n: int) {
         return
     }
     cur = ver_c
-
 
     clear(&g_tilemap)
     clear(&g_overlay_map)
@@ -518,8 +473,6 @@ level_load :: proc(n: int) {
         t,  tc2, tok  := lv_rb1  (raw, cur);  if !tok  { return };  cur = tc2
         key := [2]int{int(x), int(y)}
         if ver < 6 {
-            // Pre-v6: Oil and Fire were encoded as tile bytes 4 and 5.
-            // Pillar and Floor variants did not exist yet in that era.
             switch t {
             case 4:
                 g_tilemap[key]     = .Floor
@@ -537,7 +490,6 @@ level_load :: proc(n: int) {
         }
     }
 
-
     clear(&g_level_data.spawns)
     sc, sc_c, sc_ok := lv_rb4(raw, cur)
     if !sc_ok { return }
@@ -553,7 +505,6 @@ level_load :: proc(n: int) {
         })
     }
 
-
     clear(&g_level_data.exits)
     exc, exc_c, exc_ok := lv_rb4(raw, cur)
     if !exc_ok { return }
@@ -564,7 +515,6 @@ level_load :: proc(n: int) {
         tl, tlc, tlok := lv_rb2  (raw, cur);  if !tlok { return };  cur = tlc
         append(&g_level_data.exits, LevelExit{tx = x, ty = y, target_level = tl})
     }
-
 
     px, pxc, pxok := lv_rbf32(raw, cur)
     if pxok {
@@ -595,7 +545,6 @@ level_load :: proc(n: int) {
         }
     }
 
-
     clear(&g_level_data.lights)
     if ver >= 2 {
         lc, lc_c, lc_ok := lv_rb4(raw, cur)
@@ -617,7 +566,6 @@ level_load :: proc(n: int) {
             }
         }
     }
-
 
     if ver >= 3 {
         lf :: proc(raw: []u8, cur: int, dst: ^f32) -> (next: int, ok: bool) {
@@ -662,8 +610,11 @@ level_load :: proc(n: int) {
         cur, ok1 = lf(raw, cur, &c.fog_color_b);            if !ok1 { return }
         cur, ok1 = lf(raw, cur, &c.fog_density);            if !ok1 { return }
         cur, ok1 = lf(raw, cur, &c.fog_scatter);            if !ok1 { return }
-    }
 
+        if ver >= 14 {
+            cur, ok1 = lf(raw, cur, &c.sun_elevation);      if !ok1 { return }
+        }
+    }
 
     clear(&g_level_data.barrels)
     if ver >= 5 {
@@ -681,7 +632,6 @@ level_load :: proc(n: int) {
         }
     }
 
-
     if ver >= 6 {
         oc, oc_c, oc_ok := lv_rb4(raw, cur)
         if oc_ok {
@@ -697,43 +647,6 @@ level_load :: proc(n: int) {
             }
         }
     }
-
-
-    clear(&g_level_data.doors)
-    if ver >= 7 {
-        dc, dc_c, dc_ok := lv_rb4(raw, cur)
-        if dc_ok {
-            cur = dc_c
-            for _ in 0..<dc {
-                dx,  dxc,  dxok  := lv_rbi16(raw, cur); if !dxok  { break }; cur = dxc
-                dy,  dyc,  dyok  := lv_rbi16(raw, cur); if !dyok  { break }; cur = dyc
-                dli, dlic, dliok := lv_rb1  (raw, cur); if !dliok { break }; cur = dlic
-                dki, dkic, dkiok := lv_rb1  (raw, cur); if !dkiok { break }; cur = dkic
-                dot  := DoorOpenType(0)
-                dlk  := false
-                dlbl := [24]u8{}
-                if ver >= 8 {
-                    dov, dovc, dovok := lv_rb1(raw, cur); if !dovok { break }; cur = dovc
-                    dlv, dlvc, dlvok := lv_rb1(raw, cur); if !dlvok { break }; cur = dlvc
-                    dot = DoorOpenType(clamp(int(dov), 0, 2))
-                    dlk = dlv != 0
-                }
-                if ver >= 9 {
-                    ok9 := true
-                    for i in 0..<24 {
-                        b, bc, bok := lv_rb1(raw, cur); if !bok { ok9 = false; break }
-                        dlbl[i] = b; cur = bc
-                    }
-                    if !ok9 { break }
-                }
-                append(&g_level_data.doors, LevelDoor{
-                    tx = dx, ty = dy, link_id = dli, key_id = dki,
-                    open_type = dot, is_locked = dlk, label = dlbl,
-                })
-            }
-        }
-    }
-
 
     clear(&g_level_data.switches)
     if ver >= 7 {
@@ -751,7 +664,6 @@ level_load :: proc(n: int) {
             }
         }
     }
-
 
     clear(&g_level_data.containers)
     if ver >= 7 {
@@ -776,7 +688,6 @@ level_load :: proc(n: int) {
         }
     }
 
-
     clear(&g_level_data.lore_items)
     if ver >= 7 {
         lic, licc, licok := lv_rb4(raw, cur)
@@ -792,7 +703,6 @@ level_load :: proc(n: int) {
             }
         }
     }
-
 
     clear(&g_level_data.phonographs)
     if ver >= 7 {
@@ -810,7 +720,6 @@ level_load :: proc(n: int) {
         }
     }
 
-
     clear(&g_level_data.key_pickups)
     if ver >= 7 {
         kpc, kpcc, kpcok := lv_rb4(raw, cur)
@@ -827,7 +736,6 @@ level_load :: proc(n: int) {
         }
     }
 
-    // ver 10: hub editor grid settings
     g_ed_cell_size = TILE_SIZE
     g_ed_grid_cols = DEFAULT_LEVEL_COLS
     g_ed_grid_rows = DEFAULT_LEVEL_ROWS
@@ -837,7 +745,6 @@ level_load :: proc(n: int) {
         gr, grc, grok := lv_rb2(raw, cur); if grok { cur = grc; g_ed_grid_rows = max(1,  int(gr)) }
     }
 
-    // ver 11: camera clamp bounds
     g_level_data.cam_lims = {}
     if ver >= 11 {
         for i in 0..<4 {
@@ -846,7 +753,6 @@ level_load :: proc(n: int) {
         }
     }
 
-    // ver 12: hub cell map at HUB_CELL_RES resolution
     clear(&g_hub_cell_map)
     if ver >= 12 {
         hc, hcc, hcok := lv_rb4(raw, cur)
@@ -860,7 +766,6 @@ level_load :: proc(n: int) {
             }
         }
     } else {
-        // Derive from g_tilemap at TILE_SIZE resolution for old files
         scale := TILE_SIZE / HUB_CELL_RES
         for k, tt in g_tilemap {
             for sy in 0..<scale {
@@ -871,8 +776,8 @@ level_load :: proc(n: int) {
         }
     }
 
-    // ver 13: placed prerendered modules
     clear(&g_level_data.modules)
+    level_entities_clear()
     if ver >= 13 {
         mc, mcc, mcok := lv_rb4(raw, cur)
         if mcok {
@@ -892,6 +797,30 @@ level_load :: proc(n: int) {
                     def_idx = module_index_by_name(string(name_buf)),
                     tx = mtx, ty = mty,
                 })
+            }
+        }
+    }
+
+    if ver >= 15 {
+        ec, ecc, ecok := lv_rb4(raw, cur)
+        if ecok {
+            cur = ecc
+            for _ in 0..<ec {
+                edef, edc, edok := lv_rstr(raw, cur);  if !edok  { break }; cur = edc
+                epx,  epxc, epxok := lv_rbf32(raw, cur); if !epxok { break }; cur = epxc
+                epy,  epyc, epyok := lv_rbf32(raw, cur); if !epyok { break }; cur = epyc
+                epz,  epzc, epzok := lv_rbf32(raw, cur); if !epzok { break }; cur = epzc
+                erot, erc,  erok  := lv_rbf32(raw, cur); if !erok  { break }; cur = erc
+
+                eidx := level_entity_add(edef, {epx, epy, epz}, erot)
+
+                eoc, eocc, eocok := lv_rb4(raw, cur); if !eocok { break }; cur = eocc
+                for _ in 0..<eoc {
+                    ecmp, ecc2, ecok2 := lv_rb1(raw, cur);  if !ecok2 { break }; cur = ecc2
+                    epath, epc, epok  := lv_rstr(raw, cur); if !epok  { break }; cur = epc
+                    eval, evc, evok   := lv_rstr(raw, cur); if !evok  { break }; cur = evc
+                    level_entity_set_override(eidx, ComponentType(ecmp), epath, eval)
+                }
             }
         }
     }
@@ -973,59 +902,10 @@ level_apply :: proc(w: ^World) {
         })
     }
 
-
     for b in g_level_data.barrels {
         wx := f32(int(b.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
         spawn_barrel(w, wx, wy, BarrelType(b.btype))
-    }
-
-
-    for d in g_level_data.doors {
-        wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
-        wy := f32(int(d.ty) * TILE_SIZE + TILE_SIZE / 2)
-        id := spawn_from_def(w, find_entity_def(g_entity_defs, "env_door"))
-        if id == INVALID_ENTITY { continue }
-        comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
-
-
-        prompt_cs: cstring
-        switch d.open_type {
-        case .None:        prompt_cs = t(.INTERACT_UNLOCK) if d.key_id != 0 else t(.INTERACT_OPEN)
-        case .LeverSwitch: prompt_cs = t(.INTERACT_OPENS_ELSEWHERE)
-        case .Key:         prompt_cs = t(.INTERACT_UNLOCK) if d.is_locked else t(.INTERACT_OPEN)
-        }
-        lbl := d.label
-        if lbl[0] != 0 { prompt_cs = loc_lookup(cstring(&lbl[0])) }
-
-        prompt: [48]u8
-        copy(prompt[:], string(prompt_cs))
-        comp_set(w, id, .Interactable, InteractableComp{
-            radius = f32(TILE_SIZE) * 1.5,
-            prompt = prompt,
-            active = true,
-        })
-        comp_set(w, id, .Openable, OpenableComp{
-            is_open      = false,
-            tile         = {int(d.tx), int(d.ty)},
-            link_id      = d.link_id,
-            blocks_sight = true,
-        })
-
-
-        if d.open_type == .LeverSwitch {
-            comp_set(w, id, .Lockable, LockableComp{
-                key_id    = 0,
-                is_locked = true,
-            })
-        } else if d.key_id != 0 {
-
-            initially_locked := d.is_locked || d.open_type == .None
-            comp_set(w, id, .Lockable, LockableComp{
-                key_id    = d.key_id,
-                is_locked = initially_locked,
-            })
-        }
     }
 
     for s in g_level_data.switches {
@@ -1141,6 +1021,8 @@ level_apply :: proc(w: ^World) {
             label  = label,
         })
     }
+
+    level_entities_apply(w)
 }
 
 spawn_players :: proc(w: ^World) {
@@ -1184,9 +1066,7 @@ spawn_players :: proc(w: ^World) {
         w.player_ids[slot] = pid
     }
 
-
     w.player_id = w.player_ids[w.local_player_slot]
-
 
     if ps[0] != 0 || ps[1] != 0 {
         g_camera.target = { ps[0], ps[1] }
@@ -1235,7 +1115,6 @@ _clear_all_shop_stock :: proc(w: ^World) {
         case .AbilityVendor:
             ability_vendor_clear_stock(w, id)
         case .MutationWorkbench, .Stash, .QuestBoard, .Quartermaster, .Surgeon:
-
         }
     }
 }
@@ -1333,7 +1212,6 @@ hub_apply_quest_npcs :: proc(w: ^World) {
     }
 }
 
-
 spawn_extraction_at_tile :: proc(w: ^World, tx, ty: int) {
     ext_id := world_create_entity(w)
     comp_set(w, ext_id, .Transform, TransformComp{
@@ -1345,21 +1223,17 @@ spawn_extraction_at_tile :: proc(w: ^World, tx, ty: int) {
     })
 }
 
-
 spawn_extraction_point :: proc(w: ^World) {
     spawn_extraction_at_tile(w, 12, 7)
 }
 
 level_do_switch :: proc(w: ^World, n: int) {
-
-
     fire_system_reset()
     level_clear(w)
     director_init()
     level_load(n)
     level_apply(w)
     door_init_blockers(w)
-
 
     found_zone := false
     for ex in g_level_data.exits {
@@ -1374,7 +1248,6 @@ level_do_switch :: proc(w: ^World, n: int) {
 
     spawn_players(w)
 }
-
 
 extraction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update       { return }
@@ -1439,7 +1312,6 @@ on_player_extract :: proc(w: ^World) {
     }
     raid_result_gold = gold_earned
 
-
     serums_earned := 0
     if world_has_component(w, w.player_id, .MutationContainer) {
         mc            := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
@@ -1458,7 +1330,6 @@ on_player_extract :: proc(w: ^World) {
 
     set_playing_state(.ExtractScreen)
 }
-
 
 on_player_death :: proc(w: ^World) {
     g_lifetime_stats.deaths += 1
@@ -1484,8 +1355,6 @@ level_exit_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         xPos, yPos := world_to_tile(pos[0], pos[1])
 
         for ex in g_level_data.exits {
-
-
             if ex.target_level == 0 { continue }
             if int(ex.tx) == xPos && int(ex.ty) == yPos {
                 on_player_extract(w)

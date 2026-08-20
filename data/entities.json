@@ -1,5 +1,35 @@
 [
     {
+        "name": "greybox_box",
+        "render": { "name": "Greybox Box" },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "greybox": { "shape": "box", "size": [64, 64, 64], "color": [150, 150, 158], "solid": true }
+    },
+    {
+        "name": "greybox_platform",
+        "render": { "name": "Greybox Platform" },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "greybox": { "shape": "platform", "size": [128, 128, 16], "color": [138, 146, 132], "solid": true }
+    },
+    {
+        "name": "greybox_ramp",
+        "render": { "name": "Greybox Ramp" },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "greybox": { "shape": "ramp", "size": [128, 64, 64], "color": [156, 142, 120], "solid": false }
+    },
+    {
+        "name": "greybox_wedge",
+        "render": { "name": "Greybox Wedge" },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "greybox": { "shape": "wedge", "size": [64, 64, 64], "color": [140, 132, 150], "solid": true }
+    },
+    {
+        "name": "greybox_pillar",
+        "render": { "name": "Greybox Pillar" },
+        "transform": { "position": [0, 0, 0], "rotation": 0 },
+        "greybox": { "shape": "cylinder", "size": [40, 40, 160], "color": [160, 156, 148], "solid": true }
+    },
+    {
         "name": "player",
         "render":    { "name": "Sheriff", "sprite": "player_sheriff", "sprite_scale": 3.0, "layer": "sprite", "world_size": 70, "show_dir_tip": true },
         "transform": { "position": [0, 0, 0], "rotation": 0 },
@@ -334,44 +364,59 @@
     },
     {
         "name": "env_door",
-        "render":    { "name": "Door", "sprite": "env_door", "sprite_scale": 1.0, "layer": "sprite", "world_size": 38 },
-        "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 18, "faction": 2, "is_trigger": true }
+        "render":       { "name": "Door", "sprite": "env_door", "sprite_scale": 1.0, "layer": "sprite", "world_size": 38 },
+        "transform":    { "position": [0, 0, 0] },
+        "collider":     { "radius": 18, "faction": 2, "is_trigger": true },
+        "interactable": { "radius": 96, "prompt": "INTERACT_OPEN", "active": true },
+        "openable":     { "is_open": false, "link_id": 0, "blocks_sight": true },
+        "lockable":     { "key_id": 0, "is_locked": false }
     },
     {
         "name": "env_switch",
-        "render":    { "name": "Lever", "sprite": "env_switch", "sprite_scale": 1.0, "layer": "sprite", "world_size": 30 },
-        "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 12, "faction": 2, "is_trigger": true }
+        "render":         { "name": "Lever", "sprite": "env_switch", "sprite_scale": 1.0, "layer": "sprite", "world_size": 30 },
+        "transform":      { "position": [0, 0, 0] },
+        "collider":       { "radius": 12, "faction": 2, "is_trigger": true },
+        "interactable":   { "radius": 80, "prompt": "INTERACT_PULL", "active": true },
+        "signal_emitter": { "link_id": 0, "is_on": false, "is_toggle": true }
     },
     {
         "name": "env_chest",
         "render":    { "name": "Chest", "sprite": "env_chest", "sprite_scale": 1.0, "layer": "sprite", "world_size": 36 },
         "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 16, "faction": 2 }
+        "collider":     { "radius": 16, "faction": 2 },
+        "interactable": { "radius": 88, "prompt": "INTERACT_OPEN", "active": true },
+        "container":    { "kind": "chest", "loot_table_id": 0, "gold_min": 10, "gold_max": 40 }
     },
     {
         "name": "env_crate",
         "render":    { "name": "Crate", "sprite": "env_crate", "sprite_scale": 1.0, "layer": "sprite", "world_size": 36 },
         "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 16, "faction": 2 }
+        "collider":     { "radius": 16, "faction": 2 },
+        "interactable": { "radius": 88, "prompt": "INTERACT_OPEN", "active": true },
+        "container":    { "kind": "crate", "loot_table_id": 0, "gold_min": 0, "gold_max": 15 }
     },
     {
         "name": "env_lore_item",
         "render":    { "name": "Document", "sprite": "env_lore_item", "sprite_scale": 1.0, "layer": "sprite", "world_size": 26 },
         "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 10, "faction": 2, "is_trigger": true }
+        "collider":     { "radius": 10, "faction": 2, "is_trigger": true },
+        "interactable": { "radius": 72, "prompt": "INTERACT_READ", "active": true },
+        "lore_item":    { "lore_id": 0 }
     },
     {
         "name": "env_phonograph",
         "render":    { "name": "Phonograph", "sprite": "env_phonograph", "sprite_scale": 1.0, "layer": "sprite", "world_size": 36 },
         "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 16, "faction": 2, "is_trigger": true }
+        "collider":     { "radius": 16, "faction": 2, "is_trigger": true },
+        "interactable": { "radius": 88, "prompt": "INTERACT_PLAY", "active": true },
+        "phonograph":   { "recording_id": 0 }
     },
     {
         "name": "env_key",
         "render":    { "name": "Key", "sprite": "env_key", "sprite_scale": 1.0, "layer": "sprite", "world_size": 20 },
         "transform": { "position": [0, 0, 0] },
-        "collider":  { "radius": 10, "faction": 2, "is_trigger": true }
+        "collider":     { "radius": 10, "faction": 2, "is_trigger": true },
+        "interactable": { "radius": 72, "prompt": "INTERACT_TAKE", "active": true },
+        "key_pickup":   { "key_id": 0, "label": "" }
     }
 ]

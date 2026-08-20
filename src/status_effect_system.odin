@@ -11,12 +11,10 @@ status_effect_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
             sec := comp_get(w, id, .StatusEffect, StatusEffectComp)
 
-
             if status_effect_is_active(sec, .Wet) {
                 sec.effects[int(StatusEffectType.Burn)].duration  = 0
                 sec.effects[int(StatusEffectType.Oiled)].duration = 0
             }
-
 
             for et in 0..<len(StatusEffectType) {
                 stype  := StatusEffectType(et)
@@ -25,7 +23,6 @@ status_effect_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 if effect.duration <= 0 { continue }
 
                 effect.duration -= dt
-
 
                 #partial switch stype {
                 case .Poison:
@@ -68,7 +65,6 @@ _apply_poison_damage :: proc(w: ^World, id: int, effect: ^StatusEffect, dt: f32)
 
 @(private = "file")
 _apply_burn_damage :: proc(w: ^World, id: int, effect: ^StatusEffect, dt: f32) {
-
     if !world_has_component(w, id, .Health) { return }
     if !world_has_component(w, id, .Flammable) {return }
 

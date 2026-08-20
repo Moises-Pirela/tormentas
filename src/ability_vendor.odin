@@ -1,17 +1,14 @@
 package main
 
-
 import "core:math/rand"
 import "core:fmt"
 import rl   "vendor:raylib"
 import clay "../clay"
 
-
 MAX_ABILITY_VENDOR_STOCK  :: 4
 ABILITY_VENDOR_SERUM_COST :: 2
 
 ABILITY_VENDOR_PROMPT_DIST :: f32(85)
-
 
 AVSlot :: struct {
     item_entity: int,
@@ -20,9 +17,7 @@ AVSlot :: struct {
 g_av_stock:     [MAX_NPC_ENTITIES][MAX_ABILITY_VENDOR_STOCK]AVSlot
 g_av_stk_count: [MAX_NPC_ENTITIES]int
 
-
 g_ability_vendor_npc_id: int = INVALID_ENTITY
-
 
 ability_vendor_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
@@ -34,7 +29,6 @@ ability_vendor_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
 
     pool := ABILITY_DROP_POOL
     n    := min(MAX_ABILITY_VENDOR_STOCK, len(pool))
-
 
     indices: [len(ABILITY_DROP_POOL)]int
     for i in 0..<len(pool) { indices[i] = i }
@@ -53,7 +47,6 @@ ability_vendor_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
     }
 }
 
-
 ability_vendor_clear_stock :: proc(w: ^World, npc_id: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
     n := g_av_stk_count[slot_idx]
@@ -67,14 +60,12 @@ ability_vendor_clear_stock :: proc(w: ^World, npc_id: int) {
     g_av_stk_count[slot_idx] = 0
 }
 
-
 update_ability_vendor :: proc(w: ^World) {
     pid := w.player_id
     if !world_is_valid(w, pid) { return }
     if !world_has_component(w, pid, .Transform) { return }
 
     if ui_has(.AbilityVendor) {
-
         return
     }
 
@@ -99,7 +90,6 @@ update_ability_vendor :: proc(w: ^World) {
         }
     }
 }
-
 
 draw_ability_vendor_world :: proc(w: ^World) {
     if !world_is_valid(w, w.player_id) { return }
@@ -141,7 +131,6 @@ draw_ability_vendor_world :: proc(w: ^World) {
     }
 }
 
-
 draw_ability_vendor_hud :: proc(w: ^World) {
     if !ui_has(.AbilityVendor) { return }
     if !world_is_valid(w, g_ability_vendor_npc_id) {
@@ -175,7 +164,6 @@ draw_ability_vendor_hud :: proc(w: ^World) {
         title_fs   = uis(20),
     })
     {
-        // Header row: subtitle (left) + serum balance (right)
         ui_hstack_begin("AVHeader", 0, 0, .Center)
         ui_label("AVSub", string(t(.ABILITY_VENDOR_SUBTITLE)), uis(10), COL_MUTED)
         ui_grow("AVHeaderSpc")
@@ -183,13 +171,11 @@ draw_ability_vendor_hud :: proc(w: ^World) {
             rl.Color{ 120, 200, 120, 255 })
         ui_hstack_end()
 
-        // Stock list
         ui_vstack_begin("AVList", u16(uis(8)))
         for i in 0..<n {
             ss := &g_av_stock[slot_idx][i]
 
             if ss.item_entity == INVALID_ENTITY || !world_is_valid(w, ss.item_entity) {
-                // Sold-out placeholder
                 ui_hstack_begin(fmt.tprintf("AVSold%d", i), 0, u16(uis(10)), .Center)
                 ui_grow(fmt.tprintf("AVSoldL%d", i))
                 ui_label(fmt.tprintf("AVSoldT%d", i), string(t(.SHOP_SOLD_OUT)), uis(11), COL_MUTED)
@@ -223,7 +209,6 @@ draw_ability_vendor_hud :: proc(w: ^World) {
         }
         ui_vstack_end()
 
-        // Close hint
         ui_grow("AVSpacer")
         ui_hstack_begin("AVCloseRow", 0, 0, .Center)
         ui_grow("AVCloseL")
@@ -235,7 +220,6 @@ draw_ability_vendor_hud :: proc(w: ^World) {
     cmds := clay.EndLayout()
     clay_raylib_render(&cmds)
 }
-
 
 @(private = "file")
 _av_buy :: proc(w: ^World, stock_i: int) {

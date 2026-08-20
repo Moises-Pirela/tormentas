@@ -8,7 +8,6 @@ ARC_SPREAD   :: f32(math.PI / 2.8)
 
 RANGED_SPAWN_OFFSET :: f32(20)
 
-
 AI_AIM_DEVIATION_MAX :: f32(math.PI / 6.0)
 
 @(private)
@@ -31,7 +30,6 @@ nearest_player_pos :: proc(w: ^World, origin: [3]f32) -> (pos: [3]f32, target_id
         }
     }
     if best_id < 0 { return {}, -1, false }
-
 
     if world_has_component(w, best_id, .MutationContainer) {
         mc := comp_get(w, best_id, .MutationContainer, MutationContainerComp)
@@ -71,7 +69,6 @@ ai_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         player_pos, target_pid, has_player := nearest_player_pos(w, t.position)
 
-
         pdx, pdy, pdist: f32
         pndx, pndy: f32
         if has_player {
@@ -84,21 +81,17 @@ ai_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-
         lkdx  := ai.last_known_pos[0] - t.position[0]
         lkdy  := ai.last_known_pos[1] - t.position[1]
         lkdist := math.sqrt(lkdx*lkdx + lkdy*lkdy)
 
         switch ai.state {
-
-
         case AI_STATE_IDLE, AI_STATE_SUSPICIOUS:
             v.value = {}
 
             if ai.state == AI_STATE_SUSPICIOUS && lkdist > 0.5 {
                 t.rotation = math.atan2(lkdy, lkdx)
             }
-
 
         case AI_STATE_SEARCHING:
             if lkdist > 12 {
@@ -119,20 +112,17 @@ ai_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 v.value = {}
             }
 
-
         case AI_STATE_CHASE, AI_STATE_ATTACK:
             if !has_player {
                 v.value = {}
                 continue
             }
 
-
             if pdist > 0.5 {
                 t.rotation = math.atan2(pndy, pndx)
             }
 
             if pdist <= ai.attack_range {
-
                 ai.state = AI_STATE_ATTACK
                 v.value  = {}
 
@@ -142,7 +132,6 @@ ai_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     ai_snap  := ai^
 
                     switch ai_snap.ai_type {
-
                     case .Melee:
                         play_sfx_at("enemy_melee", pos_snap)
                         arc_id := world_create_entity(w)
@@ -183,7 +172,6 @@ ai_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
                         pellets := ai_snap.pellet_count if ai_snap.pellet_count > 0 else 5
                         spread  := ai_snap.spread_angle if ai_snap.spread_angle > 0 else (math.PI / 6)
-
 
                         aim_deviation: f32 = 0
                         if target_pid >= 0 && world_has_component(w, target_pid, .Velocity) {
@@ -239,9 +227,7 @@ ai_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
                     comp_get(w, id, .AIAgent, AIAgentComp).cooldown = ai_snap.cooldown_max
                 }
-
             } else {
-
                 ai.state = AI_STATE_CHASE
                 spd := ai.speed if ai.speed > 0 else 80
                 steer := ai_navigate(id,

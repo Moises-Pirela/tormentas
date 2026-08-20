@@ -1,6 +1,5 @@
 package main
 
-
 import "core:encoding/json"
 import "core:fmt"
 import "core:os"
@@ -23,6 +22,61 @@ ColliderDef :: struct {
     radius:     f32,
     faction:    u8,
     is_trigger: bool,
+}
+
+GreyboxDef :: struct {
+    shape:   GreyboxShape,
+    size:    [3]f32,
+    r, g, b: u8,
+    solid:   bool,
+}
+
+InteractableDef :: struct {
+    radius:       f32,
+    prompt:       string,
+    active:       bool,
+    cooldown_max: f32,
+}
+
+OpenableDef :: struct {
+    is_open:      bool,
+    link_id:      u8,
+    blocks_sight: bool,
+}
+
+LockableDef :: struct {
+    key_id:    u8,
+    is_locked: bool,
+}
+
+SignalEmitterDef :: struct {
+    link_id:       u8,
+    is_on:         bool,
+    is_toggle:     bool,
+    needs_weight:  bool,
+    weight_radius: f32,
+}
+
+ContainerDef :: struct {
+    kind:          ContainerKind,
+    loot_table_id: u8,
+    gold_min:      u16,
+    gold_max:      u16,
+    emits_signal:  bool,
+    link_id:       u8,
+}
+
+LoreItemDef :: struct {
+    lore_id: u8,
+}
+
+PhonographDef :: struct {
+    recording_id: u8,
+}
+
+KeyPickupDef :: struct {
+    key_id: u8,
+    label:  string,
 }
 
 WeaponDef :: struct {
@@ -175,6 +229,15 @@ EntityDef :: struct {
     transform:    Maybe(TransformDef),
     health:       Maybe(HealthDef),
     collider:     Maybe(ColliderDef),
+    greybox:      Maybe(GreyboxDef),
+    interactable: Maybe(InteractableDef),
+    openable:     Maybe(OpenableDef),
+    lockable:     Maybe(LockableDef),
+    signal_emit:  Maybe(SignalEmitterDef),
+    container:    Maybe(ContainerDef),
+    lore_item:    Maybe(LoreItemDef),
+    phonograph:   Maybe(PhonographDef),
+    key_pickup:   Maybe(KeyPickupDef),
     weapon:       Maybe(WeaponDef),
     ai_agent:     Maybe(AIAgentDef),
     dodge:        Maybe(DodgeDef),
@@ -292,6 +355,106 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
                 if b, b_ok := v.(bool); b_ok { c.is_trigger = b }
             }
             def.collider = c
+        }
+
+        if g_obj, g_ok := obj["greybox"].(json.Object); g_ok {
+            gb: GreyboxDef
+            gb.size = {f32(TILE_SIZE), f32(TILE_SIZE), f32(TILE_SIZE)}
+            gb.r, gb.g, gb.b = 150, 150, 158
+            gb.solid = true
+            if v, ok2 := g_obj["shape"].(string); ok2 {
+                switch v {
+                case "box":      gb.shape = .Box
+                case "ramp":     gb.shape = .Ramp
+                case "wedge":    gb.shape = .Wedge
+                case "cylinder": gb.shape = .Cylinder
+                case "platform": gb.shape = .Platform
+                }
+            }
+            if v, ok2 := g_obj["size"].(json.Array); ok2 && len(v) >= 3 {
+                gb.size = {jf32(v[0]), jf32(v[1]), jf32(v[2])}
+            }
+            if v, ok2 := g_obj["color"].(json.Array); ok2 && len(v) >= 3 {
+                gb.r, gb.g, gb.b = u8(jf32(v[0])), u8(jf32(v[1])), u8(jf32(v[2]))
+            }
+            if v, ok2 := g_obj["solid"]; ok2 {
+                if b, b_ok := v.(bool); b_ok { gb.solid = b }
+            }
+            def.greybox = gb
+        }
+
+        if i_obj, i_ok := obj["interactable"].(json.Object); i_ok {
+            d: InteractableDef
+            d.radius = f32(TILE_SIZE) * 1.5
+            d.active = true
+            if v, ok2 := i_obj["radius"];       ok2 { d.radius       = jf32(v) }
+            if v, ok2 := i_obj["cooldown_max"]; ok2 { d.cooldown_max = jf32(v) }
+            if v, ok2 := i_obj["prompt"].(string); ok2 { d.prompt = strings.clone(v) }
+            if v, ok2 := i_obj["active"]; ok2 { if b, bk := v.(bool); bk { d.active = b } }
+            def.interactable = d
+        }
+
+        if o_obj, o_ok := obj["openable"].(json.Object); o_ok {
+            d: OpenableDef
+            if v, ok2 := o_obj["link_id"]; ok2 { d.link_id = u8(jf32(v)) }
+            if v, ok2 := o_obj["is_open"]; ok2 { if b, bk := v.(bool); bk { d.is_open = b } }
+            if v, ok2 := o_obj["blocks_sight"]; ok2 { if b, bk := v.(bool); bk { d.blocks_sight = b } }
+            def.openable = d
+        }
+
+        if l_obj, l_ok := obj["lockable"].(json.Object); l_ok {
+            d: LockableDef
+            if v, ok2 := l_obj["key_id"]; ok2 { d.key_id = u8(jf32(v)) }
+            if v, ok2 := l_obj["is_locked"]; ok2 { if b, bk := v.(bool); bk { d.is_locked = b } }
+            def.lockable = d
+        }
+
+        if s_obj, s_ok := obj["signal_emitter"].(json.Object); s_ok {
+            d: SignalEmitterDef
+            d.is_toggle = true
+            if v, ok2 := s_obj["link_id"];       ok2 { d.link_id       = u8(jf32(v)) }
+            if v, ok2 := s_obj["weight_radius"]; ok2 { d.weight_radius = jf32(v) }
+            if v, ok2 := s_obj["is_on"];        ok2 { if b, bk := v.(bool); bk { d.is_on = b } }
+            if v, ok2 := s_obj["is_toggle"];    ok2 { if b, bk := v.(bool); bk { d.is_toggle = b } }
+            if v, ok2 := s_obj["needs_weight"]; ok2 { if b, bk := v.(bool); bk { d.needs_weight = b } }
+            def.signal_emit = d
+        }
+
+        if c_obj2, c_ok2 := obj["container"].(json.Object); c_ok2 {
+            d: ContainerDef
+            if v, ok2 := c_obj2["kind"].(string); ok2 {
+                switch v {
+                case "chest":   d.kind = .Chest
+                case "crate":   d.kind = .Crate
+                case "locker":  d.kind = .Locker
+                case "cabinet": d.kind = .Cabinet
+                }
+            }
+            if v, ok2 := c_obj2["loot_table_id"]; ok2 { d.loot_table_id = u8(jf32(v)) }
+            if v, ok2 := c_obj2["gold_min"];      ok2 { d.gold_min      = u16(jf32(v)) }
+            if v, ok2 := c_obj2["gold_max"];      ok2 { d.gold_max      = u16(jf32(v)) }
+            if v, ok2 := c_obj2["link_id"];       ok2 { d.link_id       = u8(jf32(v)) }
+            if v, ok2 := c_obj2["emits_signal"];  ok2 { if b, bk := v.(bool); bk { d.emits_signal = b } }
+            def.container = d
+        }
+
+        if lr_obj, lr_ok := obj["lore_item"].(json.Object); lr_ok {
+            d: LoreItemDef
+            if v, ok2 := lr_obj["lore_id"]; ok2 { d.lore_id = u8(jf32(v)) }
+            def.lore_item = d
+        }
+
+        if ph_obj, ph_ok := obj["phonograph"].(json.Object); ph_ok {
+            d: PhonographDef
+            if v, ok2 := ph_obj["recording_id"]; ok2 { d.recording_id = u8(jf32(v)) }
+            def.phonograph = d
+        }
+
+        if k_obj, k_ok := obj["key_pickup"].(json.Object); k_ok {
+            d: KeyPickupDef
+            if v, ok2 := k_obj["key_id"]; ok2 { d.key_id = u8(jf32(v)) }
+            if v, ok2 := k_obj["label"].(string); ok2 { d.label = strings.clone(v) }
+            def.key_pickup = d
         }
 
         if w_obj, w_ok := obj["weapon"].(json.Object); w_ok {
@@ -603,6 +766,70 @@ spawn_from_def :: proc(w: ^World, def: ^EntityDef) -> int {
     if def.has_input {
         comp_set(w, id, .InputState, InputStateComp{})
     }
+    if gb, ok := def.greybox.?; ok {
+        comp_set(w, id, .Greybox, GreyboxComp{
+            shape = gb.shape,
+            size  = gb.size,
+            r     = gb.r,
+            g     = gb.g,
+            b     = gb.b,
+            solid = gb.solid,
+        })
+    }
+
+    if d, ok := def.interactable.?; ok {
+        prompt: [48]u8
+        if d.prompt != "" {
+            key := strings.clone_to_cstring(d.prompt, context.temp_allocator)
+            copy(prompt[:], string(loc_lookup(key)))
+        }
+        comp_set(w, id, .Interactable, InteractableComp{
+            radius       = d.radius,
+            prompt       = prompt,
+            active       = d.active,
+            cooldown_max = d.cooldown_max,
+        })
+    }
+    if d, ok := def.openable.?; ok {
+        comp_set(w, id, .Openable, OpenableComp{
+            is_open      = d.is_open,
+            link_id      = d.link_id,
+            blocks_sight = d.blocks_sight,
+        })
+    }
+    if d, ok := def.lockable.?; ok {
+        comp_set(w, id, .Lockable, LockableComp{ key_id = d.key_id, is_locked = d.is_locked })
+    }
+    if d, ok := def.signal_emit.?; ok {
+        comp_set(w, id, .SignalEmitter, SignalEmitterComp{
+            link_id       = d.link_id,
+            is_on         = d.is_on,
+            is_toggle     = d.is_toggle,
+            needs_weight  = d.needs_weight,
+            weight_radius = d.weight_radius,
+        })
+    }
+    if d, ok := def.container.?; ok {
+        comp_set(w, id, .Container, ContainerComp{
+            kind          = d.kind,
+            loot_table_id = d.loot_table_id,
+            gold_min      = d.gold_min,
+            gold_max      = d.gold_max,
+            emits_signal  = d.emits_signal,
+            link_id       = d.link_id,
+        })
+    }
+    if d, ok := def.lore_item.?; ok {
+        comp_set(w, id, .LoreItem, LoreItemComp{ lore_id = d.lore_id })
+    }
+    if d, ok := def.phonograph.?; ok {
+        comp_set(w, id, .Phonograph, PhonographComp{ recording_id = d.recording_id })
+    }
+    if d, ok := def.key_pickup.?; ok {
+        label: [40]u8
+        if d.label != "" { copy(label[:], d.label) }
+        comp_set(w, id, .KeyPickup, KeyPickupComp{ key_id = d.key_id, label = label })
+    }
     if c, ok := def.collider.?; ok {
         comp_set(w, id, .Collider, ColliderComp{
             radius     = c.radius,
@@ -800,7 +1027,6 @@ spawn_from_def :: proc(w: ^World, def: ^EntityDef) -> int {
             vision_radius = udm.vision_radius,
         })
     }
-
 
     if len(def.mutations) > 0 {
         comp_set(w, id, .MutationContainer, mutation_container_empty())

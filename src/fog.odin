@@ -1,6 +1,5 @@
 package main
 
-
 FOG_VISION_RADIUS :: f32(260)
 FOG_FADE_WIDTH    :: f32(160)
 

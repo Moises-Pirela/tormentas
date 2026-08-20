@@ -6,10 +6,10 @@ import     "core:fmt"
 
 @(private = "file")
 CLASS_GLOW_COLORS := [4]rl.Color{
-    { 200,  80,  80, 255 },  // Nurse
-    {  80, 220,  80, 255 },  // Pr1s
-    { 230, 200,  80, 255 },  // Sheriff
-    { 160,  80, 240, 255 },  // SrBrain
+    { 200,  80,  80, 255 },
+    {  80, 220,  80, 255 },
+    { 230, 200,  80, 255 },
+    { 160,  80, 240, 255 },
 }
 
 @(private = "file")
@@ -59,12 +59,8 @@ CLASS_BASE_HP     := [4]f32 { 100, 130,  90,  80 }
 CLASS_BASE_ENERGY := [4]f32 { 130,  70,  80, 140 }
 CLASS_BASE_SPEED  := [4]f32 { 220, 230, 270, 225 }
 
-// Each class wields exactly one weapon archetype — the one drawn in its sprite. This is
-// the single source of truth (starter weapon, equip restriction). Order: Nurse, PR1S,
-// Sheriff, SRBrain.
 CLASS_WEAPON_ARCHETYPE := [4]WeaponArchetype{ .Pistol, .Shotgun, .Pistol, .Pistol }
 
-// The local player's class weapon archetype (used to gate weapon equipping).
 player_class_archetype :: proc() -> WeaponArchetype {
     ci := class_idx_for_slot(g_active_slot)
     if ci < 0 || ci >= 4 { return .Pistol }
@@ -77,10 +73,6 @@ CLASS_STARTER_ABILITIES := [4]AbilityType{
     .RapidDischarge,
     .GalvanicShock,
 }
-
-// ────────────────────────────────────────────────────────────
-// Update
-// ────────────────────────────────────────────────────────────
 
 _mm_update_class_select :: proc() {
     dt := rl.GetFrameTime()
@@ -136,11 +128,9 @@ _cs_confirm_class :: proc() {
     g_player_stem  = stems[ci]
     g_selected_class_idx = ci
 
-    // Persist class choice in reserved byte so it survives restarts
-    // (PlayerSaveFile is blank until the first save_player call)
     idx := g_mm.cs_pending_slot
     if idx >= 0 && idx < MAX_CHAR_SLOTS {
-        g_char_save.slots[idx]._reserved[0] = u8(ci + 1)  // 1-indexed; 0 means "not set"
+        g_char_save.slots[idx]._reserved[0] = u8(ci + 1)
     }
 
     chars_save_all()
@@ -148,10 +138,6 @@ _cs_confirm_class :: proc() {
     g_mm.cs_pending_slot = -1
     g_mm.phase           = .PlayOptions
 }
-
-// ────────────────────────────────────────────────────────────
-// Draw
-// ────────────────────────────────────────────────────────────
 
 _mm_draw_class_select :: proc() {
     sw      := f32(rl.GetScreenWidth())
@@ -164,10 +150,8 @@ _mm_draw_class_select :: proc() {
     cards_x := sw * 0.5 - total_w * 0.5
     cards_y := sh * 0.26
 
-    // Full-screen dark overlay so this reads as its own scene
     rl.DrawRectangleRec({0, 0, sw, sh}, rl.Color{6, 4, 3, 235})
 
-    // Section subtitle
     lbl := t(.CLASS_SELECT_TITLE)
     lfs := uis(14)
     lsz := rl.MeasureTextEx(g_font_body, lbl, lfs, 0.5)
@@ -175,14 +159,12 @@ _mm_draw_class_select :: proc() {
         {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(18)},
         lfs, 0.5, rl.Color{130, 118, 82, 200})
 
-    // Class cards
     for i in 0..<n {
         cx := cards_x + f32(i) * (card_w + card_gap)
         r  := rl.Rectangle{cx, cards_y, card_w, card_h}
         _cs_draw_class_card(i, r, g_mm.cs_hovered == i, g_mm.new_char == i)
     }
 
-    // Stats panel to the right of the cards
     display_idx := g_mm.cs_hovered if g_mm.cs_hovered >= 0 else g_mm.new_char
     panel_r := rl.Rectangle{
         cards_x + total_w + uis(28),
@@ -192,7 +174,6 @@ _mm_draw_class_select :: proc() {
     }
     _cs_draw_stats_panel(display_idx, panel_r)
 
-    // Description centered below cards
     desc    := t(CLASS_DESC_KEYS[display_idx])
     desc_fs := uis(12)
     desc_y  := cards_y + card_h + uis(18)
@@ -201,7 +182,6 @@ _mm_draw_class_select :: proc() {
         {sw * 0.5 - dsz.x * 0.5, desc_y},
         desc_fs, 0.5, COL_MUTED)
 
-    // BACK / BEGIN buttons
     btn_w   := sw * 0.14
     btn_h   := uis(42)
     btn_y   := sh * 0.86
@@ -210,7 +190,6 @@ _mm_draw_class_select :: proc() {
     _mm_btn_draw(back_r,  t(.MENU_BTN_BACK),     false)
     _mm_btn_draw(begin_r, t(.CLASS_SELECT_BEGIN), true)
 
-    // ESC hint
     hint    := cstring("ESC  Back")
     hint_fs := uis(10)
     hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
@@ -234,7 +213,6 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
     border := COL_BRASS if selected else (rl.Color{100, 88, 58, 200} if hovered else COL_RULE)
     rl.DrawRectangleLinesEx(r, 1.5, border)
 
-    // Sprite — bottom-anchored in the top 62% of the card
     sprite_h := r.height * 0.62
     sprite_area := rl.Rectangle{
         r.x + uis(6),
@@ -246,7 +224,6 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
     stems := PLAYER_STEMS
     _cs_draw_sprite_frame(stems[ci], sprite_area, g_mm.cs_anim_t, tint)
 
-    // Ground glow ellipse under sprite feet
     if hot {
         glow_y := r.y + sprite_h - uis(2)
         rl.DrawEllipse(
@@ -256,7 +233,6 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
         )
     }
 
-    // Class display name
     name_y  := r.y + sprite_h + uis(6)
     name    := t(CLASS_NAME_KEYS[ci])
     name_fs := uis(14)
@@ -265,7 +241,6 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
         {r.x + (r.width - nsz.x) * 0.5, name_y},
         name_fs, 0.5, COL_BRASS if hot else COL_MUTED)
 
-    // Primary stat label
     stat_lbl := t(CLASS_PRIMARY_STAT_KEYS[ci])
     stat_fs  := uis(11)
     ssz      := rl.MeasureTextEx(g_font_body, stat_lbl, stat_fs, 0.5)
@@ -274,7 +249,6 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
         stat_fs, 0.5,
         rl.Color{glow.r, glow.g, glow.b, 200} if hot else COL_RULE)
 
-    // Selection bar at card bottom
     if selected {
         bar_r := rl.Rectangle{r.x + uis(12), r.y + r.height - uis(6), r.width - uis(24), uis(3)}
         rl.DrawRectangleRec(bar_r, rl.Color{glow.r, glow.g, glow.b, 220})
@@ -337,7 +311,6 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
     py  := r.y + uis(14)
     glow := CLASS_GLOW_COLORS[ci]
 
-    // Class title
     title_fs := uis(15)
     rl.DrawTextEx(g_font_body, t(CLASS_TITLE_KEYS[ci]), {px, py}, title_fs, 0.5, COL_BRASS)
     py += title_fs + uis(8)
@@ -345,7 +318,6 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
     rl.DrawLineV({r.x + uis(6), py}, {r.x + r.width - uis(6), py}, COL_RULE)
     py += uis(10)
 
-    // Stat dots: STR / DEX / SCI
     _cs_draw_stat_dots(t(.CLASS_STAT_STR), CLASS_BASE_STR[ci], glow, px, py)
     py += uis(18)
     _cs_draw_stat_dots(t(.CLASS_STAT_DEX), CLASS_BASE_DEX[ci], glow, px, py)
@@ -353,7 +325,6 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
     _cs_draw_stat_dots(t(.CLASS_STAT_SCI), CLASS_BASE_SCI[ci], glow, px, py)
     py += uis(22)
 
-    // Numeric HP / Energy / Speed
     num_buf: [32]u8
     val_fs := uis(11)
 
@@ -375,7 +346,6 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
     rl.DrawLineV({r.x + uis(6), py}, {r.x + r.width - uis(6), py}, COL_RULE)
     py += uis(10)
 
-    // Ability
     ab_lbl_fs := uis(11)
     rl.DrawTextEx(g_font_body, t(.CLASS_STARTER_ABILITY), {px, py}, ab_lbl_fs, 0.5, COL_MUTED)
     py += ab_lbl_fs + uis(4)
@@ -390,7 +360,6 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
     rl.DrawTextEx(g_font_body, cstring(&ab_buf[0]), {px, py}, ab_fs, 0.5, COL_PARCH)
     py += ab_fs + uis(12)
 
-    // Weapon
     rl.DrawTextEx(g_font_body, t(.CLASS_STARTER_WEAPON), {px, py}, ab_lbl_fs, 0.5, COL_MUTED)
     py += ab_lbl_fs + uis(4)
     rl.DrawTextEx(g_font_body, t(CLASS_WEAPON_KEYS[ci]), {px, py}, ab_fs, 0.5, COL_PARCH)

@@ -27,7 +27,7 @@ collect_local_input :: proc() -> p2p.InputFrame {
     mp    := screen_to_world_cartesian(rl.GetMousePosition())
     f.aim  = { mp.x, mp.y }
 
-    if rl.IsMouseButtonDown(.LEFT) && !dbg_inspector_wants_mouse() { f.actions += {.Fire}     }
+    if rl.IsMouseButtonDown(.LEFT) && !imui_wants_mouse() { f.actions += {.Fire}     }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
@@ -134,19 +134,17 @@ dodge_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         if input.dodge_pressed && !dodge.active && (dodge.cooldown <= 0 || can_dodge_charge) {
             dodge.active    = true
             dodge.timer     = dodge.duration
-            // Screen-facing: movement while moving, aim while standing still. Screen-x of a
-            // world vector is (x - y) under the iso projection.
+
             face_sx := math.cos(t.rotation) - math.sin(t.rotation)
             if input.move[0]*input.move[0] + input.move[1]*input.move[1] > 0.0001 {
                 face_sx = input.move[0] - input.move[1]
             }
-            // Dodge is a backward horizontal screen-dash: opposite the facing on the screen-x
-            // axis, no vertical component yet. World dirs (1,-1)/(−1,1) move purely along screen-x.
+
             INV_SQRT2 :: f32(0.7071067811865476)
             if face_sx > 0 {
-                dodge.direction = { -INV_SQRT2,  INV_SQRT2 }   // facing screen-right -> dash screen-left
+                dodge.direction = { -INV_SQRT2,  INV_SQRT2 }
             } else {
-                dodge.direction = {  INV_SQRT2, -INV_SQRT2 }   // facing screen-left  -> dash screen-right
+                dodge.direction = {  INV_SQRT2, -INV_SQRT2 }
             }
             if id == w.player_id { play_sfx("dodge") }
         }
@@ -175,10 +173,8 @@ facing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         t     := comp_get(w, id, .Transform, TransformComp)
         input := comp_get(w, id, .InputState, InputStateComp)
 
-
         if world_has_component(w, id, .AimLock) { continue }
 
-        // Lock facing briefly during a dodge so the sprite doesn't spin mid-dash.
         if world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active { continue }
 
         dx := input.mouse_world[0] - t.position[0]

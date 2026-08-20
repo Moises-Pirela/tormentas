@@ -12,8 +12,8 @@ uniform vec2  u_camera_target;
 uniform vec2  u_camera_offset;
 uniform float u_camera_zoom;
 uniform int   u_light_count;
-uniform vec2  u_light_pos[MAX_LIGHTS];       // world-space positions
-uniform vec3  u_light_color[MAX_LIGHTS];     // RGB 0..255
+uniform vec2  u_light_pos[MAX_LIGHTS];
+uniform vec3  u_light_color[MAX_LIGHTS];
 uniform float u_light_radius[MAX_LIGHTS];
 uniform float u_light_intensity[MAX_LIGHTS];
 
@@ -32,7 +32,6 @@ void main() {
 
         if (dist >= r) continue;
 
-        // Smooth quadratic falloff
         float t = dist / r;
         float falloff = (1.0 - t * t);
         falloff = falloff * falloff;

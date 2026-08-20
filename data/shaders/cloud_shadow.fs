@@ -18,11 +18,7 @@ uniform float u_cloud_thresh_hi;
 uniform float u_cloud_alpha_min;
 uniform float u_cloud_alpha_max;
 uniform float u_cloud_contrast;
-uniform vec3  u_cloud_tint;       // 0..255 range
-
-// ---------------------------------------------------------------------------
-// Perlin noise
-// ---------------------------------------------------------------------------
+uniform vec3  u_cloud_tint;
 
 float fade5(float t) {
     return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
@@ -65,18 +61,11 @@ float fbm2(vec2 p) {
     return value;
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 void main() {
-    // gl_FragCoord has (0,0) at bottom-left; flip Y for Raylib's top-left origin.
     vec2 screen_px = vec2(gl_FragCoord.x, u_screen_size.y - gl_FragCoord.y);
 
-    // Screen -> world (same transform as the CPU version)
     vec2 world_pos = u_camera_target + (screen_px - u_camera_offset) / u_camera_zoom;
 
-    // Noise coordinates
     vec2 n = (world_pos + u_time * u_cloud_drift) * u_cloud_freq;
 
     float coarse = fbm2(n);

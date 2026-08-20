@@ -7,7 +7,6 @@ import "core:strconv"
 import "core:strings"
 import rl "vendor:raylib"
 
-
 ANIM_ED_KEY_CAP    :: 64
 ANIM_ED_FIELD_CAP  :: 20
 ANIM_ED_PANEL_W    :: 179
@@ -39,22 +38,17 @@ AnimEdField :: enum {
     AnchorX, AnchorY,
 }
 
-
 AnimEditorState :: struct {
     open:            bool,
-
 
     key_buf:         [ANIM_ED_KEY_CAP]u8,
     key_len:         int,
 
-
     sprite_ok:       bool,
     sprite_tex:      rl.Texture2D,
 
-
     sheet:           AnimSheetDef,
     dirty:           bool,
-
 
     view_offset:     rl.Vector2,
     view_zoom:       f32,
@@ -62,24 +56,19 @@ AnimEditorState :: struct {
     dragging:        bool,
     hover_frame:     int,
 
-
     active_state:    int,
-
 
     preview_playing: bool,
     preview_frame:   int,
     preview_elapsed: f32,
 
-
     found_keys:      [dynamic]string,
     picker_open:     bool,
     picker_scroll:   int,
 
-
     toast_msg:       [64]u8,
     toast_len:       int,
     toast_timer:     f32,
-
 
     focused_field:   AnimEdField,
     field_buf:       [ANIM_ED_FIELD_CAP]u8,
@@ -88,7 +77,6 @@ AnimEditorState :: struct {
 }
 
 g_anim_ed: AnimEditorState
-
 
 anim_editor_open :: proc() {
     if g_anim_ed.open { return }
@@ -110,7 +98,6 @@ anim_editor_close :: proc() {
     ed.focused_field = .None
     ed.picker_open   = false
 }
-
 
 @(private = "file")
 anim_editor_toast :: proc(msg: string) {
@@ -181,7 +168,6 @@ anim_ed_focus_field :: proc(id: AnimEdField) {
     anim_ed_commit_field()
     ed.focused_field = id
     ed.field_len     = 0
-
 
     switch id {
     case .None, .Key:
@@ -305,7 +291,6 @@ anim_editor_load :: proc(stem: string) {
         anim_editor_toast("No JSON - created defaults")
     }
 
-
     ed.view_offset   = { f32(tex.width) * 0.5, f32(tex.height) * 0.5 }
     ed.view_zoom     = max(2.0, uis(240) / f32(max(tex.width, 1)))
     ed.preview_frame   = 0
@@ -339,8 +324,7 @@ anim_editor_save :: proc() {
         first = false
         clip   := ed.sheet.clips[si]
         loop_s := "false"; if clip.looping { loop_s = "true" }
-        // Braces are written literally via write_string — fmt.bprintf treats "{" as a
-        // directive and would emit "%!(MISSING CLOSE BRACE)" if braces were in the format.
+
         strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], "    \"%s\": ", ANIM_STATE_NAMES[si]))])
         strings.write_string(&sb, "{ ")
         strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:],
@@ -380,7 +364,6 @@ anim_editor_scan_keys :: proc() {
 
     seen := make(map[string]bool, context.temp_allocator)
 
-
     png_matches, _ := filepath.glob("data/sprites/entities/*.png", context.temp_allocator)
     for m in png_matches {
         base := filepath.base(m)
@@ -392,7 +375,6 @@ anim_editor_scan_keys :: proc() {
             }
         }
     }
-
 
     json_matches, _ := filepath.glob("data/sprites/entities/*.json", context.temp_allocator)
     for m in json_matches {
@@ -407,7 +389,6 @@ anim_editor_scan_keys :: proc() {
     }
 }
 
-
 update_anim_editor :: proc(dt: f32) {
     if !g_anim_ed.open { return }
     ed := &g_anim_ed
@@ -415,7 +396,6 @@ update_anim_editor :: proc(dt: f32) {
     if rl.IsKeyPressed(.F3) { anim_editor_close(); return }
 
     if ed.toast_timer > 0 { ed.toast_timer -= dt }
-
 
     if ed.preview_playing && ed.sprite_ok && ed.sheet.has_clip[ed.active_state] {
         clip := ed.sheet.clips[ed.active_state]
@@ -437,7 +417,6 @@ update_anim_editor :: proc(dt: f32) {
         }
     }
 
-
     if rl.IsKeyPressed(.ESCAPE) {
         if ed.focused_field != .None && ed.focused_field != .Key {
             anim_ed_commit_field(); ed.focused_field = .None
@@ -448,7 +427,6 @@ update_anim_editor :: proc(dt: f32) {
         }
         return
     }
-
 
     if rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.KP_ENTER) {
         #partial switch ed.focused_field {
@@ -461,9 +439,7 @@ update_anim_editor :: proc(dt: f32) {
         return
     }
 
-
     if ed.focused_field != .None { anim_ed_handle_chars() }
-
 
     if ed.focused_field != .None {
         if rl.IsKeyPressed(.BACKSPACE) {
@@ -475,7 +451,6 @@ update_anim_editor :: proc(dt: f32) {
             ed.bs_timer = 0
         }
     }
-
 
     if rl.IsKeyPressed(.TAB) {
         switch ed.focused_field {
@@ -491,14 +466,12 @@ update_anim_editor :: proc(dt: f32) {
         }
     }
 
-
     ctrl := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
     if ctrl && rl.IsKeyPressed(.S) {
         anim_ed_commit_field()
         anim_editor_save()
     }
 }
-
 
 @(private = "file")
 anim_ed_btn :: proc(rect: rl.Rectangle, label: cstring, mp: rl.Vector2) -> bool {
@@ -521,7 +494,6 @@ anim_ed_label :: proc(x, y: f32, text: cstring, fs: f32, col: rl.Color) {
     rl.DrawTextEx(g_font, text, {x, y}, fs, 0.5, col)
 }
 
-
 @(private = "file")
 anim_ed_number_field :: proc(rect: rl.Rectangle, id: AnimEdField, mp: rl.Vector2) -> bool {
     ed      := &g_anim_ed
@@ -540,7 +512,6 @@ anim_ed_number_field :: proc(rect: rl.Rectangle, id: AnimEdField, mp: rl.Vector2
     rl.DrawRectangleRec(rect, bg)
     border := ANIM_ED_BORDER; if focused { border = ANIM_ED_FOCUS_BDR }
     rl.DrawRectangleLinesEx(rect, 1, border)
-
 
     var_buf: [ANIM_ED_FIELD_CAP + 4]u8
     var_len: int
@@ -574,7 +545,6 @@ anim_ed_number_field :: proc(rect: rl.Rectangle, id: AnimEdField, mp: rl.Vector2
     return clicked
 }
 
-
 @(private = "file")
 anim_ed_draw_header :: proc(sw, hdr_y, hdr_h: f32, mp: rl.Vector2) {
     ed := &g_anim_ed
@@ -598,7 +568,6 @@ anim_ed_draw_header :: proc(sw, hdr_y, hdr_h: f32, mp: rl.Vector2) {
     rl.DrawTextEx(g_font, hint, {sw - hsz.x - uis(9), hdr_y + (hdr_h - hsz.y)*0.5}, hint_fs, 0.5, ANIM_ED_MUTED)
 }
 
-
 @(private = "file")
 anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     ed  := &g_anim_ed
@@ -609,7 +578,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     rl.DrawLine(i32(lp_x + lp_w - 1), i32(lp_y), i32(lp_x + lp_w - 1), i32(lp_y + lp_h), ANIM_ED_BORDER)
 
     cy := lp_y + pad
-
 
     anim_ed_label(lp_x + pad, cy, "SPRITE KEY", uis(7), ANIM_ED_MUTED); cy += uis(12)
 
@@ -626,7 +594,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     k_bdr := ANIM_ED_BORDER; if focus_key { k_bdr = ANIM_ED_FOCUS_BDR }
     rl.DrawRectangleLinesEx(key_rect, 1, k_bdr)
 
-
     disp: [ANIM_ED_KEY_CAP + 2]u8
     dn := ed.key_len
     copy(disp[:], ed.key_buf[:dn])
@@ -635,7 +602,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     k_col := ANIM_ED_TEXT; if focus_key { k_col = ANIM_ED_ACCENT }
     rl.DrawTextEx(g_font, cstring(&disp[0]),
         {key_rect.x + uis(4), key_rect.y + (key_rect.height - fs)*0.5}, fs, 0.5, k_col)
-
 
     if ed.key_len > 0 {
         s_col := ANIM_ED_MUTED; s_lbl := cstring("-")
@@ -647,7 +613,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
             tag_fs, 0.5, s_col)
     }
     cy += key_h + uis(3)
-
 
     if ed.picker_open && ed.key_len > 0 {
         prefix := string(ed.key_buf[:ed.key_len])
@@ -701,7 +666,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
         }
     }
 
-
     rl.DrawLine(i32(lp_x + pad), i32(cy), i32(lp_x + lp_w - pad), i32(cy), ANIM_ED_BORDER)
     cy += pad
 
@@ -709,7 +673,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
         anim_ed_label(lp_x + pad, cy, "Press Enter to load", uis(8), ANIM_ED_MUTED)
         return
     }
-
 
     anim_ed_label(lp_x + pad, cy, "STATE", uis(7), ANIM_ED_MUTED); cy += uis(12)
 
@@ -745,9 +708,7 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     }
     cy += tab_h + pad
 
-
     anim_ed_label(lp_x + pad, cy, "CLIP", uis(7), ANIM_ED_MUTED); cy += uis(11)
-
 
     {
         cb_sz := uis(12)
@@ -757,7 +718,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
         b_col := ANIM_ED_BORDER; if hot_c { b_col = ANIM_ED_ACCENT }
         rl.DrawRectangleLinesEx(cx_r, 1, b_col)
         if ed.sheet.has_clip[ed.active_state] {
-
             rl.DrawLine(i32(cx_r.x + cb_sz*0.18), i32(cx_r.y + cb_sz*0.50),
                         i32(cx_r.x + cb_sz*0.42), i32(cx_r.y + cb_sz*0.78), ANIM_ED_ACCENT)
             rl.DrawLine(i32(cx_r.x + cb_sz*0.42), i32(cx_r.y + cb_sz*0.78),
@@ -777,21 +737,17 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     fx      := lp_x + pad + label_w
     fw      := lp_w - pad*2 - label_w
 
-
     anim_ed_label(lp_x + pad, cy + (fh-fs)*0.5, "Start frame", fs, ANIM_ED_MUTED)
     anim_ed_number_field(rl.Rectangle{fx, cy, fw, fh}, .StartFrame, mp)
     cy += fh + fgap
-
 
     anim_ed_label(lp_x + pad, cy + (fh-fs)*0.5, "Frame count", fs, ANIM_ED_MUTED)
     anim_ed_number_field(rl.Rectangle{fx, cy, fw, fh}, .FrameCount, mp)
     cy += fh + fgap
 
-
     anim_ed_label(lp_x + pad, cy + (fh-fs)*0.5, "FPS", fs, ANIM_ED_MUTED)
     anim_ed_number_field(rl.Rectangle{fx, cy, fw, fh}, .FPS, mp)
     cy += fh + fgap
-
 
     {
         cb_sz := uis(12)
@@ -815,7 +771,6 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
         cy += uis(16)
     }
 
-
     rl.DrawLine(i32(lp_x + pad), i32(cy), i32(lp_x + lp_w - pad), i32(cy), ANIM_ED_BORDER)
     cy += uis(4)
     anim_ed_label(lp_x + pad, cy, "ANCHOR", uis(7), ANIM_ED_MUTED); cy += uis(11)
@@ -827,10 +782,8 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     anim_ed_number_field(rl.Rectangle{fx + half_fw + uis(3) + uis(9), cy, half_fw - uis(9), fh}, .AnchorY, mp)
     cy += fh + fgap
 
-
     anim_ed_label(lp_x + pad, cy, "Ctrl+drag in viewport", uis(7), ANIM_ED_MUTED)
 }
-
 
 @(private = "file")
 anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
@@ -854,7 +807,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
     fh   := ed.sheet.frame_height
     cols := ed.sheet.columns
 
-
     if over {
         if rl.IsMouseButtonPressed(.MIDDLE) || rl.IsMouseButtonPressed(.RIGHT) {
             ed.dragging  = true
@@ -862,7 +814,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
         }
         ctrl_held := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
         if rl.IsMouseButtonDown(.LEFT) && ctrl_held && fw > 0 && fh > 0 {
-
             sx := ed.view_offset.x + (mp.x - vp_x - vp_w*0.5) / ed.view_zoom
             sy := ed.view_offset.y + (mp.y - vp_y - vp_h*0.5) / ed.view_zoom
             if sx >= 0 && sy >= 0 && sx < f32(tex.width) && sy < f32(tex.height) {
@@ -948,7 +899,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
             rl.DrawLineV({tex_x, gy}, {tex_x + tex_w, gy}, grid_col)
         }
 
-
         if ed.sheet.has_clip[ed.active_state] && cols > 0 {
             clip := ed.sheet.clips[ed.active_state]
             for fi in 0..<clip.frame_count {
@@ -963,7 +913,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
                 rl.DrawRectangleLinesEx(rl.Rectangle{frx, fry, frw, frh}, 2, col)
             }
         }
-
 
         if ed.sheet.has_clip[ed.active_state] && cols > 0 && fw > 0 && fh > 0 {
             clip := ed.sheet.clips[ed.active_state]
@@ -980,7 +929,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
             rl.DrawLineV({ cx_, cy_ - arm }, { cx_, cy_ + arm }, CROSSHAIR_COL)
             rl.DrawCircleV({ cx_, cy_ }, 3, CROSSHAIR_COL)
         }
-
 
         if over && fw > 0 && fh > 0 && cols > 0 {
             sx := ed.view_offset.x + (mp.x - vp_x - vp_w*0.5) / ed.view_zoom
@@ -1009,7 +957,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
 
     rl.DrawRectangleLinesEx(rl.Rectangle{vp_x, vp_y, vp_w, vp_h}, 1, ANIM_ED_BORDER)
 
-
     {
         zb: [16]u8
         zn := len(fmt.bprintf(zb[:], "%.0f%%", ed.view_zoom * 100)); zb[zn] = 0
@@ -1017,7 +964,6 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
             {vp_x + uis(4), vp_y + vp_h - uis(15)}, uis(9), 0.5, ANIM_ED_MUTED)
     }
 }
-
 
 @(private = "file")
 anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
@@ -1034,7 +980,6 @@ anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
         anim_ed_label(rp_x + pad, cy, "-", uis(9), ANIM_ED_MUTED)
         return
     }
-
 
     prev_sz := min(rp_w - pad*2, uis(120))
     prev_x  := rp_x + (rp_w - prev_sz) * 0.5
@@ -1073,7 +1018,6 @@ anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
     }
     cy += prev_sz + uis(15)
 
-
     play_lbl := cstring("> Play"); if ed.preview_playing { play_lbl = cstring("|| Pause") }
     play_r   := rl.Rectangle{rp_x + pad, cy, rp_w - pad*2, uis(19)}
     if anim_ed_btn(play_r, play_lbl, mp) {
@@ -1081,7 +1025,6 @@ anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
         if ed.preview_playing { ed.preview_frame = 0; ed.preview_elapsed = 0 }
     }
     cy += uis(21)
-
 
     state_shorts := [ANIM_STATE_COUNT]cstring{ "Idle", "Walk", "Dodg", "Atk", "Die" }
     mini_tab_h   := uis(15)
@@ -1108,7 +1051,6 @@ anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
     }
     cy += mini_tab_h + pad
 
-
     if ed.sheet.has_clip[ed.active_state] {
         clip := ed.sheet.clips[ed.active_state]
         sb: [48]u8
@@ -1118,7 +1060,6 @@ anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
         rl.DrawTextEx(g_font, cstring(&sb[0]), {rp_x + pad, cy}, uis(8), 0.5, ANIM_ED_MUTED)
     }
 }
-
 
 @(private = "file")
 anim_ed_draw_bottom_bar :: proc(bar_x, bar_y, bar_w, bar_h: f32, mp: rl.Vector2) {
@@ -1135,7 +1076,6 @@ anim_ed_draw_bottom_bar :: proc(bar_x, bar_y, bar_w, bar_h: f32, mp: rl.Vector2)
     lw  := uis(44)
     gap := uis(9)
 
-
     anim_ed_label(cx, fy + (fh-fs)*0.5, "frame_w:", fs, ANIM_ED_MUTED); cx += lw
     anim_ed_number_field(rl.Rectangle{cx, fy, uis(35), fh}, .FrameWidth, mp);  cx += uis(35) + gap
 
@@ -1145,14 +1085,12 @@ anim_ed_draw_bottom_bar :: proc(bar_x, bar_y, bar_w, bar_h: f32, mp: rl.Vector2)
     anim_ed_label(cx, fy + (fh-fs)*0.5, "columns:", fs, ANIM_ED_MUTED); cx += lw
     anim_ed_number_field(rl.Rectangle{cx, fy, uis(29), fh}, .Columns, mp);    cx += uis(29) + gap
 
-
     if ed.sprite_ok {
         tsz_buf: [32]u8
         tsz_n := len(fmt.bprintf(tsz_buf[:], "tex %dx%d", ed.sprite_tex.width, ed.sprite_tex.height))
         tsz_buf[tsz_n] = 0
         rl.DrawTextEx(g_font, cstring(&tsz_buf[0]), {cx, fy + (fh - uis(8))*0.5}, uis(8), 0.5, ANIM_ED_MUTED)
     }
-
 
     btn_h := uis(20)
     btn_y := bar_y + (bar_h - btn_h) * 0.5
@@ -1171,14 +1109,12 @@ anim_ed_draw_bottom_bar :: proc(bar_x, bar_y, bar_w, bar_h: f32, mp: rl.Vector2)
     }
 }
 
-
 draw_anim_editor :: proc() {
     if !g_anim_ed.open { return }
     ed := &g_anim_ed
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
     mp := rl.GetMousePosition()
-
 
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), ANIM_ED_BG)
 
@@ -1199,7 +1135,6 @@ draw_anim_editor :: proc() {
     anim_ed_draw_preview(rp_x, mid_y, rp_w, mid_h, mp)
     anim_ed_draw_bottom_bar(0, bot_y, sw, bot_h, mp)
 
-
     if rl.IsMouseButtonPressed(.LEFT) {
         in_lp  := rl.CheckCollisionPointRec(mp, rl.Rectangle{0, mid_y, lp_w, mid_h})
         in_bot := rl.CheckCollisionPointRec(mp, rl.Rectangle{0, bot_y, sw,  bot_h})
@@ -1209,7 +1144,6 @@ draw_anim_editor :: proc() {
             }
         }
     }
-
 
     if ed.toast_timer > 0 && ed.toast_len > 0 {
         a := u8(clamp(int(ed.toast_timer * 200), 0, 255))

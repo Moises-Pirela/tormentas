@@ -2,7 +2,6 @@ package main
 
 import "core:math"
 
-
 AI_PATH_MAX    :: 64
 AI_PATH_RETICK :: f32(0.35)
 

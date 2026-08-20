@@ -1,12 +1,10 @@
 package main
 
-
 import "core:encoding/json"
 import "core:os"
 import rl "vendor:raylib"
 
 CONFIG_PATH :: "data/config.json"
-
 
 GameplayBinds :: struct {
     move_up:        i32,
@@ -27,12 +25,10 @@ GameplayBinds :: struct {
     pause:          i32,
 }
 
-
 UIBinds :: struct {
     close_panel:     i32,
     compare_tooltip: i32,
 }
-
 
 Bindings :: struct {
     language: u8,
@@ -40,11 +36,9 @@ Bindings :: struct {
     ui:       UIBinds,
 }
 
-
 GAMEPLAY_BIND_COUNT :: 16
 UI_BIND_COUNT       :: 2
 TOTAL_BIND_COUNT    :: GAMEPLAY_BIND_COUNT + UI_BIND_COUNT
-
 
 g_binds: Bindings
 
@@ -75,7 +69,6 @@ default_binds :: proc() -> Bindings {
     }
 }
 
-
 load_config :: proc() {
     g_binds = default_binds()
     data, ok := os.read_entire_file(CONFIG_PATH)
@@ -91,7 +84,6 @@ save_config :: proc() {
     defer delete(data)
     os.write_entire_file(CONFIG_PATH, data)
 }
-
 
 BindRow :: struct {
     label: cstring,
@@ -126,7 +118,6 @@ ui_bind_rows :: proc() -> [UI_BIND_COUNT]BindRow {
     }
 }
 
-
 all_bind_rows :: proc() -> [TOTAL_BIND_COUNT]BindRow {
     g := gameplay_bind_rows()
     u := ui_bind_rows()
@@ -135,7 +126,6 @@ all_bind_rows :: proc() -> [TOTAL_BIND_COUNT]BindRow {
     for i in 0..<UI_BIND_COUNT       { out[GAMEPLAY_BIND_COUNT + i]  = u[i] }
     return out
 }
-
 
 key_name :: proc(k: rl.KeyboardKey, buf: []u8) -> cstring {
     s: string

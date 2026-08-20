@@ -9,6 +9,10 @@ g_light_widget_open: bool
 
 g_light_sun_dir_x: f32 = 0.84
 g_light_sun_dir_y: f32 = 0.54
+g_light_sun_elevation: f32 = 55.0
+
+SHADOW_NEAR_ALPHA :: 215
+SHADOW_FAR_ALPHA  :: 135
 
 g_light_cloud_freq:      f32 = 0.0032
 g_light_cloud_freq_fine: f32 = 0.0075
@@ -41,10 +45,10 @@ g_light_sprite_diffuse:        f32 = 0.70
 g_light_sprite_rim:            f32 = 0.45
 g_light_sprite_shadow_response:f32 = 0.65
 
-
 LevelLightingConfig :: struct #packed {
     sun_dir_x:              f32,
     sun_dir_y:              f32,
+    sun_elevation:          f32,
     cloud_freq:             f32,
     cloud_freq_fine:        f32,
     cloud_drift_x:          f32,
@@ -83,6 +87,7 @@ LevelLightingConfig :: struct #packed {
 LIGHTING_CONFIG_DEFAULT :: LevelLightingConfig{
     sun_dir_x              = 0.84,
     sun_dir_y              = 0.54,
+    sun_elevation          = 55.0,
     cloud_freq             = 0.0032,
     cloud_freq_fine        = 0.0075,
     cloud_drift_x          = 12.0,
@@ -118,11 +123,11 @@ LIGHTING_CONFIG_DEFAULT :: LevelLightingConfig{
     fog_scatter            = 1.35,
 }
 
-
 lighting_config_capture :: proc() -> LevelLightingConfig {
     return LevelLightingConfig{
         sun_dir_x              = g_light_sun_dir_x,
         sun_dir_y              = g_light_sun_dir_y,
+        sun_elevation          = g_light_sun_elevation,
         cloud_freq             = g_light_cloud_freq,
         cloud_freq_fine        = g_light_cloud_freq_fine,
         cloud_drift_x          = g_light_cloud_drift_x,
@@ -159,10 +164,10 @@ lighting_config_capture :: proc() -> LevelLightingConfig {
     }
 }
 
-
 lighting_config_apply :: proc(c: LevelLightingConfig) {
     g_light_sun_dir_x              = c.sun_dir_x
     g_light_sun_dir_y              = c.sun_dir_y
+    g_light_sun_elevation          = c.sun_elevation
     g_light_cloud_freq             = c.cloud_freq
     g_light_cloud_freq_fine        = c.cloud_freq_fine
     g_light_cloud_drift_x          = c.cloud_drift_x
@@ -389,7 +394,6 @@ shutdown_directional_shader :: proc() {
     rl.UnloadShader(g_spritelight_shader)
 }
 
-
 init_wall_mask :: proc() {
     g_wall_mask_dirty = true
 }
@@ -528,23 +532,6 @@ sun_dir :: proc() -> [2]f32 {
     return { g_light_sun_dir_x * inv_len, g_light_sun_dir_y * inv_len }
 }
 
-@(private = "file")
-draw_shadow_blob :: proc(pos: rl.Vector2, radius: f32, alpha_scale: f32 = 1.0) {
-    dir := sun_dir()
-    base_a := u8(clamp(70 * alpha_scale, 0, 255))
-    col    := rl.Color{ 8, 10, 6, base_a }
-    for i in 0..<4 {
-        t      := f32(i) / 3.0
-        offset := radius * (0.45 + t * 0.9)
-        r      := radius * (0.82 - t * 0.16)
-        p      := rl.Vector2{
-            pos.x + dir[0] * offset,
-            pos.y + dir[1] * offset,
-        }
-        rl.DrawCircleV(p, r, col)
-    }
-}
-
 draw_cloud_shadow_field :: proc() {
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
@@ -600,25 +587,29 @@ draw_wall_sun_shadows :: proc() {
     }
 }
 
-
-draw_player_contact_shadow :: proc(w: ^World) {
+draw_player_projected_shadow :: proc(w: ^World) {
     pid := w.player_id
     if !world_is_valid(w, pid) { return }
-    if !world_has_component(w, pid, .Transform) { return }
+    if is_fog_hidden(w, pid) { return }
 
-    tr  := comp_get(w, pid, .Transform, TransformComp)
-    pos := rl.Vector2{ tr.position[0], tr.position[1] }
+    if world_has_component(w, pid, .Respawn) &&
+       comp_get(w, pid, .Respawn, RespawnComp).timer > 0 { return }
 
-    vis := draw_entity_visual_info(w, pid)
-    if !vis.ok { return }
+    frame, ok := sprite_frame_for(w, pid)
+    if !ok { return }
 
-    radius := vis.world_size * 0.30
-    ipos   := world_to_iso_v(pos)
+    tr   := comp_get(w, pid, .Transform, TransformComp)
+    feet := world_to_iso_v({ tr.position[0], tr.position[1] })
 
+    near_a := u8(clamp(f32(SHADOW_NEAR_ALPHA) * g_light_shadow_alpha, 0, 255))
+    far_a  := u8(clamp(f32(SHADOW_FAR_ALPHA)  * g_light_shadow_alpha, 0, 255))
 
-    rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 1.1, max(radius * 0.42, 2), rl.Color{ 4, 4, 2, 60  })
-    rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 0.8, max(radius * 0.32, 2), rl.Color{ 4, 4, 2, 110 })
-    rl.DrawEllipse(i32(ipos.x), i32(ipos.y), radius * 0.5, max(radius * 0.20, 1), rl.Color{ 4, 4, 2, 160 })
+    draw_projected_sprite_shadow(
+        frame.tex, frame.src, feet,
+        frame.world_size, frame.aspect, frame.anchor, frame.ground, frame.flip_x,
+        sun_dir(), g_light_sun_elevation,
+        near_a, far_a, rl.Color{ 6, 7, 5, 255 },
+    )
 }
 
 draw_entity_sprite_shadows :: proc(w: ^World) {
@@ -915,7 +906,6 @@ draw_fog_and_lights :: proc(w: ^World) {
         rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_intensity, &intensities, .FLOAT, c.int(count))
     }
 
-
     pass := c.int(0)
     rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
     rl.BeginShaderMode(g_foglight_shader)
@@ -924,7 +914,6 @@ draw_fog_and_lights :: proc(w: ^World) {
     }
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
     rl.EndShaderMode()
-
 
     if count > 0 {
         pass = c.int(1)
@@ -1074,6 +1063,7 @@ draw_lighting_widget :: proc() {
     lighting_slider(22, "Sprite Outline", &g_light_sprite_outline,          0.0, 2.5, { x, y + gap * 25, w, h })
     lighting_slider(23, "Sprite Diffuse", &g_light_sprite_diffuse,          0.0, 1.2, { x, y + gap * 26, w, h })
     lighting_slider(24, "Sprite Rim",     &g_light_sprite_rim,              0.0, 1.0, { x, y + gap * 27, w, h })
+    lighting_slider(25, "Sun Elev",       &g_light_sun_elevation,            10,  80, { x, y + gap * 28, w, h })
     lighting_slider(25, "Sprite Shadow",  &g_light_sprite_shadow_response,  0.0, 0.8, { x, y + gap * 28, w, h })
 
     div_y = y + gap * 29 - uis(6)

@@ -2,7 +2,6 @@ package main
 
 import rl   "vendor:raylib"
 
-
 g_lore_panel_id: u8 = 0
 
 ui_open_lore :: proc(lore_id: u8) {
@@ -10,17 +9,14 @@ ui_open_lore :: proc(lore_id: u8) {
     ui_open(.Lore)
 }
 
-
 draw_lore_panel :: proc() {
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
-
 
     if rl.IsKeyPressed(.ESCAPE) {
         ui_close(.Lore)
         return
     }
-
 
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 160})
 
@@ -30,7 +26,6 @@ draw_lore_panel :: proc() {
     PH  := uis(420)
     px  := (sw - PW) * 0.5
     py  := (sh - PH) * 0.5
-
 
     rl.DrawRectangleRec({px + uis(6), py + uis(6), PW, PH},
         rl.Color{0, 0, 0, 100})
@@ -56,7 +51,6 @@ draw_lore_panel :: proc() {
     rl.DrawRectangleLinesEx({px + uis(8), py + uis(8), PW - uis(16), PH - uis(16)},
         uis(1), rl.Color{140, 110, 55, 100})
 
-
     CORN := uis(14)
     corners := [4][2]f32{
         {px + uis(12), py + uis(12)},
@@ -72,14 +66,12 @@ draw_lore_panel :: proc() {
     }
 
     if !ok {
-
         msg := cstring("[ Document not found ]")
         msz := rl.MeasureTextEx(g_font_body, msg, uis(12), 1)
         rl.DrawTextEx(g_font_body, msg,
             {px + PW*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
             uis(12), 1, rl.Color{100, 80, 50, 180})
     } else {
-
         title := loc_lookup(cstring(&page.title[0]))
         title_fs := uis(16)
         tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
@@ -87,12 +79,10 @@ draw_lore_panel :: proc() {
             {px + PW*0.5 - tsz.x*0.5, py + uis(28)},
             title_fs, 1, rl.Color{80, 52, 18, 230})
 
-
         rl.DrawLineEx(
             {px + uis(32), py + uis(28) + title_fs + uis(4)},
             {px + PW - uis(32), py + uis(28) + title_fs + uis(4)},
             uis(1), rl.Color{110, 80, 32, 140})
-
 
         body_x   := px + uis(36)
         body_y   := py + uis(28) + title_fs + uis(18)
@@ -106,13 +96,11 @@ draw_lore_panel :: proc() {
         lore_draw_wrapped(body_str, body_x, body_y, body_w, body_fs, line_h, body_col)
     }
 
-
     hint := cstring("[ ESC to close ]")
     hsz  := rl.MeasureTextEx(g_font_body, hint, uis(9), 0.5)
     rl.DrawTextEx(g_font_body, hint,
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(22)},
         uis(9), 0.5, rl.Color{90, 68, 32, 160})
-
 
     mp := rl.GetMousePosition()
     if rl.IsMouseButtonPressed(.LEFT) &&
@@ -120,7 +108,6 @@ draw_lore_panel :: proc() {
         ui_close(.Lore)
     }
 }
-
 
 lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: rl.Color) {
     if len(text) == 0 { return }

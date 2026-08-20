@@ -1,6 +1,5 @@
 package main
 
-
 import rl "vendor:raylib"
 
 flask_system :: proc(w: ^World, _ev: SystemEvent, dt: f32) {
@@ -11,16 +10,13 @@ flask_system :: proc(w: ^World, _ev: SystemEvent, dt: f32) {
 
         inv := comp_get(w, pid, .Inventory, InventoryComp)
 
-
         if rl.IsKeyPressed(.ONE) {
             _try_use_flask(w, pid, inv, .Flask1)
         }
 
-
         if rl.IsKeyPressed(.TWO) {
             _try_use_flask(w, pid, inv, .Flask2)
         }
-
 
         if world_has_component(w, pid, .FlaskEffect) {
             fe := comp_get(w, pid, .FlaskEffect, FlaskEffectComp)
@@ -29,7 +25,6 @@ flask_system :: proc(w: ^World, _ev: SystemEvent, dt: f32) {
             if fe.remaining <= 0 {
                 comp_rm(w, pid, .FlaskEffect)
             } else {
-
                 if fe.heal_per_sec > 0 && world_has_component(w, pid, .Health) {
                     h := comp_get(w, pid, .Health, HealthComp)
                     if !world_has_component(w, pid, .Stats) ||
@@ -55,12 +50,9 @@ _try_use_flask :: proc(w: ^World, pid: int, inv: ^InventoryComp, slot: EquipSlot
     fc := comp_get(w, fid, .Flask, FlaskComp)
     if fc.charges <= 0 { return }
 
-
     fc.charges -= 1
 
-
     rate := fc.recover_amount / fc.recover_duration
-
 
     if world_has_component(w, pid, .FlaskEffect) {
         fe := comp_get(w, pid, .FlaskEffect, FlaskEffectComp)

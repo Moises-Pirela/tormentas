@@ -8,7 +8,6 @@ AppState :: enum {
     Playing,
 }
 
-
 PlayingSubstate :: enum {
     Gameplay,
     Hub,
@@ -23,22 +22,13 @@ g_hub_active: bool
 
 g_current_raid_level: int
 
-
 g_pending_raid_start: int
 
-
-// ---------------------------------------------------------------------------
-// Music state resolution (maps game state -> engine MusicState each frame)
-// ---------------------------------------------------------------------------
-
-COMBAT_MUSIC_HOLD :: f32(5.0)   // seconds of "combat" music after the last hit
+COMBAT_MUSIC_HOLD :: f32(5.0)
 g_combat_timer: f32
 
-// Called from combat code (damage involving the local player) to keep combat music up.
 mark_combat :: proc() { g_combat_timer = COMBAT_MUSIC_HOLD }
 
-// Resolves the desired music state from app/playing state, boss presence, and recent
-// combat, then hands it to the crossfading music system (which no-ops if unchanged).
 update_music_state :: proc(w: ^World) {
     dt := rl.GetFrameTime()
     if g_combat_timer > 0 { g_combat_timer = max(g_combat_timer - dt, 0) }
@@ -65,7 +55,6 @@ update_music_state :: proc(w: ^World) {
     }
     audio_music_set_state(state)
 }
-
 
 STASH_MAX_ITEMS :: 64
 STASH_COLS :: 12
@@ -96,7 +85,6 @@ stash_make_empty :: proc() -> Stash {
 raid_result_gold:   int
 raid_result_serums: int
 
-
 g_raid_serums_start: int
 
 g_paused: bool
@@ -105,7 +93,6 @@ set_playing_state :: proc(next: PlayingSubstate) {
     g_playing_state = next
     g_editor_mode   = (next == .Editor)
 }
-
 
 playing_collects_input :: proc() -> bool {
     return (g_playing_state == .Gameplay || g_playing_state == .Hub) &&
@@ -116,22 +103,18 @@ g_app_state: AppState = .MainMenu
 
 g_is_host: bool
 
-
 PLAYER_NAME_MAX :: 24
 g_player_name:  [PLAYER_NAME_MAX + 1]u8
 g_player_names: [4][PLAYER_NAME_MAX + 1]u8
-
 
 g_disconnect_msg_timer: f32
 DISCONNECT_MSG_DURATION :: f32(4.0)
 
 g_should_exit: bool
 
-
 g_loot_filter_rarity: ItemRarity = .Normal
 
 g_selected_class_idx: int = 0
-
 
 FADE_SPEED :: f32(2.5)
 

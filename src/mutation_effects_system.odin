@@ -180,21 +180,17 @@ _mut_tick_extra_dodge_charges :: proc(w: ^World, eid: int, dt: f32) {
     }
 }
 
-
 @(private = "file")
 _mut_tick_heart_cage :: proc(w: ^World, pid: int, eid: int, dt: f32) {
     if !world_has_component(w, eid, .MutHeartCage) { return }
     hc := comp_get(w, eid, .MutHeartCage, MutHeartCageComp)
     if hc.heart_id == INVALID_ENTITY { return }
 
-
     hc.orbit_angle += HEART_CAGE_ORBIT_SPEED * dt
-
 
     if !world_is_valid(w, hc.heart_id)                        { return }
     if !world_has_component(w, hc.heart_id, .Health)          { return }
     if comp_get(w, hc.heart_id, .Health, HealthComp).current <= 0          { return }
-
 
     if world_is_valid(w, hc.heart_id) &&
        world_has_component(w, pid, .Transform) {
@@ -215,7 +211,6 @@ _spawn_heart_entity :: proc(w: ^World, owner_id: int, max_hp: f32) -> int {
         pos[0] += HEART_CAGE_ORBIT_RADIUS
     }
     comp_set(w, id, .Transform, TransformComp{ position = pos })
-
 
     comp_set(w, id, .Collider, ColliderComp{ radius = 14, faction = 0 })
 
@@ -262,7 +257,6 @@ _mut_tick_black_lung :: proc(w: ^World, pid: int, eid: int, dt: f32) {
         }
     }
 }
-
 
 @(private = "file")
 _mut_early_false_saint_beacon :: proc(w: ^World, pid: int, eid: int) {

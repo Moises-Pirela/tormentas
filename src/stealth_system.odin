@@ -3,13 +3,11 @@ package main
 import "core:math"
 import rl "vendor:raylib"
 
-
 AI_STATE_IDLE       :: u8(0)
 AI_STATE_SUSPICIOUS :: u8(1)
 AI_STATE_SEARCHING  :: u8(2)
 AI_STATE_CHASE      :: u8(3)
 AI_STATE_ATTACK     :: u8(4)
-
 
 STEALTH_CONE_HALF   :: f32(math.PI / 2.8)
 STEALTH_RATE_LIT    :: f32(2.0)
@@ -20,7 +18,6 @@ STEALTH_NOISE_MED   :: f32(0.45)
 STEALTH_DARK_THRESH :: f32(0.40)
 STEALTH_SEARCH_TIME :: f32(4.5)
 
-
 NoiseEvent :: struct {
     pos:      [3]f32,
     radius:   f32,
@@ -29,11 +26,9 @@ NoiseEvent :: struct {
 
 g_noise_events: [dynamic]NoiseEvent
 
-
 emit_noise :: proc(pos: [3]f32, radius: f32, strength: f32) {
     append(&g_noise_events, NoiseEvent{ pos = pos, radius = radius, strength = strength })
 }
-
 
 stealth_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     #partial switch event {
@@ -42,7 +37,6 @@ stealth_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     case .LateUpdate:  clear(&g_noise_events)
     }
 }
-
 
 @(private = "file")
 _stealth_movement_noise :: proc(w: ^World) {
@@ -62,7 +56,6 @@ _stealth_movement_noise :: proc(w: ^World) {
     }
 }
 
-
 @(private = "file")
 _stealth_perception :: proc(w: ^World, dt: f32) {
     dark := g_light_ambient <= STEALTH_DARK_THRESH
@@ -74,11 +67,9 @@ _stealth_perception :: proc(w: ^World, dt: f32) {
         ai := comp_get(w, id, .AIAgent, AIAgentComp)
         t  := comp_get(w, id, .Transform, TransformComp)
 
-
         if ai.state == AI_STATE_ATTACK { continue }
 
         player_pos, _, has_player := nearest_player_pos(w, t.position)
-
 
         for &evt in g_noise_events {
             dx := evt.pos[0] - t.position[0]
@@ -89,7 +80,6 @@ _stealth_perception :: proc(w: ^World, dt: f32) {
                 ai.last_known_pos = evt.pos
             }
         }
-
 
         if has_player && ai.state < AI_STATE_CHASE {
             dx := player_pos[0] - t.position[0]
@@ -104,7 +94,6 @@ _stealth_perception :: proc(w: ^World, dt: f32) {
                 }
             }
         }
-
 
         if ai.state == AI_STATE_CHASE {
             if has_player {
@@ -123,14 +112,12 @@ _stealth_perception :: proc(w: ^World, dt: f32) {
             }
         }
 
-
         switch ai.state {
         case AI_STATE_IDLE:
             if ai.suspicion >= 0.25 { ai.state = AI_STATE_SUSPICIOUS }
 
         case AI_STATE_SUSPICIOUS:
             if ai.suspicion >= 1.0 {
-
                 if has_player {
                     dx := player_pos[0] - t.position[0]
                     dy := player_pos[1] - t.position[1]
@@ -163,7 +150,6 @@ _stealth_perception :: proc(w: ^World, dt: f32) {
             }
         }
 
-
         if ai.state < AI_STATE_CHASE {
             ai.suspicion = max(0, ai.suspicion - STEALTH_DECAY * dt)
         }
@@ -177,7 +163,6 @@ _stealth_angle_diff :: proc(a, b: f32) -> f32 {
     for diff < -math.PI { diff += 2 * math.PI }
     return diff
 }
-
 
 draw_stealth_indicators :: proc(w: ^World) {
     ids := world_query(w, query_mask(.AIAgent, .Transform))

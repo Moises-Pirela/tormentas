@@ -45,6 +45,16 @@
       "max_instances": 3, "min_interval_ms": 60, "priority": 4,
       "spatial": false,
       "preload": true
+    },
+
+    "step": {
+      "bus": "sfx",
+      "variants": ["sfx/step1", "sfx/step2", "sfx/step3"],
+      "select": "random",
+      "gain": 0.45, "gain_var": 0.08, "pitch_var": 0.12,
+      "max_instances": 4, "min_interval_ms": 90, "priority": 1,
+      "spatial": false,
+      "preload": true
     }
   }
 }

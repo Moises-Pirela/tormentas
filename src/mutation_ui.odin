@@ -5,11 +5,9 @@ import      "core:fmt"
 import      "core:math"
 import clay "../clay"
 
-
 MUT_PANEL_W  :: f32(680)
 MUT_PANEL_H  :: f32(560)
 MUT_CARD_GAP :: f32(8)
-
 
 @(private="file") MUT_BG       :: rl.Color{  10,  8, 16, 252 }
 @(private="file") MUT_BORDER   :: rl.Color{ 140, 60,200, 220 }
@@ -20,9 +18,7 @@ MUT_CARD_GAP :: f32(8)
 @(private="file") MUT_CANGET   :: rl.Color{ 180, 80,255, 220 }
 @(private="file") MUT_LOCKED   :: rl.Color{  70, 50, 90, 160 }
 
-
 @(private="file") g_mut_tab: MutationBranch = .Corpus
-
 
 @(private="file")
 mutation_branch_name :: proc(branch: MutationBranch) -> cstring {
@@ -85,19 +81,15 @@ draw_mutation_workbench_world :: proc(w: ^World) {
         fs, 0.5, rl.Color{ 220, 170, 255, pulse })
 }
 
-
 update_mutation_tree :: proc(w: ^World) {
     if !world_is_valid(w, w.player_id) { return }
     if !world_has_component(w, w.player_id, .MutationContainer) { return }
 
-    // Tab/card/reset clicks and wheel scrolling are handled in draw_mutation_tree
-    // (Clay immediate-mode + wired scroll); only ESC-to-close stays here.
     if input_pressed(.ESCAPE) {
         ui_close_top()
         return
     }
 }
-
 
 draw_mutation_tree :: proc(w: ^World) {
     if !world_is_valid(w, w.player_id) { return }
@@ -108,8 +100,8 @@ draw_mutation_tree :: proc(w: ^World) {
 
     pw      := uis(MUT_PANEL_W)
     ph      := uis(MUT_PANEL_H)
-    inner_w := pw - uis(28)                  // panel padding (~14 each side)
-    tab_w   := (inner_w - uis(8)) / 3        // 3 tabs, 2 gaps of uis(4)
+    inner_w := pw - uis(28)
+    tab_w   := (inner_w - uis(8)) / 3
     purple_active := rl.Color{ 50, 20, 80, 245 }
 
     clay.BeginLayout()
@@ -122,13 +114,11 @@ draw_mutation_tree :: proc(w: ^World) {
         title_col  = MUT_HEADER,
     })
     {
-        // Serum balance (right-aligned)
         ui_hstack_begin("MutSerumRow", 0, 0, .Center)
         ui_grow("MutSerumL")
         ui_label("MutSerums", string(tf(.MUT_SERUMS, mc.serums)), uis(9), MUT_OWNED)
         ui_hstack_end()
 
-        // Branch tabs
         ui_hstack_begin("MutTabs", u16(uis(4)), 0, .Center)
         for branch in MutationBranch {
             if ui_tab(fmt.tprintf("MutTab%d", int(branch)),
@@ -139,7 +129,6 @@ draw_mutation_tree :: proc(w: ^World) {
         }
         ui_hstack_end()
 
-        // Scrollable card list (grows to fill remaining height; footer sits below it)
         ui_scroll_begin("MutScroll")
         ui_vstack_begin("MutList", u16(uis(MUT_CARD_GAP)))
         for mt in MutationType {
@@ -190,7 +179,6 @@ draw_mutation_tree :: proc(w: ^World) {
         ui_vstack_end()
         ui_scroll_end()
 
-        // Footer: hint (left) + reset (right)
         ui_hstack_begin("MutFooter", u16(uis(8)), 0, .Center)
         ui_label("MutHint", string(t(.MUT_FOOTER)), uis(8), rl.Color{ 90, 70, 110, 180 })
         ui_grow("MutFooterSpc")

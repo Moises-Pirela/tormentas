@@ -46,7 +46,6 @@ draw_social_panel :: proc() {
     ui_panel_begin("SocialPanel", "Social", pw, ph,
         { anchor = .RightTop, offset = { -uis(14), uis(46) } })
     {
-        // Session status row
         ui_hstack_begin("SocStatus", u16(uis(6)), 0, .Center)
         ui_label("SocStatusLbl", "Session:", uis(10), COL_MUTED)
         ui_grow("SocStatusSpc")
@@ -55,7 +54,6 @@ draw_social_panel :: proc() {
 
         ui_divider("SocStatusDiv")
 
-        // Friends list
         if nf == 0 {
             ui_label("SocNoFriends",
                 g_steam_ok ? "No friends online" : "Steam not available",
@@ -87,7 +85,6 @@ draw_social_panel :: proc() {
 
         ui_grow("SocBtnSpacer")
 
-        // Bottom action button (centered)
         btn_w := uis(180)
         btn_h := uis(34)
         ui_hstack_begin("SocActionRow", 0, 0, .Center)

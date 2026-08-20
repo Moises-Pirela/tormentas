@@ -63,8 +63,6 @@ _on_black_to_menu :: proc() {
     fade_from_black()
 }
 
-// Accepted a co-op invite from outside the hub (menu or mid-raid): rebuild a fresh
-// hub as a client and connect to the host.
 @(private)
 _on_black_join_invite :: proc() {
     if g_sim_alive { shutdown_game() }
@@ -79,10 +77,8 @@ _on_black_join_invite :: proc() {
     fade_from_black()
 }
 
-
 update_main_menu :: proc(dt: f32) {
     if g_disconnect_msg_timer > 0 { g_disconnect_msg_timer -= dt }
-
 
     if ui_any() {
         top, ok := ui_top()
@@ -94,7 +90,6 @@ update_main_menu :: proc(dt: f32) {
                 update_keybinds_screen()
             case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor, .PauseMenu,
                  .LevelSelect, .Lore, .Phonograph, .Social, .QuestBoard:
-
             }
         }
         return
@@ -181,10 +176,7 @@ draw_main_menu :: proc() {
     if exit_hot && rl.IsMouseButtonReleased(.LEFT) {
         g_should_exit = true
     }
-
-
 }
-
 
 SLOT_CARD_W :: f32(160)
 SLOT_CARD_H :: f32(110)
@@ -333,7 +325,6 @@ _mm_draw_char_select :: proc() {
         cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
         _mm_btn_draw(create_r, t(.MENU_BTN_CREATE), false)
         _mm_btn_draw(cancel_r, t(.MENU_BTN_CANCEL), false)
-
     } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
         play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
         delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
@@ -416,7 +407,6 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     }
 }
 
-
 @(private = "file")
 _mm_update_play_options :: proc() {
     sw := f32(rl.GetScreenWidth())
@@ -478,7 +468,6 @@ _mm_draw_play_options :: proc() {
     _mm_btn_draw(back_r, t(.MENU_BTN_BACK), false)
 }
 
-
 update_connecting :: proc(dt: f32) {
     g_mm.conn_timer += dt
 
@@ -531,7 +520,6 @@ draw_connecting :: proc() {
         {cx - csz.x * 0.5, sh * 0.58},
         cfs, 0.5, rl.Color{110, 100, 72, 180})
 }
-
 
 _mm_btn_hit :: proc(r: rl.Rectangle) -> bool {
     return rl.IsMouseButtonReleased(.LEFT) &&

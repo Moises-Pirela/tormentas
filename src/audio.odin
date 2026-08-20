@@ -7,23 +7,11 @@ import        "core:os"
 import        "core:strings"
 import json   "core:encoding/json"
 
-// ---------------------------------------------------------------------------
-// Audio pipeline (engine-grade)
-//
-// Phase 1: data-driven sound bank + alias voice pools + variation + throttling.
-// Phase 2: priority-based global voice stealing (important sounds win under load).
-// Phase 3: music/ambience state machine with crossfades + music ducking.
-//
-// Game code keeps calling play_sfx / play_sfx_at / play_music / play_ambience.
-// Events come from data/sounds/audio.json or auto-register with sane defaults.
-// ---------------------------------------------------------------------------
-
 g_vol_master:   f32 = 1.0
 g_vol_sfx:      f32 = 1.0
 g_vol_music:    f32 = 0.7
 g_vol_ambience: f32 = 0.5
 g_vol_voice:    f32 = 1.0
-
 
 g_listener_pos: [3]f32
 
@@ -36,7 +24,7 @@ set_audio_listener :: proc(pos: [3]f32) {
 
 AUDIO_MANIFEST_PATH     :: "data/sounds/audio.json"
 AUDIO_SOUND_DIR         :: "data/sounds/"
-AUDIO_MAX_ALIASES_TOTAL :: 48   // global safety cap on concurrent voices
+AUDIO_MAX_ALIASES_TOTAL :: 48
 
 AudioBus     :: enum u8 { SFX, Music, Ambience, Voice, UI }
 AudioSelect  :: enum u8 { First, Random, RoundRobin }
@@ -47,21 +35,21 @@ MusicState   :: enum u8 { None, Menu, Hub, Explore, Combat, Boss, Tension }
 AudioEventDef :: struct {
     name:          string,
     bus:           AudioBus,
-    variants:      []string,   // paths relative to AUDIO_SOUND_DIR, no extension
+    variants:      []string,
     select:        AudioSelect,
     gain:          f32,
     gain_var:      f32,
     pitch:         f32,
     pitch_var:     f32,
     max_instances: int,
-    min_interval:  f32,        // seconds
+    min_interval:  f32,
     priority:      int,
     spatial:       bool,
     rolloff:       AudioRolloff,
     inner:         f32,
     outer:         f32,
     preload:       bool,
-    // runtime state
+
     rr_index:      int,
     last_play_t:   f64,
 }
@@ -79,37 +67,35 @@ AliasPool :: struct {
     voices: [dynamic]AliasVoice,
 }
 
-// Two-stream crossfading player, used for both music and ambience.
 @(private = "file")
 CrossfadeStream :: struct {
     bus:      AudioBus,
     streams:  [2]rl.Music,
     loaded:   [2]bool,
-    active:   int,        // index of the current (incoming) track
+    active:   int,
     cur_stem: string,
     fading:   bool,
-    fade_t:   f32,        // 0..1
-    fade_dur: f32,        // seconds
+    fade_t:   f32,
+    fade_dur: f32,
 }
 
 @(private = "file") g_event_defs:  [dynamic]AudioEventDef
 @(private = "file") g_event_index: map[string]int
 @(private = "file") g_pools:       [dynamic]AliasPool
-@(private = "file") g_pool_index:  map[string]int   // variant path -> pool index
+@(private = "file") g_pool_index:  map[string]int
 @(private = "file") g_alias_total: int
 
 @(private = "file") g_voice_cache: map[string]rl.Sound
 
 @(private = "file") g_music_cf:     CrossfadeStream
 @(private = "file") g_amb_cf:       CrossfadeStream
+@(private = "file") g_amb_bed_cf:   CrossfadeStream
 @(private = "file") g_music_state:  MusicState = .None
-@(private = "file") g_music_states: map[string]string   // state key -> stem
+@(private = "file") g_music_states: map[string]string
 
-// Music ducking envelope.
-@(private = "file") g_music_duck:    f32 = 1   // current multiplier applied to music
-@(private = "file") g_duck_hold:     f32       // seconds remaining at full dip
-@(private = "file") g_duck_release:  f32 = 0.3 // seconds to recover to 1
-
+@(private = "file") g_music_duck:    f32 = 1
+@(private = "file") g_duck_hold:     f32
+@(private = "file") g_duck_release:  f32 = 0.3
 
 init_audio :: proc() {
     rl.InitAudioDevice()
@@ -119,6 +105,7 @@ init_audio :: proc() {
     g_music_states = make(map[string]string)
     g_music_cf.bus = .Music
     g_amb_cf.bus   = .Ambience
+    g_amb_bed_cf.bus = .Ambience
     _audio_load_manifest()
     _audio_preload()
 }
@@ -139,6 +126,7 @@ shutdown_audio :: proc() {
 
     _cf_unload(&g_music_cf)
     _cf_unload(&g_amb_cf)
+    _cf_unload(&g_amb_bed_cf)
     delete(g_music_states)
 
     rl.CloseAudioDevice()
@@ -149,16 +137,10 @@ update_audio :: proc() {
     _duck_update(dt)
     _cf_update(&g_music_cf, dt)
     _cf_update(&g_amb_cf, dt)
+    _cf_update(&g_amb_bed_cf, dt)
 }
 
-// Music/ambience volumes are recomputed every frame in _cf_update, so slider
-// changes take effect automatically; nothing to push here.
 apply_bus_volumes :: proc() {}
-
-
-// ---------------------------------------------------------------------------
-// Public SFX API (unchanged signatures)
-// ---------------------------------------------------------------------------
 
 play_sfx :: proc(name: string) {
     _audio_play(name, false, {})
@@ -167,7 +149,6 @@ play_sfx :: proc(name: string) {
 play_sfx_at :: proc(name: string, world_pos: [3]f32) {
     _audio_play(name, true, world_pos)
 }
-
 
 @(private = "file")
 _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
@@ -180,7 +161,7 @@ _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
 
     variant := _select_variant(def)
     pidx    := _get_or_make_pool(variant)
-    if g_pools[pidx].source.frameCount == 0 { return }   // missing file -> silence
+    if g_pools[pidx].source.frameCount == 0 { return }
 
     gain := def.gain
     if def.gain_var > 0 { gain += _rand_pm(def.gain_var) }
@@ -267,11 +248,6 @@ _select_variant :: proc(def: ^AudioEventDef) -> string {
     return def.variants[0]
 }
 
-
-// ---------------------------------------------------------------------------
-// Event registry
-// ---------------------------------------------------------------------------
-
 @(private = "file")
 _event_idx :: proc(name: string) -> int {
     if idx, ok := g_event_index[name]; ok { return idx }
@@ -288,7 +264,7 @@ _register_default_event :: proc(name: string) -> int {
         pitch         = 1,
         max_instances = 4,
         priority      = 1,
-        spatial       = true,      // so play_sfx_at() positions un-manifested events
+        spatial       = true,
         rolloff       = .Linear,
     }
     def.variants = make([]string, 1)
@@ -303,11 +279,6 @@ _add_event :: proc(def: AudioEventDef) -> int {
     g_event_index[def.name] = idx
     return idx
 }
-
-
-// ---------------------------------------------------------------------------
-// Alias voice pools + priority stealing (phase 1 + 2)
-// ---------------------------------------------------------------------------
 
 @(private = "file")
 _get_or_make_pool :: proc(variant: string) -> int {
@@ -329,20 +300,17 @@ _load_source :: proc(variant: string) -> rl.Sound {
             return rl.LoadSound(pcs)
         }
     }
-    return rl.Sound{}   // frameCount == 0 -> treated as missing
+    return rl.Sound{}
 }
 
-// Returns an index into g_pools[pidx].voices ready to (re)play, or ok=false to drop.
 @(private = "file")
 _acquire_voice :: proc(pidx: int, priority: int, max_instances: int) -> (int, bool) {
-    // 1. reuse a finished voice in this pool
     for &v, i in g_pools[pidx].voices {
         if !rl.IsSoundPlaying(v.sound) { return i, true }
     }
-    // 2. room to grow this event's polyphony
+
     if len(g_pools[pidx].voices) < max(max_instances, 1) {
         if g_alias_total >= AUDIO_MAX_ALIASES_TOTAL {
-            // global cap: try to reclaim a slot (idle voice, or a less-important one)
             if !_reclaim_global_slot(priority) { return 0, false }
         }
         al := rl.LoadSoundAlias(g_pools[pidx].source)
@@ -350,7 +318,7 @@ _acquire_voice :: proc(pidx: int, priority: int, max_instances: int) -> (int, bo
         g_alias_total += 1
         return len(g_pools[pidx].voices) - 1, true
     }
-    // 3. at this event's cap: steal its own oldest voice
+
     oldest    := -1
     oldest_t  := f64(0)
     for &v, i in g_pools[pidx].voices {
@@ -363,12 +331,8 @@ _acquire_voice :: proc(pidx: int, priority: int, max_instances: int) -> (int, bo
     return 0, false
 }
 
-// Frees one global alias slot: prefers an idle voice anywhere; otherwise steals the
-// lowest-priority playing voice, but only if it is strictly less important than the
-// incoming sound. Returns false if nothing may be taken.
 @(private = "file")
 _reclaim_global_slot :: proc(incoming_priority: int) -> bool {
-    // Prefer unloading an idle voice (interrupts nothing).
     for &p in g_pools {
         for v, vi in p.voices {
             if !rl.IsSoundPlaying(v.sound) {
@@ -379,7 +343,7 @@ _reclaim_global_slot :: proc(incoming_priority: int) -> bool {
             }
         }
     }
-    // Else find the lowest-priority (then oldest) playing voice.
+
     found     := false
     low_pri   := 0
     low_t     := f64(0)
@@ -403,11 +367,6 @@ _reclaim_global_slot :: proc(incoming_priority: int) -> bool {
     return false
 }
 
-
-// ---------------------------------------------------------------------------
-// Music / ambience: crossfading state machine + ducking (phase 3)
-// ---------------------------------------------------------------------------
-
 audio_music_set_state :: proc(state: MusicState, fade_ms: f32 = 800) {
     if state == g_music_state { return }
     g_music_state = state
@@ -416,8 +375,6 @@ audio_music_set_state :: proc(state: MusicState, fade_ms: f32 = 800) {
     else          { _cf_set(&g_music_cf, stem, fade_ms) }
 }
 
-// Dip music by `amount` (0..1) for hold_ms, then recover over release_ms. Use under
-// stingers / voice lines.
 audio_duck_music :: proc(amount, hold_ms, release_ms: f32) {
     g_music_duck   = clamp(1 - amount, 0, 1)
     g_duck_hold    = hold_ms / 1000.0
@@ -435,6 +392,11 @@ play_ambience :: proc(stem: string) {
 }
 stop_ambience :: proc() {
     _cf_stop(&g_amb_cf, 600)
+    _cf_stop(&g_amb_bed_cf, 600)
+}
+
+play_ambience_bed :: proc(stem: string) {
+    _cf_set(&g_amb_bed_cf, fmt.tprintf("ambience/%s", stem), 1200)
 }
 
 @(private = "file")
@@ -442,7 +404,7 @@ _music_state_stem :: proc(state: MusicState) -> string {
     key := _music_state_key(state)
     if key == "" { return "" }
     if s, ok := g_music_states[key]; ok { return s }
-    return fmt.tprintf("music/%s", key)   // default convention if not in manifest
+    return fmt.tprintf("music/%s", key)
 }
 
 @(private = "file")
@@ -498,7 +460,7 @@ _cf_set :: proc(cf: ^CrossfadeStream, stem: string, fade_ms: f32) {
 @(private = "file")
 _cf_stop :: proc(cf: ^CrossfadeStream, fade_ms: f32) {
     if !cf.loaded[cf.active] && !cf.fading { return }
-    // Fade toward a silent (unresolved) track.
+
     incoming := 1 - cf.active
     if cf.loaded[incoming] {
         rl.StopMusicStream(cf.streams[incoming])
@@ -567,30 +529,6 @@ _resolve_stream_path :: proc(stem: string) -> (cstring, bool) {
     return nil, false
 }
 
-
-// ---------------------------------------------------------------------------
-// Voice (one-shot dialogue; simple single-instance cache)
-// ---------------------------------------------------------------------------
-
-play_voice :: proc(stem: string) {
-    s, cached := g_voice_cache[stem]
-    if !cached {
-        path_buf: [128]u8
-        path := fmt.bprintf(path_buf[:127], "data/sounds/voice/%s.wav", stem)
-        path_buf[len(path)] = 0
-        s = rl.LoadSound(cstring(&path_buf[0]))
-        g_voice_cache[stem] = s
-    }
-    if s.frameCount == 0 { return }
-    rl.SetSoundVolume(s, clamp(g_vol_master * g_vol_voice, 0, 1))
-    rl.PlaySound(s)
-}
-
-
-// ---------------------------------------------------------------------------
-// Manifest loading (data/sounds/audio.json)
-// ---------------------------------------------------------------------------
-
 @(private = "file")
 _audio_load_manifest :: proc() {
     data, ok := os.read_entire_file(AUDIO_MANIFEST_PATH)
@@ -613,7 +551,6 @@ _audio_load_manifest :: proc() {
         }
     }
 
-    // Optional music-state -> stem table.
     if music, m_ok := obj["music"].(json.Object); m_ok {
         for key, val in music {
             #partial switch s in val {
@@ -632,9 +569,6 @@ _audio_preload :: proc() {
     }
 }
 
-// Hot-reload the manifest at runtime (dev iteration). Rebuilds the event registry
-// from audio.json; existing alias pools/sources stay cached and are reused, new
-// variant paths pool lazily on next play.
 audio_reload :: proc() {
     _audio_clear_events()
     _audio_load_manifest()
@@ -654,14 +588,12 @@ _audio_clear_events :: proc() {
     clear(&g_music_states)
 }
 
-// Names of every registered event, for a debug/audition listing (temp-allocated).
 audio_debug_event_names :: proc(allocator := context.temp_allocator) -> []string {
     out := make([]string, len(g_event_defs), allocator)
     for def, i in g_event_defs { out[i] = def.name }
     return out
 }
 
-// Set the music state from a string key (for console/debug). Returns false if unknown.
 audio_music_set_state_named :: proc(name: string) -> bool {
     st, ok := _music_state_from_key(name)
     if !ok { return false }
@@ -750,9 +682,6 @@ _parse_rolloff :: proc(s: string) -> AudioRolloff {
     return .Linear
 }
 
-
-// ---- small JSON helpers (values are freed after load, so callers clone) ----
-
 @(private = "file")
 _jf32 :: proc(o: json.Object, key: string, d: f32) -> f32 {
     v, ok := o[key]
@@ -811,4 +740,54 @@ _jstr_array :: proc(o: json.Object, key: string) -> []string {
         }
     }
     return out[:n]
+}
+
+FOOTSTEP_DISTANCE  :: f32(120.0)
+FOOTSTEP_MIN_SPEED :: ANIM_WALK_SPEED_THRESH
+
+@(private = "file") g_step_accum:    f32
+@(private = "file") g_step_last_pos: [2]f32
+@(private = "file") g_step_primed:   bool
+
+tick_footsteps :: proc(w: ^World, dt: f32) {
+    pid := w.player_id
+    if !world_is_valid(w, pid) || !world_has_component(w, pid, .Transform) {
+        g_step_primed = false
+        return
+    }
+
+    if world_has_component(w, pid, .DodgeState) && comp_get(w, pid, .DodgeState, DodgeComp).active {
+        g_step_primed = false
+        return
+    }
+    if world_has_component(w, pid, .Respawn) && comp_get(w, pid, .Respawn, RespawnComp).timer > 0 {
+        g_step_primed = false
+        return
+    }
+
+    p := comp_get(w, pid, .Transform, TransformComp).position
+    iso := world_to_iso_xy(p[0], p[1])
+    cur := [2]f32{ iso.x, iso.y }
+
+    if !g_step_primed {
+        g_step_last_pos = cur
+        g_step_accum    = 0
+        g_step_primed   = true
+        return
+    }
+
+    d := [2]f32{ cur[0] - g_step_last_pos[0], cur[1] - g_step_last_pos[1] }
+    g_step_last_pos = cur
+
+    moved := math.sqrt(d[0]*d[0] + d[1]*d[1])
+    if dt > 0 && moved / dt < FOOTSTEP_MIN_SPEED {
+        g_step_accum = max(g_step_accum - moved, 0)
+        return
+    }
+
+    g_step_accum += moved
+    for g_step_accum >= FOOTSTEP_DISTANCE {
+        g_step_accum -= FOOTSTEP_DISTANCE
+        play_sfx("step")
+    }
 }

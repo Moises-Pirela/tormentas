@@ -2,10 +2,10 @@
   "frame_width": 512,
   "frame_height": 512,
   "columns": 8,
-  "anchor": [256, 500],
+  "anchor": [271, 421],
   "states": {
-    "idle":  { "start_frame": 0,  "frame_count": 8, "fps": 8,  "looping": true },
-    "walk":  { "start_frame": 8,  "frame_count": 7, "fps": 12, "looping": true },
-    "dodge": { "start_frame": 16, "frame_count": 5, "fps": 18, "looping": false }
+    "idle": { "start_frame": 0, "frame_count": 8, "fps": 8.0, "looping": true },
+    "walk": { "start_frame": 8, "frame_count": 7, "fps": 12.0, "looping": true },
+    "dodge": { "start_frame": 16, "frame_count": 5, "fps": 18.0, "looping": false }
   }
 }

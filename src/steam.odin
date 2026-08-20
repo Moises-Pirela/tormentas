@@ -10,8 +10,6 @@ g_steam_pipe:         sw.HSteamPipe
 g_steam_lobby_id:     sw.CSteamID
 g_pending_join_lobby: sw.CSteamID
 
-// A resolved, accept-able co-op invitation, surfaced as an on-screen prompt so the
-// player can join from anywhere rather than only while sitting in the hub.
 g_invite_pending:   bool
 g_invite_host_id:   sw.CSteamID
 g_invite_host_name: [64]u8
@@ -57,9 +55,7 @@ steam_run_callbacks :: proc() {
         defer sw.ManualDispatch_FreeLastCallback(g_steam_pipe)
         #partial switch cb.iCallback {
         case .GameLobbyJoinRequested:
-            // Accepting an invite only tells us *which* lobby to join — we must
-            // actually enter it before its data (host_id) becomes readable. The
-            // real join is kicked off in the LobbyEnter callback below.
+
             req := (^sw.GameLobbyJoinRequested)(cb.pubParam)
             fmt.printf("[steam] lobby join requested: %d\n", u64(req.steamIDLobby))
             sw.Matchmaking_JoinLobby(sw.Matchmaking(), req.steamIDLobby)
@@ -67,7 +63,7 @@ steam_run_callbacks :: proc() {
         case .LobbyEnter:
             ev    := (^sw.LobbyEnter)(cb.pubParam)
             lobby := sw.CSteamID(ev.ulSteamIDLobby)
-            // The host also gets LobbyEnter for the lobby it created — skip that one.
+
             if lobby != g_steam_lobby_id {
                 g_pending_join_lobby = lobby
                 fmt.printf("[steam] entered lobby: %d\n", u64(lobby))

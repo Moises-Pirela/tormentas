@@ -93,7 +93,6 @@ draw_quest_board_panel :: proc(w: ^World) {
             card_bdr := rl.Color{70, 150, 70, 140} if done else COL_RULE
             ui_card_begin(fmt.tprintf("QBCard%d", idx), card_bg, card_bdr, u16(uis(5)))
             {
-                // Title row + COMPLETED badge
                 ui_hstack_begin(fmt.tprintf("QBTitleRow%d", idx), 0, 0, .Center)
                 ui_label(fmt.tprintf("QBTitle%d", idx), string(t(def.title_key)), uis(12),
                     rl.Color{120, 200, 120, 255} if done else COL_PARCH)
@@ -106,7 +105,6 @@ draw_quest_board_panel :: proc(w: ^World) {
 
                 ui_label(fmt.tprintf("QBObj%d", idx), string(t(def.obj_key)), uis(10), COL_MUTED)
 
-                // Progress bar + count
                 ui_hstack_begin(fmt.tprintf("QBProg%d", idx), u16(uis(6)), 0, .Center)
                 ratio := f32(min(cur, tgt)) / f32(tgt) if tgt > 0 else 0
                 ui_hbar(fmt.tprintf("QBBar%d", idx), ratio,

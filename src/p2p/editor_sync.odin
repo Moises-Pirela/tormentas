@@ -7,6 +7,7 @@ EditorOpAction :: enum u8 {
     Erase         = 2,
     ClearAll      = 3,
     EraseObjects  = 4,
+    FillWalkable  = 5,
 }
 
 EditorOp :: struct #packed {
@@ -18,7 +19,6 @@ EditorOp :: struct #packed {
 }
 
 EDITOR_OP_SIZE :: size_of(EditorOp)
-
 
 EditorModOp :: struct #packed {
     tx:    i16,

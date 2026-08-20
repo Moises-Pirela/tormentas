@@ -5,19 +5,16 @@ import "core:fmt"
 import rl   "vendor:raylib"
 import clay "../clay"
 
-
 MAX_SHOP_STOCK   :: 6
 GOLD_DROP_MIN    :: 3
 GOLD_DROP_MAX    :: 18
 
 SELL_RATIO :: f32(0.4)
 
-
 ShopEntry :: struct {
     item_name:  string,
     base_price: int,
 }
-
 
 RARITY_PRICE_MULT := [ItemRarity]int{
     .Normal    = 1,
@@ -26,7 +23,6 @@ RARITY_PRICE_MULT := [ItemRarity]int{
     .Legendary = 8,
     .Unique    = 16,
 }
-
 
 @(private = "file")
 SHOP_CATALOGUE := [?]ShopEntry{
@@ -47,7 +43,6 @@ SHOP_CATALOGUE := [?]ShopEntry{
     { item_name = "ITEM_NECROTIC_SERUM3_NAME",     base_price = 55 },
 }
 
-
 MAX_NPC_ENTITIES :: 32
 
 StockSlot :: struct {
@@ -55,13 +50,10 @@ StockSlot :: struct {
     price:       int,
 }
 
-
 g_shop_stock:     [MAX_NPC_ENTITIES][MAX_SHOP_STOCK]StockSlot
 g_shop_stk_count: [MAX_NPC_ENTITIES]int
 
-
 g_shop_npc_id:  int = INVALID_ENTITY
-
 
 spawn_gold_drop :: proc(w: ^World, world_pos: [3]f32, amount: int) {
     if amount <= 0 { return }
@@ -72,14 +64,12 @@ spawn_gold_drop :: proc(w: ^World, world_pos: [3]f32, amount: int) {
     comp_add(w, id, .FogOfWar)
 }
 
-
 gold_drop_amount :: proc(tick: u64, entity_id: int) -> int {
     seed   := loot_seed(tick, entity_id) ~ 0x1234567890abcdef
     rstate := rand.create(seed)
     context.random_generator = rand.default_random_generator(&rstate)
     return GOLD_DROP_MIN + rand.int_max(GOLD_DROP_MAX - GOLD_DROP_MIN + 1)
 }
-
 
 shop_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
@@ -88,7 +78,6 @@ shop_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
     seed   := loot_seed(u64(level_num), npc_id) ~ 0xfeedfacecafebeef
     rstate := rand.create(seed)
     context.random_generator = rand.default_random_generator(&rstate)
-
 
     cat_copy: [len(SHOP_CATALOGUE)]int
     for i in 0..<len(SHOP_CATALOGUE) { cat_copy[i] = i }
@@ -103,7 +92,6 @@ shop_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
         cat := SHOP_CATALOGUE[cat_copy[i]]
         def := loot_find_by_name(cat.item_name)
         if def == nil { continue }
-
 
         item_id := world_create_entity(w)
         comp_set(w, item_id, .Transform, TransformComp{})
@@ -152,7 +140,6 @@ shop_roll_stock :: proc(w: ^World, npc_id: int, level_num: int) {
     }
 }
 
-
 shop_clear_stock :: proc(w: ^World, npc_id: int) {
     slot_idx := npc_id % MAX_NPC_ENTITIES
     n := g_shop_stk_count[slot_idx]
@@ -166,9 +153,7 @@ shop_clear_stock :: proc(w: ^World, npc_id: int) {
     g_shop_stk_count[slot_idx] = 0
 }
 
-
 SHOP_INTERACT_PROMPT_DIST :: f32(85)
-
 
 update_shop :: proc(w: ^World) {
     pid := w.player_id
@@ -181,7 +166,6 @@ update_shop :: proc(w: ^World) {
         return
     }
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
-
 
     npc_ids := world_query(w, query_mask(.NPC, .Transform))
     defer delete(npc_ids)
@@ -201,7 +185,6 @@ update_shop :: proc(w: ^World) {
     }
 }
 
-
 draw_shop_world :: proc(w: ^World) {
     if !world_has_component(w, w.player_id, .Transform) { return }
     player_pos := comp_get(w, w.player_id, .Transform, TransformComp).position
@@ -218,7 +201,6 @@ draw_shop_world :: proc(w: ^World) {
         dy  := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
 
-
         pos := world_to_iso_xy(nt.position[0], nt.position[1])
         rc   := comp_get(w, nid, .RenderConfig, RenderConfigComp)
         name := loc_lookup(render_config_name_cstr(rc))
@@ -227,7 +209,6 @@ draw_shop_world :: proc(w: ^World) {
         rl.DrawTextEx(g_font_body, name,
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
             nfs, 0.5, rl.Color{ 240, 215, 120, 220 })
-
 
         if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
             prompt    := t(.SHOP_INTERACT)
@@ -241,7 +222,6 @@ draw_shop_world :: proc(w: ^World) {
         }
     }
 }
-
 
 draw_shop_hud :: proc(w: ^World) {
     if !ui_has(.Shop) { return }
@@ -265,8 +245,7 @@ draw_shop_hud :: proc(w: ^World) {
     item_h   := uis(60)
 
     clay.BeginLayout()
-    // Shift left by half the inventory panel width — the inventory is docked on the
-    // right while the shop is open, so the shop centers in the area left of it.
+
     ui_panel_begin("ShopPanel", string(npc_name), uis(480), uis(520), {
         anchor     = .CenterCenter,
         offset     = { -f32(g_inv.panel_w) * 0.5, 0 },
@@ -277,7 +256,6 @@ draw_shop_hud :: proc(w: ^World) {
         title_fs   = uis(20),
     })
     {
-        // Header row: shop subtitle (left) + wallet gold (right)
         ui_hstack_begin("ShopHeader", 0, 0, .Center)
         ui_label("ShopSub", string(t(.SHOP_TITLE)), uis(10), COL_MUTED)
         ui_grow("ShopHeaderSpc")
@@ -285,7 +263,6 @@ draw_shop_hud :: proc(w: ^World) {
             rl.Color{ 255, 215, 50, 255 })
         ui_hstack_end()
 
-        // Stock list
         ui_vstack_begin("ShopList", u16(uis(8)))
         for i in 0..<n {
             ss := &g_shop_stock[slot_idx][i]
@@ -326,11 +303,9 @@ draw_shop_hud :: proc(w: ^World) {
         }
         ui_vstack_end()
 
-        // Sell section header
         ui_divider("ShopSellDiv")
         ui_label("ShopSell", string(t(.SHOP_SELL)), uis(11), COL_MUTED)
 
-        // Close hint
         ui_grow("ShopSpacer")
         ui_hstack_begin("ShopCloseRow", 0, 0, .Center)
         ui_grow("ShopCloseL")
@@ -343,11 +318,8 @@ draw_shop_hud :: proc(w: ^World) {
     clay_raylib_render(&cmds)
 }
 
-
 @(private = "file")
 _update_shop_panel :: proc(w: ^World) {
-
-
     if g_sell_item_id != INVALID_ENTITY {
         _shop_sell(w, g_sell_item_id)
         g_sell_item_id = INVALID_ENTITY
@@ -388,7 +360,6 @@ _shop_buy :: proc(w: ^World, stock_i: int) {
     }
 }
 
-
 shop_sell_price :: proc(item: ^ItemComp, base_price: int) -> int {
     p := int(f32(base_price * RARITY_PRICE_MULT[item.rarity]) * SELL_RATIO)
     return max(p, 1)
@@ -419,7 +390,6 @@ _shop_sell :: proc(w: ^World, item_id: int) {
     inv  := comp_get(w, pid, .Inventory, InventoryComp)
     item := comp_get(w, item_id, .Item, ItemComp)
 
-
     base_price := 25
     for ce in SHOP_CATALOGUE {
         def := loot_find_by_name(ce.item_name)
@@ -431,7 +401,6 @@ _shop_sell :: proc(w: ^World, item_id: int) {
     }
 
     sell_val := shop_sell_price(item, base_price)
-
 
     backpack_remove(inv, item)
 
@@ -449,6 +418,5 @@ _shop_sell :: proc(w: ^World, item_id: int) {
 
     save_player(w, pid)
 }
-
 
 g_sell_item_id: int = INVALID_ENTITY

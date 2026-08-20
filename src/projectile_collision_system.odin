@@ -11,10 +11,6 @@ SweepHit :: struct {
     id: int,
 }
 
-// Swept projectile collision: instead of a single end-of-tick point test (which lets
-// fast projectiles tunnel through targets and thin walls), we test the segment the
-// projectile travelled this tick (prev -> current) against walls (tile DDA) and targets
-// (ray vs inflated circle), resolving hits in travel order so pierce still works.
 projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
@@ -32,16 +28,13 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         bx := proj_t.position[0]
         by := proj_t.position[1]
-        // Projectiles only move via the integration step this tick, so the pre-move
-        // position reconstructs exactly. (On a projectile's very first tick the segment
-        // may point slightly behind the muzzle — negligible, ~one tick of travel.)
+
         ax := bx - proj.direction[0] * proj.speed * dt
         ay := by - proj.direction[1] * proj.speed * dt
 
         dx := bx - ax
         dy := by - ay
 
-        // Barely moved (very slow / lingering): fall back to a point-overlap test.
         if dx*dx + dy*dy < 1.0 {
             for target_id in target_ids {
                 if target_id == proj_id { continue }
@@ -61,10 +54,8 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             continue
         }
 
-        // A wall crossing caps how far along the segment a target can be hit.
-        t_wall := _raycast_walls_t(ax, ay, bx, by)
+        t_wall := raycast_walls_t(ax, ay, bx, by)
 
-        // Collect target intersections in [0, t_wall], ordered along the segment.
         hits:   [MAX_SWEEP_HITS]SweepHit
         n_hits: int
         for target_id in target_ids {
@@ -95,7 +86,6 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
 
         if destroyed {
-            // Snap to the hit point so the projectile doesn't render past its target.
             proj_t.position[0] = ax + dx * stop_t
             proj_t.position[1] = ay + dy * stop_t
             world_tag_destroy(w, proj_id)
@@ -107,8 +97,6 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     }
 }
 
-// Applies damage + on-hit effects for one target, returns true if the projectile should
-// be destroyed (i.e. it had no pierce left).
 @(private = "file")
 _apply_proj_hit :: proc(w: ^World, proj_id: int, proj: ^ProjectileComp, target_id: int, target_pos: [3]f32) -> (destroy: bool) {
     world_push_damage(w, target_id, proj.damage, proj.owner_id)
@@ -136,7 +124,6 @@ _apply_proj_hit :: proc(w: ^World, proj_id: int, proj: ^ProjectileComp, target_i
     return true
 }
 
-// Earliest t in [0,1] where segment A->(A+d) enters the inflated target circle, if any.
 @(private = "file")
 _ray_circle_t :: proc(ax, ay, dx, dy, cx, cy, r: f32) -> (t: f32, hit: bool) {
     fx := ax - cx
@@ -144,7 +131,7 @@ _ray_circle_t :: proc(ax, ay, dx, dy, cx, cy, r: f32) -> (t: f32, hit: bool) {
     a  := dx*dx + dy*dy
     if a < 1e-9 { return 0, false }
     c  := fx*fx + fy*fy - r*r
-    if c <= 0 { return 0, true }              // segment starts inside the circle
+    if c <= 0 { return 0, true }
     b    := 2*(fx*dx + fy*dy)
     disc := b*b - 4*a*c
     if disc < 0 { return 0, false }
@@ -154,10 +141,7 @@ _ray_circle_t :: proc(ax, ay, dx, dy, cx, cy, r: f32) -> (t: f32, hit: bool) {
     return tt, true
 }
 
-// Tile DDA: earliest t in [0,1] where the segment enters a solid (non-floor) tile;
-// returns 1 if the whole segment is clear, 0 if it starts inside a wall.
-@(private = "file")
-_raycast_walls_t :: proc(ax, ay, bx, by: f32) -> f32 {
+raycast_walls_t :: proc(ax, ay, bx, by: f32) -> f32 {
     ix, iy := world_to_tile(ax, ay)
     if tile_base(tile_at(ix, iy)) != .Floor { return 0 }
 

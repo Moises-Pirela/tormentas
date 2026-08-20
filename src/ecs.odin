@@ -24,6 +24,10 @@ entity_is_active :: proc(e: ecs.Entity) -> bool {
     return ecs.entity_is_active(e)
 }
 
+world_entity_count :: proc(w: ^World) -> int {
+    return ecs.world_entity_count(&w.base)
+}
+
 world_has_component :: proc(w: ^World, id: int, ct: ComponentType) -> bool {
     return ecs.comp_has(&w.base, id, ct)
 }
@@ -202,6 +206,7 @@ make_world :: proc() -> World {
     ecs.comp_register(&w.base, ComponentType.Flask, FlaskComp)
     ecs.comp_register(&w.base, ComponentType.FlaskEffect, FlaskEffectComp)
     ecs.comp_register(&w.base, ComponentType.Resistance, ResistanceComp)
+    ecs.comp_register(&w.base, ComponentType.Greybox, GreyboxComp)
 
     return w
 }

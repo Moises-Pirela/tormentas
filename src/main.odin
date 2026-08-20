@@ -14,8 +14,7 @@ PLAYER_RADIUS :: 16.0
 
 TICK_RATE :: 60
 TICK_DT   :: f32(1.0 / TICK_RATE)
-// Max simulation ticks caught up in a single frame; beyond this we drop the backlog
-// so one long frame can't cascade into an ever-growing catch-up (spiral of death).
+
 MAX_CATCHUP_TICKS :: 5
 
 g_camera:            ^rl.Camera2D
@@ -50,12 +49,10 @@ do_sim_tick :: proc(sim: ^Simulation, local_frame: p2p.InputFrame, dt: f32) -> (
     return false
 }
 
-// Accept a pending co-op invitation from whatever state the player is in.
 accept_invite :: proc() {
     if !g_invite_pending { return }
     if p2p.session_is_online(&g_session) { g_invite_pending = false; return }
 
-    // Already in a hub: connect in place (the proven path).
     if g_app_state == .Playing && g_playing_state == .Hub {
         g_is_host = false
         copy(g_session.local_name[:], g_player_name[:])
@@ -64,8 +61,7 @@ accept_invite :: proc() {
         return
     }
 
-    // Otherwise load into a hub as a client first — which needs a chosen character.
-    if g_active_slot < 0 { return }   // prompt hints to pick a character
+    if g_active_slot < 0 { return }
     fade_to_black(_on_black_join_invite)
 }
 
@@ -116,7 +112,6 @@ init_game :: proc() {
     sim_register_system(&g_sim, { .Update      }, facing_system)
     sim_register_system(&g_sim, { .Update      }, weapon_system)
 
-
     sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system)
     sim_register_system(&g_sim, { .Update      }, ai_system)
     sim_register_system(&g_sim, { .Update      }, spawn_director_system)
@@ -140,6 +135,7 @@ init_game :: proc() {
     sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
     sim_register_system(&g_sim, { .LateUpdate  }, entity_separation_system)
     sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
+    sim_register_system(&g_sim, { .LateUpdate  }, greybox_collision_system)
     sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
     sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system)
 
@@ -172,6 +168,7 @@ init_game :: proc() {
 
     play_music("main_theme")
     play_ambience("wind")
+    play_ambience_bed("ambience_industrial")
 
     g_accumulator = 0
 }
@@ -239,7 +236,6 @@ update_playing :: proc(dt: f32) {
     if !g_sim_alive { return }
     w := &g_sim.world
 
-    // After handshake: send our character data to the peer once.
     if g_session.peer_ready && !g_session.char_data_sent && world_is_valid(w, w.player_id) {
         bytes := player_to_bytes(w, w.player_id)
         p2p.session_send_char_data(&g_session, bytes)
@@ -264,18 +260,18 @@ update_playing :: proc(dt: f32) {
     if input_pressed(.F6) && !g_console_open && !g_anim_ed.open {
         dbg_inspector_toggle()
     }
+    if input_pressed(.F5) && g_editor_mode && !g_console_open {
+        ed_set_mode(g_ed_mode == .Edit ? EditorMode.Live : EditorMode.Edit)
+    }
     update_lighting_widget()
 
-    if !g_console_open && !g_anim_ed.open && !dbg_inspector_wants_keys() {
-
+    if !g_console_open && !g_anim_ed.open && !imui_wants_keys() {
         switch g_playing_state {
-
         case .Editor:
             update_editor(dt)
 
         case .Hub:
 
-            // Client: pick up level-load notification sent by the host.
             if g_session.pending_level_load > 0 && g_session.local_slot != 0 {
                 n := g_session.pending_level_load
                 g_session.pending_level_load = 0
@@ -289,7 +285,6 @@ update_playing :: proc(dt: f32) {
                 break
             }
 
-            // Mid-hub join: spawn remote player once char data arrives.
             if p2p.session_is_online(&g_session) {
                 remote_slot := 1 - g_session.local_slot
                 if !g_hub_remote_spawned {
@@ -356,10 +351,7 @@ update_playing :: proc(dt: f32) {
             }
 
         case .ExtractScreen, .DeathScreen:
-
-
         }
-
 
         if input_is_ui() {
             top, ok := ui_top()
@@ -382,8 +374,6 @@ update_playing :: proc(dt: f32) {
                     update_ability_vendor(w)
                 case .Settings, .LevelSelect, .Inventory, .Stats,
                      .Lore, .Phonograph, .Social, .QuestBoard:
-
-
                 }
             }
         }
@@ -399,12 +389,11 @@ update_playing :: proc(dt: f32) {
             local_frame.actions = {}
             n += 1
             if n >= MAX_CATCHUP_TICKS {
-                g_accumulator = 0   // drop the backlog rather than spiral on a bad frame
+                g_accumulator = 0
                 break
             }
         }
     }
-
 
     if g_playing_state == .Gameplay &&
        world_is_valid(w, w.player_id) &&
@@ -424,6 +413,7 @@ update_playing :: proc(dt: f32) {
     tick_camera_shake(dt)
     tick_explosions(dt)
     tick_hit_flashes(dt)
+    tick_footsteps(w, dt)
 }
 
 @(private)
@@ -438,13 +428,12 @@ draw_playing :: proc() {
     rl.ClearBackground(rl.BLANK)
     rl.BeginMode2D(g_camera^)
     if g_hub_active {
-        draw_hub_background()   // pre-rendered town image replaces tilemap in hub (editor too)
+        draw_hub_background()
     } else if len(g_level_data.modules) > 0 {
-        draw_level_modules()    // prerendered modules; tiles are invisible collision (hub model)
+        draw_level_modules()
     } else {
         draw_tilemap()
     }
-    draw_player_contact_shadow(w)
     if g_playing_state == .Hub {
         draw_hub_world(w)
     }
@@ -459,6 +448,7 @@ draw_playing :: proc() {
 
     rl.BeginMode2D(g_camera^)
     draw_entity_sprite_shadows(w)
+    draw_player_projected_shadow(w)
     rl.EndMode2D()
 
     rl.BeginTextureMode(g_sprite_rt)
@@ -476,6 +466,7 @@ draw_playing :: proc() {
 
     rl.BeginMode2D(g_camera^)
     draw_editor_cell_overlay()
+    if !g_editor_mode { draw_player_aim_line(w) }
     draw_mutation_workbench_world(w)
     draw_stash_world(w)
     draw_ability_vendor_world(w)
@@ -501,11 +492,9 @@ draw_playing :: proc() {
         draw_raid_timer()
         draw_hud(w)
 
-
         if g_playing_state == .Hub {
             draw_hub_hud(w)
         }
-
 
         switch g_playing_state {
         case .ExtractScreen:
@@ -513,7 +502,6 @@ draw_playing :: proc() {
         case .DeathScreen:
             draw_death_screen(w)
         case .Gameplay, .Hub, .Editor:
-
         }
 
         draw_minimap(w)
@@ -523,10 +511,8 @@ draw_playing :: proc() {
         draw_loot_filter_hud()
     }
 
-
     draw_lighting_widget()
 }
-
 
 main :: proc() {
     if len(os.args) > 0 {
@@ -631,16 +617,12 @@ main :: proc() {
     steam_init()
     defer steam_shutdown()
 
-
     for !rl.WindowShouldClose() && !g_should_exit {
         dt := rl.GetFrameTime()
         defer free_all(context.temp_allocator)
 
         steam_run_callbacks()
 
-        // Once we've entered the invited lobby, resolve its host into a pending co-op
-        // invitation the player can accept from anywhere via the on-screen prompt.
-        // Retried each frame — lobby data can lag a frame behind LobbyEnter.
         if g_pending_join_lobby != 0 && !g_invite_pending && !p2p.session_is_online(&g_session) {
             host_id := steam_lobby_get_host_id(g_pending_join_lobby)
             if host_id != 0 && host_id != steam_get_local_id() {
@@ -655,7 +637,6 @@ main :: proc() {
             }
         }
 
-        // Invite prompt input (guarded against console / name-entry text capture).
         if g_invite_pending && !p2p.session_is_online(&g_session) {
             typing := g_console_open || (g_app_state == .MainMenu && g_mm.focus == .NewName)
             if !typing {
@@ -681,7 +662,6 @@ main :: proc() {
             update_playing(dt)
         }
 
-
         if ui_any() && input_pressed(rl.KeyboardKey(g_binds.ui.close_panel)) {
             ui_close_top()
         }
@@ -699,7 +679,6 @@ main :: proc() {
             draw_playing()
         }
 
-
         {
             ui_w := (^World)(nil)
             if g_app_state == .Playing && g_sim_alive {
@@ -712,10 +691,21 @@ main :: proc() {
         draw_anim_editor()
         draw_fade()
         draw_console()
-        dbg_inspector_draw()
+        if g_editor_mode { ed_gizmo_draw() }
+        imui_begin()
+        dbg_inspector_windows()
+        editor_imui_windows()
+        editor_entity_windows()
+        if g_editor_mode {
+            editor_paint_window()
+            editor_grid_window()
+            editor_levels_window()
+        }
+        imui_end()
         rl.EndDrawing()
     }
 
     dbg_inspector_shutdown()
+    imui_shutdown()
     if g_sim_alive { shutdown_game() }
 }

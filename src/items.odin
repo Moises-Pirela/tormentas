@@ -1,6 +1,5 @@
 package main
 
-
 import "core:math"
 import "core:math/rand"
 import "core:os"
@@ -31,7 +30,6 @@ affix_value_for_rarity :: proc(r: ItemRarity) -> f32 {
     return 0
 }
 
-
 @(private = "file")
 affix_stat_bonus_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
@@ -43,7 +41,6 @@ affix_stat_bonus_for_rarity :: proc(r: ItemRarity) -> f32 {
     }
     return 1
 }
-
 
 @(private = "file")
 affix_energy_regen_for_rarity :: proc(r: ItemRarity) -> f32 {
@@ -57,7 +54,6 @@ affix_energy_regen_for_rarity :: proc(r: ItemRarity) -> f32 {
     return 1
 }
 
-
 @(private = "file")
 affix_resist_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
@@ -70,10 +66,8 @@ affix_resist_for_rarity :: proc(r: ItemRarity) -> f32 {
     return 0.05
 }
 
-
 @(private = "file")
 FLASK_STATS := [FlaskKind][FlaskSize][2][3]f32{
-
     .Health = {
         .Small  = { {  60, 4, 3 }, { 100, 4, 3 } },
         .Medium = { { 140, 5, 2 }, { 220, 5, 2 } },
@@ -91,7 +85,6 @@ FLASK_STATS := [FlaskKind][FlaskSize][2][3]f32{
 FLASK_SIZE_NAMES := [FlaskSize]string{ .Small = "Small", .Medium = "Medium", .Large = "Large" }
 @(private = "file")
 FLASK_KIND_NAMES := [FlaskKind]string{ .Health = "Health", .Energy = "Energy" }
-
 
 create_flask_item :: proc(w: ^World, kind: FlaskKind, size: FlaskSize, rarity: ItemRarity) -> int {
     r := rarity if rarity <= .Rare else ItemRarity.Rare
@@ -123,7 +116,6 @@ create_flask_item :: proc(w: ^World, kind: FlaskKind, size: FlaskSize, rarity: I
     return id
 }
 
-
 flask_comp_from_save :: proc(slot: EquipSlot, size: FlaskSize, rarity: ItemRarity, saved_charges: int) -> FlaskComp {
     kind := FlaskKind.Health if slot == .Flask1 else FlaskKind.Energy
     ri   := min(int(rarity), 1)
@@ -145,14 +137,12 @@ flask_comp_from_save :: proc(slot: EquipSlot, size: FlaskSize, rarity: ItemRarit
 roll_affixes :: proc(item: ^ItemComp) {
     if item == nil { return }
 
-
     base_count := int(item.affix_count)
     for i in base_count..<len(item.affixes) { item.affixes[i] = {} }
 
     target := affix_count_for_rarity(item.rarity)
     to_add := max(0, target - base_count)
     if to_add == 0 || base_count >= len(item.affixes) { return }
-
 
     armor_pool  := [?]AffixType{
         .BonusHP, .Armor, .BonusMoveSpeed, .BonusEnergy, .HealthRegen,
@@ -184,7 +174,6 @@ roll_affixes :: proc(item: ^ItemComp) {
     }
     if len(pool_slice) == 0 { return }
 
-
     pool_copy := make([]AffixType, len(pool_slice), context.temp_allocator)
     pool_len  := 0
     for at in pool_slice {
@@ -195,7 +184,6 @@ roll_affixes :: proc(item: ^ItemComp) {
         if !already { pool_copy[pool_len] = at; pool_len += 1 }
     }
     pool_copy = pool_copy[:pool_len]
-
 
     for i := len(pool_copy) - 1; i > 0; i -= 1 {
         j := rand.int_max(i + 1)
@@ -289,9 +277,7 @@ backpack_find_free :: proc(inv: ^InventoryComp, item: ^ItemComp) -> (col, row: i
     return 0, 0, false
 }
 
-
 LootRaritySet :: bit_set[ItemRarity]
-
 
 MAX_BASE_AFFIXES :: 4
 
@@ -319,7 +305,6 @@ LootDef :: struct {
     base_affix_count:   u8,
     weapon_archetype:   WeaponArchetype,
 
-
     base_damage:      f32,
     base_fire_rate:   f32,
     base_ammo_max:    u8,
@@ -328,7 +313,6 @@ LootDef :: struct {
     base_armor:       f32,
     base_shield:      f32,
 }
-
 
 g_loot_table:      [dynamic]LootDef
 g_loot_file_data:  []u8
@@ -423,7 +407,6 @@ loot_table_destroy :: proc() {
     }
 }
 
-
 loot_find_by_name :: proc(name: string) -> ^LootDef {
     for &def in g_loot_table {
         if def.name == name { return &def }
@@ -431,10 +414,7 @@ loot_find_by_name :: proc(name: string) -> ^LootDef {
     return nil
 }
 
-
 roll_rarity_allowed :: proc(mask: LootRaritySet) -> ItemRarity {
-
-
     WEIGHTS := [ItemRarity]int{
         .Normal    = 750,
         .Rare      = 220,
@@ -454,7 +434,6 @@ roll_rarity_allowed :: proc(mask: LootRaritySet) -> ItemRarity {
     }
     return .Normal
 }
-
 
 @(private = "file")
 _csv_parse_line :: proc(line: string, fields: ^[dynamic]string) {
@@ -567,7 +546,6 @@ _parse_weapon_archetype :: proc(s: string) -> WeaponArchetype {
     return .None
 }
 
-
 @(private = "file")
 _parse_affix_list :: proc(s: string, out: []Affix) -> u8 {
     count := 0
@@ -595,10 +573,8 @@ _parse_affix_list :: proc(s: string, out: []Affix) -> u8 {
     return u8(count)
 }
 
-
 spawn_loot_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64, forced_rarity: Maybe(ItemRarity) = nil) {
     if len(g_loot_table) == 0 { return }
-
 
     pos: [3]f32 = world_pos
     {
@@ -616,13 +592,11 @@ spawn_loot_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64, forced_rarity: 
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
 
-
     total_weight := 0
     for &d in g_loot_table {
         if d.serum_value == 0 { total_weight += d.roll_weight }
     }
     if total_weight == 0 { return }
-
 
     pick := rand.int_max(total_weight)
     acc  := 0
@@ -681,9 +655,7 @@ spawn_loot_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64, forced_rarity: 
     comp_add(w, item_id, .FogOfWar)
 }
 
-
 SERUM_DROP_CHANCE :: f32(0.005)
-
 
 ITEM_DROP_CHANCE_UNIQUE    :: f32(0.0015)
 ITEM_DROP_CHANCE_LEGENDARY :: f32(0.0030)
@@ -694,7 +666,6 @@ ITEM_DROP_CHANCE_NORMAL    :: f32(0.6300)
 spawn_serum_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64) {
     rng_state                := rand.create(seed)
     context.random_generator  = rand.default_random_generator(&rng_state)
-
 
     serum1, serum3: ^LootDef
     for &d in g_loot_table {
@@ -726,9 +697,7 @@ spawn_serum_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64) {
     comp_add(w, item_id, .FogOfWar)
 }
 
-
 ABILITY_DROP_POOL :: [?]AbilityType{
-
     .CadavericSpasm, .OsseousSlam, .NecroticSurge, .CrushingGrip,
 
     .RapidDischarge, .DeliberateRound, .EtherVial, .Indexed,
@@ -738,9 +707,7 @@ ABILITY_DROP_POOL :: [?]AbilityType{
     .LaTormenta, .Overcharged, .InductionCoil, .GalvanicShock,
 }
 
-
 ABILITY_DROP_CHANCE :: f32(0.02)
-
 
 spawn_ability_drop :: proc(w: ^World, world_pos: [3]f32, seed: u64) {
     rng_state                := rand.create(seed)
@@ -778,7 +745,6 @@ _spawn_ability_item :: proc(w: ^World, world_pos: [3]f32, at: AbilityType) {
     comp_add(w, item_id, .FogOfWar)
 }
 
-
 create_ability_item :: proc(w: ^World, at: AbilityType) -> int {
     if at == .None                   { return INVALID_ENTITY }
     if int(at) >= len(ABILITY_DEFS)  { return INVALID_ENTITY }
@@ -808,9 +774,6 @@ create_ability_item :: proc(w: ^World, at: AbilityType) -> int {
 give_class_starter_items :: proc(w: ^World, pid: int, class_idx: int) {
     ci := clamp(class_idx, 0, 3)
 
-    // Ensure the visual reflects the chosen class immediately.
-    // get_entity_sprite_stem() returns g_player_stem directly, so this
-    // must be set before spawn_players sets the RenderConfig sprite key.
     stems := PLAYER_STEMS
     g_player_stem = stems[ci]
     g_selected_class_idx = ci
@@ -835,8 +798,6 @@ give_class_starter_items :: proc(w: ^World, pid: int, class_idx: int) {
 
     give_starter_items(w, pid)
 
-    // Each class gets its one archetype (see CLASS_WEAPON_ARCHETYPE). Sheriff keeps a
-    // fast-draw fire-rate affix on her starter pistol.
     extra := Affix{}
     if ci == 2 { extra = Affix{ type = .BonusFireRate, value = 0.30 } }
     if ci >= 0 && ci < 4 {
@@ -923,11 +884,9 @@ loot_seed :: proc(tick: u64, entity_id: int) -> u64 {
     return h
 }
 
-
 give_starter_items :: proc(w: ^World, pid: int) {
     if !world_has_component(w, pid, .Inventory) { return }
     inv := comp_get(w, pid, .Inventory, InventoryComp)
-
 
     hf_id := create_flask_item(w, .Health, .Small, .Normal)
     if world_is_valid(w, hf_id) {
@@ -935,13 +894,11 @@ give_starter_items :: proc(w: ^World, pid: int) {
         inv.equipped[int(EquipSlot.Flask1)] = hf_id
     }
 
-
     ef_id := create_flask_item(w, .Energy, .Small, .Normal)
     if world_is_valid(w, ef_id) {
         inv = comp_get(w, pid, .Inventory, InventoryComp)
         inv.equipped[int(EquipSlot.Flask2)] = ef_id
     }
-
 
     for &d in g_loot_table {
         if d.slot != .WeaponPrimary          { continue }
@@ -985,4 +942,3 @@ give_starter_items :: proc(w: ^World, pid: int) {
         break
     }
 }
-

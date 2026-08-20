@@ -5,7 +5,6 @@ in vec4 fragColor;
 
 out vec4 finalColor;
 
-// Raylib auto-binds the drawn texture here
 uniform sampler2D texture0;
 uniform sampler2D u_shadow_tex;
 uniform vec2  u_screen_size;

@@ -1,6 +1,5 @@
 package main
 
-
 import rl   "vendor:raylib"
 import clay "../clay"
 import      "core:fmt"
@@ -17,7 +16,6 @@ draw_stats_screen :: proc(w: ^World) {
     HPAD := u16(uis(20))
     VGAP := u16(uis(5))
 
-
     ROW_H  := uis(36)
     BTN_SZ := uis(26)
 
@@ -25,7 +23,6 @@ draw_stats_screen :: proc(w: ^World) {
     stat_values := [3]int{ st.strength, st.dexterity, st.science }
 
     xp_ratio := clamp(st.xp / st.xp_next, 0, 1) if st.xp_next > 0 else f32(0)
-
 
     eff_bufs: [3][32]u8
     eff_strs: [3]string
@@ -62,7 +59,6 @@ draw_stats_screen :: proc(w: ^World) {
 
     btn_active := st.stat_points > 0
 
-
     ui_frame_reset()
     clay.BeginLayout()
 
@@ -84,8 +80,6 @@ draw_stats_screen :: proc(w: ^World) {
         border          = { color = ui_clay_color(COL_RULE), width = { 1, 1, 1, 1, 0 } },
         cornerRadius    = clay.CornerRadiusAll(4),
     }) {
-
-
         if clay.UI(clay.ID("CharTitle"))({
             layout = {
                 sizing         = { clay.SizingGrow(), clay.SizingFit() },
@@ -101,7 +95,6 @@ draw_stats_screen :: proc(w: ^World) {
 
         ui_divider("CharDiv0")
 
-
         if clay.UI(clay.ID("CharLevel"))({
             layout = { sizing = { clay.SizingGrow(), clay.SizingFit() } },
         }) {
@@ -110,7 +103,6 @@ draw_stats_screen :: proc(w: ^World) {
                 textColor = ui_clay_color(COL_PARCH),
             }))
         }
-
 
         ui_hbar("CharXP", xp_ratio,
             rl.Color{ 180, 148, 36, 255 },
@@ -132,7 +124,6 @@ draw_stats_screen :: proc(w: ^World) {
 
         ui_divider("CharDiv1")
 
-
         if clay.UI(clay.ID("CharStatsHdr"))({
             layout = {
                 layoutDirection = .LeftToRight,
@@ -150,7 +141,6 @@ draw_stats_screen :: proc(w: ^World) {
                     rl.Color{ 200, 175, 60, 230 })
             }
         }
-
 
         for i in 0..<3 {
             row_id := fmt.tprintf("CharStatRow%d",  i)
@@ -172,25 +162,20 @@ draw_stats_screen :: proc(w: ^World) {
                 backgroundColor = { 18, 14, 10, 200 },
                 border          = { color = { 80, 65, 42, 120 }, width = { 1, 1, 1, 1, 0 } },
             }) {
-
-
                 clay.TextDynamic(string(stat_names[i]), clay.TextConfig({
                     fontSize  = u16(uis(15)),
                     textColor = ui_clay_color(COL_PARCH),
                 }))
 
-
                 if clay.UI(clay.ID(fmt.tprintf("CharStatSep%d", i)))({
                     layout = { sizing = { clay.SizingGrow(), clay.SizingGrow() } },
                 }) {}
-
 
                 clay.TextDynamic(eff_strs[i], clay.TextConfig({
                     fontSize      = u16(uis(12)),
                     textColor     = ui_clay_color(COL_MUTED),
                     letterSpacing = 2,
                 }))
-
 
                 val_str := fmt.tprintf("%d", stat_values[i])
                 if clay.UI(clay.ID(fmt.tprintf("CharStatVal%d", i)))({
@@ -204,7 +189,6 @@ draw_stats_screen :: proc(w: ^World) {
                         textColor = ui_clay_color(COL_BRASS),
                     }))
                 }
-
 
                 if clay.UI(clay.ID(btn_id))({
                     layout = {
@@ -220,12 +204,10 @@ draw_stats_screen :: proc(w: ^World) {
                         textColor = btn_col,
                     }))
                 }
-
             }
         }
 
         ui_divider("CharDiv2")
-
 
         ui_section("CharHistHdr", string(t(.STATS_HISTORY)))
 
@@ -254,7 +236,6 @@ draw_stats_screen :: proc(w: ^World) {
 
         ui_divider("CharDiv3")
 
-
         if clay.UI(clay.ID("CharClose"))({
             layout = {
                 sizing         = { clay.SizingGrow(), clay.SizingFit() },
@@ -267,11 +248,9 @@ draw_stats_screen :: proc(w: ^World) {
                 letterSpacing = 5,
             }))
         }
-
     }
 
     cmds := clay.EndLayout()
-
 
     if btn_active && rl.IsMouseButtonPressed(.LEFT) {
         mp := rl.GetMousePosition()

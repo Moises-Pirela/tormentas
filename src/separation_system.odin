@@ -1,6 +1,5 @@
 package main
 
-
 import      "core:math"
 
 entity_separation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
@@ -35,13 +34,10 @@ entity_separation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             overlap := min_d - dist
 
             if dist < 0.5 {
-
-
                 ta.position[1] -= overlap * 0.5
                 tb.position[1] += overlap * 0.5
                 continue
             }
-
 
             nx := dx / dist
             ny := dy / dist

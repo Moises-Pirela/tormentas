@@ -1,6 +1,5 @@
 package main
 
-
 import "core:math"
 
 homing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
@@ -13,7 +12,6 @@ homing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         h  := comp_get(w, pid, .Homing, HomingComp)
         pr := comp_get(w, pid, .Projectile, ProjectileComp)
         pt := comp_get(w, pid, .Transform, TransformComp)
-
 
         best_dist_sq := h.seek_range * h.seek_range
         if h.seek_range <= 0 { best_dist_sq = max(f32) }
@@ -37,15 +35,12 @@ homing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         if !target_found { continue }
 
-
         current_angle := math.atan2(pr.direction[1], pr.direction[0])
         target_angle  := math.atan2(target_dy, target_dx)
-
 
         diff := target_angle - current_angle
         for diff >  math.PI { diff -= 2.0 * math.PI }
         for diff < -math.PI { diff += 2.0 * math.PI }
-
 
         max_turn := h.turn_rate * dt
         turn     := clamp(diff, -max_turn, max_turn)

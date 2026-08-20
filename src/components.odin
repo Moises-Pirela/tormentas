@@ -1,6 +1,5 @@
 package main
 
-
 ComponentType :: enum u8 {
     Transform,
     Velocity,
@@ -96,6 +95,8 @@ ComponentType :: enum u8 {
     Flask,
     FlaskEffect,
     Resistance,
+
+    Greybox,
 }
 
 _inv_clear :: proc(ptr: rawptr) {
@@ -130,7 +131,6 @@ FlammableComp :: struct {
     isImmune : bool
 }
 
-
 InteractableComp :: struct {
     radius:       f32,
     prompt:       [48]u8,
@@ -139,7 +139,6 @@ InteractableComp :: struct {
     cooldown_max: f32,
 }
 
-
 OpenableComp :: struct {
     is_open:      bool,
     tile:         [2]int,
@@ -147,12 +146,10 @@ OpenableComp :: struct {
     blocks_sight: bool,
 }
 
-
 LockableComp :: struct {
     key_id:    u8,
     is_locked: bool,
 }
-
 
 SignalEmitterComp :: struct {
     link_id:       u8,
@@ -162,14 +159,12 @@ SignalEmitterComp :: struct {
     weight_radius: f32,
 }
 
-
 SignalReceiverComp :: struct {
     link_id: u8,
     invert:  bool,
 }
 
 ContainerKind :: enum u8 { Chest, Crate, Locker, Cabinet }
-
 
 ContainerComp :: struct {
     kind:          ContainerKind,
@@ -181,23 +176,19 @@ ContainerComp :: struct {
     link_id:       u8,
 }
 
-
 KeyPickupComp :: struct {
     key_id: u8,
     label:  [40]u8,
 }
 
-
 KeyRingComp :: struct {
     held: bit_set[0..<64; u64],
 }
-
 
 LoreItemComp :: struct {
     lore_id: u8,
     is_read: bool,
 }
-
 
 PhonographComp :: struct {
     recording_id: u8,
@@ -205,28 +196,23 @@ PhonographComp :: struct {
     play_timer:   f32,
 }
 
-
 AimLockComp :: struct {}
-
 
 DamageAmpComp :: struct {
     mult:  f32,
     timer: f32,
 }
 
-
 DamageAmpOnHitComp :: struct {
     mult: f32,
     dur:  f32,
 }
-
 
 HomingComp :: struct {
     turn_rate:  f32,
     seek_range: f32,
     owner_id:   int,
 }
-
 
 ProximityTriggerComp :: struct {
     arm_timer:    f32,
@@ -239,7 +225,6 @@ ProximityTriggerComp :: struct {
     er, eg, eb:   u8,
 }
 
-
 OverchargeBuffComp :: struct {
     speed_mult:     f32,
     fire_rate_mult: f32,
@@ -248,16 +233,13 @@ OverchargeBuffComp :: struct {
     timer:          f32,
 }
 
-
 KillHealComp :: struct {
     amount:   f32,
     duration: f32,
     timer:    f32,
 }
 
-
 ContagionTagComp :: struct {}
-
 
 GrenadeComp :: struct {
     owner_id:       int,
@@ -274,7 +256,6 @@ GrenadeComp :: struct {
     blink_on_land:  bool,
     er, eg, eb:     u8,
 }
-
 
 PoisonCloudComp :: struct {
     owner_id:       int,
@@ -472,23 +453,19 @@ HEART_CAGE_ORBIT_RADIUS :: f32(80.0)
 HEART_CAGE_ORBIT_SPEED  :: f32(0.9)
 CARRION_MAX_SERVANTS    :: 3
 
-
 MutHeartCageComp :: struct {
     heart_id:    int,
     max_hp_pct:  f32,
     orbit_angle: f32,
 }
 
-
 MutCarrionCrownComp :: struct {
     servant_ids: [CARRION_MAX_SERVANTS]int,
 }
 
-
 ReanimatedComp :: struct {
     owner_id: int,
 }
-
 
 MutBlackLungComp :: struct {
     pressure:     f32,
@@ -498,19 +475,16 @@ MutBlackLungComp :: struct {
     radius:       f32,
 }
 
-
 MutThornPactComp :: struct {
     reflect_pct:   f32,
     slow_heal_mult: f32,
 }
-
 
 MutFalseSaintComp :: struct {
     aura_radius:   f32,
     slow_mult:     f32,
     beacon_radius: f32,
 }
-
 
 PointLightComp :: struct {
     color:     [3]f32,
@@ -647,10 +621,8 @@ RespawnComp :: struct {
     timer:     f32,
 }
 
-
 FlaskKind :: enum u8 { Health, Energy }
 FlaskSize :: enum u8 { Small, Medium, Large }
-
 
 FlaskComp :: struct {
     kind:             FlaskKind,
@@ -661,13 +633,11 @@ FlaskComp :: struct {
     max_charges:      i32,
 }
 
-
 FlaskEffectComp :: struct {
     heal_per_sec:   f32,
     energy_per_sec: f32,
     remaining:      f32,
 }
-
 
 ResistanceComp :: struct {
     physical:  f32,
@@ -832,7 +802,6 @@ ItemComp :: struct {
 
     weapon_archetype: WeaponArchetype,
 
-
     base_damage:      f32,
     base_fire_rate:   f32,
     base_ammo_max:    u8,
@@ -865,7 +834,6 @@ WeaponArchetype :: enum u8 {
 WeaponType :: enum u8 { Melee, Ranged }
 
 WeaponComp :: struct {
-
     type:             WeaponType,
     damage:           f32,
     fire_rate:        f32,
@@ -874,7 +842,6 @@ WeaponComp :: struct {
     range:            f32,
     ammo_max:         int,
     reload_time:      f32,
-
 
     cooldown:         f32,
     ammo_current:     int,
@@ -887,12 +854,10 @@ EquipmentComp :: struct {
 }
 
 DodgeComp :: struct {
-
     active:       bool,
     direction:    [2]f32,
     timer:        f32,
     cooldown:     f32,
-
 
     duration:     f32,
     speed:        f32,
@@ -902,22 +867,18 @@ DodgeComp :: struct {
 AbilitySlotState :: struct {
     cooldown:      f32,
 
-
     burst_shots:   int,
     burst_timer:   f32,
     burst_dmg:     f32,
     burst_pierce:  i8,
 
-
     charging:      bool,
     charge_timer:  f32,
     charge_dmg:    f32,
 
-
     primed:        bool,
     primed_count:  int,
     primed_dmg:    f32,
-
 
     buff_timer:    f32,
     buff_value:    f32,
@@ -1000,7 +961,6 @@ render_config_set_desc :: proc(c: ^RenderConfigComp, desc: string) {
 render_config_desc_cstr :: proc(c: ^RenderConfigComp) -> cstring {
     return cstring(&c.desc[0])
 }
-
 
 status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
     if !world_has_component(w, id, .StatusEffect) {
@@ -1093,22 +1053,31 @@ StatsComp :: struct {
     nonlethal_shots:            bool,
     hp_locked_to_one:           bool,
 
-
     bonus_ammo_pct:  f32,
     bonus_pierce:    int,
-
 
     melee_damage_mult: f32,
     melee_range_mult:  f32,
     melee_speed_mult:  f32,
 
-
     shield_max: f32,
 
-
     energy_regen: f32,
-
 
     energy_cost_mult: f32,
 }
 
+GreyboxShape :: enum u8 {
+    Box,
+    Ramp,
+    Wedge,
+    Cylinder,
+    Platform,
+}
+
+GreyboxComp :: struct {
+    shape:      GreyboxShape,
+    size:       [3]f32,
+    r, g, b:    u8,
+    solid:      bool,
+}

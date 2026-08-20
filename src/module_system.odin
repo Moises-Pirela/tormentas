@@ -6,34 +6,19 @@ import      "core:strings"
 import json "core:encoding/json"
 import      "core:fmt"
 
-// ---------------------------------------------------------------------------
-// Prerendered level modules
-//
-// Levels are composed from hand-placed prerendered iso images — rooms, connectors,
-// landmarks — while collision/gameplay lives in the tile grid (painted invisibly in
-// the editor, same model as the hub's Town.png). A module is purely visual + a tile
-// footprint used for grid-snapped placement; collision is authored separately.
-//
-// Manifest: data/sprites/modules/modules.json
-//   { "modules": { "<id>": { "file": "<png stem>", "w": <tiles>, "h": <tiles>,
-//                            "off_x": <px>, "off_y": <px> }, ... } }
-// Images: data/sprites/modules/<file>.png
-// ---------------------------------------------------------------------------
-
 MODULE_DIR :: "data/sprites/modules/"
 
 ModuleDef :: struct {
     id:    string,
     tex:   rl.Texture2D,
-    w, h:  int,   // footprint in tiles (grid snapping / editor preview)
-    off_x: f32,   // iso-space draw offset for fine art alignment
+    w, h:  int,
+    off_x: f32,
     off_y: f32,
 }
 
-// A placed module instance within a level.
 LevelModule :: struct {
-    def_idx: int,   // index into g_modules (-1 if the id wasn't found in the manifest)
-    tx, ty:  i16,   // tile position of the module's origin
+    def_idx: int,
+    tx, ty:  i16,
 }
 
 g_modules:      [dynamic]ModuleDef
@@ -44,7 +29,7 @@ module_registry_init :: proc() {
     g_module_index = make(map[string]int)
 
     data, ok := os.read_entire_file(MODULE_DIR + "modules.json")
-    if !ok { return }   // no manifest yet — module system stays dormant
+    if !ok { return }
     defer delete(data)
 
     root, err := json.parse(data)
@@ -103,7 +88,6 @@ module_name :: proc(idx: int) -> string {
     return ""
 }
 
-// Place a module at a tile origin, replacing any module already anchored there.
 module_place_at :: proc(def_idx, tx, ty: int) {
     if def_idx < 0 || def_idx >= len(g_modules) { return }
     for i := len(g_level_data.modules) - 1; i >= 0; i -= 1 {
@@ -113,7 +97,6 @@ module_place_at :: proc(def_idx, tx, ty: int) {
     append(&g_level_data.modules, LevelModule{ def_idx = def_idx, tx = i16(tx), ty = i16(ty) })
 }
 
-// Remove the topmost module whose footprint covers the tile.
 module_erase_at :: proc(tx, ty: int) {
     for i := len(g_level_data.modules) - 1; i >= 0; i -= 1 {
         m := g_level_data.modules[i]
@@ -126,7 +109,6 @@ module_erase_at :: proc(tx, ty: int) {
     }
 }
 
-// Draw a translucent ghost of a module at a tile origin (editor placement preview).
 module_draw_ghost :: proc(def_idx, tx, ty: int) {
     if def_idx < 0 || def_idx >= len(g_modules) { return }
     def := g_modules[def_idx]
@@ -135,8 +117,6 @@ module_draw_ghost :: proc(def_idx, tx, ty: int) {
     rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, rl.Color{ 255, 255, 255, 130 })
 }
 
-// Draw the current level's placed modules — flat, behind entities, painter-sorted
-// back-to-front in iso (by tx+ty). Called in the raid world pass in place of the tilemap.
 draw_level_modules :: proc() {
     n := len(g_level_data.modules)
     if n == 0 { return }
@@ -163,7 +143,6 @@ draw_level_modules :: proc() {
         rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, rl.WHITE)
     }
 }
-
 
 @(private = "file")
 _mj_int :: proc(o: json.Object, k: string, d: int) -> int {

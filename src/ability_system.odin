@@ -1,8 +1,6 @@
 package main
 
-
 import "core:math"
-
 
 AbilityTrait :: enum u8 {
     None,
@@ -32,7 +30,6 @@ AbilityDamageSource :: enum u8 {
 SCIENCE_DAMAGE_PER_POINT :: f32(5.0)
 ABILITY_MAX_LEVEL        :: 5
 
-
 AbilityExecKind :: enum u8 {
     None,
     FireProjectile,
@@ -55,9 +52,7 @@ AbilityExecKind :: enum u8 {
     BuffStats,
 }
 
-
 SPIN_CHANNEL_DURATION :: f32(1.2)
-
 
 SPIN_ANGULAR_VELOCITY :: f32(20.0)
 
@@ -82,7 +77,6 @@ AbilityExecComp :: struct {
     blink_on_land:    bool,
 }
 
-
 AbilityDef :: struct {
     name:          string,
     desc:          string,
@@ -96,11 +90,8 @@ AbilityDef :: struct {
     exec_count: int,
 }
 
-
 ABILITY_DEFS := [AbilityType]AbilityDef{
-
     .None = {},
-
 
     .CadavericSpasm = {
         name = "Cadaveric Spasm",
@@ -161,7 +152,6 @@ ABILITY_DEFS := [AbilityType]AbilityDef{
         }, {}, {}, {} },
     },
 
-
     .RapidDischarge = {
         name = "Rapid Discharge",
         desc = "Bypass the magazine — fire 6 rounds from the chamber in rapid succession.",
@@ -212,7 +202,6 @@ ABILITY_DEFS := [AbilityType]AbilityDef{
         }, {}, {}, {} },
     },
 
-
     .VetriolFlask = {
         name = "Vetriol Flask",
         desc = "Hurl a flask of vitriol acid to the cursor; it explodes on landing and leaves a corrosive Poison cloud.",
@@ -236,7 +225,6 @@ ABILITY_DEFS := [AbilityType]AbilityDef{
         damage_source = .Science,
         cd_max = 10, level_scale = 0.14, energy_cost = 20, exec_count = 2,
         execs = { {
-
             kind       = .ConeBlast,
             p1         = 0.79,
             p2         = 160,
@@ -244,7 +232,6 @@ ABILITY_DEFS := [AbilityType]AbilityDef{
             status_dur = 4.0,
             status_str = 1.0,
         }, {
-
             kind       = .ConeBlast,
             p1         = 0.79,
             p2         = 160,
@@ -284,7 +271,6 @@ ABILITY_DEFS := [AbilityType]AbilityDef{
             status = .Oiled,
         }, {}, {}, {} },
     },
-
 
     .LaTormenta = {
         name = "La Tormenta",
@@ -340,7 +326,6 @@ ABILITY_DEFS := [AbilityType]AbilityDef{
     },
 }
 
-
 ability_slot_to_equip :: proc(slot_idx: int) -> EquipSlot {
     switch slot_idx {
     case 0: return .Ability1
@@ -364,15 +349,6 @@ player_ability_in_slot :: proc(w: ^World, player_id: int, slot_idx: int) -> Abil
     return raw
 }
 
-player_has_ability :: proc(w: ^World, player_id: int, at: AbilityType) -> bool {
-    if at == .None { return false }
-    for i in 0..<ABILITY_SLOT_COUNT {
-        if player_ability_in_slot(w, player_id, i) == at { return true }
-    }
-    return false
-}
-
-
 ability_item_level :: proc(w: ^World, player_id: int, slot_idx: int) -> int {
     if !world_has_component(w, player_id, .Inventory) { return 1 }
     inv := comp_get(w, player_id, .Inventory, InventoryComp)
@@ -383,7 +359,6 @@ ability_item_level :: proc(w: ^World, player_id: int, slot_idx: int) -> int {
     lv := int(comp_get(w, iid, .Item, ItemComp).ability_level)
     return max(1, lv)
 }
-
 
 ability_base_damage :: proc(w: ^World, id: int, def: ^AbilityDef, level: int, exec_p1: f32) -> f32 {
     level_bonus := 1.0 + f32(max(0, level - 1)) * def.level_scale
@@ -429,7 +404,6 @@ ability_base_damage :: proc(w: ^World, id: int, def: ^AbilityDef, level: int, ex
     return base * exec_p1 * level_bonus * stat_mult
 }
 
-
 @(private = "file")
 _maybe_apply_status :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
     if exec.status == StatusEffectType(0) { return }
@@ -442,12 +416,10 @@ _maybe_apply_status :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
     })
 }
 
-
 @(private = "file")
 _maybe_stamp_damage_amp :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
     if exec.damage_amp_mult <= 0 { return }
     if world_has_component(w, enemy_id, .DamageAmp) {
-
         da := comp_get(w, enemy_id, .DamageAmp, DamageAmpComp)
         da.mult  *= exec.damage_amp_mult
         da.timer  = max(da.timer, exec.damage_amp_dur)
@@ -459,7 +431,6 @@ _maybe_stamp_damage_amp :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp)
     }
 }
 
-
 @(private = "file")
 _maybe_stamp_contagion :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
     if !exec.spread_on_poison_death { return }
@@ -467,13 +438,11 @@ _maybe_stamp_contagion :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) 
     comp_add(w, enemy_id, .ContagionTag)
 }
 
-
 MAX_SPAWNS :: 24
 
 @(private = "file")
 ability_spawn_projectile :: proc(w: ^World, shooter_id: int,
                                   dir: [3]f32, damage: f32, pierce: i8 = 0) {
-
     proj_speed: f32 = 380
     proj_life:  f32 = 1.8
 
@@ -566,7 +535,6 @@ ability_blast_aoe :: proc(w: ^World, shooter_id: int, radius, damage: f32,
     if hit_any { play_sfx("melee_hit") } else { play_sfx("ability_fan") }
 }
 
-
 @(private = "file")
 ability_blast_cone :: proc(w: ^World, shooter_id: int,
                             half_angle_rad, range, damage: f32,
@@ -589,7 +557,6 @@ ability_blast_cone :: proc(w: ^World, shooter_id: int,
         dist_sq := dx*dx + dy*dy
         if dist_sq > r2 { continue }
 
-
         angle_to := math.atan2(dy, dx)
         diff      := angle_to - rot
 
@@ -609,7 +576,6 @@ ability_blast_cone :: proc(w: ^World, shooter_id: int,
     push_explosion(origin[0], origin[1], range * 0.5, er, eg, eb)
     if hit_any { play_sfx("melee_hit") } else { play_sfx("ability_fan") }
 }
-
 
 ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
@@ -669,12 +635,9 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         st     := &ab_snap.slots[slot_idx]
         level  := ability_item_level(w, id, slot_idx)
 
-
         if st.cooldown > 0 { st.cooldown = max(st.cooldown - dt_scaled, 0) }
 
-
         if st.buff_timer > 0 { st.buff_timer = max(st.buff_timer - dt, 0) }
-
 
         if st.burst_shots > 0 {
             st.burst_timer -= dt
@@ -694,9 +657,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-
         if st.charging {
-
             spin_radius:   f32 = 80
             spin_interval: f32 = 0.15
             spin_exec:     AbilityExecComp
@@ -712,7 +673,6 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
 
             if is_spin {
-
                 st.charge_timer -= dt
                 st.burst_timer  -= dt
                 if st.burst_timer <= 0 {
@@ -726,10 +686,8 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     comp_rm(w, id, .AimLock)
                 }
 
-
                 comp_get(w, id, .Transform, TransformComp).rotation += SPIN_ANGULAR_VELOCITY * dt
             } else {
-
                 st.charge_timer -= dt
                 if st.charge_timer <= 0 {
                     st.charging = false
@@ -739,7 +697,6 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 }
             }
         }
-
 
         if st.primed && input.dodge_pressed {
             st.primed = false
@@ -753,9 +710,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             play_sfx("ability_fan")
         }
 
-
         if !inputs_pressed[slot_idx] || st.cooldown > 0 { continue }
-
 
         effective_energy_cost := def.energy_cost
         if def.energy_cost > 0 && world_has_component(w, id, .Stats) {
@@ -774,9 +729,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         for ei in 0..<def.exec_count {
             ex := def.execs[ei]
             switch ex.kind {
-
             case .None:
-
 
             case .FireProjectile:
                 dmg := ability_base_damage(w, id, def, level, ex.p1)
@@ -825,7 +778,6 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     st.charging     = true
                     st.charge_timer = SPIN_CHANNEL_DURATION
                     st.burst_timer  = 0
-
 
                     st.charge_dmg   = ability_base_damage(w, id, def, level, 1.0)
                     did_activate    = true
@@ -1069,7 +1021,6 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
     }
-
 
     for i in 0..<spawn_count {
         ability_spawn_projectile(w, id, spawn_dirs[i], spawn_dmgs[i], spawn_pierce[i])

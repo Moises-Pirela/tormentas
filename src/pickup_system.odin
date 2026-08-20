@@ -88,7 +88,6 @@ pickup_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 continue
             }
 
-
             if item.rarity < g_loot_filter_rarity { continue }
 
             col, row, ok := backpack_find_free(inv, item)

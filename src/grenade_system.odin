@@ -1,13 +1,10 @@
 package main
 
-
 import "core:math"
 import rl "vendor:raylib"
 
-
 grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
-
 
     {
         grenade_ids := world_query(w, query_mask(.Grenade, .Transform))
@@ -23,7 +20,6 @@ grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
             g.fuse_timer -= dt
 
-
             arrived := dist <= g.speed * dt || g.fuse_timer <= 0
 
             if !arrived {
@@ -38,7 +34,6 @@ grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
     }
-
 
     {
         cloud_ids := world_query(w, query_mask(.PoisonCloud, .Transform))
@@ -65,12 +60,10 @@ grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     }
 }
 
-
 @(private = "file")
 _grenade_detonate :: proc(w: ^World, gid: int) {
     g   := comp_get(w, gid, .Grenade, GrenadeComp)
     pos := comp_get(w, gid, .Transform, TransformComp).position
-
 
     if g.blink_on_land && world_is_valid(w, g.owner_id) &&
        world_has_component(w, g.owner_id, .Transform) {
@@ -82,13 +75,10 @@ _grenade_detonate :: proc(w: ^World, gid: int) {
         }
     }
 
-
     _cloud_damage_nearby(w, g.owner_id, pos, g.blast_radius, g.damage, g.cloud_status, 0)
-
 
     push_explosion(pos[0], pos[1], g.blast_radius, g.er, g.eg, g.eb)
     play_sfx("ability_fan")
-
 
     if g.cloud_duration > 0 {
         cloud_id := world_create_entity(w)
@@ -137,9 +127,7 @@ _cloud_damage_nearby :: proc(w: ^World, owner_id: int,
     }
 }
 
-
 draw_grenades_and_clouds :: proc(w: ^World) {
-
     {
         cloud_ids := world_query(w, query_mask(.PoisonCloud, .Transform))
         defer delete(cloud_ids)
@@ -151,12 +139,10 @@ draw_grenades_and_clouds :: proc(w: ^World) {
                 comp_get(w, cid, .Transform, TransformComp).position[1],
             }
 
-
             life_frac := clamp(cl.duration / cl.tick_interval / 16.0, 0, 1)
             pulse     := f32(0.65) + f32(0.35) * math.sin_f32(cl.duration * 4.0)
             fill_a    := u8(clamp(life_frac * pulse * 55,  0, 255))
             edge_a    := u8(clamp(life_frac * pulse * 160, 0, 255))
-
 
             draw_world_circle(pos, cl.radius,        rl.Color{ cl.er, cl.eg, cl.eb, fill_a })
 
@@ -166,7 +152,6 @@ draw_grenades_and_clouds :: proc(w: ^World) {
                 rl.Color{ 220, 255, 180, u8(clamp(f32(edge_a) * 0.45, 0, 255)) })
         }
     }
-
 
     {
         grenade_ids := world_query(w, query_mask(.Grenade, .Transform))

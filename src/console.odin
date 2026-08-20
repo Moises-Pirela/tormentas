@@ -45,7 +45,6 @@ console_logf :: proc(format: string, args: ..any) {
     console_log(s)
 }
 
-
 @(private = "file")
 ConsoleGeo :: struct {
     panel_h, y_off: f32,
@@ -69,9 +68,7 @@ console_geo :: proc() -> ConsoleGeo {
     return { panel_h, y_off, fs, line_h, pad, input_y, log_bot_y, visible }
 }
 
-
 update_console :: proc(dt: f32) {
-
     if rl.IsKeyPressed(.GRAVE) {
         g_console_open = !g_console_open
         if g_console_open {
@@ -80,7 +77,6 @@ update_console :: proc(dt: f32) {
             g_console_scroll   = 0
         }
     }
-
 
     target := f32(1) if g_console_open else f32(0)
     if g_console_slide < target {
@@ -91,14 +87,11 @@ update_console :: proc(dt: f32) {
 
     if !g_console_open { return }
 
-
     wh := rl.GetMouseWheelMove()
     if wh != 0 {
         g_console_scroll -= int(wh) * CONSOLE_SCROLL_AMT
         if g_console_scroll < 0 { g_console_scroll = 0 }
-
     }
-
 
     for {
         ch := rl.GetCharPressed()
@@ -109,7 +102,6 @@ update_console :: proc(dt: f32) {
             g_console_in_len += 1
         }
     }
-
 
     if rl.IsKeyPressed(.BACKSPACE) {
         if g_console_in_len > 0 { g_console_in_len -= 1 }
@@ -122,7 +114,6 @@ update_console :: proc(dt: f32) {
         }
     }
 
-
     if rl.IsKeyPressed(.ENTER) {
         raw := string(g_console_input[:g_console_in_len])
         console_logf("> %s", raw)
@@ -134,7 +125,6 @@ update_console :: proc(dt: f32) {
     }
 }
 
-
 draw_console :: proc() {
     if g_console_slide <= 0 { return }
 
@@ -143,16 +133,13 @@ draw_console :: proc() {
     bar_w := uis(6)
     spacing := f32(0.4)
 
-
     max_scroll := max(g_console_count - g.visible, 0)
     if g_console_scroll > max_scroll { g_console_scroll = max_scroll }
-
 
     rl.DrawRectangle(0, i32(g.y_off), i32(sw), i32(g.panel_h),
         rl.Color{ 8, 8, 12, 225 })
     rl.DrawRectangle(0, i32(g.y_off + g.panel_h) - 1, i32(sw), 1,
         rl.Color{ 140, 90, 35, 255 })
-
 
     log_clip_y := i32(max(g.y_off, 0))
     log_clip_h := i32(g.log_bot_y) - log_clip_y
@@ -176,7 +163,6 @@ draw_console :: proc() {
         rl.EndScissorMode()
     }
 
-
     if max_scroll > 0 {
         track_x := sw - bar_w - g.pad * 0.5
         track_y := g.y_off + g.pad
@@ -188,7 +174,6 @@ draw_console :: proc() {
         t := f32(g_console_scroll) / f32(max_scroll)
         thumb_y := track_y + (track_h - thumb_h) * (1.0 - t)
 
-
         if track_y + track_h > 0 {
             rl.DrawRectangleRounded(
                 { track_x, track_y, bar_w, track_h }, 0.5, 4,
@@ -198,7 +183,6 @@ draw_console :: proc() {
                 rl.Color{ 160, 100, 40, 220 })
         }
     }
-
 
     prompt     := cstring("> ")
     prompt_col := rl.Color{ 160, 120, 55, 255 }
@@ -222,7 +206,6 @@ draw_console :: proc() {
     }
 }
 
-
 @(private = "file")
 _console_exec :: proc(w: ^World, raw: string) {
     s := strings.trim_space(raw)
@@ -233,7 +216,6 @@ _console_exec :: proc(w: ^World, raw: string) {
     args := "" if sep < 0 else strings.trim_space(s[sep + 1:])
 
     switch cmd {
-
     case "help":
         console_log("  mut <name>                apply mutation by json entity name")
         console_log("  ability <name> [lv]       spawn ability item at feet (lv 1-5)")
@@ -360,7 +342,6 @@ _console_exec :: proc(w: ^World, raw: string) {
 
     case "ability":
 
-
         if w == nil { console_log("ERROR: no world active"); return }
         if !world_is_valid(w, w.player_id) { console_log("ERROR: no active player"); return }
         sep2 := strings.last_index_byte(args, ' ')
@@ -443,7 +424,6 @@ _ability_type_from_name :: proc(raw: string) -> AbilityType {
     s := strings.to_lower(raw, context.temp_allocator)
 
     switch s {
-
     case "cadavericspasm",  "cadaveric_spasm",  "spasm":    return .CadavericSpasm
     case "osseouslam",      "osseous_slam",     "slam":     return .OsseousSlam
     case "necroticsurge",   "necrotic_surge",   "surge":    return .NecroticSurge

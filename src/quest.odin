@@ -1,6 +1,5 @@
 package main
 
-
 QuestID :: enum u8 {
     SurvivorsMark,
     TheHorde,

@@ -1,6 +1,5 @@
 package main
 
-
 MutationBranch :: enum u8 { Corpus, Shadow, Venom }
 
 MutationDef :: struct {
@@ -14,7 +13,6 @@ MutationDef :: struct {
 
 MUTATION_DEFS := [MutationType]MutationDef{
     .None = {},
-
 
     .SerratedHands = {
         name       = "Serrated Hands",
@@ -54,7 +52,6 @@ MUTATION_DEFS := [MutationType]MutationDef{
         conflicts  = { .DeadmansTrigger, .None },
     },
 
-
     .GlassCannon = {
         name       = "Glass Cannon",
         lore       = "Abandon the body. Become the bullet.",
@@ -92,7 +89,6 @@ MUTATION_DEFS := [MutationType]MutationDef{
         serum_cost = 5,
         conflicts  = { .LivingBomb, .None },
     },
-
 
     .BloodFrenzy = {
         name       = "Blood Frenzy",
@@ -132,7 +128,6 @@ MUTATION_DEFS := [MutationType]MutationDef{
         serum_cost = 6,
     },
 
-
     .HeartCage = {
         name       = "Heart Cage",
         lore       = "A second heart grows outside the body. Feed it well.",
@@ -148,7 +143,6 @@ MUTATION_DEFS := [MutationType]MutationDef{
         serum_cost = 5,
     },
 
-
     .CarrionCrown = {
         name       = "Carrion Crown",
         lore       = "Death is not the end. It is a recruitment.",
@@ -163,7 +157,6 @@ MUTATION_DEFS := [MutationType]MutationDef{
         branch     = .Shadow,
         serum_cost = 5,
     },
-
 
     .BlackLung = {
         name       = "Black Lung",
@@ -189,12 +182,6 @@ mutation_get_entity :: proc(w: ^World, player_id: int, mt: MutationType) -> int 
 
 player_has_mutation :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
     return mutation_get_entity(w, player_id, mt) != INVALID_ENTITY
-}
-
-mutation_get_state :: proc(w: ^World, player_id: int, mt: MutationType) -> ^MutComp {
-    eid := mutation_get_entity(w, player_id, mt)
-    if eid == INVALID_ENTITY { return nil }
-    return comp_get(w, eid, .Mut, MutComp)
 }
 
 @(private = "file")
@@ -340,7 +327,6 @@ mutation_init_components :: proc(w: ^World, player_id: int, eid: int, mt: Mutati
     }
 }
 
-
 mutation_restore_direct :: proc(w: ^World, player_id: int, mt: MutationType) {
     if mt == .None { return }
     if !world_has_component(w, player_id, .MutationContainer) { return }
@@ -369,7 +355,6 @@ mutation_unlock :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
     mc := comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     mc.serums -= MUTATION_DEFS[mt].serum_cost
 
-
     tname := mutation_template_name(mt)
     eid   := INVALID_ENTITY
     if tname != "" {
@@ -381,16 +366,13 @@ mutation_unlock :: proc(w: ^World, player_id: int, mt: MutationType) -> bool {
     comp_set(w, eid, .Mut, MutComp{ type_id = mt })
     mutation_init_components(w, player_id, eid, mt)
 
-
     mc = comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     mc.entities[mc.entity_count] = eid
     mc.entity_count += 1
     return true
 }
 
-
 MUT_CLEAR_COST :: 3
-
 
 mutation_clear_all :: proc(w: ^World, player_id: int) -> bool {
     if !world_has_component(w, player_id, .MutationContainer) { return false }
@@ -400,7 +382,6 @@ mutation_clear_all :: proc(w: ^World, player_id: int) -> bool {
 
     mc.serums -= MUT_CLEAR_COST
 
-
     n    := mc.entity_count
     eids : [MAX_MUTATION_SLOTS]int
     for i in 0..<n { eids[i] = mc.entities[i] }
@@ -409,14 +390,12 @@ mutation_clear_all :: proc(w: ^World, player_id: int) -> bool {
         eid := eids[i]
         if !world_is_valid(w, eid) { continue }
 
-
         if world_has_component(w, eid, .MutHeartCage) {
             hc := comp_get(w, eid, .MutHeartCage, MutHeartCageComp)
             if world_is_valid(w, hc.heart_id) {
                 world_destroy_entity(w, hc.heart_id)
             }
         }
-
 
         if world_has_component(w, eid, .MutCarrionCrown) {
             cc := comp_get(w, eid, .MutCarrionCrown, MutCarrionCrownComp)
@@ -431,12 +410,10 @@ mutation_clear_all :: proc(w: ^World, player_id: int) -> bool {
         world_destroy_entity(w, eid)
     }
 
-
     mc = comp_get(w, player_id, .MutationContainer, MutationContainerComp)
     mc.entity_count = 0
     return true
 }
-
 
 mutation_name_to_type :: proc(template_name: string) -> MutationType {
     for mt in MutationType {

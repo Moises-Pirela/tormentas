@@ -4,16 +4,13 @@ import "core:os"
 import "core:strings"
 import "core:fmt"
 
-
 Language :: enum u8 { EN, ES, PT }
 
 LANG_COUNT :: 3
 
 g_lang: Language = .EN
 
-
 LocKey :: enum {
-
     MENU_TITLE,
     MENU_SUBTITLE,
     MENU_DISCONNECTED,
@@ -287,16 +284,13 @@ LocKey :: enum {
 
 LOC_KEY_COUNT :: int(LocKey._LOC_COUNT)
 
-
 @(private = "file")
 g_loc: [LANG_COUNT][LOC_KEY_COUNT]cstring
-
 
 loc_init :: proc() {
     data, ok := os.read_entire_file("data/loc.csv")
     if !ok { return }
     defer delete(data)
-
 
     content := string(data)
     lines   := strings.split_lines(content, context.temp_allocator)
@@ -313,7 +307,6 @@ loc_init :: proc() {
         case "pt": col_lang[i] = int(Language.PT)
         }
     }
-
 
     for raw_line in lines[1:] {
         line := strings.trim_space(raw_line)
@@ -348,7 +341,6 @@ loc_destroy :: proc() {
         }
     }
 }
-
 
 @(private = "file")
 _loc_csv_split :: proc(line: string, allocator := context.allocator) -> []string {
@@ -389,7 +381,6 @@ tf :: proc(key: LocKey, args: ..any) -> cstring {
 @(private = "file")
 _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     switch name {
-
     case "MENU_TITLE":             return .MENU_TITLE, true
     case "MENU_SUBTITLE":          return .MENU_SUBTITLE, true
     case "MENU_DISCONNECTED":      return .MENU_DISCONNECTED, true
@@ -652,7 +643,6 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     }
     return {}, false
 }
-
 
 loc_lookup :: proc(raw: cstring) -> cstring {
     if raw == nil || len(raw) == 0 { return raw }

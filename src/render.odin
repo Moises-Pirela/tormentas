@@ -1,6 +1,5 @@
 package main
 
-
 import rl       "vendor:raylib"
 import          "core:math"
 import          "core:c"
@@ -10,11 +9,9 @@ import slice    "core:slice"
 import          "base:runtime"
 import clay     "../clay"
 
-
 g_font:      rl.Font
 g_font_body: rl.Font
 
-// HUD sprite textures. Zero-id means asset not found; renderers fall back gracefully.
 g_hud_orb_frame : rl.Texture2D
 g_hud_hp_icon   : rl.Texture2D
 
@@ -28,25 +25,20 @@ HUD_SPRITE_PATHS :: [?]cstring{
     "data/sprites/hud/hp_icon.png",
 }
 
-
 g_ui_scale: f32 = 1.0
 
 uis :: proc(base: f32) -> f32 { return math.round(base * g_ui_scale) }
 
-// font_for returns g_font_body for body/label text (base <= 14) and g_font (Cinzel) for large display text.
 font_for :: proc(base_size: f32) -> rl.Font { return g_font_body if base_size <= 14 else g_font }
 
-// Clay font ids — used by TextElementConfig.fontId so Clay text can pick a font.
-FONT_ID_TITLE :: u16(0)  // Cinzel (g_font) — the default when fontId is omitted
-FONT_ID_BODY  :: u16(1)  // body font (g_font_body)
+FONT_ID_TITLE :: u16(0)
+FONT_ID_BODY  :: u16(1)
 
 clay_font :: proc "c" (font_id: u16) -> rl.Font {
     return g_font_body if font_id == FONT_ID_BODY else g_font
 }
 
-
 g_levelup_flash: f32
-
 
 MAX_DMGNUM   :: 48
 DMGNUM_LIFE  :: f32(1.3)
@@ -80,7 +72,6 @@ push_dmg_number :: proc(x, y, value: f32, is_enemy: bool, is_crit: bool = false)
     }
 }
 
-
 update_draw_dmg_numbers :: proc(dt: f32) {
     for i in 0..<MAX_DMGNUM {
         n := &g_dmgnums[i]
@@ -95,7 +86,6 @@ update_draw_dmg_numbers :: proc(dt: f32) {
         col: rl.Color
         fs:  f32
         if n.is_crit {
-
             fs = 22
             white := clamp(frac * 3.0 - 1.5, 0, 1)
             col = rl.Color{255, u8(160 + white * 95), u8(white * 200), alpha}
@@ -116,7 +106,6 @@ update_draw_dmg_numbers :: proc(dt: f32) {
             { n.x - tsz.x*0.5, n.y - tsz.y*0.5 }, fs, 0.5, col)
     }
 }
-
 
 draw_extraction_zones :: proc(w: ^World) {
     if g_hub_active { return }
@@ -207,7 +196,6 @@ draw_extraction_zones :: proc(w: ^World) {
         }
     }
 }
-
 
 draw_loot_filter_hud :: proc() {
     if g_loot_filter_rarity == .Normal { return }
@@ -314,9 +302,7 @@ draw_boss_warning :: proc() {
         cd_fs, 0.5, rl.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
 }
 
-
 g_inspected_entity: int = INVALID_ENTITY
-
 
 update_entity_hover :: proc(w: ^World) {
     if g_playing_state != .Gameplay || ui_any() {
@@ -349,13 +335,10 @@ update_entity_hover :: proc(w: ^World) {
     }
 }
 
-
 draw_entity_inspect_hud :: proc(w: ^World) {
-
     if g_boss_id != INVALID_ENTITY && !world_is_valid(w, g_boss_id) {
         g_boss_id = INVALID_ENTITY
     }
-
 
     show_id := g_inspected_entity
     if show_id == INVALID_ENTITY || !world_is_valid(w, show_id) {
@@ -375,7 +358,6 @@ draw_entity_inspect_hud :: proc(w: ^World) {
     bx := sw * 0.5 - bw * 0.5
     by := uis(16)
 
-
     rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, rl.Color{  8,  4,  4, 220 })
     rl.DrawRectangleRec({ bx, by, bw, bh },                  rl.Color{ 45, 12, 12, 200 })
     if frac > 0 {
@@ -392,14 +374,12 @@ draw_entity_inspect_hud :: proc(w: ^World) {
     }
     rl.DrawRectangleLinesEx({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, rl.Color{ 140, 40, 40, 200 })
 
-
     hp_str := rl.TextFormat("%d / %d", i32(h.current), i32(h.max))
     hp_fs  := uis(11)
     hp_sz  := rl.MeasureTextEx(g_font_body, hp_str, hp_fs, 0.4)
     rl.DrawTextEx(g_font_body, hp_str,
         { bx + bw - hp_sz.x - uis(3), by + (bh - hp_fs) * 0.5 },
         hp_fs, 0.4, rl.Color{ 220, 200, 200, 130 })
-
 
     name_lbl := cstring("ENEMY")
     if world_has_component(w, show_id, .RenderConfig) {
@@ -414,10 +394,8 @@ draw_entity_inspect_hud :: proc(w: ^World) {
         { sw * 0.5 - name_sz.x * 0.5, name_y },
         name_fs, 0.5, rl.Color{ 200, 120, 120, 200 })
 
-
     if world_has_component(w, show_id, .MutationContainer) {
         mc := comp_get(w, show_id, .MutationContainer, MutationContainerComp)
-
 
         badge_fs  := uis(11)
         dot_r     := f32(4.5)
@@ -461,14 +439,6 @@ draw_entity_inspect_hud :: proc(w: ^World) {
         }
     }
 }
-
-
-draw_boss_hud :: proc(w: ^World) {
-    draw_entity_inspect_hud(w)
-}
-
-@(private = "file")
-
 
 FONT_SIZE :: i32(512)
 
@@ -659,6 +629,22 @@ draw_world_line :: proc(a, b: rl.Vector2, thick: f32, color: rl.Color) {
     rl.DrawLineEx(world_to_iso_v(a), world_to_iso_v(b), thick, color)
 }
 
+draw_tracer :: proc(pos: rl.Vector2, dir: [3]f32, speed: f32, core, glow: rl.Color, fade: f32) {
+    length := clamp(speed * TICK_DT * 1.5, 12, 46)
+    tail   := rl.Vector2{ pos.x - dir[0] * length,        pos.y - dir[1] * length }
+    mid    := rl.Vector2{ pos.x - dir[0] * length * 0.42, pos.y - dir[1] * length * 0.42 }
+
+    a :: proc(c: rl.Color, f, scale: f32) -> rl.Color {
+        return rl.Color{ c.r, c.g, c.b, u8(clamp(f32(c.a) * f * scale, 0, 255)) }
+    }
+
+    draw_world_line(tail, mid, 2.0, a(glow, fade, 0.30))
+    draw_world_line(mid,  pos, 6.0, a(glow, fade, 0.55))
+    draw_world_line(mid,  pos, 3.5, a(glow, fade, 1.00))
+    draw_world_line(mid,  pos, 1.8, a(core, fade, 1.00))
+    draw_world_circle(pos, 3.5, a(core, fade, 1.00))
+}
+
 is_player_entity :: proc(w: ^World, id: int) -> bool {
     for pid in w.player_ids {
         if pid == id { return true }
@@ -678,10 +664,7 @@ draw_entity_visual_info :: proc(w: ^World, id: int) -> EntityVisualInfo {
 
     if world_has_component(w, id, .RenderConfig) {
         rc := comp_get(w, id, .RenderConfig, RenderConfigComp)
-        // Player sprite is always driven by g_player_stem (see get_entity_sprite_stem).
-        // Skip the stored RenderConfig key for player entities so that load_player
-        // or give_class_starter_items setting g_player_stem takes effect immediately
-        // without needing a second render_config_set_sprite call.
+
         if rc.sprite_len > 0 && !is_player_entity(w, id) {
             info.sprite_key = render_config_sprite_cstr(rc)
         }
@@ -716,7 +699,6 @@ draw_entity_visual_info :: proc(w: ^World, id: int) -> EntityVisualInfo {
 
     if info.sprite_key == nil {
         if is_player_entity(w, id) {
-            // g_player_stem is a string literal (from PLAYER_STEMS) — null-terminated, static lifetime.
             info.sprite_key = cstring(raw_data(g_player_stem))
         } else if world_has_component(w, id, .NPC) {
             npc := comp_get(w, id, .NPC, NPCComp)
@@ -743,6 +725,7 @@ draw_entity_visual_info :: proc(w: ^World, id: int) -> EntityVisualInfo {
 }
 
 entity_render_layer :: proc(w: ^World, id: int) -> RenderLayer {
+    if world_has_component(w, id, .Greybox) { return .Sprite }
     if world_has_component(w, id, .RenderConfig) {
         rc := comp_get(w, id, .RenderConfig, RenderConfigComp)
         if rc.render_layer != .None { return rc.render_layer }
@@ -820,13 +803,15 @@ draw_entity_world_fx :: proc(w: ^World, id: int) {
         p := comp_get(w, id, .Projectile, ProjectileComp)
         switch p.visual {
         case .Standard:
-            draw_world_circle(pos, 4, rl.Color{ 220, 190, 60, 255 })
+            draw_tracer(pos, p.direction, p.speed,
+                rl.Color{ 255, 246, 190, 255 },
+                rl.Color{ 255, 190,  45, 225 }, 1.0)
         case .Smoke:
             fade := f32(1)
             if p.max_lifetime > 0 { fade = clamp(p.lifetime / p.max_lifetime, 0, 1) }
-            draw_world_circle(pos, 7, rl.Color{ 130, 122, 118, u8(clamp(fade * 55, 0, 255)) })
-            draw_world_circle(pos, 4, rl.Color{ 178, 168, 162, u8(clamp(fade * 130, 0, 255)) })
-            draw_world_circle(pos, 2, rl.Color{ 215, 208, 204, u8(clamp(fade * 200, 0, 255)) })
+            draw_tracer(pos, p.direction, p.speed,
+                rl.Color{ 226, 218, 212, 235 },
+                rl.Color{ 150, 140, 134, 170 }, fade)
         }
         return
     }
@@ -843,7 +828,6 @@ draw_entity_world_fx :: proc(w: ^World, id: int) {
     }
 }
 
-
 draw_ground_item_labels :: proc(w: ^World) {
     ids := world_query(w, query_mask(.GroundItem, .Item, .Transform),
         context.temp_allocator)
@@ -856,7 +840,6 @@ draw_ground_item_labels :: proc(w: ^World) {
         if !world_has_component(w, id, .RenderConfig)   { continue }
 
         item := comp_get(w, id, .Item, ItemComp)
-
 
         if !alt_held && item.rarity < g_loot_filter_rarity { continue }
 
@@ -878,7 +861,6 @@ draw_ground_item_labels :: proc(w: ^World) {
             { iso.x - nsz.x * 0.5, iso.y - uis(20) - nsz.y },
             nfs, 0.4, rl.Color{ rc.r, rc.g, rc.b, name_a })
 
-
         if item.ability_type != .None {
             tag := t(.HUD_ITEM_ACTIVE)
             tfs := uis(8)
@@ -888,6 +870,48 @@ draw_ground_item_labels :: proc(w: ^World) {
                 tfs, 0.4, rl.Color{ 200, 170, 100, u8(130 + pulse * 60) })
         }
     }
+}
+
+player_has_ranged_equipped :: proc(w: ^World, id: int) -> bool {
+    if !world_has_component(w, id, .Equipment) { return false }
+    wid := comp_get(w, id, .Equipment, EquipmentComp).weapon_entity_id
+    if !world_is_valid(w, wid)                    { return false }
+    if !world_has_component(w, wid, .Weapon)      { return false }
+    return comp_get(w, wid, .Weapon, WeaponComp).type == .Ranged
+}
+
+draw_player_aim_line :: proc(w: ^World) {
+    id := w.player_id
+    if !world_is_valid(w, id)                     { return }
+    if !world_has_component(w, id, .Transform)    { return }
+    if !player_has_ranged_equipped(w, id)         { return }
+    if is_fog_hidden(w, id)                       { return }
+
+    slot := player_slot_for_id(w, id)
+    if slot < 0 { return }
+    col := PLAYER_SLOT_COLORS[slot][2]
+
+    tp  := comp_get(w, id, .Transform, TransformComp).position
+    pos := rl.Vector2{ tp[0], tp[1] }
+
+    mouse := screen_to_world_cartesian(rl.GetMousePosition())
+    dx    := mouse.x - pos.x
+    dy    := mouse.y - pos.y
+    dist  := math.sqrt(dx*dx + dy*dy)
+    if dist < MUZZLE_OFFSET + 1 { return }
+
+    ux, uy := dx / dist, dy / dist
+    muzzle := rl.Vector2{ pos.x + ux * MUZZLE_OFFSET, pos.y + uy * MUZZLE_OFFSET }
+
+    end := mouse
+    if t := raycast_walls_t(muzzle.x, muzzle.y, end.x, end.y); t < 1 {
+        end = { muzzle.x + (end.x - muzzle.x) * t, muzzle.y + (end.y - muzzle.y) * t }
+    }
+
+    draw_world_line(muzzle, end, 3.0, rl.Color{ 10, 8, 8, 90 })
+    draw_world_line(muzzle, end, 1.5, rl.Color{ col.r, col.g, col.b, 150 })
+    draw_world_circle(end, 4.0, rl.Color{ 10, 8, 8, 110 })
+    draw_world_circle(end, 2.5, rl.Color{ col.r, col.g, col.b, 220 })
 }
 
 draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_size: f32, rot: f32, sprite_iso_h: f32) {
@@ -913,14 +937,16 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
         } else if world_has_component(w, id, .AIAgent) && comp_get(w, id, .AIAgent, AIAgentComp).ai_type == .Ranged {
             line_col = rl.Color{ 80, 128, 205, 200 }
         }
-        tip := rl.Vector2{
-            pos.x + math.cos(rot) * (base_size * 0.22 + 8),
-            pos.y + math.sin(rot) * (base_size * 0.22 + 8),
-        }
-        draw_world_line(pos, tip, 2, line_col)
-        draw_world_circle(tip, 5, line_col)
-    }
 
+        if id != w.player_id || !player_has_ranged_equipped(w, id) {
+            tip := rl.Vector2{
+                pos.x + math.cos(rot) * (base_size * 0.22 + 8),
+                pos.y + math.sin(rot) * (base_size * 0.22 + 8),
+            }
+            draw_world_line(pos, tip, 2, line_col)
+            draw_world_circle(tip, 5, line_col)
+        }
+    }
 
     sprite_top := sprite_iso_h
 
@@ -940,13 +966,11 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
         }
     }
 
-
     if !is_player && world_has_component(w, id, .MutationContainer) {
         mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
         if mc.entity_count > 0 {
             iso   := world_to_iso_v(pos)
             bar_w := base_size * 0.65
-
 
             label_fs := f32(9)
             for i in 0..<mc.entity_count {
@@ -962,7 +986,6 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
                     label_fs, 0.4, rl.Color{ col.r, col.g, col.b, 175 })
                 break
             }
-
 
             dot_x0 := iso.x - bar_w * 0.5 + 3
             dot_y  := iso.y - sprite_top + 3
@@ -995,7 +1018,6 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
             { iso.x - name_sz.x * 0.5, iso.y - sprite_top - name_fs - 3 },
             name_fs, 0.5, rl.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
-
         if world_has_component(w, id, .MutationContainer) {
             mc_hc := comp_get(w, id, .MutationContainer, MutationContainerComp)
             for hi in 0..<mc_hc.entity_count {
@@ -1005,7 +1027,6 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
                 hc    := comp_get(w, hmeid, .MutHeartCage, MutHeartCageComp)
                 t_now := f32(rl.GetTime())
                 hrad  := f32(12.0)
-
 
                 hworld: rl.Vector2
                 if world_is_valid(w, hc.heart_id) &&
@@ -1078,7 +1099,6 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
     }
     tint = color_mix(tint, rl.WHITE, get_hit_flash_intensity(id) * 0.75)
 
-
     anchor := [2]f32{ 0.5, 1.0 }
     if def, aok := get_or_load_anim_def(string(vis.sprite_key)); aok &&
        def.frame_width > 0 && def.frame_height > 0 {
@@ -1087,7 +1107,6 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
             f32(def.anchor_px_y) / f32(def.frame_height),
         }
     }
-
 
     top_down := is_player_entity(w, id) ||
         (world_has_component(w, id, .RenderConfig) &&
@@ -1098,26 +1117,7 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
         src := anim_source_rect(w, id, entry.src, string(vis.sprite_key)) if !entry.from_rt else entry.src
         if top_down {
             if src.width > 0 { sprite_iso_h = vis.world_size * src.height / src.width * anchor[1] }
-            // Face movement while moving, aim while standing still. Screen-x of a world
-            // vector is (x - y) under the iso projection (screen_x = wx - wy); art faces
-            // screen-left unflipped, so we flip when screen-x < 0.
-            in_dodge := world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active
-            flip_x: bool
-            if in_dodge {
-                // Facing is locked for the dodge. The dash moves backward (opposite facing),
-                // so the locked facing is the negation of the dodge direction's screen-x.
-                dd     := comp_get(w, id, .DodgeState, DodgeComp).direction
-                flip_x  = -(dd[0] - dd[1]) < 0
-            } else {
-                flip_x = (math.cos(rot) - math.sin(rot)) < 0
-                if world_has_component(w, id, .Velocity) {
-                    vel := comp_get(w, id, .Velocity, VelocityComp).value
-                    if vel[0]*vel[0] + vel[1]*vel[1] > ANIM_WALK_SPEED_THRESH*ANIM_WALK_SPEED_THRESH {
-                        flip_x = (vel[0] - vel[1]) < 0
-                    }
-                }
-            }
-            draw_player_sprite(entry.tex, src, pos, vis.world_size, tint, anchor, flip_x)
+            draw_player_sprite(entry.tex, src, pos, vis.world_size, tint, anchor, sprite_facing_flip(w, id, rot))
         } else {
             draw_entity_sprite_quad_ex(entry.tex, src, pos, vis.world_size, rot, tint, ISO_SPRITE_Y, anchor)
         }
@@ -1146,39 +1146,14 @@ draw_entities :: proc(w: ^World, pass: RenderLayer) {
         case .WorldFX:
             draw_entity_world_fx(w, id)
         case .Sprite:
-            draw_entity_sprite_visual(w, id)
+            if world_has_component(w, id, .Greybox) {
+                draw_greybox_volume(w, id)
+            } else {
+                draw_entity_sprite_visual(w, id)
+            }
         }
     }
 }
-
-draw_player :: proc(w: ^World) {
-
-}
-
-draw_floor :: proc() {
-
-}
-
-draw_enemies :: proc(w: ^World) {
-
-}
-
-draw_world_npcs :: proc(w: ^World) {
-
-}
-
-draw_melee_arcs :: proc(w: ^World) {
-
-}
-
-draw_projectiles :: proc(w: ^World) {
-
-}
-
-draw_ground_items :: proc(w: ^World) {
-
-}
-
 
 ability_trait_color :: proc(trait: AbilityTrait) -> rl.Color {
     switch trait {
@@ -1201,7 +1176,6 @@ rarity_color :: proc(rarity: ItemRarity) -> rl.Color {
     return rl.Color{ 160, 155, 148, 255 }
 }
 
-
 mutation_visual_color :: proc(mt: MutationType) -> rl.Color {
     #partial switch mt {
     case .LivingBomb:  return rl.Color{ 255, 120,  30, 255 }
@@ -1211,7 +1185,6 @@ mutation_visual_color :: proc(mt: MutationType) -> rl.Color {
     }
     return rl.Color{ 180, 180, 180, 255 }
 }
-
 
 @(private = "file")
 mutation_short_name :: proc(mt: MutationType) -> cstring {
@@ -1223,7 +1196,6 @@ mutation_short_name :: proc(mt: MutationType) -> cstring {
     }
     return "MUTANT"
 }
-
 
 @(private = "file")
 InvLayout :: struct {
@@ -1258,10 +1230,7 @@ PAUSE_RESOLUTIONS := [?]PauseResolution{
 g_pause_res_idx: int
 g_borderless:    bool
 
-// Set by draw_pause_menu (the Quit button) and relayed out by update_pause_menu,
-// because the pause menu now handles input inside its cached Clay draw pass.
 g_pause_quit_requested: bool
-
 
 @(private = "file")
 lang_name :: proc(lang: Language) -> cstring {
@@ -1272,7 +1241,6 @@ lang_name :: proc(lang: Language) -> cstring {
     }
     return "?"
 }
-
 
 @(private = "file")
 _apply_lang :: proc(lang: Language) {
@@ -1323,8 +1291,6 @@ set_window_mode :: proc(borderless: bool) {
     g_borderless = borderless
 }
 
-// Input is handled inside draw_pause_menu (Clay immediate-mode in the cached draw
-// pass); this just relays the quit request out to the main loop.
 update_pause_menu :: proc() -> (quit: bool) {
     quit = g_pause_quit_requested
     g_pause_quit_requested = false
@@ -1347,7 +1313,6 @@ draw_pause_menu :: proc() {
             ui_close_top()
         }
 
-        // Resolution (disabled in borderless mode)
         rd := ui_stepper("PauseRes", string(t(.SETTINGS_RESOLUTION)),
             string(PAUSE_RESOLUTIONS[g_pause_res_idx].label), !g_borderless)
         if rd < 0 {
@@ -1358,13 +1323,11 @@ draw_pause_menu :: proc() {
             apply_resolution(g_pause_res_idx)
         }
 
-        // Window mode (either arrow toggles)
         mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
         if ui_stepper("PauseMode", string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
             set_window_mode(!g_borderless)
         }
 
-        // Language
         ld := ui_stepper("PauseLang", string(t(.SETTINGS_LANGUAGE)), string(lang_name(g_lang)))
         if ld < 0 {
             _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT))
@@ -1372,7 +1335,6 @@ draw_pause_menu :: proc() {
             _apply_lang(Language((int(g_lang) + 1) % LANG_COUNT))
         }
 
-        // Volume
         ui_divider("PauseVolDiv")
         ui_hstack_begin("PauseVolHdrRow", 0, 0, .Center)
         ui_grow("PauseVolHdrL")
@@ -1385,13 +1347,11 @@ draw_pause_menu :: proc() {
         if nv, ch := ui_slider("PauseAmbience", string(t(.SETTINGS_AMBIENCE)), g_vol_ambience); ch { g_vol_ambience = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("PauseVoice",    string(t(.SETTINGS_VOICE)),    g_vol_voice);    ch { g_vol_voice    = nv; apply_bus_volumes() }
 
-        // Keybinds
         ui_divider("PauseKbDiv")
         if ui_button_centered("PauseKeybinds", string(t(.PAUSE_BTN_KEYBINDS)), bw, bh) {
             ui_open(.Keybinds)
         }
 
-        // Quit
         ui_divider("PauseQuitDiv")
         if ui_button_centered("PauseQuit", string(t(.PAUSE_BTN_QUIT)), bw, bh, .Danger) {
             g_pause_quit_requested = true
@@ -1402,15 +1362,11 @@ draw_pause_menu :: proc() {
     clay_raylib_render(&cmds)
 }
 
-
 @(private = "file") BIND_ROW_H :: f32(30)
 @(private = "file") BIND_HDR_H :: f32(22)
 
-
 @(private = "file")
 _bind_row_y :: proc(i: int) -> f32 {
-
-
     if i < GAMEPLAY_BIND_COUNT {
         return BIND_HDR_H + f32(i) * BIND_ROW_H
     }
@@ -1419,14 +1375,11 @@ _bind_row_y :: proc(i: int) -> f32 {
            BIND_HDR_H + f32(j) * BIND_ROW_H
 }
 
-
 @(private = "file")
 _bind_content_h :: proc() -> f32 {
     return _bind_row_y(TOTAL_BIND_COUNT - 1) + BIND_ROW_H
 }
 
-// Keybinds rebinding listens for keypresses every frame, so the key capture stays
-// here (the main-loop input phase); row/button clicks live in the cached Clay draw.
 update_keybinds_screen :: proc() {
     if !ui_has(.Keybinds) { return }
     if g_rebind_idx < 0   { return }
@@ -1457,7 +1410,6 @@ _kb_draw_row :: proc(i: int, rows: ^[TOTAL_BIND_COUNT]BindRow, listening: bool) 
         if active {
             key_str = string(t(.KEYBINDS_PRESS_KEY))
         } else {
-            // tprintf clones into the temp allocator so the text survives until Clay renders.
             name_buf: [16]u8
             key_str = fmt.tprintf("%s", key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:]))
         }
@@ -1500,7 +1452,6 @@ draw_keybinds_screen :: proc() {
 
         ui_grow("KBSpacer")
 
-        // Footer: Reset + Close
         ui_hstack_begin("KBFooter", u16(uis(8)), 0, .Center)
         ui_grow("KBFooterL")
         if ui_button("KBReset", string(t(.KEYBINDS_BTN_RESET)), uis(160), uis(36)) && !listening {
@@ -1529,7 +1480,6 @@ SETTINGS_H_BASE :: f32(648)
 
 settings_H :: proc() -> i32 { return i32(uis(SETTINGS_H_BASE)) }
 
-// Input handled in draw_settings_overlay (Clay immediate-mode in the cached draw pass).
 update_settings_overlay :: proc() {}
 
 draw_settings_overlay :: proc() {
@@ -1544,7 +1494,6 @@ draw_settings_overlay :: proc() {
         title_fs = uis(24),
     })
     {
-        // Resolution (disabled in borderless mode)
         rd := ui_stepper("SetRes", string(t(.SETTINGS_RESOLUTION)),
             string(PAUSE_RESOLUTIONS[g_pause_res_idx].label), !g_borderless)
         if rd < 0 {
@@ -1555,13 +1504,11 @@ draw_settings_overlay :: proc() {
             apply_resolution(g_pause_res_idx)
         }
 
-        // Window mode (either arrow toggles)
         mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
         if ui_stepper("SetMode", string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
             set_window_mode(!g_borderless)
         }
 
-        // Language
         ld := ui_stepper("SetLang", string(t(.SETTINGS_LANGUAGE)), string(lang_name(g_lang)))
         if ld < 0 {
             _apply_lang(Language((int(g_lang) - 1 + LANG_COUNT) % LANG_COUNT))
@@ -1569,7 +1516,6 @@ draw_settings_overlay :: proc() {
             _apply_lang(Language((int(g_lang) + 1) % LANG_COUNT))
         }
 
-        // Volume
         ui_divider("SetVolDiv")
         ui_hstack_begin("SetVolHdrRow", 0, 0, .Center)
         ui_grow("SetVolHdrL")
@@ -1582,19 +1528,16 @@ draw_settings_overlay :: proc() {
         if nv, ch := ui_slider("SetAmbience", string(t(.SETTINGS_AMBIENCE)), g_vol_ambience); ch { g_vol_ambience = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("SetVoice",    string(t(.SETTINGS_VOICE)),    g_vol_voice);    ch { g_vol_voice    = nv; apply_bus_volumes() }
 
-        // Keybinds
         ui_divider("SetKbDiv")
         if ui_button_centered("SetKeybinds", string(t(.SETTINGS_BTN_KEYBINDS)), bw, bh) {
             ui_open(.Keybinds)
         }
 
-        // Close
         ui_divider("SetCloseDiv")
         if ui_button_centered("SetClose", string(t(.SETTINGS_BTN_CLOSE)), bw, bh) {
             ui_close_top()
         }
 
-        // Exit game
         ui_divider("SetExitDiv")
         if ui_button_centered("SetExit", string(t(.SETTINGS_BTN_EXIT)), bw, bh, .Danger) {
             g_should_exit = true
@@ -1893,7 +1836,6 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
     return entry, true
 }
 
-
 get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: rl.Rectangle, ok: bool) {
     if len(stem) == 0 { return }
     buf: [64]u8
@@ -1904,11 +1846,6 @@ get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: rl.Recta
     if !eok { return }
     return entry.tex, entry.src, true
 }
-
-draw_entity_sprite_quad :: proc(entry: EntitySpriteEntry, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color) {
-    draw_entity_sprite_quad_ex(entry.tex, entry.src, pos, world_size, rotation_rad, tint)
-}
-
 
 ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W
 
@@ -1921,7 +1858,6 @@ draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl
     rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
 }
 
-
 draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, tint: rl.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
     iso    := world_to_iso_v(pos)
     aspect := src.height / src.width
@@ -1929,12 +1865,9 @@ draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2
     dst    := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
     origin := rl.Vector2{ world_size * anchor[0], iso_h * anchor[1] }
     s      := src
-    if flip_x { s.width = -s.width }   // negative source width mirrors horizontally
+    if flip_x { s.width = -s.width }
     rl.DrawTexturePro(tex, s, dst, origin, 0.0, tint)
 }
-
-
-
 
 @(private = "file")
 draw_text_wrapped :: proc(
@@ -1992,7 +1925,6 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
     req_count   := (1 if item.req_str > 0 else 0) +
                    (1 if item.req_dex > 0 else 0) +
                    (1 if item.req_sci > 0 else 0)
-
 
     stat_line_count := 0
     if item.weapon_archetype != .None && !item.is_melee {
@@ -2087,7 +2019,6 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         rl.Color{ rc.r, rc.g, rc.b, 195 })
 
     if item.ability_type != .None && int(item.ability_type) < len(ABILITY_DEFS) {
-
         def := ABILITY_DEFS[item.ability_type]
         rl.DrawTextEx(g_font_body, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
             rl.Color{ 200, 170, 100, 210 })
@@ -2096,7 +2027,6 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         cd_buf[len(cd_s)] = 0
         rl.DrawTextEx(g_font_body, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
     } else if world_has_component(w, item_id, .Flask) {
-
         fc := comp_get(w, item_id, .Flask, FlaskComp)
 
         if !world_has_component(w, item_id, .RenderConfig) {
@@ -2112,14 +2042,12 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         slot_label: cstring = "Health Flask [1]" if item.slot == .Flask1 else "Energy Flask [2]"
         rl.DrawTextEx(g_font_body, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
-
         stat_buf: [64]u8
         recover_what: string = "HP" if fc.kind == .Health else "Energy"
         rs := fmt.bprintf(stat_buf[:63], "Recovers %.0f %s over %.0fs",
             fc.recover_amount, recover_what, fc.recover_duration)
         stat_buf[len(rs)] = 0
         rl.DrawTextEx(g_font_body, cstring(&stat_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_STAT)
-
 
         chg_buf: [32]u8
         cs := fmt.bprintf(chg_buf[:31], "Charges: %d / %d", fc.charges, fc.max_charges)
@@ -2162,7 +2090,6 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             rl.DrawTextEx(g_font_body, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
         }
     }
-
 
     stat_y := ty2 + uis(78)
     {
@@ -2404,7 +2331,6 @@ draw_levelup_flash :: proc() {
         sfs, 1, { 200, 180, 120, salp })
 }
 
-
 draw_enemy_mutation_auras :: proc(w: ^World) {
     t   := f32(rl.GetTime())
     ids := world_query(w, query_mask(.MutationContainer, .Transform, .AIAgent),
@@ -2421,7 +2347,6 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
             meid := mc.entities[i]
             if !world_is_valid(w, meid) { continue }
 
-
             if world_has_component(w, meid, .MutOnDeathExplode) {
                 pulse := f32(0.87) + f32(0.13) * math.sin(t * 1.4 * math.PI * 2)
                 r     := f32(38) * pulse
@@ -2429,7 +2354,6 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
                 draw_world_circle_lines(pos, r,         rl.Color{ col.r, col.g, col.b, 130 })
                 draw_world_circle_lines(pos, r * 0.58,  rl.Color{ col.r, col.g, col.b,  60 })
             }
-
 
             if world_has_component(w, meid, .MutProximityDamage) {
                 pd    := comp_get(w, meid, .MutProximityDamage, MutProximityDamageComp)
@@ -2439,13 +2363,11 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
                 draw_world_circle_lines(pos, pd.radius, rl.Color{ col.r, col.g, col.b, alpha })
             }
 
-
             if world_has_component(w, meid, .MutThornPact) {
                 col := mutation_visual_color(.ThornPact)
                 draw_world_circle_lines(pos, 40, rl.Color{ col.r, col.g, col.b, 115 })
                 draw_world_circle_lines(pos, 47, rl.Color{ col.r, col.g, col.b,  42 })
             }
-
 
             if world_has_component(w, meid, .MutBlackLung) {
                 bl := comp_get(w, meid, .MutBlackLung, MutBlackLungComp)
@@ -2460,4 +2382,111 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
             }
         }
     }
+}
+
+sprite_facing_flip :: proc(w: ^World, id: int, rot: f32) -> bool {
+    if world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active {
+        dd := comp_get(w, id, .DodgeState, DodgeComp).direction
+        return -(dd[0] - dd[1]) < 0
+    }
+
+    flip := (math.cos(rot) - math.sin(rot)) < 0
+    if world_has_component(w, id, .Velocity) {
+        vel := comp_get(w, id, .Velocity, VelocityComp).value
+        if vel[0]*vel[0] + vel[1]*vel[1] > ANIM_WALK_SPEED_THRESH*ANIM_WALK_SPEED_THRESH {
+            flip = (vel[0] - vel[1]) < 0
+        }
+    }
+    return flip
+}
+
+SpriteFrame :: struct {
+    tex:        rl.Texture2D,
+    src:        rl.Rectangle,
+    anchor:     [2]f32,
+    ground:     f32,
+    world_size: f32,
+    aspect:     f32,
+    flip_x:     bool,
+}
+
+sprite_frame_for :: proc(w: ^World, id: int) -> (f: SpriteFrame, ok: bool) {
+    if !world_has_component(w, id, .Transform) { return {}, false }
+
+    vis := draw_entity_visual_info(w, id)
+    if !vis.ok { return {}, false }
+
+    entry, sok := get_or_load_entity_sprite(vis.sprite_key)
+    if !sok { return {}, false }
+
+    stem := string(vis.sprite_key)
+    src  := anim_source_rect(w, id, entry.src, stem) if !entry.from_rt else entry.src
+    if src.width == 0 || src.height == 0 { return {}, false }
+
+    anchor := [2]f32{ 0.5, 1.0 }
+    if def, aok := get_or_load_anim_def(stem); aok && def.frame_width > 0 && def.frame_height > 0 {
+        anchor = {
+            f32(def.anchor_px_x) / f32(def.frame_width),
+            f32(def.anchor_px_y) / f32(def.frame_height),
+        }
+    }
+
+    fw, fh := int(abs(src.width)), int(abs(src.height))
+    if def, aok := get_or_load_anim_def(stem); aok && def.frame_width > 0 && def.frame_height > 0 {
+        fw, fh = def.frame_width, def.frame_height
+    }
+    ground := anchor[1]
+    if !entry.from_rt {
+        ground = sprite_ground_fraction(stem, fw, fh)
+    }
+
+    rot := comp_get(w, id, .Transform, TransformComp).rotation
+
+    return SpriteFrame{
+        tex        = entry.tex,
+        src        = src,
+        anchor     = anchor,
+        ground     = ground,
+        world_size = vis.world_size,
+        aspect     = abs(src.height / src.width),
+        flip_x     = sprite_facing_flip(w, id, rot),
+    }, true
+}
+
+SPRITE_GROUND_ALPHA :: 16
+
+@(private = "file")
+g_sprite_ground_cache: map[string]f32
+
+sprite_ground_fraction :: proc(stem: string, frame_w, frame_h: int) -> f32 {
+    if v, found := g_sprite_ground_cache[stem]; found { return v }
+
+    ground := f32(1.0)
+
+    path := fmt.tprintf("data/sprites/entities/%s.png", stem)
+    img  := rl.LoadImage(strings.clone_to_cstring(path, context.temp_allocator))
+    if img.data != nil {
+        if img.format != .UNCOMPRESSED_R8G8B8A8 {
+            rl.ImageFormat(&img, .UNCOMPRESSED_R8G8B8A8)
+        }
+        fw := min(frame_w, int(img.width))
+        fh := min(frame_h, int(img.height))
+        if fw > 0 && fh > 0 && img.data != nil {
+            px     := ([^]u8)(img.data)
+            stride := int(img.width) * 4
+            scan: for y := fh - 1; y >= 0; y -= 1 {
+                row := y * stride
+                for x in 0 ..< fw {
+                    if px[row + x * 4 + 3] >= SPRITE_GROUND_ALPHA {
+                        ground = f32(y + 1) / f32(fh)
+                        break scan
+                    }
+                }
+            }
+        }
+        rl.UnloadImage(img)
+    }
+
+    g_sprite_ground_cache[strings.clone(stem)] = ground
+    return ground
 }

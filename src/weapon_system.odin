@@ -1,8 +1,8 @@
 package main
 
-
 import "core:math"
 
+MUZZLE_OFFSET :: f32(PLAYER_RADIUS + 6)
 
 @(private = "file")
 ArchetypeWeaponParams :: struct {
@@ -17,17 +17,15 @@ ArchetypeWeaponParams :: struct {
 
 @(private = "file")
 ARCHETYPE_WEP_PARAMS := [WeaponArchetype]ArchetypeWeaponParams{
-
-    .None    = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
-    .Pistol  = { .Ranged, 25,  5.0, 500, 1.5,  8, 1.5 },
-    .Rifle   = { .Ranged, 50,  0.8, 720, 2.4,  5, 3.2 },
-    .Shotgun = { .Ranged, 22,  1.2, 380, 0.5,  6, 2.5 },
+    .None    = { .Ranged, 25,  5.0, 2000, 0.375,  8, 1.5 },
+    .Pistol  = { .Ranged, 25,  5.0, 2000, 0.375,  8, 1.5 },
+    .Rifle   = { .Ranged, 50,  0.8, 2400, 0.720,  5, 3.2 },
+    .Shotgun = { .Ranged, 22,  1.2, 1400, 0.136,  6, 2.5 },
 
     .Axe     = { .Melee,   0,  0,     0, 0,    0, 0   },
     .Knife   = { .Melee,   0,  0,     0, 0,    0, 0   },
     .Sword   = { .Melee,   0,  0,     0, 0,    0, 0   },
 }
-
 
 @(private = "file")
 archetype_pellets :: proc(a: WeaponArchetype) -> (count: int, spread: f32) {
@@ -36,7 +34,6 @@ archetype_pellets :: proc(a: WeaponArchetype) -> (count: int, spread: f32) {
     }
     return 1, 0
 }
-
 
 @(private = "file")
 equipped_primary_archetype :: proc(w: ^World, holder_id: int) -> WeaponArchetype {
@@ -50,7 +47,6 @@ equipped_primary_archetype :: proc(w: ^World, holder_id: int) -> WeaponArchetype
 
 weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
-
 
     wep_ids := world_query(w, query_mask(.Weapon))
     defer delete(wep_ids)
@@ -73,7 +69,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
     }
 
-
     inv_ids := world_query(w, query_mask(.Inventory))
     defer delete(inv_ids)
     for holder_id in inv_ids {
@@ -88,16 +83,13 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
     }
 
-
     fire_ids := world_query(w, query_mask(.Equipment, .InputState, .Transform))
     defer delete(fire_ids)
 
     for shooter_id in fire_ids {
-
         if world_has_component(w, shooter_id, .AimLock) { continue }
 
         input := comp_get(w, shooter_id, .InputState, InputStateComp)^
-
 
         archetype := equipped_primary_archetype(w, shooter_id)
 
@@ -140,7 +132,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-
         melee_handled := false
         if world_has_component(w, shooter_id, .Inventory) {
             inv          := comp_get(w, shooter_id, .Inventory, InventoryComp)
@@ -151,7 +142,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 if mi.is_melee {
                     melee_handled = true
                     if input.fire_pressed && mi.melee_cooldown <= 0 {
-
                         t_snap       := comp_get(w, shooter_id, .Transform, TransformComp)^
                         arc_angle    := t_snap.rotation
                         arc_pos      := t_snap.position
@@ -191,7 +181,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         })
                         comp_set(w, arc_id, .SelfDestruct, SelfDestructComp{ timer = 0.18 })
 
-
                         mi_fresh := comp_get(w, melee_item_id, .Item, ItemComp)
                         mi_fresh.melee_cooldown = m_cd_max / melee_speed_mult
                     }
@@ -199,7 +188,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
         if melee_handled { continue }
-
 
         equip := comp_get(w, shooter_id, .Equipment, EquipmentComp)^
         wid    = equip.weapon_entity_id
@@ -247,7 +235,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         if ranged_blocked { continue }
 
-
         wp_snap := wp^
         t_snap  := comp_get(w, shooter_id, .Transform, TransformComp)^
 
@@ -261,18 +248,13 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             pierce_rem = i8(clamp(comp_get(w, shooter_id, .Stats, StatsComp).bonus_pierce, 0, 10))
         }
 
-
         if rof := player_get_root_on_fire(w, shooter_id); rof != nil {
             rof.timer = rof.duration
         }
 
-
         pellet_count, pellet_spread := archetype_pellets(archetype)
 
-        spawn_offset :: PLAYER_RADIUS + 6
-
         for p in 0..<pellet_count {
-
             angle_offset := f32(0)
             if pellet_count > 1 {
                 t_ratio      := f32(p) / f32(pellet_count - 1)
@@ -285,8 +267,8 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 0,
             }
             origin := [3]f32{
-                t_snap.position[0] + dir[0] * spawn_offset,
-                t_snap.position[1] + dir[1] * spawn_offset,
+                t_snap.position[0] + dir[0] * MUZZLE_OFFSET,
+                t_snap.position[1] + dir[1] * MUZZLE_OFFSET,
                 0,
             }
 
@@ -303,7 +285,7 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 damage           = wp_snap.damage * damage_mult,
                 owner_id         = shooter_id,
                 owner_faction    = owner_faction,
-                visual           = .Standard if damage_mult > 1.0 else .Smoke,
+                visual           = .Standard,
                 pierce_remaining = pierce_rem,
             })
             comp_set(w, proj_id, .SelfDestruct, SelfDestructComp{
@@ -314,13 +296,11 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         play_sfx("shoot")
 
-
         emit_noise(
             { t_snap.position[0], t_snap.position[1], 0 },
             280,
             STEALTH_NOISE_LOUD,
         )
-
 
         wfresh := comp_get(w, wid, .Weapon, WeaponComp)
         if wp_snap.fire_rate > 0 {

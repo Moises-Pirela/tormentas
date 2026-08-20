@@ -27,7 +27,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         if !world_is_valid(w, ev.target_id)               { continue }
         if !world_has_component(w, ev.target_id, .Health) { continue }
 
-        // Keep combat music alive while the local player is dealing or taking damage.
         if ev.amount > 0 && (ev.target_id == w.player_id || ev.source_id == w.player_id) {
             mark_combat()
         }
@@ -35,17 +34,14 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         h := comp_get(w, ev.target_id, .Health, HealthComp)
         amount := ev.amount
 
-
         if ev.amount > 0 && ev.kind == .Physical &&
            world_has_component(w, ev.target_id, .Stats) {
             amount *= (1.0 - comp_get(w, ev.target_id, .Stats, StatsComp).armor)
         }
 
-
         if ev.amount > 0 && world_has_component(w, ev.target_id, .DamageAmp) {
             amount *= comp_get(w, ev.target_id, .DamageAmp, DamageAmpComp).mult
         }
-
 
         if ev.amount > 0 && world_has_component(w, ev.target_id, .Resistance) {
             res := comp_get(w, ev.target_id, .Resistance, ResistanceComp)
@@ -204,7 +200,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-
         if !force_death && amount > 0 && world_has_component(w, ev.target_id, .AIAgent) {
             if ev.source_id != 0 &&
                world_has_component(w, ev.source_id, .Stats) &&
@@ -215,7 +210,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 }
             }
         }
-
 
         if amount > 0 && ev.source_id != 0 &&
            world_has_component(w, ev.target_id, .MutationContainer) {
@@ -229,7 +223,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 break
             }
         }
-
 
         if amount > 0 && world_has_component(w, ev.target_id, .MutationContainer) {
             tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
@@ -247,12 +240,10 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             h.current = clamp(h.current - amount, 0, h.max)
         }
 
-
         if g_god_mode && ev.target_id == w.player_id {
             if h.current <= 0 { h.current = 1 }
             force_death = false
         }
-
 
         if world_has_component(w, ev.target_id, .Stats) &&
            comp_get(w, ev.target_id, .Stats, StatsComp).hp_locked_to_one {
@@ -281,7 +272,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         if h.current > 0 && !force_death {
             if ev.target_id == w.player_id && amount > 0 {
                 play_sfx("player_hurt")
-
             }
             continue
         }
@@ -301,7 +291,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     epos := comp_get(w, ev.target_id, .Transform, TransformComp).position
                     r2   := ode.radius * ode.radius
                     if is_player_entity(w, ev.target_id) {
-
                         ai_ids := world_query(w, query_mask(.AIAgent, .Transform), context.temp_allocator)
                         for ai_id in ai_ids {
                             ap  := comp_get(w, ai_id, .Transform, TransformComp).position
@@ -314,7 +303,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         camera_shake(5)
                         push_explosion(epos[0], epos[1], ode.radius, 255, 140, 30)
                     } else {
-
                         for pslot in 0..<MAX_PLAYERS {
                             ppid := w.player_ids[pslot]
                             if !world_is_valid(w, ppid)                  { continue }
@@ -339,7 +327,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-
         if bomb_triggered {
             bomb_skip[min(bomb_skip_n, len(bomb_skip) - 1)] = ev.target_id
             bomb_skip_n += 1
@@ -353,12 +340,10 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 play_sfx("player_death")
             }
         } else if !bomb_triggered {
-
             if world_has_component(w, ev.target_id, .Reanimated) {
                 world_tag_destroy(w, ev.target_id)
                 continue
             }
-
 
             is_heart := false
             heart_check: for pslot in 0..<MAX_PLAYERS {
@@ -392,7 +377,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 if ev.target_id == g_boss_id {
                     g_lifetime_stats.bosses_killed += 1
                 }
-
 
                 for pslot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[pslot]
@@ -458,7 +442,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     }
                 }
 
-
                 for slot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[slot]
                     if !world_is_valid(w, ppid)                      { continue }
@@ -472,7 +455,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         ph.current = min(ph.current + kh.amount, ph.max)
                     }
                 }
-
 
                 if world_has_component(w, ev.target_id, .ContagionTag) {
                     comp_rm(w, ev.target_id, .ContagionTag)
@@ -499,7 +481,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     }
                 }
 
-
                 if world_has_component(w, ev.source_id, .Ability) &&
                    world_has_component(w, ev.source_id, .Inventory) {
                     ab := comp_get(w, ev.source_id, .Ability, AbilityComp)
@@ -519,7 +500,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         }
                     }
                 }
-
 
                 for slot in 0..<MAX_PLAYERS {
                     ppid := w.player_ids[slot]
@@ -555,7 +535,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         leveled          = true
                     }
                     if leveled {
-
                         if world_has_component(w, pid, .Health) {
                             health := comp_get(w, pid, .Health, HealthComp)
                             health.current = health.max
@@ -581,15 +560,12 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     }
     world_clear_damage_events(w)
 
-
     if heart_killed_player && g_playing_state == .Gameplay {
         on_player_death(w)
         return
     }
 
     for d in pending_drops {
-
-
         drop_rng := rand.create(d.seed ~ 0xd1ce_face_cafe_b00b)
         context.random_generator = rand.default_random_generator(&drop_rng)
         roll := rand.float32()
@@ -605,7 +581,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             spawn_loot_drop(w, d.pos, d.seed, ItemRarity.Normal)
         }
 
-
         serum_rng := rand.create(d.seed ~ 0xfeedc0de_beefcafe)
         context.random_generator = rand.default_random_generator(&serum_rng)
         if rand.float32() < SERUM_DROP_CHANCE {
@@ -616,7 +591,6 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         gold_amt := gold_drop_amount(w.tick, d.entity_id)
         gold_pos := [3]f32{ d.pos[0] + 16, d.pos[1] - 8, 0 }
         spawn_gold_drop(w, gold_pos, gold_amt)
-
 
         if d.was_boss {
             spawn_ability_drop(w, {d.pos[0] - 24, d.pos[1] - 18, 0},

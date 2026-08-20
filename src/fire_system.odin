@@ -1,14 +1,11 @@
 package main
 
-
 import rl  "vendor:raylib"
 import     "core:math"
-
 
 BarrelType :: enum { Fire, Water }
 
 g_barrel_registry: map[int]BarrelType
-
 
 FIRE_PATCH_CAP      :: 64
 FIRE_DMG_PER_SEC    :: f32(20)
@@ -31,7 +28,6 @@ g_fire:   [FIRE_PATCH_CAP]FirePatch
 @(private = "file")
 g_fire_n: int
 
-
 WATER_PUDDLE_CAP  :: 32
 WATER_PUDDLE_LIFE :: f32(5.0)
 WATER_PUDDLE_RAD  :: f32(TILE_SIZE) * 0.85
@@ -49,12 +45,10 @@ g_water:   [WATER_PUDDLE_CAP]WaterPuddle
 @(private = "file")
 g_water_n: int
 
-
 FIRE_TILE_RESPAWN_CD :: f32(0.5)
 
 @(private = "file")
 g_fire_tile_cd: f32
-
 
 fire_system_init :: proc() {
     g_barrel_registry = make(map[int]BarrelType)
@@ -62,7 +56,6 @@ fire_system_init :: proc() {
     g_water_n      = 0
     g_fire_tile_cd = 0
 }
-
 
 fire_system_reset :: proc() {
     clear(&g_barrel_registry)
@@ -72,19 +65,11 @@ fire_system_reset :: proc() {
     g_fire_tile_cd = 0
 }
 
-
-fire_patches_reset :: proc() {
-    g_fire_n       = 0
-    g_water_n      = 0
-    g_fire_tile_cd = FIRE_TILE_RESPAWN_CD
-}
-
 fire_system_destroy :: proc() {
     delete(g_barrel_registry)
     g_fire_n  = 0
     g_water_n = 0
 }
-
 
 spawn_barrel :: proc(w: ^World, wx, wy: f32, btype: BarrelType) -> int {
     id := world_create_entity(w)
@@ -95,7 +80,6 @@ spawn_barrel :: proc(w: ^World, wx, wy: f32, btype: BarrelType) -> int {
     g_barrel_registry[id] = btype
     return id
 }
-
 
 @(private = "file")
 _push_fire :: proc(wx, wy, radius, lifetime: f32, from_oil: bool) {
@@ -121,18 +105,15 @@ _push_water :: proc(wx, wy, radius: f32) {
     g_water_n += 1
 }
 
-
 @(private = "file")
 _explode_fire_barrel :: proc(w: ^World, wx, wy: f32) {
     EXP_R :: f32(72)
     push_explosion(wx, wy, EXP_R, 255, 110, 20)
 
     for id in 0..<len(w.entities) {
-
         if !world_is_valid(w, id)               { continue }
 
         if !world_has_component(w, id, .Health) { continue }
-
 
         tr := comp_get(w, id, .Transform, TransformComp)
         dx := tr.position[0] - wx
@@ -163,7 +144,6 @@ _explode_fire_barrel :: proc(w: ^World, wx, wy: f32) {
         }
     }
 
-
     for i in 0..<6 {
         a := f32(i) * (math.PI * 2 / 6)
         d := EXP_R * 0.52
@@ -178,9 +158,7 @@ _explode_water_barrel :: proc(w: ^World, wx, wy: f32) {
     SPLASH_R :: f32(85)
     push_explosion(wx, wy, SPLASH_R * 0.55, 70, 150, 220)
 
-
     _extinguish_radius(wx, wy, SPLASH_R)
-
 
     for i in 0..<5 {
         a := f32(i) * (math.PI * 2 / 5)
@@ -188,7 +166,6 @@ _explode_water_barrel :: proc(w: ^World, wx, wy: f32) {
         _push_water(wx + math.cos(a)*d, wy + math.sin(a)*d, WATER_PUDDLE_RAD)
     }
     _push_water(wx, wy, WATER_PUDDLE_RAD * 1.25)
-
 
     for eid in 0..<len(w.entities) {
         if !world_is_valid(w, eid)               { continue }
@@ -224,7 +201,6 @@ _extinguish_radius :: proc(cx, cy, radius: f32) {
     }
 }
 
-
 @(private = "file")
 _ignite_oil :: proc(start_tx, start_ty: int) {
     if overlay_at(start_tx, start_ty) != .Oil { return }
@@ -244,11 +220,9 @@ _ignite_oil :: proc(start_tx, start_ty: int) {
         ty := queue[head][1]
         head += 1
 
-
         wx := f32(tx)*f32(TILE_SIZE) + f32(TILE_SIZE)*0.5
         wy := f32(ty)*f32(TILE_SIZE) + f32(TILE_SIZE)*0.5
         _push_fire(wx, wy, f32(TILE_SIZE)*0.72, FIRE_OIL_LIFE, true)
-
 
         for off in offsets {
             nx, ny := tx + off[0], ty + off[1]
@@ -260,7 +234,6 @@ _ignite_oil :: proc(start_tx, start_ty: int) {
         }
     }
 }
-
 
 barrel_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .LateUpdate { return }
@@ -384,7 +357,6 @@ fire_patch_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             continue
         }
 
-
         for eid in 0..<len(w.entities) {
             if !world_is_valid(w, eid)                { continue }
             if !world_has_component(w, eid, .Health)  { continue }
@@ -429,7 +401,6 @@ fire_patch_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     }
 }
 
-
 draw_fire_patches :: proc() {
     tt := f32(rl.GetTime())
     for i in 0..<g_fire_n {
@@ -440,7 +411,6 @@ draw_fire_patches :: proc() {
         pulse := f32(math.sin(f64(tt)*4.0 + f64(fp.pos[0])*0.1 + f64(fp.pos[1])*0.07)*0.5 + 0.5)
         p     := rl.Vector2{fp.pos[0], fp.pos[1]}
 
-
         draw_world_circle(p, fp.radius * 1.22,
             rl.Color{175, 45, 8, u8(f32(ab) * 0.40)})
 
@@ -449,7 +419,6 @@ draw_fire_patches :: proc() {
 
         draw_world_circle(p, fp.radius * 0.38,
             rl.Color{255, 222, 80, u8(f32(ab) * 0.72 * pulse)})
-
 
         for fi in 0..<5 {
             a := f32(fi)*(math.PI*2/5) + math.sin(tt*3 + f32(fi))*0.42
@@ -479,7 +448,6 @@ draw_water_puddles :: proc() {
     }
 }
 
-
 draw_status_effects :: proc(w: ^World) {
     tt := f32(rl.GetTime())
     for id in 0..<len(w.entities) {
@@ -497,7 +465,6 @@ draw_status_effects :: proc(w: ^World) {
 
         pulse := f32(math.sin(f64(tt)*6.0)*0.5 + 0.5)
 
-
         if status_effect_is_active(sec, .Burn) {
             ef  := status_effect_get(sec, .Burn)
             frac := clamp(ef.duration / 2.5, 0, 1)
@@ -509,7 +476,6 @@ draw_status_effects :: proc(w: ^World) {
             draw_world_circle(p, r * 0.32 * pulse,
                 rl.Color{ 255, 150, 25, u8(f32(ab) * 0.42 * pulse) })
         }
-
 
         if status_effect_is_active(sec, .Wet) {
             ef   := status_effect_get(sec, .Wet)
@@ -523,7 +489,6 @@ draw_status_effects :: proc(w: ^World) {
             draw_world_circle(p, r * 1.08,
                 rl.Color{ 40, 115, 200, u8(f32(ab) * 0.18) })
         }
-
 
         if status_effect_is_active(sec, .Oiled) {
             ef    := status_effect_get(sec, .Oiled)
@@ -544,7 +509,6 @@ draw_status_effects :: proc(w: ^World) {
     }
 }
 
-
 draw_barrels :: proc() {
     w := &g_sim.world
     for id, btype in g_barrel_registry {
@@ -556,9 +520,7 @@ draw_barrels :: proc() {
         ix  := i32(iso.x)
         iy  := i32(iso.y)
 
-
         rl.DrawEllipse(ix, iy + 5, 15, 6, rl.Color{0, 0, 0, 65})
-
 
         rl.DrawEllipse(ix, iy + 7, 13, 5, rl.Color{55, 38, 24, 245})
 
@@ -575,14 +537,12 @@ draw_barrels :: proc() {
         rl.DrawEllipse(ix, iy - 12, 13, 5, top_col)
         rl.DrawEllipseLines(ix, iy - 12, 13, 5, rl.Color{0, 0, 0, 160})
 
-
         dot_col: rl.Color
         switch btype {
         case .Fire:  dot_col = rl.Color{255, 200, 60, 230}
         case .Water: dot_col = rl.Color{180, 230, 255, 230}
         }
         rl.DrawCircle(ix, iy - 12, 3, dot_col)
-
 
         if world_has_component(w, id, .Health) {
             h      := comp_get(w, id, .Health, HealthComp)

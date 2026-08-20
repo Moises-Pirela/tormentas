@@ -7,7 +7,6 @@ BOSS_MIN_DIST       :: f32(520)
 BOSS_WARNING_LEAD   :: f32(18.0)
 DIRECTOR_BUDGET_CAP :: f32(24.0)
 
-
 MAX_DIRECTOR_LEVELS :: 3
 
 DirectorConfig :: struct {
@@ -33,7 +32,6 @@ DirectorEnemy :: struct {
 DIRECTOR_ROSTER := [?]DirectorEnemy{
     { "enemy_spider", 1 },
 }
-
 
 ENEMY_MUTATION_POOL :: [?]MutationType{
     .LivingBomb,
@@ -74,7 +72,6 @@ spawn_director_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     _director_tick_boss(w, cfg, dt)
     _director_tick_spawns(w, cfg, dt)
 }
-
 
 @(private = "file")
 _director_apply_tier :: proc(w: ^World, id: int) {
@@ -127,7 +124,7 @@ _director_tick_boss :: proc(w: ^World, cfg: DirectorConfig, dt: f32) {
     warning_start := cfg.boss_spawn_at + BOSS_WARNING_LEAD
     if g_raid_timer <= warning_start && g_boss_warning_timer <= 0 {
         g_boss_warning_timer = BOSS_WARNING_LEAD
-        audio_duck_music(0.5, 500, 1200)   // dip music under the boss warning
+        audio_duck_music(0.5, 500, 1200)
     }
 
     if g_boss_warning_timer > 0 {

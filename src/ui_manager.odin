@@ -1,8 +1,6 @@
 package main
 
-
 import rl "vendor:raylib"
-
 
 UIPanel :: enum {
     Inventory,
@@ -42,12 +40,9 @@ UIManager :: struct {
     last_mouse_pos: rl.Vector2,
 }
 
-
 UI_FADE_SPEED :: f32(8.0)
 
-
 g_ui: UIManager
-
 
 ui_init :: proc() {
     g_ui.rt_w = rl.GetScreenWidth()
@@ -62,7 +57,6 @@ ui_destroy :: proc() {
     }
     g_ui = {}
 }
-
 
 @(private = "file")
 _ui_ensure_rt :: proc() {
@@ -79,7 +73,6 @@ _ui_ensure_rt :: proc() {
     g_ui.rt_w = sw
     g_ui.rt_h = sh
 }
-
 
 ui_open :: proc(panel: UIPanel) {
     for i in 0..<g_ui.count {
@@ -107,7 +100,6 @@ ui_open :: proc(panel: UIPanel) {
     _ui_on_open(panel)
 }
 
-
 ui_close_top :: proc() {
     if g_ui.count == 0 { return }
     l := &g_ui.layers[g_ui.count - 1]
@@ -115,7 +107,6 @@ ui_close_top :: proc() {
     l.state = .FadeOut
     _ui_on_close(l.panel)
 }
-
 
 ui_close :: proc(panel: UIPanel) {
     for i in 0..<g_ui.count {
@@ -127,7 +118,6 @@ ui_close :: proc(panel: UIPanel) {
         }
     }
 }
-
 
 ui_close_all :: proc() {
     for i in 0..<g_ui.count {
@@ -143,7 +133,6 @@ ui_close_all :: proc() {
     g_ui.count = 0
 }
 
-
 ui_has :: proc(panel: UIPanel) -> bool {
     for i in 0..<g_ui.count {
         l := &g_ui.layers[i]
@@ -151,7 +140,6 @@ ui_has :: proc(panel: UIPanel) -> bool {
     }
     return false
 }
-
 
 ui_top :: proc() -> (panel: UIPanel, ok: bool) {
     for i := g_ui.count - 1; i >= 0; i -= 1 {
@@ -161,11 +149,9 @@ ui_top :: proc() -> (panel: UIPanel, ok: bool) {
     return {}, false
 }
 
-
 ui_any :: proc() -> bool {
     return g_ui.count > 0
 }
-
 
 ui_mark_dirty :: proc(panel: UIPanel) {
     for i in 0..<g_ui.count {
@@ -176,10 +162,8 @@ ui_mark_dirty :: proc(panel: UIPanel) {
     }
 }
 
-
 ui_update :: proc(dt: f32) {
     _ui_ensure_rt()
-
 
     mp  := rl.GetMousePosition()
     ddx := mp.x - g_ui.last_mouse_pos.x
@@ -209,7 +193,6 @@ ui_update :: proc(dt: f32) {
         case .FadeOut:
             l.alpha = max(l.alpha - dt * UI_FADE_SPEED, 0)
             if l.alpha <= 0 {
-
                 if l.rt_ok {
                     rl.UnloadRenderTexture(l.rt)
                 }
@@ -225,7 +208,6 @@ ui_update :: proc(dt: f32) {
     }
 }
 
-
 ui_draw :: proc(w: ^World) {
     if g_ui.count == 0 { return }
 
@@ -236,7 +218,6 @@ ui_draw :: proc(w: ^World) {
         l := &g_ui.layers[i]
         if !l.rt_ok { continue }
 
-
         if l.dirty {
             rl.BeginTextureMode(l.rt)
             rl.ClearBackground(rl.BLANK)
@@ -245,14 +226,12 @@ ui_draw :: proc(w: ^World) {
             l.dirty = false
         }
 
-
         src  := rl.Rectangle{ 0, f32(g_ui.rt_h), f32(g_ui.rt_w), -f32(g_ui.rt_h) }
         dst  := rl.Rectangle{ 0, 0, sw, sh }
         tint := rl.Color{ 255, 255, 255, u8(l.alpha * 255) }
         rl.DrawTexturePro(l.rt.texture, src, dst, {0, 0}, 0, tint)
     }
 }
-
 
 @(private = "file")
 _ui_draw_panel :: proc(panel: UIPanel, w: ^World) {
@@ -299,7 +278,6 @@ _ui_draw_panel :: proc(panel: UIPanel, w: ^World) {
     }
 }
 
-
 @(private = "file")
 _ui_on_open :: proc(panel: UIPanel) {
     switch panel {
@@ -309,10 +287,8 @@ _ui_on_open :: proc(panel: UIPanel) {
         g_rebind_idx = -1
     case .Inventory, .Stats, .MutationTree, .Shop, .Stash, .AbilityVendor, .Settings,
          .LevelSelect, .Lore, .Phonograph, .Social, .QuestBoard:
-
     }
 }
-
 
 @(private = "file")
 _ui_on_close :: proc(panel: UIPanel) {
@@ -331,6 +307,5 @@ _ui_on_close :: proc(panel: UIPanel) {
         g_rebind_idx = -1
     case .Inventory, .Stats, .MutationTree, .Settings, .LevelSelect,
          .Lore, .Phonograph, .Social:
-
     }
 }

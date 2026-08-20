@@ -97,7 +97,6 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
         return {}, false
     }
 
-
     result.anchor_px_x = result.frame_width  / 2
     result.anchor_px_y = result.frame_height
     if v, vok := root["anchor"]; vok {
@@ -134,7 +133,6 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
     g_anim_def_cache[owned] = result
     return result, true
 }
-
 
 anim_def_cache_evict :: proc(stem: string) {
     delete_key(&g_anim_def_cache, stem)
@@ -209,14 +207,12 @@ NPC_STEM     :: "npc_shopkeeper"
 @(private = "file")
 WORKBENCH_STEM :: "mutation_workbench"
 
-
 PLAYER_STEMS :: [?]string{
     "player_nurse",
     "player_pr1s",
     "player_sheriff",
     "player_srbrain",
 }
-
 
 g_player_stem: string = PLAYER_STEMS[2]
 

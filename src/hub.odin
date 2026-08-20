@@ -19,8 +19,6 @@ HUB_QUEST_BOARD_POS        :: [3]f32{  168,    0, 0 }
 HUB_QUARTERMASTER_POS      :: [3]f32{  480,    0, 0 }
 HUB_SURGEON_POS            :: [3]f32{  480, -128, 0 }
 
-// ── Hub background (pre-rendered town image) ──────────────────────────────────
-
 g_hub_bg_tex:    rl.Texture2D
 g_hub_bg_loaded: bool
 
@@ -43,29 +41,24 @@ hub_unload_bg :: proc() {
     }
 }
 
-// Draw the pre-rendered town background stretched to cover the full isometric
-// level bounds. Must be called inside BeginMode2D / BeginTextureMode(g_world_rt).
-//
-// Isometric bounding box for a DEFAULT_LEVEL_COLS × DEFAULT_LEVEL_ROWS grid:
-//   half_w = (COLS/2) * TILE_SIZE = 16 * 64 = 1024  (world half-width)
-//   half_h = (ROWS/2) * TILE_SIZE = 10 * 64 =  640  (world half-height)
-//   span   = half_w + half_h = 1664
-//   iso rect: { x = -span, y = -span*0.5, w = span*2, h = span }
-//           → { -1664, -832, 3328, 1664 }
 draw_hub_background :: proc() {
     hub_load_bg()
     if !g_hub_bg_loaded { return }
 
-    half_w := f32(DEFAULT_LEVEL_COLS / 2) * f32(TILE_SIZE)  // 1024
-    half_h := f32(DEFAULT_LEVEL_ROWS / 2) * f32(TILE_SIZE)  //  640
-    span   := half_w + half_h                                // 1664
+    half_w := f32(DEFAULT_LEVEL_COLS / 2) * f32(TILE_SIZE)
+    half_h := f32(DEFAULT_LEVEL_ROWS / 2) * f32(TILE_SIZE)
+    span   := half_w + half_h
 
-    src  := rl.Rectangle{ 0, 0, f32(g_hub_bg_tex.width), f32(g_hub_bg_tex.height) }
-    dest := rl.Rectangle{ -span, -span * 0.5, span * 2, span }
+    sw := f32(g_hub_bg_tex.width)
+    sh := f32(g_hub_bg_tex.height)
+
+    scale  := span * 2 / sw
+    dest_h := sh * scale
+
+    src  := rl.Rectangle{ 0, 0, sw, sh }
+    dest := rl.Rectangle{ -span, span * 0.5 - dest_h, span * 2, dest_h }
     rl.DrawTexturePro(g_hub_bg_tex, src, dest, {0, 0}, 0, rl.WHITE)
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 enter_hub :: proc(w: ^World, save_progress: bool = false) {
     if save_progress && world_is_valid(w, w.player_id) {
@@ -86,7 +79,6 @@ enter_hub :: proc(w: ^World, save_progress: bool = false) {
     }
     hub_apply_quest_npcs(w)
 
-    // If already connected: spawn_players handled both; load remote char data if ready.
     if p2p.session_is_online(&g_session) {
         g_hub_remote_spawned = true
         if g_session.remote_char_ready {
@@ -121,7 +113,6 @@ enter_raid :: proc(w: ^World, n: int) {
     level_load(n)
     level_apply(w)
     door_init_blockers(w)
-
 
     found_zone := false
     for ex in g_level_data.exits {
@@ -311,7 +302,6 @@ draw_level_select :: proc(w: ^World) {
     clay_raylib_render(&cmds)
 }
 
-
 draw_extract_screen :: proc(w: ^World) {
     ui_scrim(185)
 
@@ -332,7 +322,6 @@ draw_extract_screen :: proc(w: ^World) {
         title_fs   = uis(20),
     })
     {
-        // Subtitle (centered)
         ui_hstack_begin("ExSubRow", 0, 0, .Center)
         ui_grow("ExSubL")
         ui_label("ExSub", string(t(.EXTRACT_SUBTITLE)), uis(16), rl.Color{80, 200, 80, 200})
@@ -364,7 +353,6 @@ draw_extract_screen :: proc(w: ^World) {
     clay_raylib_render(&cmds)
 }
 
-
 draw_death_screen :: proc(w: ^World) {
     ui_scrim(185)
 
@@ -385,7 +373,6 @@ draw_death_screen :: proc(w: ^World) {
         title_fs   = uis(26),
     })
     {
-        // Subtitle (centered)
         ui_hstack_begin("DeSubRow", 0, 0, .Center)
         ui_grow("DeSubL")
         ui_label("DeSub", string(t(.DEATH_MSG)), uis(12), COL_MUTED)
@@ -414,8 +401,6 @@ draw_death_screen :: proc(w: ^World) {
     clay_raylib_render(&cmds)
 }
 
-
-// _hub_reward_row draws a label (left) + value (right) row inside a panel body.
 @(private = "file")
 _hub_reward_row :: proc(base_id, label, value: string, value_col: rl.Color) {
     ui_hstack_begin(fmt.tprintf("%sRow", base_id), 0, 0, .Center)

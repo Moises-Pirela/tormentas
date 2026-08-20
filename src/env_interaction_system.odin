@@ -2,7 +2,6 @@ package main
 
 import "core:math"
 
-
 g_interact_focused_id: int = INVALID_ENTITY
 
 env_interaction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
@@ -14,7 +13,6 @@ env_interaction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     pt := comp_get(w, local_pid, .Transform, TransformComp)
     px := pt.position[0]
     py := pt.position[1]
-
 
     emitter_ids := world_query(w, query_mask(.SignalEmitter))
     defer delete(emitter_ids)
@@ -30,7 +28,6 @@ env_interaction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         em.is_on = on
         signal_broadcast(w, em.link_id, on)
     }
-
 
     best_id   := INVALID_ENTITY
     best_dist := max(f32)
@@ -57,7 +54,6 @@ env_interaction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
     g_interact_focused_id = best_id
 
-
     if best_id == INVALID_ENTITY { return }
 
     input := comp_get(w, local_pid, .InputState, InputStateComp)
@@ -71,13 +67,10 @@ env_interaction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
 @(private = "file")
 dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
-
     if world_has_component(w, target_id, .Openable) {
-
         if world_has_component(w, target_id, .Lockable) {
             lk := comp_get(w, target_id, .Lockable, LockableComp)
             if lk.is_locked {
-
                 if world_has_component(w, player_id, .KeyRing) {
                     kr := comp_get(w, player_id, .KeyRing, KeyRingComp)
                     if int(lk.key_id) in kr.held {
@@ -95,7 +88,6 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         }
         op := comp_get(w, target_id, .Openable, OpenableComp)
 
-
         opening := !op.is_open
         door_set_open(w, target_id, opening)
         play_sfx("door_open" if opening else "door_close")
@@ -105,7 +97,6 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         }
         return
     }
-
 
     if world_has_component(w, target_id, .SignalEmitter) {
         em := comp_get(w, target_id, .SignalEmitter, SignalEmitterComp)
@@ -122,7 +113,6 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         return
     }
 
-
     if world_has_component(w, target_id, .Container) {
         ct := comp_get(w, target_id, .Container, ContainerComp)
         if ct.is_open { return }
@@ -134,7 +124,6 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         return
     }
 
-
     if world_has_component(w, target_id, .LoreItem) {
         li := comp_get(w, target_id, .LoreItem, LoreItemComp)
         li.is_read = true
@@ -142,7 +131,6 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         play_sfx("paper_rustle")
         return
     }
-
 
     if world_has_component(w, target_id, .Phonograph) {
         ph := comp_get(w, target_id, .Phonograph, PhonographComp)
@@ -159,7 +147,6 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         if sfx_end > 0 { play_sfx(string(sfx[:sfx_end])) }
         return
     }
-
 
     if world_has_component(w, target_id, .KeyPickup) {
         kp := comp_get(w, target_id, .KeyPickup, KeyPickupComp)

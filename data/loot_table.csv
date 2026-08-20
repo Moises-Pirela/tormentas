@@ -6,9 +6,9 @@ ITEM_BANDOLIER_RIG_NAME,cartucho,Chest,1,1,0,ITEM_BANDOLIER_RIG_DESC,0,1,0,0,0,0
 ITEM_ETHEREAL_SHARD_NAME,fragmento,Boots,1,2,0,ITEM_ETHEREAL_SHARD_DESC,0,2,1,0,0,0,0,0,0,Rare|Epic|Legendary,8,BonusMoveSpeed:0.05,,0,0,0,0,0,0,0
 ITEM_COYOTE_STRIDERS_NAME,botas,Boots,2,1,0,ITEM_COYOTE_STRIDERS_DESC,0,2,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,10,BonusMoveSpeed:0.08,,0,0,0,0,0,0,0
 ITEM_BONE_FETISH_NAME,fetiche,Head,2,2,0,ITEM_BONE_FETISH_DESC,3,0,0,0,0,0,0,0,0,Rare|Epic|Legendary,8,HealthRegen:0.005,,0,0,0,0,0,0.04,0
-ITEM_HAMMERLOCK_PISTOL_NAME,weapon_pistol,WeaponPrimary,1,1,0,ITEM_HAMMERLOCK_PISTOL_DESC,0,1,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,12,BonusDamage:0.05,Pistol,25,4.0,8,1.5,500,0,0
-ITEM_LIGHTCOIL_REPEATER_NAME,weapon_rifle,WeaponPrimary,1,1,0,ITEM_LIGHTCOIL_REPEATER_DESC,0,2,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,12,BonusFireRate:0.50,Rifle,12,6.0,20,2.0,550,0,0
-ITEM_DRUMFEED_CARBINE_NAME,weapon_shotgun,WeaponPrimary,2,1,0,ITEM_DRUMFEED_CARBINE_DESC,0,1,1,1,0,0,0,0,0,Rare|Epic|Legendary,8,BonusDamage:0.05;BonusFireRate:0.03,Shotgun,18,1.8,6,3.0,350,0,0
+ITEM_HAMMERLOCK_PISTOL_NAME,weapon_pistol,WeaponPrimary,1,1,0,ITEM_HAMMERLOCK_PISTOL_DESC,0,1,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,12,BonusDamage:0.05,Pistol,25,4.0,8,1.5,2000,0,0
+ITEM_LIGHTCOIL_REPEATER_NAME,weapon_rifle,WeaponPrimary,1,1,0,ITEM_LIGHTCOIL_REPEATER_DESC,0,2,0,0,0,0,0,0,0,Normal|Rare|Epic|Legendary,12,BonusFireRate:0.50,Rifle,12,6.0,20,2.0,1833,0,0
+ITEM_DRUMFEED_CARBINE_NAME,weapon_shotgun,WeaponPrimary,2,1,0,ITEM_DRUMFEED_CARBINE_DESC,0,1,1,1,0,0,0,0,0,Rare|Epic|Legendary,8,BonusDamage:0.05;BonusFireRate:0.03,Shotgun,18,1.8,6,3.0,1289,0,0
 ITEM_DESERT_MACHETE_NAME,weapon_sword,WeaponPrimary,2,1,0,ITEM_DESERT_MACHETE_DESC,2,0,0,0,1,30,72,0.65,0.55,Normal|Rare|Epic|Legendary,8,BonusDamage:0.05,Sword,0,0,0,0,0,0,0
 ITEM_WAR_CLEAVER_NAME,weapon_axe,WeaponPrimary,2,2,0,ITEM_WAR_CLEAVER_DESC,4,0,0,1,1,65,80,0.45,1.1,Epic|Legendary,5,BonusDamage:0.10;BonusHP:0.05,Axe,0,0,0,0,0,0,0
 ITEM_QUICKFANG_KNIFE_NAME,weapon_knife,WeaponPrimary,1,1,0,ITEM_QUICKFANG_KNIFE_DESC,0,3,0,0,1,14,56,0.8,0.28,Normal|Rare|Epic|Legendary,10,BonusMoveSpeed:0.05,Knife,0,0,0,0,0,0,0
