@@ -97,6 +97,9 @@ ComponentType :: enum u8 {
     Resistance,
 
     Greybox,
+    LevelExit,
+    SpawnAnchor,
+    PlayerStart,
 }
 
 _inv_clear :: proc(ptr: rawptr) {
@@ -1081,3 +1084,11 @@ GreyboxComp :: struct {
     r, g, b:    u8,
     solid:      bool,
 }
+
+LevelExitComp :: struct {
+    target_level: u16,
+}
+
+SpawnAnchorComp :: struct {}
+
+PlayerStartComp :: struct {}

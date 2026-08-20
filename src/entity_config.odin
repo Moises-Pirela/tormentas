@@ -31,6 +31,16 @@ GreyboxDef :: struct {
     solid:   bool,
 }
 
+PointLightDef :: struct {
+    r, g, b:   u8,
+    radius:    f32,
+    intensity: f32,
+}
+
+LevelExitDef :: struct {
+    target_level: u16,
+}
+
 InteractableDef :: struct {
     radius:       f32,
     prompt:       string,
@@ -242,6 +252,8 @@ EntityDef :: struct {
     ai_agent:     Maybe(AIAgentDef),
     dodge:        Maybe(DodgeDef),
     render_cfg:   Maybe(RenderConfigDef),
+    point_light:  Maybe(PointLightDef),
+    level_exit:   Maybe(LevelExitDef),
 
     npc:          Maybe(NPCDef),
     mut_damage_mult:      Maybe(MutDamageMultDef),
@@ -267,6 +279,8 @@ EntityDef :: struct {
     has_velocity:    bool,
     has_input:       bool,
     has_fog_of_war:  bool,
+    has_spawn_anchor: bool,
+    has_player_start: bool,
     has_mut_lock_hp_to_one: bool,
     has_mut_block_healing:  bool,
     has_mut_block_ranged:   bool,
@@ -316,6 +330,8 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
         if _, v_ok  := obj["velocity"];    v_ok  { def.has_velocity   = true }
         if _, in_ok := obj["input"];       in_ok { def.has_input      = true }
         if _, fw_ok := obj["fog_of_war"];  fw_ok { def.has_fog_of_war = true }
+        if _, sa_ok := obj["spawn_anchor"]; sa_ok { def.has_spawn_anchor = true }
+        if _, ps_ok := obj["player_start"]; ps_ok { def.has_player_start = true }
         if _, hp1_ok := obj["mut_lock_hp_to_one"]; hp1_ok { def.has_mut_lock_hp_to_one = true }
         if _, bhf_ok := obj["mut_block_healing"];  bhf_ok { def.has_mut_block_healing  = true }
         if _, mbr_ok := obj["mut_block_ranged"];   mbr_ok { def.has_mut_block_ranged   = true }
@@ -355,6 +371,25 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
                 if b, b_ok := v.(bool); b_ok { c.is_trigger = b }
             }
             def.collider = c
+        }
+
+        if pl_obj, pl_ok := obj["point_light"].(json.Object); pl_ok {
+            pl: PointLightDef
+            pl.r, pl.g, pl.b = 255, 200, 100
+            pl.radius    = 120.0
+            pl.intensity = 1.0
+            if v, ok2 := pl_obj["r"]; ok2 { pl.r = u8(jf32(v)) }
+            if v, ok2 := pl_obj["g"]; ok2 { pl.g = u8(jf32(v)) }
+            if v, ok2 := pl_obj["b"]; ok2 { pl.b = u8(jf32(v)) }
+            if v, ok2 := pl_obj["radius"];    ok2 { pl.radius    = jf32(v) }
+            if v, ok2 := pl_obj["intensity"]; ok2 { pl.intensity = jf32(v) }
+            def.point_light = pl
+        }
+
+        if le_obj, le_ok := obj["level_exit"].(json.Object); le_ok {
+            le: LevelExitDef
+            if v, ok2 := le_obj["target_level"]; ok2 { le.target_level = u16(jf32(v)) }
+            def.level_exit = le
         }
 
         if g_obj, g_ok := obj["greybox"].(json.Object); g_ok {
@@ -775,6 +810,22 @@ spawn_from_def :: proc(w: ^World, def: ^EntityDef) -> int {
             b     = gb.b,
             solid = gb.solid,
         })
+    }
+    if pl, ok := def.point_light.?; ok {
+        comp_set(w, id, .PointLight, PointLightComp{
+            color     = { f32(pl.r), f32(pl.g), f32(pl.b) },
+            radius    = pl.radius,
+            intensity = pl.intensity,
+        })
+    }
+    if le, ok := def.level_exit.?; ok {
+        comp_set(w, id, .LevelExit, LevelExitComp{ target_level = le.target_level })
+    }
+    if def.has_spawn_anchor {
+        comp_add(w, id, .SpawnAnchor)
+    }
+    if def.has_player_start {
+        comp_add(w, id, .PlayerStart)
     }
 
     if d, ok := def.interactable.?; ok {

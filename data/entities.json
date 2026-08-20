@@ -418,5 +418,25 @@
         "collider":     { "radius": 10, "faction": 2, "is_trigger": true },
         "interactable": { "radius": 72, "prompt": "INTERACT_TAKE", "active": true },
         "key_pickup":   { "key_id": 0, "label": "" }
+    },
+    {
+        "name": "level_spawn_point",
+        "transform":    { "position": [0, 0, 0] },
+        "spawn_anchor": true
+    },
+    {
+        "name": "level_exit",
+        "transform":  { "position": [0, 0, 0] },
+        "level_exit": { "target_level": 0 }
+    },
+    {
+        "name": "level_light",
+        "transform":   { "position": [0, 0, 0] },
+        "point_light": { "r": 255, "g": 200, "b": 100, "radius": 120.0, "intensity": 1.0 }
+    },
+    {
+        "name": "level_player_start",
+        "transform":    { "position": [0, 0, 0] },
+        "player_start": true
     }
 ]

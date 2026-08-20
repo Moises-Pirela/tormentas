@@ -197,8 +197,16 @@ _director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
 
     min_d2 := DIRECTOR_MIN_DIST * DIRECTOR_MIN_DIST
 
-    if len(g_level_data.spawns) > 0 {
-        n       := len(g_level_data.spawns)
+    anchor_ids := world_query(w, query_mask(.SpawnAnchor, .Transform))
+    anchors := make([dynamic][2]f32, 0, len(anchor_ids), context.temp_allocator)
+    defer delete(anchor_ids)
+    for id in anchor_ids {
+        p := comp_get(w, id, .Transform, TransformComp).position
+        append(&anchors, [2]f32{p[0], p[1]})
+    }
+
+    if len(anchors) > 0 {
+        n       := len(anchors)
         indices := make([]int, n, context.temp_allocator)
         for i in 0..<n { indices[i] = i }
         for i := n - 1; i > 0; i -= 1 {
@@ -210,9 +218,8 @@ _director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
         best_d2 := f32(-1)
 
         for idx in indices {
-            sp  := g_level_data.spawns[idx]
-            spx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
-            spy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
+            spx := anchors[idx][0]
+            spy := anchors[idx][1]
             ddx := spx - player_pos[0]
             ddy := spy - player_pos[1]
             d2  := ddx*ddx + ddy*ddy

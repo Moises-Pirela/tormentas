@@ -17,30 +17,31 @@ level_scan_available :: proc() -> int {
     return MAX_SCAN
 }
 
-EnemySpawnType :: enum u8 {
-    Melee  = 1,
-    Brute  = 2,
-    Hunter = 3,
-    Ranged = 4,
-    Sniper = 5,
-    Spider = 6,
+@(private = "file")
+_LegacySpawn :: struct {
+    tx, ty: i16,
 }
 
-SpawnPoint :: struct {
-    tx, ty:     i16,
-    enemy_type: EnemySpawnType,
-}
-
-LevelExit :: struct {
+@(private = "file")
+_LegacyExit :: struct {
     tx, ty:       i16,
     target_level: u16,
 }
 
-LevelLight :: struct {
+@(private = "file")
+_LegacyLight :: struct {
     tx, ty:    i16,
     r, g, b:   u8,
     radius:    f32,
     intensity: f32,
+}
+
+@(private = "file")
+_LegacyDoor :: struct {
+    tx, ty:    i16,
+    link_id:   u8,
+    key_id:    u8,
+    is_locked: bool,
 }
 
 LevelNPC :: struct {
@@ -83,9 +84,6 @@ LevelKeyPickup :: struct {
 }
 
 LevelData :: struct {
-    spawns:       [dynamic]SpawnPoint,
-    exits:        [dynamic]LevelExit,
-    lights:       [dynamic]LevelLight,
     npcs:         [dynamic]LevelNPC,
     barrels:      [dynamic]LevelBarrel,
 
@@ -96,7 +94,6 @@ LevelData :: struct {
     key_pickups:  [dynamic]LevelKeyPickup,
     modules:      [dynamic]LevelModule,
     entities:     [dynamic]LevelEntity,
-    player_start: [2]f32,
     lighting:     LevelLightingConfig,
 
     cam_lims: [4]f32,
@@ -115,9 +112,6 @@ EXTRACT_TIME   :: f32(30.0)
 g_raid_timer: f32
 
 level_data_init :: proc() {
-    g_level_data.spawns       = make([dynamic]SpawnPoint)
-    g_level_data.exits        = make([dynamic]LevelExit)
-    g_level_data.lights       = make([dynamic]LevelLight)
     g_level_data.npcs         = make([dynamic]LevelNPC)
     g_level_data.barrels      = make([dynamic]LevelBarrel)
     g_level_data.switches     = make([dynamic]LevelSwitch)
@@ -131,9 +125,6 @@ level_data_init :: proc() {
 }
 
 level_data_destroy :: proc() {
-    delete(g_level_data.spawns)
-    delete(g_level_data.exits)
-    delete(g_level_data.lights)
     delete(g_level_data.npcs)
     delete(g_level_data.barrels)
     delete(g_level_data.switches)
@@ -214,7 +205,7 @@ lv_rstr :: proc(raw: []u8, cur: int) -> (val: string, next: int, ok: bool) {
 }
 
 LEVEL_MAGIC   :: [4]u8{'T', 'R', 'M', 'T'}
-LEVEL_VERSION :: u16(15)
+LEVEL_VERSION :: u16(16)
 
 level_save :: proc(n: int) {
     os.make_directory(LEVEL_DIR)
@@ -231,39 +222,11 @@ level_save :: proc(n: int) {
         lv_wb1 (&buf, u8(v))
     }
 
-    lv_wb4(&buf, u32(len(g_level_data.spawns)))
-    for sp in g_level_data.spawns {
-        lv_wbi16(&buf, sp.tx)
-        lv_wbi16(&buf, sp.ty)
-        lv_wb1 (&buf, u8(sp.enemy_type))
-    }
-
-    lv_wb4(&buf, u32(len(g_level_data.exits)))
-    for ex in g_level_data.exits {
-        lv_wbi16(&buf, ex.tx)
-        lv_wbi16(&buf, ex.ty)
-        lv_wb2 (&buf, ex.target_level)
-    }
-
-    lv_wbf32(&buf, g_level_data.player_start[0])
-    lv_wbf32(&buf, g_level_data.player_start[1])
-
     lv_wb4(&buf, u32(len(g_level_data.npcs)))
     for npc in g_level_data.npcs {
         lv_wbi16(&buf, npc.tx)
         lv_wbi16(&buf, npc.ty)
         lv_wb1 (&buf, u8(npc.npc_type))
-    }
-
-    lv_wb4(&buf, u32(len(g_level_data.lights)))
-    for lt in g_level_data.lights {
-        lv_wbi16(&buf, lt.tx)
-        lv_wbi16(&buf, lt.ty)
-        lv_wb1 (&buf, lt.r)
-        lv_wb1 (&buf, lt.g)
-        lv_wb1 (&buf, lt.b)
-        lv_wbf32(&buf, lt.radius)
-        lv_wbf32(&buf, lt.intensity)
     }
 
     cfg := lighting_config_capture()
@@ -406,9 +369,6 @@ level_load :: proc(n: int) {
     raw, ok := os.read_entire_file(level_path(n), context.temp_allocator)
     if !ok || len(raw) < 10 {
         tilemap_fill_default()
-        clear(&g_level_data.spawns)
-        clear(&g_level_data.exits)
-        clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
         clear(&g_level_data.switches)
@@ -418,7 +378,6 @@ level_load :: proc(n: int) {
         clear(&g_level_data.key_pickups)
         clear(&g_level_data.modules)
         level_entities_clear()
-        g_level_data.player_start = {}
         return
     }
 
@@ -427,9 +386,6 @@ level_load :: proc(n: int) {
     if raw[0] != 'T' || raw[1] != 'R' || raw[2] != 'M' || raw[3] != 'T' {
         clear(&g_tilemap)
         clear(&g_overlay_map)
-        clear(&g_level_data.spawns)
-        clear(&g_level_data.exits)
-        clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
         clear(&g_level_data.switches)
@@ -437,7 +393,6 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lore_items)
         clear(&g_level_data.phonographs)
         clear(&g_level_data.key_pickups)
-        g_level_data.player_start = {}
         return
     }
     cur = 4
@@ -447,9 +402,6 @@ level_load :: proc(n: int) {
     if !ver_ok || ver < 1 || ver > LEVEL_VERSION {
         clear(&g_tilemap)
         clear(&g_overlay_map)
-        clear(&g_level_data.spawns)
-        clear(&g_level_data.exits)
-        clear(&g_level_data.lights)
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
         clear(&g_level_data.switches)
@@ -457,7 +409,6 @@ level_load :: proc(n: int) {
         clear(&g_level_data.lore_items)
         clear(&g_level_data.phonographs)
         clear(&g_level_data.key_pickups)
-        g_level_data.player_start = {}
         return
     }
     cur = ver_c
@@ -490,39 +441,42 @@ level_load :: proc(n: int) {
         }
     }
 
-    clear(&g_level_data.spawns)
-    sc, sc_c, sc_ok := lv_rb4(raw, cur)
-    if !sc_ok { return }
-    cur = sc_c
-    for _ in 0..<sc {
-        x,  xc,  xok  := lv_rbi16(raw, cur);  if !xok  { return };  cur = xc
-        y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
-        et, ec,  eok  := lv_rb1  (raw, cur);  if !eok  { return };  cur = ec
-        append(&g_level_data.spawns, SpawnPoint{
-            tx         = x,
-            ty         = y,
-            enemy_type = EnemySpawnType(clamp(int(et), 1, 6)),
-        })
-    }
+    legacy_spawns: [dynamic]_LegacySpawn
+    defer delete(legacy_spawns)
+    legacy_exits: [dynamic]_LegacyExit
+    defer delete(legacy_exits)
+    legacy_player_start: [2]f32
+    have_legacy_player_start := false
+    if ver < 16 {
+        sc, sc_c, sc_ok := lv_rb4(raw, cur)
+        if !sc_ok { return }
+        cur = sc_c
+        for _ in 0..<sc {
+            x,  xc,  xok  := lv_rbi16(raw, cur);  if !xok  { return };  cur = xc
+            y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
+            _,  ec,  eok  := lv_rb1  (raw, cur);  if !eok  { return };  cur = ec
+            append(&legacy_spawns, _LegacySpawn{ tx = x, ty = y })
+        }
 
-    clear(&g_level_data.exits)
-    exc, exc_c, exc_ok := lv_rb4(raw, cur)
-    if !exc_ok { return }
-    cur = exc_c
-    for _ in 0..<exc {
-        x,  xc,  xok  := lv_rbi16(raw, cur);  if !xok  { return };  cur = xc
-        y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
-        tl, tlc, tlok := lv_rb2  (raw, cur);  if !tlok { return };  cur = tlc
-        append(&g_level_data.exits, LevelExit{tx = x, ty = y, target_level = tl})
-    }
+        exc, exc_c, exc_ok := lv_rb4(raw, cur)
+        if !exc_ok { return }
+        cur = exc_c
+        for _ in 0..<exc {
+            x,  xc,  xok  := lv_rbi16(raw, cur);  if !xok  { return };  cur = xc
+            y,  yc,  yok  := lv_rbi16(raw, cur);  if !yok  { return };  cur = yc
+            tl, tlc, tlok := lv_rb2  (raw, cur);  if !tlok { return };  cur = tlc
+            append(&legacy_exits, _LegacyExit{ tx = x, ty = y, target_level = tl })
+        }
 
-    px, pxc, pxok := lv_rbf32(raw, cur)
-    if pxok {
-        cur = pxc
-        py, pyc, pyok := lv_rbf32(raw, cur)
-        if pyok {
-            g_level_data.player_start = {px, py}
-            cur = pyc
+        px, pxc, pxok := lv_rbf32(raw, cur)
+        if pxok {
+            cur = pxc
+            py, pyc, pyok := lv_rbf32(raw, cur)
+            if pyok {
+                legacy_player_start = {px, py}
+                have_legacy_player_start = px != 0 || py != 0
+                cur = pyc
+            }
         }
     }
 
@@ -545,8 +499,9 @@ level_load :: proc(n: int) {
         }
     }
 
-    clear(&g_level_data.lights)
-    if ver >= 2 {
+    legacy_lights: [dynamic]_LegacyLight
+    defer delete(legacy_lights)
+    if ver >= 2 && ver < 16 {
         lc, lc_c, lc_ok := lv_rb4(raw, cur)
         if lc_ok {
             cur = lc_c
@@ -558,7 +513,7 @@ level_load :: proc(n: int) {
                 lb,  lbc,  lbok  := lv_rb1  (raw, cur);  if !lbok  { break };  cur = lbc
                 rad, radc, radok := lv_rbf32(raw, cur);  if !radok { break };  cur = radc
                 int_, intc, intok := lv_rbf32(raw, cur);  if !intok { break };  cur = intc
-                append(&g_level_data.lights, LevelLight{
+                append(&legacy_lights, _LegacyLight{
                     tx = lx, ty = ly,
                     r = lr, g = lg, b = lb,
                     radius = rad, intensity = int_,
@@ -644,6 +599,26 @@ level_load :: proc(n: int) {
                 if ov_clamped != 0 {
                     g_overlay_map[[2]int{int(ox), int(oy)}] = TileOverlay(ov_clamped)
                 }
+            }
+        }
+    }
+
+    legacy_doors: [dynamic]_LegacyDoor
+    defer delete(legacy_doors)
+    if ver >= 7 && ver < 16 {
+        dc, dcc, dcok := lv_rb4(raw, cur)
+        if dcok {
+            cur = dcc
+            for _ in 0..<dc {
+                dx,  dxc,  dxok  := lv_rbi16(raw, cur); if !dxok  { break }; cur = dxc
+                dy,  dyc,  dyok  := lv_rbi16(raw, cur); if !dyok  { break }; cur = dyc
+                dli, dlic, dliok := lv_rb1  (raw, cur); if !dliok { break }; cur = dlic
+                dki, dkic, dkiok := lv_rb1  (raw, cur); if !dkiok { break }; cur = dkic
+                _,   dotc, dotok := lv_rb1  (raw, cur); if !dotok { break }; cur = dotc
+                dlk, dlkc, dlkok := lv_rb1  (raw, cur); if !dlkok { break }; cur = dlkc
+                if cur + 24 > len(raw) { break }
+                cur += 24
+                append(&legacy_doors, _LegacyDoor{ tx = dx, ty = dy, link_id = dli, key_id = dki, is_locked = dlk != 0 })
             }
         }
     }
@@ -778,6 +753,40 @@ level_load :: proc(n: int) {
 
     clear(&g_level_data.modules)
     level_entities_clear()
+    for d in legacy_doors {
+        wx := f32(int(d.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(d.ty) * TILE_SIZE + TILE_SIZE / 2)
+        idx := level_entity_add("env_door", {wx, wy, 0})
+        if d.link_id != 0  { level_entity_set_override(idx, .Openable, "link_id", fmt.tprintf("%d", d.link_id)) }
+        if d.key_id != 0   { level_entity_set_override(idx, .Lockable, "key_id",  fmt.tprintf("%d", d.key_id)) }
+        if d.is_locked     { level_entity_set_override(idx, .Lockable, "is_locked", "true") }
+    }
+    for sp in legacy_spawns {
+        wx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
+        level_entity_add("level_spawn_point", {wx, wy, 0})
+    }
+    for ex in legacy_exits {
+        wx := f32(int(ex.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(ex.ty) * TILE_SIZE + TILE_SIZE / 2)
+        idx := level_entity_add("level_exit", {wx, wy, 0})
+        if ex.target_level != 0 {
+            level_entity_set_override(idx, .LevelExit, "target_level", fmt.tprintf("%d", ex.target_level))
+        }
+    }
+    for lt in legacy_lights {
+        wx := f32(int(lt.tx) * TILE_SIZE + TILE_SIZE / 2)
+        wy := f32(int(lt.ty) * TILE_SIZE + TILE_SIZE / 2)
+        idx := level_entity_add("level_light", {wx, wy, 0})
+        level_entity_set_override(idx, .PointLight, "color[0]",  fmt.tprintf("%d", lt.r))
+        level_entity_set_override(idx, .PointLight, "color[1]",  fmt.tprintf("%d", lt.g))
+        level_entity_set_override(idx, .PointLight, "color[2]",  fmt.tprintf("%d", lt.b))
+        level_entity_set_override(idx, .PointLight, "radius",    fmt.tprintf("%f", lt.radius))
+        level_entity_set_override(idx, .PointLight, "intensity", fmt.tprintf("%f", lt.intensity))
+    }
+    if have_legacy_player_start {
+        level_entity_add("level_player_start", {legacy_player_start[0], legacy_player_start[1], 0})
+    }
     if ver >= 13 {
         mc, mcc, mcok := lv_rb4(raw, cur)
         if mcok {
@@ -873,33 +882,6 @@ level_apply :: proc(w: ^World) {
         wx := f32(int(npc.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(npc.ty) * TILE_SIZE + TILE_SIZE / 2)
         spawn_level_npc(w, npc.npc_type, wx, wy)
-    }
-
-    for sp in g_level_data.spawns {
-        wx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
-        wy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
-
-        spawn_enemy :: proc(w: ^World, name: string, wx, wy: f32) -> int {
-            id := spawn_from_def(w, find_entity_def(g_entity_defs, name))
-            if id != INVALID_ENTITY {
-                comp_get(w, id, .Transform, TransformComp).position = {wx, wy, 0}
-            }
-            return id
-        }
-
-        spawn_enemy(w, "enemy_spider", wx, wy)
-    }
-
-    for lt in g_level_data.lights {
-        wx := f32(int(lt.tx) * TILE_SIZE + TILE_SIZE / 2)
-        wy := f32(int(lt.ty) * TILE_SIZE + TILE_SIZE / 2)
-        id := world_create_entity(w)
-        comp_set(w, id, .Transform, TransformComp{ position = {wx, wy, 0} })
-        comp_set(w, id, .PointLight, PointLightComp{
-            color     = { f32(lt.r), f32(lt.g), f32(lt.b) },
-            radius    = lt.radius,
-            intensity = lt.intensity,
-        })
     }
 
     for b in g_level_data.barrels {
@@ -1027,7 +1009,13 @@ level_apply :: proc(w: ^World) {
 
 spawn_players :: proc(w: ^World) {
     slots_to_spawn := 2 if p2p.session_is_online(&g_session) else 1
-    ps             := g_level_data.player_start
+    ps: [2]f32
+    start_ids := world_query(w, query_mask(.PlayerStart, .Transform))
+    if len(start_ids) > 0 {
+        p := comp_get(w, start_ids[0], .Transform, TransformComp).position
+        ps = { p[0], p[1] }
+    }
+    delete(start_ids)
     SLOT_OFFSET    :: f32(60)
 
     for slot in 0..<slots_to_spawn {
@@ -1227,6 +1215,23 @@ spawn_extraction_point :: proc(w: ^World) {
     spawn_extraction_at_tile(w, 12, 7)
 }
 
+level_spawn_extraction_zones :: proc(w: ^World) -> (found_zone: bool) {
+    exit_ids := world_query(w, query_mask(.LevelExit, .Transform))
+    defer delete(exit_ids)
+    for id in exit_ids {
+        le := comp_get(w, id, .LevelExit, LevelExitComp)
+        if le.target_level != 0 { continue }
+        p := comp_get(w, id, .Transform, TransformComp).position
+        tx, ty := world_to_tile(p[0], p[1])
+        spawn_extraction_at_tile(w, tx, ty)
+        found_zone = true
+    }
+    if !found_zone {
+        spawn_extraction_point(w)
+    }
+    return
+}
+
 level_do_switch :: proc(w: ^World, n: int) {
     fire_system_reset()
     level_clear(w)
@@ -1235,16 +1240,7 @@ level_do_switch :: proc(w: ^World, n: int) {
     level_apply(w)
     door_init_blockers(w)
 
-    found_zone := false
-    for ex in g_level_data.exits {
-        if ex.target_level == 0 {
-            spawn_extraction_at_tile(w, int(ex.tx), int(ex.ty))
-            found_zone = true
-        }
-    }
-    if !found_zone {
-        spawn_extraction_point(w)
-    }
+    level_spawn_extraction_zones(w)
 
     spawn_players(w)
 }
@@ -1354,9 +1350,14 @@ level_exit_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         pos      := comp_get(w, pid, .Transform, TransformComp).position
         xPos, yPos := world_to_tile(pos[0], pos[1])
 
-        for ex in g_level_data.exits {
-            if ex.target_level == 0 { continue }
-            if int(ex.tx) == xPos && int(ex.ty) == yPos {
+        exit_ids := world_query(w, query_mask(.LevelExit, .Transform))
+        defer delete(exit_ids)
+        for id in exit_ids {
+            le := comp_get(w, id, .LevelExit, LevelExitComp)
+            if le.target_level == 0 { continue }
+            ep := comp_get(w, id, .Transform, TransformComp).position
+            etx, ety := world_to_tile(ep[0], ep[1])
+            if etx == xPos && ety == yPos {
                 on_player_extract(w)
                 return
             }

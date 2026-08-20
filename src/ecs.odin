@@ -207,6 +207,9 @@ make_world :: proc() -> World {
     ecs.comp_register(&w.base, ComponentType.FlaskEffect, FlaskEffectComp)
     ecs.comp_register(&w.base, ComponentType.Resistance, ResistanceComp)
     ecs.comp_register(&w.base, ComponentType.Greybox, GreyboxComp)
+    ecs.comp_register(&w.base, ComponentType.LevelExit, LevelExitComp)
+    ecs.comp_register(&w.base, ComponentType.SpawnAnchor, SpawnAnchorComp)
+    ecs.comp_register(&w.base, ComponentType.PlayerStart, PlayerStartComp)
 
     return w
 }

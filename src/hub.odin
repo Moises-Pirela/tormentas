@@ -114,16 +114,7 @@ enter_raid :: proc(w: ^World, n: int) {
     level_apply(w)
     door_init_blockers(w)
 
-    found_zone := false
-    for ex in g_level_data.exits {
-        if ex.target_level == 0 {
-            spawn_extraction_at_tile(w, int(ex.tx), int(ex.ty))
-            found_zone = true
-        }
-    }
-    if !found_zone {
-        spawn_extraction_point(w)
-    }
+    level_spawn_extraction_zones(w)
 
     spawn_players(w)
     if !load_player(w, w.player_id) {
@@ -157,7 +148,14 @@ hub_spawn_remote_player :: proc(w: ^World) {
     remote_slot := 1 - g_session.local_slot
     if world_is_valid(w, w.player_ids[remote_slot]) { return }
 
-    ps := g_level_data.player_start
+    ps: [2]f32
+    start_ids := world_query(w, query_mask(.PlayerStart, .Transform))
+    if len(start_ids) > 0 {
+        p := comp_get(w, start_ids[0], .Transform, TransformComp).position
+        ps = { p[0], p[1] }
+    }
+    delete(start_ids)
+
     sp: [3]f32
     if ps[0] != 0 || ps[1] != 0 {
         sp = { ps[0] + f32(remote_slot) * 60, ps[1], 0 }

@@ -17,16 +17,8 @@ EditorBrush :: enum u8 {
     Floor       = 0,
     Wall        = 1,
     Water       = 2,
-    SpawnMelee  = 3,
-    SpawnBrute  = 4,
-    SpawnHunter = 5,
-    SpawnRanged = 6,
-    SpawnSniper = 7,
     Shopkeeper  = 8,
     MutationWorkbench = 9,
-    ExitTile    = 10,
-    PlayerStart = 11,
-    Light       = 12,
     Erase       = 13,
 
     Oil         = 14,
@@ -42,7 +34,6 @@ EditorBrush :: enum u8 {
     Phonograph  = 23,
     KeyPickup   = 24,
     Pillar      = 25,
-    SpawnSpider = 26,
 
     Floor1      = 27,
     Floor2      = 28,
@@ -541,18 +532,6 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
             append(&g_level_data.barrels, LevelBarrel{
                 tx = i16(tx), ty = i16(ty), btype = btype,
             })
-        case .SpawnMelee, .SpawnBrute, .SpawnHunter, .SpawnRanged, .SpawnSniper, .SpawnSpider:
-            et := brush_to_spawn_type(EditorBrush(op.brush))
-            for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
-                sp := g_level_data.spawns[i]
-                if int(sp.tx) == tx && int(sp.ty) == ty {
-                    unordered_remove(&g_level_data.spawns, i)
-                }
-            }
-            append(&g_level_data.spawns, SpawnPoint{
-                tx = i16(tx), ty = i16(ty),
-                enemy_type = et,
-            })
         case .Shopkeeper, .MutationWorkbench:
             npc_type := NPCType.Shopkeeper
             if EditorBrush(op.brush) == .MutationWorkbench {
@@ -567,34 +546,6 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
             append(&g_level_data.npcs, LevelNPC{
                 tx = i16(tx), ty = i16(ty),
                 npc_type = npc_type,
-            })
-        case .ExitTile:
-            for i := len(g_level_data.exits) - 1; i >= 0; i -= 1 {
-                ex := g_level_data.exits[i]
-                if int(ex.tx) == tx && int(ex.ty) == ty {
-                    unordered_remove(&g_level_data.exits, i)
-                }
-            }
-            append(&g_level_data.exits, LevelExit{
-                tx = i16(tx), ty = i16(ty),
-                target_level = op.target_level,
-            })
-        case .PlayerStart:
-            g_level_data.player_start = {
-                f32(tx * TILE_SIZE + TILE_SIZE / 2),
-                f32(ty * TILE_SIZE + TILE_SIZE / 2),
-            }
-        case .Light:
-            for i := len(g_level_data.lights) - 1; i >= 0; i -= 1 {
-                lt := g_level_data.lights[i]
-                if int(lt.tx) == tx && int(lt.ty) == ty {
-                    unordered_remove(&g_level_data.lights, i)
-                }
-            }
-            append(&g_level_data.lights, LevelLight{
-                tx = i16(tx), ty = i16(ty),
-                r = 255, g = 200, b = 100,
-                radius = 120.0, intensity = 1.0,
             })
         case .SwitchLever:
             param := u8(op.target_level & 0xFF)
@@ -677,9 +628,7 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         ed_fill_walkable(max(1, int(op.tx)), max(1, int(op.ty)))
     case .ClearAll:
         tilemap_fill_default()
-        clear(&g_level_data.spawns)
-        clear(&g_level_data.exits)
-        clear(&g_level_data.lights)
+        level_entities_clear()
         clear(&g_level_data.npcs)
         clear(&g_level_data.barrels)
         clear(&g_level_data.switches)
@@ -687,7 +636,6 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
         clear(&g_level_data.lore_items)
         clear(&g_level_data.phonographs)
         clear(&g_level_data.key_pickups)
-        g_level_data.player_start = {}
     }
 
     g_wall_mask_dirty = true
@@ -695,28 +643,10 @@ ed_apply_op :: proc(op: p2p.EditorOp) {
 
 @(private = "file")
 _erase_objects :: proc(tx, ty: int) {
-    for i := len(g_level_data.spawns) - 1; i >= 0; i -= 1 {
-        sp := g_level_data.spawns[i]
-        if int(sp.tx) == tx && int(sp.ty) == ty {
-            unordered_remove(&g_level_data.spawns, i)
-        }
-    }
-    for i := len(g_level_data.exits) - 1; i >= 0; i -= 1 {
-        ex := g_level_data.exits[i]
-        if int(ex.tx) == tx && int(ex.ty) == ty {
-            unordered_remove(&g_level_data.exits, i)
-        }
-    }
     for i := len(g_level_data.npcs) - 1; i >= 0; i -= 1 {
         npc := g_level_data.npcs[i]
         if int(npc.tx) == tx && int(npc.ty) == ty {
             unordered_remove(&g_level_data.npcs, i)
-        }
-    }
-    for i := len(g_level_data.lights) - 1; i >= 0; i -= 1 {
-        lt := g_level_data.lights[i]
-        if int(lt.tx) == tx && int(lt.ty) == ty {
-            unordered_remove(&g_level_data.lights, i)
         }
     }
     for i := len(g_level_data.barrels) - 1; i >= 0; i -= 1 {
@@ -773,19 +703,6 @@ ed_erase_objects :: proc(tx, ty: int) {
     }
     ed_apply_op(op)
     p2p.session_send_editor_op(&g_session, op)
-}
-
-@(private = "file")
-brush_to_spawn_type :: proc(b: EditorBrush) -> EnemySpawnType {
-    #partial switch b {
-    case .SpawnMelee:  return .Melee
-    case .SpawnBrute:  return .Brute
-    case .SpawnHunter: return .Hunter
-    case .SpawnRanged: return .Ranged
-    case .SpawnSniper: return .Sniper
-    case .SpawnSpider: return .Spider
-    }
-    return .Melee
 }
 
 draw_editor_world :: proc() {
@@ -903,34 +820,40 @@ draw_editor_world :: proc() {
     fs := ts * 0.22
     cr := ts * 0.30
 
-    for sp in g_level_data.spawns {
-        wx := f32(int(sp.tx) * TILE_SIZE + TILE_SIZE / 2)
-        wy := f32(int(sp.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
-        col := spawn_marker_color(sp.enemy_type)
-        rl.DrawCircleV(ip, cr, col)
-        rl.DrawCircleV(ip, cr * 0.65, rl.Color{0, 0, 0, 100})
-        lbl := spawn_marker_label(sp.enemy_type)
-        lsz := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
-        rl.DrawTextEx(g_font, lbl, {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5}, fs, 0.5,
-            rl.Color{255, 240, 200, 230})
-    }
+    if g_sim_alive {
+        anchor_ids := world_query(&g_sim.world, query_mask(.SpawnAnchor, .Transform))
+        for id in anchor_ids {
+            p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
+            ip := world_to_iso_xy(p[0], p[1])
+            rl.DrawCircleV(ip, cr, rl.Color{190, 60, 60, 220})
+            rl.DrawCircleV(ip, cr * 0.65, rl.Color{0, 0, 0, 100})
+            lsz := rl.MeasureTextEx(g_font, "Sp", fs, 0.5)
+            rl.DrawTextEx(g_font, "Sp", {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5}, fs, 0.5,
+                rl.Color{255, 240, 200, 230})
+        }
+        delete(anchor_ids)
 
-    EXIT_COL :: rl.Color{50, 200, 90, 180}
-    for ex in g_level_data.exits {
-        center, top, right, bottom, left := iso_tile_bounds(int(ex.tx), int(ex.ty))
-        iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{30, 140, 60, 80})
-        rl.DrawLineEx(top, right, lw * 2.5, EXIT_COL)
-        rl.DrawLineEx(right, bottom, lw * 2.5, EXIT_COL)
-        rl.DrawLineEx(bottom, left, lw * 2.5, EXIT_COL)
-        rl.DrawLineEx(left, top, lw * 2.5, EXIT_COL)
-        buf: [8]u8
-        s := fmt.bprintf(buf[:7], "->%d", ex.target_level)
-        buf[len(s)] = 0
-        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs, 0.5)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
-            {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
-            fs, 0.5, rl.Color{140, 255, 160, 230})
+        EXIT_COL :: rl.Color{50, 200, 90, 180}
+        exit_ids := world_query(&g_sim.world, query_mask(.LevelExit, .Transform))
+        for id in exit_ids {
+            le := comp_get(&g_sim.world, id, .LevelExit, LevelExitComp)
+            p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
+            etx, ety := world_to_tile(p[0], p[1])
+            center, top, right, bottom, left := iso_tile_bounds(etx, ety)
+            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{30, 140, 60, 80})
+            rl.DrawLineEx(top, right, lw * 2.5, EXIT_COL)
+            rl.DrawLineEx(right, bottom, lw * 2.5, EXIT_COL)
+            rl.DrawLineEx(bottom, left, lw * 2.5, EXIT_COL)
+            rl.DrawLineEx(left, top, lw * 2.5, EXIT_COL)
+            buf: [8]u8
+            s := fmt.bprintf(buf[:7], "->%d", le.target_level)
+            buf[len(s)] = 0
+            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs, 0.5)
+            rl.DrawTextEx(g_font, cstring(&buf[0]),
+                {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
+                fs, 0.5, rl.Color{140, 255, 160, 230})
+        }
+        delete(exit_ids)
     }
 
     for npc in g_level_data.npcs {
@@ -952,18 +875,22 @@ draw_editor_world :: proc() {
     }
 
     LIGHT_COL :: rl.Color{255, 210, 80, 200}
-    for lt in g_level_data.lights {
-        wx := f32(int(lt.tx) * TILE_SIZE + TILE_SIZE / 2)
-        wy := f32(int(lt.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+    if g_sim_alive {
+        light_ids := world_query(&g_sim.world, query_mask(.PointLight, .Transform))
+        for id in light_ids {
+            pl := comp_get(&g_sim.world, id, .PointLight, PointLightComp)
+            p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
+            ip := world_to_iso_xy(p[0], p[1])
 
-        rl.DrawCircleV(ip, cr * 1.2, rl.Color{lt.r, lt.g, lt.b, 60})
-        rl.DrawCircleV(ip, cr * 0.7, LIGHT_COL)
-        rl.DrawCircleLinesV(ip, cr * 1.2, rl.Color{255, 220, 100, 160})
-        lsz := rl.MeasureTextEx(g_font, "L", fs * 1.1, 0.5)
-        rl.DrawTextEx(g_font, "L",
-            {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5},
-            fs * 1.1, 0.5, rl.Color{40, 30, 0, 240})
+            rl.DrawCircleV(ip, cr * 1.2, rl.Color{u8(pl.color[0]), u8(pl.color[1]), u8(pl.color[2]), 60})
+            rl.DrawCircleV(ip, cr * 0.7, LIGHT_COL)
+            rl.DrawCircleLinesV(ip, cr * 1.2, rl.Color{255, 220, 100, 160})
+            lsz := rl.MeasureTextEx(g_font, "L", fs * 1.1, 0.5)
+            rl.DrawTextEx(g_font, "L",
+                {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5},
+                fs * 1.1, 0.5, rl.Color{40, 30, 0, 240})
+        }
+        delete(light_ids)
     }
 
     for b in g_level_data.barrels {
@@ -1143,19 +1070,23 @@ draw_editor_world :: proc() {
             fs * 0.8, 0.5, rl.Color{255, 230, 60, 230})
     }
 
-    ps := g_level_data.player_start
-    if ps[0] != 0 || ps[1] != 0 {
-        ptx, pty := world_to_tile(ps[0], ps[1])
-        center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
-        iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{200, 160, 30, 70})
-        rl.DrawLineEx(top, right, lw * 2.5, rl.Color{255, 200, 50, 220})
-        rl.DrawLineEx(right, bottom, lw * 2.5, rl.Color{255, 200, 50, 220})
-        rl.DrawLineEx(bottom, left, lw * 2.5, rl.Color{255, 200, 50, 220})
-        rl.DrawLineEx(left, top, lw * 2.5, rl.Color{255, 200, 50, 220})
-        lsz := rl.MeasureTextEx(g_font, "P", fs*1.2, 0.5)
-        rl.DrawTextEx(g_font, "P",
-            {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
-            fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
+    if g_sim_alive {
+        ps_ids := world_query(&g_sim.world, query_mask(.PlayerStart, .Transform))
+        for id in ps_ids {
+            p := comp_get(&g_sim.world, id, .Transform, TransformComp).position
+            ptx, pty := world_to_tile(p[0], p[1])
+            center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
+            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{200, 160, 30, 70})
+            rl.DrawLineEx(top, right, lw * 2.5, rl.Color{255, 200, 50, 220})
+            rl.DrawLineEx(right, bottom, lw * 2.5, rl.Color{255, 200, 50, 220})
+            rl.DrawLineEx(bottom, left, lw * 2.5, rl.Color{255, 200, 50, 220})
+            rl.DrawLineEx(left, top, lw * 2.5, rl.Color{255, 200, 50, 220})
+            lsz := rl.MeasureTextEx(g_font, "P", fs*1.2, 0.5)
+            rl.DrawTextEx(g_font, "P",
+                {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
+                fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
+        }
+        delete(ps_ids)
     }
 
     ed_insp_draw_selection_highlight()
@@ -1183,48 +1114,14 @@ draw_editor_world :: proc() {
 }
 
 @(private = "file")
-spawn_marker_color :: proc(et: EnemySpawnType) -> rl.Color {
-    switch et {
-    case .Melee:  return rl.Color{220,  70,  50, 200}
-    case .Brute:  return rl.Color{160,  30,  30, 200}
-    case .Hunter: return rl.Color{120,  60, 200, 200}
-    case .Ranged:  return rl.Color{ 40, 160, 160, 200}
-    case .Sniper:  return rl.Color{ 40,  70, 200, 200}
-    case .Spider:  return rl.Color{ 30, 160,  30, 200}
-    }
-    return rl.Color{200, 200, 200, 200}
-}
-
-@(private = "file")
-spawn_marker_label :: proc(et: EnemySpawnType) -> cstring {
-    switch et {
-    case .Melee:  return "M"
-    case .Brute:  return "B"
-    case .Hunter: return "H"
-    case .Ranged:  return "R"
-    case .Sniper:  return "S"
-    case .Spider:  return "Sp"
-    }
-    return "?"
-}
-
-@(private = "file")
 ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     switch b {
     case .Floor:       return {110,  95,  65,  85}, {200, 170,  90, 200}
     case .Wall:        return { 70, 105, 140,  85}, { 90, 150, 210, 200}
     case .Water:       return { 18,  60, 130,  90}, { 40, 120, 220, 210}
     case .Module:      return { 40,  90, 160,  90}, { 90, 150, 230, 210}
-    case .SpawnMelee:  return {220,  70,  50,  70}, {255, 110,  80, 210}
-    case .SpawnBrute:  return {160,  30,  30,  70}, {210,  60,  60, 210}
-    case .SpawnHunter: return {120,  60, 200,  70}, {160,  90, 255, 210}
-    case .SpawnRanged: return { 40, 160, 160,  70}, { 60, 210, 210, 210}
-    case .SpawnSniper: return { 40,  70, 200,  70}, { 70, 110, 255, 210}
     case .Shopkeeper:  return {180, 148,  62,  70}, {230, 200, 100, 210}
     case .MutationWorkbench: return {150,  60, 180,  70}, {210, 110, 255, 210}
-    case .ExitTile:    return { 30, 140,  60,  70}, { 50, 210,  90, 210}
-    case .PlayerStart: return {200, 160,  30,  70}, {255, 200,  50, 210}
-    case .Light:       return {200, 180,  50,  70}, {255, 220,  80, 210}
     case .Oil:         return { 18,  14,  10,  90}, { 60,  80,  50, 200}
     case .Fire:        return { 90,  22,   6,  90}, {240,  80,  15, 210}
     case .FireBarrel:  return {120,  40,   8,  80}, {230,  90,  20, 210}
@@ -1236,7 +1133,6 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
     case .Phonograph:  return { 62,  28,  62,  85}, {170,  70, 180, 210}
     case .KeyPickup:   return { 96,  84,  10,  85}, {245, 210,  30, 210}
     case .Pillar:      return { 80,  70,  56,  85}, {170, 148, 115, 210}
-    case .SpawnSpider: return { 20,  60,  20,  70}, { 50, 180,  50, 210}
     case .Floor1:      return { 34,  30,  24,  85}, {110,  96,  68, 210}
     case .Floor2:      return { 40,  36,  28,  85}, {124, 108,  76, 210}
     case .Floor3:      return { 46,  40,  32,  85}, {138, 120,  84, 210}

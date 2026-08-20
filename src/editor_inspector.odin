@@ -12,10 +12,7 @@ EditorSelKind :: enum u8 {
     LoreItem   = 4,
     Phonograph = 5,
     KeyPickup  = 6,
-    Spawn      = 7,
-    Exit       = 8,
     NPC        = 9,
-    Light      = 10,
     Barrel     = 11,
 }
 
@@ -64,10 +61,7 @@ ed_try_select_at :: proc(tx, ty: int) -> bool {
     for li in g_level_data.lore_items  { if li.tx == itx && li.ty == ity { g_ed_sel = {.LoreItem,   itx, ity}; return true } }
     for ph in g_level_data.phonographs { if ph.tx == itx && ph.ty == ity { g_ed_sel = {.Phonograph, itx, ity}; return true } }
     for kp in g_level_data.key_pickups { if kp.tx == itx && kp.ty == ity { g_ed_sel = {.KeyPickup,  itx, ity}; return true } }
-    for sp in g_level_data.spawns      { if sp.tx == itx && sp.ty == ity { g_ed_sel = {.Spawn,      itx, ity}; return true } }
-    for ex in g_level_data.exits       { if ex.tx == itx && ex.ty == ity { g_ed_sel = {.Exit,       itx, ity}; return true } }
     for npc in g_level_data.npcs       { if npc.tx == itx && npc.ty == ity { g_ed_sel = {.NPC,      itx, ity}; return true } }
-    for lt in g_level_data.lights      { if lt.tx == itx && lt.ty == ity { g_ed_sel = {.Light,      itx, ity}; return true } }
     for b  in g_level_data.barrels     { if b.tx  == itx && b.ty  == ity { g_ed_sel = {.Barrel,     itx, ity}; return true } }
     return false
 }
@@ -194,10 +188,7 @@ ed_insp_draw_panel :: proc() {
     case .LoreItem:   _insp_lore_item(mp, cont_x, &cy, cont_w)
     case .Phonograph: _insp_phonograph(mp, cont_x, &cy, cont_w)
     case .KeyPickup:  _insp_key_pickup(mp, cont_x, &cy, cont_w)
-    case .Spawn:      _insp_spawn(mp, cont_x, &cy, cont_w)
-    case .Exit:       _insp_exit(mp, cont_x, &cy, cont_w)
     case .NPC:        _insp_npc(mp, cont_x, &cy, cont_w)
-    case .Light:      _insp_light(mp, cont_x, &cy, cont_w)
     case .Barrel:     _insp_barrel(mp, cont_x, &cy, cont_w)
     }
 
@@ -267,36 +258,6 @@ _insp_spin_u16 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
     cy^ += h + uis(2)
 }
 
-@(private = "file")
-_insp_spin_f32 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
-                       label: cstring, val: ^f32, lo, hi, step: f32,
-                       mk: u8, mf: u8) {
-    h  := uis(INSP_ROW_H)
-    y  := cy^
-    rx := x + w
-    bsz := uis(INSP_BTN_S)
-    vsz := uis(INSP_VAL_W)
-
-    rl.DrawTextEx(g_font, label, {x, y + h * 0.5 - uis(4.5)},
-        uis(9), 0.5, rl.Color{158, 155, 148, 215})
-
-    pr := rl.Rectangle{rx - bsz,                   y + h*0.5 - bsz*0.5, bsz, bsz}
-    mr := rl.Rectangle{rx - bsz*2 - vsz - uis(2),  y + h*0.5 - bsz*0.5, bsz, bsz}
-    vr := rl.Rectangle{mr.x + bsz + uis(1),         y + h*0.5 - bsz*0.5, vsz, bsz}
-
-    hm := rl.CheckCollisionPointRec(mp, mr)
-    hp := rl.CheckCollisionPointRec(mp, pr)
-
-    _insp_draw_btn(mr, "-", rl.Color{220, 140, 80, 240}, hm)
-    _insp_draw_val_box(vr, fmt.tprintf("%.1f", val^))
-    _insp_draw_btn(pr, "+", rl.Color{90, 220, 120, 240}, hp)
-
-    if rl.IsMouseButtonPressed(.LEFT) {
-        if hm && val^ > lo { val^ = max(val^ - step, lo); _insp_mod(mk, mf, transmute(u32)val^) }
-        if hp && val^ < hi { val^ = min(val^ + step, hi); _insp_mod(mk, mf, transmute(u32)val^) }
-    }
-    cy^ += h + uis(2)
-}
 
 @(private = "file")
 _insp_dropdown :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
@@ -370,15 +331,6 @@ _insp_toggle :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
 }
 
 @(private = "file")
-_insp_mod_label :: proc(mk: u8, mf_base: u8, lbl: [24]u8) {
-    for chunk: u8 = 0; chunk < 6; chunk += 1 {
-        base := chunk * 4
-        v := u32(lbl[base]) | u32(lbl[base+1])<<8 | u32(lbl[base+2])<<16 | u32(lbl[base+3])<<24
-        _insp_mod(mk, mf_base + chunk, v)
-    }
-}
-
-@(private = "file")
 _insp_draw_btn :: proc(r: rl.Rectangle, label: cstring, fg: rl.Color, hov: bool) {
     bg  := rl.Color{38, 32, 26, 190} if !hov else rl.Color{55, 46, 36, 210}
     brd := rl.Color{90, 78, 55, 160}
@@ -448,37 +400,10 @@ ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
         for &kp in g_level_data.key_pickups {
             if kp.tx == tx && kp.ty == ty { if op.field == 0 { kp.key_id = u8(op.value) }; return }
         }
-    case .Spawn:
-        for &sp in g_level_data.spawns {
-            if sp.tx == tx && sp.ty == ty {
-                if op.field == 0 { sp.enemy_type = EnemySpawnType(op.value) }
-                return
-            }
-        }
-    case .Exit:
-        for &ex in g_level_data.exits {
-            if ex.tx == tx && ex.ty == ty {
-                if op.field == 0 { ex.target_level = u16(op.value) }
-                return
-            }
-        }
     case .NPC:
         for &npc in g_level_data.npcs {
             if npc.tx == tx && npc.ty == ty {
                 if op.field == 0 { npc.npc_type = NPCType(op.value) }
-                return
-            }
-        }
-    case .Light:
-        for &lt in g_level_data.lights {
-            if lt.tx == tx && lt.ty == ty {
-                switch op.field {
-                case 0: lt.r         = u8(op.value)
-                case 1: lt.g         = u8(op.value)
-                case 2: lt.b         = u8(op.value)
-                case 3: lt.radius    = transmute(f32)op.value
-                case 4: lt.intensity = transmute(f32)op.value
-                }
                 return
             }
         }
@@ -549,29 +474,6 @@ _insp_key_pickup :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
 }
 
 @(private = "file")
-_insp_spawn :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &sp in g_level_data.spawns {
-        if sp.tx == g_ed_sel.tx && sp.ty == g_ed_sel.ty {
-            et_val   := u8(sp.enemy_type)
-            et_names := []cstring{"Melee", "Brute", "Hunter", "Ranged", "Sniper"}
-            _insp_dropdown(mp, x, cy, w, "Enemy Type", &et_val, et_names, 1, 5, u8(EditorSelKind.Spawn), 0)
-            sp.enemy_type = EnemySpawnType(et_val)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_exit :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &ex in g_level_data.exits {
-        if ex.tx == g_ed_sel.tx && ex.ty == g_ed_sel.ty {
-            _insp_spin_u16(mp, x, cy, w, "Target Level", &ex.target_level, 0, 99, u8(EditorSelKind.Exit), 0)
-            return
-        }
-    }
-}
-
-@(private = "file")
 _insp_npc :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
     for &npc in g_level_data.npcs {
         if npc.tx == g_ed_sel.tx && npc.ty == g_ed_sel.ty {
@@ -579,20 +481,6 @@ _insp_npc :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
             nt_names := []cstring{"Shopkeeper", "Mutator", "Stash", "AbilityVendor"}
             _insp_dropdown(mp, x, cy, w, "NPC Type", &nt_val, nt_names, 0, 3, u8(EditorSelKind.NPC), 0)
             npc.npc_type = NPCType(nt_val)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_light :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &lt in g_level_data.lights {
-        if lt.tx == g_ed_sel.tx && lt.ty == g_ed_sel.ty {
-            _insp_spin_u8( mp, x, cy, w, "Red",       &lt.r, 0, 255,  u8(EditorSelKind.Light), 0)
-            _insp_spin_u8( mp, x, cy, w, "Green",     &lt.g, 0, 255,  u8(EditorSelKind.Light), 1)
-            _insp_spin_u8( mp, x, cy, w, "Blue",      &lt.b, 0, 255,  u8(EditorSelKind.Light), 2)
-            _insp_spin_f32(mp, x, cy, w, "Radius",    &lt.radius,    20,  600, 10,   u8(EditorSelKind.Light), 3)
-            _insp_spin_f32(mp, x, cy, w, "Intensity", &lt.intensity, 0.05, 4.0, 0.05, u8(EditorSelKind.Light), 4)
             return
         }
     }
@@ -638,10 +526,7 @@ _insp_sel_exists :: proc() -> bool {
     case .LoreItem:  for li in g_level_data.lore_items  { if li.tx == tx && li.ty == ty { return true } }
     case .Phonograph:for ph in g_level_data.phonographs { if ph.tx == tx && ph.ty == ty { return true } }
     case .KeyPickup: for kp in g_level_data.key_pickups { if kp.tx == tx && kp.ty == ty { return true } }
-    case .Spawn:     for sp in g_level_data.spawns      { if sp.tx == tx && sp.ty == ty { return true } }
-    case .Exit:      for ex in g_level_data.exits       { if ex.tx == tx && ex.ty == ty { return true } }
     case .NPC:       for npc in g_level_data.npcs       { if npc.tx == tx && npc.ty == ty { return true } }
-    case .Light:     for lt in g_level_data.lights      { if lt.tx == tx && lt.ty == ty { return true } }
     case .Barrel:    for b  in g_level_data.barrels     { if b.tx  == tx && b.ty  == ty { return true } }
     }
     return false
@@ -656,10 +541,7 @@ _insp_kind_name :: proc(k: EditorSelKind) -> cstring {
     case .LoreItem:   return "Lore Item"
     case .Phonograph: return "Phonograph"
     case .KeyPickup:  return "Key Pickup"
-    case .Spawn:      return "Enemy Spawn"
-    case .Exit:       return "Exit"
     case .NPC:        return "NPC"
-    case .Light:      return "Light"
     case .Barrel:     return "Barrel"
     }
     return "?"

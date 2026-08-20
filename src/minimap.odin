@@ -77,9 +77,11 @@ draw_minimap :: proc(w: ^World) {
         rl.DrawRectangleRec({px, py, tile_px, tile_px}, col)
     }
 
-    for ex in g_level_data.exits {
-        tx := int(ex.tx)
-        ty := int(ex.ty)
+    exit_ids := world_query(w, query_mask(.LevelExit, .Transform))
+    defer delete(exit_ids)
+    for id in exit_ids {
+        p := comp_get(w, id, .Transform, TransformComp).position
+        tx, ty := world_to_tile(p[0], p[1])
         if _, explored := g_explored_tiles[[2]int{tx, ty}]; !explored { continue }
         cx := panel_x + f32(tx - MINIMAP_TX_ORIGIN) * tile_px + tile_px * 0.5
         cy := panel_y + f32(ty - MINIMAP_TY_ORIGIN) * tile_px + tile_px * 0.5

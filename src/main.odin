@@ -230,7 +230,7 @@ update_playing :: proc(dt: f32) {
         }
     }
     if !g_editor_mode {
-        g_camera.zoom = f32(rl.GetScreenHeight()) / 720.0
+        g_camera.zoom = f32(rl.GetScreenHeight()) / 1080.0
     }
 
     if !g_sim_alive { return }
