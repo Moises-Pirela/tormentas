@@ -491,7 +491,7 @@ ability_spawn_projectile :: proc(w: ^World, shooter_id: int,
     })
     comp_set(w, proj_id, .SelfDestruct, SelfDestructComp{ timer = proj_life })
     comp_add(w, proj_id, .ProjectileTag)
-    play_sfx("shoot")
+    play_sfx_at("shoot", origin)
 }
 
 @(private = "file")
@@ -532,7 +532,7 @@ ability_blast_aoe :: proc(w: ^World, shooter_id: int, radius, damage: f32,
 
     er, eg, eb := _trait_color(trait)
     push_explosion(origin[0], origin[1], radius, er, eg, eb)
-    if hit_any { play_sfx("melee_hit") } else { play_sfx("ability_fan") }
+    if hit_any { play_sfx_at("melee_hit", origin) } else { play_sfx_at("ability_fan", origin) }
 }
 
 @(private = "file")
@@ -574,16 +574,21 @@ ability_blast_cone :: proc(w: ^World, shooter_id: int,
 
     er, eg, eb := _trait_color(trait)
     push_explosion(origin[0], origin[1], range * 0.5, er, eg, eb)
-    if hit_any { play_sfx("melee_hit") } else { play_sfx("ability_fan") }
+    if hit_any { play_sfx_at("melee_hit", origin) } else { play_sfx_at("ability_fan", origin) }
 }
 
 ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
-    if !world_is_valid(w, w.player_id)                { return }
-    if !world_has_component(w, w.player_id, .Ability) { return }
+    for slot in 0..<MAX_PLAYERS {
+        id := w.player_ids[slot]
+        if !world_is_valid(w, id)                { continue }
+        if !world_has_component(w, id, .Ability) { continue }
+        _ability_tick_player(w, id, dt)
+    }
+}
 
-    id := w.player_id
-
+@(private = "file")
+_ability_tick_player :: proc(w: ^World, id: int, dt: f32) {
     if world_has_component(w, id, .Respawn) &&
        comp_get(w, id, .Respawn, RespawnComp).timer > 0 { return }
 
@@ -693,7 +698,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     st.charging = false
                     enqueue(&spawn_dirs, &spawn_dmgs, &spawn_pierce, &spawn_count,
                         facing, st.charge_dmg, 0)
-                    play_sfx("ability_quickdraw")
+                    play_sfx_at("ability_quickdraw", t_snap.position)
                 }
             }
         }
@@ -707,7 +712,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     [3]f32{ math.cos(angle), math.sin(angle), 0 },
                     st.primed_dmg, 0)
             }
-            play_sfx("ability_fan")
+            play_sfx_at("ability_fan", t_snap.position)
         }
 
         if !inputs_pressed[slot_idx] || st.cooldown > 0 { continue }
@@ -719,7 +724,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         if effective_energy_cost > 0 && world_has_component(w, id, .Health) {
             h_en := comp_get(w, id, .Health, HealthComp)
             if h_en.energy < effective_energy_cost {
-                play_sfx("no_energy")
+                if id == w.player_id { play_sfx("no_energy") }
                 continue
             }
         }
@@ -738,7 +743,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
                 fire_proj_exec = ex
                 did_activate = true
-                play_sfx("ability_quickdraw")
+                play_sfx_at("ability_quickdraw", t_snap.position)
 
             case .BurstFire:
                 if st.burst_shots == 0 {
@@ -747,7 +752,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     st.burst_dmg    = ability_base_damage(w, id, def, level, 1.0)
                     st.burst_pierce = 0
                     did_activate    = true
-                    play_sfx("ability_quickdraw")
+                    play_sfx_at("ability_quickdraw", t_snap.position)
                 }
 
             case .FanFire:
@@ -762,7 +767,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         [3]f32{ math.cos(a), math.sin(a), 0 }, base_dmg, 0)
                 }
                 did_activate = true
-                play_sfx("ability_fan")
+                play_sfx_at("ability_fan", t_snap.position)
 
             case .ChargeFire:
                 if !st.charging {
@@ -781,7 +786,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
                     st.charge_dmg   = ability_base_damage(w, id, def, level, 1.0)
                     did_activate    = true
-                    play_sfx("ability_fan")
+                    play_sfx_at("ability_fan", t_snap.position)
 
                     comp_add(w, id, .AimLock)
                 }
@@ -792,7 +797,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     st.primed_count = int(ex.p1)
                     st.primed_dmg   = ability_base_damage(w, id, def, level, 1.0)
                     did_activate    = true
-                    play_sfx("ability_fan")
+                    play_sfx_at("ability_fan", t_snap.position)
                 }
 
             case .AoEBlast:
@@ -827,7 +832,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         status_effect_get(sec, ex.status).duration = 0
                         detonated = true
                     }
-                    if detonated { play_sfx("ability_fan") }
+                    if detonated { play_sfx_at("ability_fan", t_snap.position) }
                 }
                 did_activate = true
 
@@ -881,7 +886,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         comp_set(w, pid, .SelfDestruct, SelfDestructComp{ timer = proj_life })
                         comp_add(w, pid, .ProjectileTag)
                     }
-                    play_sfx("ability_fan")
+                    play_sfx_at("ability_fan", t_snap.position)
                 }
                 did_activate = true
 
@@ -904,7 +909,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         status_str = ex.status_str,
                         er = er, eg = eg, eb = eb,
                     })
-                    play_sfx("ability_fan")
+                    play_sfx_at("ability_fan", t_snap.position)
                 }
                 did_activate = true
 
@@ -921,7 +926,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         duration       = dur,
                         timer          = 0,
                     })
-                    play_sfx("levelup")
+                    play_sfx_at("levelup", t_snap.position)
                 case .NecroticSurge:
 
                     base_heal := ability_base_damage(w, id, def, level, 0.3)
@@ -930,10 +935,10 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                         duration = ex.p2,
                         timer    = 0,
                     })
-                    play_sfx("levelup")
+                    play_sfx_at("levelup", t_snap.position)
                 case:
 
-                    play_sfx("levelup")
+                    play_sfx_at("levelup", t_snap.position)
                 }
                 did_activate = true
 
@@ -970,7 +975,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     er = er, eg = eg, eb = eb,
                 })
                 did_activate = true
-                play_sfx("ability_fan")
+                play_sfx_at("ability_fan", t_snap.position)
 
             case .HealSelf:
                 if world_has_component(w, id, .Health) {
@@ -979,7 +984,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     h.current = min(h.current + heal, h.max)
                 }
                 did_activate = true
-                play_sfx("levelup")
+                play_sfx_at("levelup", t_snap.position)
 
             case .InstantReload:
                 if world_has_component(w, id, .Equipment) {
@@ -993,13 +998,13 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     }
                 }
                 did_activate = true
-                play_sfx("reload")
+                play_sfx_at("reload", t_snap.position)
 
             case .BuffArmor:
                 st.buff_timer = ex.p2
                 st.buff_value = ex.p1
                 did_activate  = true
-                play_sfx("levelup")
+                play_sfx_at("levelup", t_snap.position)
 
             case .CooldownReset:
                 reduction := ex.p1
@@ -1008,7 +1013,7 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     ab_snap.slots[other_idx].cooldown *= (1.0 - reduction)
                 }
                 did_activate = true
-                play_sfx("levelup")
+                play_sfx_at("levelup", t_snap.position)
             }
         }
 

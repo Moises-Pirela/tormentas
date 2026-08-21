@@ -294,7 +294,7 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             comp_add(w, proj_id, .ProjectileTag)
         }
 
-        play_sfx("shoot")
+        play_sfx_at("pistol_shot", t_snap.position);
 
         emit_noise(
             { t_snap.position[0], t_snap.position[1], 0 },

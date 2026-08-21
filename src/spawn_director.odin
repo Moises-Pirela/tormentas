@@ -182,19 +182,32 @@ _director_tick_spawns :: proc(w: ^World, cfg: DirectorConfig, dt: f32) {
     id := _director_spawn_enemy(w, chosen.name, wx, wy)
     if id == INVALID_ENTITY { return }
 
+    if world_has_component(w, id, .AIAgent) {
+        comp_get(w, id, .AIAgent, AIAgentComp).roster_index = u8(chosen_idx)
+    }
+
     g_director.budget  -= chosen.cost
     g_director.spawn_cd = cfg.spawn_interval
 }
 
 @(private = "file")
-_director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
-    player_pos: [2]f32
-    pid := w.player_id
-    if world_is_valid(w, pid) && world_has_component(w, pid, .Transform) {
-        p := comp_get(w, pid, .Transform, TransformComp).position
-        player_pos = {p[0], p[1]}
+_min_player_dist2 :: proc(w: ^World, x, y: f32) -> f32 {
+    best := max(f32)
+    for slot in 0..<MAX_PLAYERS {
+        pid := w.player_ids[slot]
+        if !world_is_valid(w, pid)                  { continue }
+        if !world_has_component(w, pid, .Transform) { continue }
+        p  := comp_get(w, pid, .Transform, TransformComp).position
+        dx := x - p[0]
+        dy := y - p[1]
+        d2 := dx*dx + dy*dy
+        if d2 < best { best = d2 }
     }
+    return best
+}
 
+@(private = "file")
+_director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
     min_d2 := DIRECTOR_MIN_DIST * DIRECTOR_MIN_DIST
 
     anchor_ids := world_query(w, query_mask(.SpawnAnchor, .Transform))
@@ -220,9 +233,7 @@ _director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
         for idx in indices {
             spx := anchors[idx][0]
             spy := anchors[idx][1]
-            ddx := spx - player_pos[0]
-            ddy := spy - player_pos[1]
-            d2  := ddx*ddx + ddy*ddy
+            d2  := _min_player_dist2(w, spx, spy)
             if d2 >= min_d2 {
                 return spx, spy, true
             }
@@ -240,11 +251,9 @@ _director_pick_anchor :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
     defer delete(candidates)
     for pos, tt in g_tilemap {
         if tile_base(tt) != .Floor { continue }
-        cx  := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
-        cy  := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
-        ddx := cx - player_pos[0]
-        ddy := cy - player_pos[1]
-        if ddx*ddx + ddy*ddy >= min_d2 {
+        cx := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
+        cy := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
+        if _min_player_dist2(w, cx, cy) >= min_d2 {
             append(&candidates, pos)
         }
     }
@@ -273,24 +282,15 @@ _director_spawn_boss :: proc(w: ^World) {
 
 @(private = "file")
 _find_boss_tile :: proc(w: ^World) -> (wx, wy: f32, ok: bool) {
-    player_pos: [2]f32
-    pid := w.player_id
-    if world_is_valid(w, pid) && world_has_component(w, pid, .Transform) {
-        p := comp_get(w, pid, .Transform, TransformComp).position
-        player_pos = {p[0], p[1]}
-    }
-
     candidates: [dynamic][2]int
     defer delete(candidates)
 
     for pos, tt in g_tilemap {
         if tile_base(tt) != .Floor { continue }
         if !_tile_open_3x3(pos[0], pos[1]) { continue }
-        cx  := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
-        cy  := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
-        ddx := cx - player_pos[0]
-        ddy := cy - player_pos[1]
-        if ddx*ddx + ddy*ddy >= BOSS_MIN_DIST * BOSS_MIN_DIST {
+        cx := f32(pos[0]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
+        cy := f32(pos[1]) * f32(TILE_SIZE) + f32(TILE_SIZE) * 0.5
+        if _min_player_dist2(w, cx, cy) >= BOSS_MIN_DIST * BOSS_MIN_DIST {
             append(&candidates, pos)
         }
     }

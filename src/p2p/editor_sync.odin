@@ -30,32 +30,39 @@ EditorModOp :: struct #packed {
 
 EDITOR_MOD_OP_SIZE :: size_of(EditorModOp)
 
-session_send_editor_op :: proc(s: ^Session, op: EditorOp) {
+@(private)
+_send_or_broadcast :: proc(s: ^Session, pkt: []u8) {
+    if is_host(s) {
+        _broadcast(s, pkt)
+        return
+    }
     if s.state != .Connected { return }
+    _send(s, pkt)
+}
+
+session_send_editor_op :: proc(s: ^Session, op: EditorOp) {
     op := op
     pkt: [1 + EDITOR_OP_SIZE]u8
     pkt[0] = u8(MsgType.EditorOp)
     mem.copy(&pkt[1], &op, EDITOR_OP_SIZE)
-    _send(s, pkt[:])
+    _send_or_broadcast(s, pkt[:])
 }
 
 session_send_level_load :: proc(s: ^Session, n: int) {
-    if s.state != .Connected { return }
     n16 := u16(n)
     pkt: [3]u8
     pkt[0] = u8(MsgType.LevelLoad)
     pkt[1] = u8(n16)
     pkt[2] = u8(n16 >> 8)
-    _send(s, pkt[:])
+    _send_or_broadcast(s, pkt[:])
 }
 
 session_send_editor_mod_op :: proc(s: ^Session, op: EditorModOp) {
-    if s.state != .Connected { return }
     op := op
     pkt: [1 + EDITOR_MOD_OP_SIZE]u8
     pkt[0] = u8(MsgType.EditorModOp)
     mem.copy(&pkt[1], &op, EDITOR_MOD_OP_SIZE)
-    _send(s, pkt[:])
+    _send_or_broadcast(s, pkt[:])
 }
 
 session_drain_editor_mod_ops :: proc(s: ^Session) -> []EditorModOp {

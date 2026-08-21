@@ -3776,7 +3776,7 @@ SteamNetworkingIdentity :: struct #packed {
     szUnknownRawString: [128]u8,
 }
 
-SteamNetConnectionInfo :: struct #packed {
+SteamNetConnectionInfo :: struct {
     identityRemote:          SteamNetworkingIdentity,
     nUserData:               i64,
     hListenSocket:           HSteamListenSocket,

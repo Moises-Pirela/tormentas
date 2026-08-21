@@ -745,49 +745,51 @@ _jstr_array :: proc(o: json.Object, key: string) -> []string {
 FOOTSTEP_DISTANCE  :: f32(120.0)
 FOOTSTEP_MIN_SPEED :: ANIM_WALK_SPEED_THRESH
 
-@(private = "file") g_step_accum:    f32
-@(private = "file") g_step_last_pos: [2]f32
-@(private = "file") g_step_primed:   bool
+@(private = "file") g_step_accum:    [MAX_PLAYERS]f32
+@(private = "file") g_step_last_pos: [MAX_PLAYERS][2]f32
+@(private = "file") g_step_primed:   [MAX_PLAYERS]bool
 
 tick_footsteps :: proc(w: ^World, dt: f32) {
-    pid := w.player_id
-    if !world_is_valid(w, pid) || !world_has_component(w, pid, .Transform) {
-        g_step_primed = false
-        return
-    }
+    for slot in 0..<MAX_PLAYERS {
+        pid := w.player_ids[slot]
+        if !world_is_valid(w, pid) || !world_has_component(w, pid, .Transform) {
+            g_step_primed[slot] = false
+            continue
+        }
 
-    if world_has_component(w, pid, .DodgeState) && comp_get(w, pid, .DodgeState, DodgeComp).active {
-        g_step_primed = false
-        return
-    }
-    if world_has_component(w, pid, .Respawn) && comp_get(w, pid, .Respawn, RespawnComp).timer > 0 {
-        g_step_primed = false
-        return
-    }
+        if world_has_component(w, pid, .DodgeState) && comp_get(w, pid, .DodgeState, DodgeComp).active {
+            g_step_primed[slot] = false
+            continue
+        }
+        if world_has_component(w, pid, .Respawn) && comp_get(w, pid, .Respawn, RespawnComp).timer > 0 {
+            g_step_primed[slot] = false
+            continue
+        }
 
-    p := comp_get(w, pid, .Transform, TransformComp).position
-    iso := world_to_iso_xy(p[0], p[1])
-    cur := [2]f32{ iso.x, iso.y }
+        p := comp_get(w, pid, .Transform, TransformComp).position
+        iso := world_to_iso_xy(p[0], p[1])
+        cur := [2]f32{ iso.x, iso.y }
 
-    if !g_step_primed {
-        g_step_last_pos = cur
-        g_step_accum    = 0
-        g_step_primed   = true
-        return
-    }
+        if !g_step_primed[slot] {
+            g_step_last_pos[slot] = cur
+            g_step_accum[slot]    = 0
+            g_step_primed[slot]   = true
+            continue
+        }
 
-    d := [2]f32{ cur[0] - g_step_last_pos[0], cur[1] - g_step_last_pos[1] }
-    g_step_last_pos = cur
+        d := [2]f32{ cur[0] - g_step_last_pos[slot][0], cur[1] - g_step_last_pos[slot][1] }
+        g_step_last_pos[slot] = cur
 
-    moved := math.sqrt(d[0]*d[0] + d[1]*d[1])
-    if dt > 0 && moved / dt < FOOTSTEP_MIN_SPEED {
-        g_step_accum = max(g_step_accum - moved, 0)
-        return
-    }
+        moved := math.sqrt(d[0]*d[0] + d[1]*d[1])
+        if dt > 0 && moved / dt < FOOTSTEP_MIN_SPEED {
+            g_step_accum[slot] = max(g_step_accum[slot] - moved, 0)
+            continue
+        }
 
-    g_step_accum += moved
-    for g_step_accum >= FOOTSTEP_DISTANCE {
-        g_step_accum -= FOOTSTEP_DISTANCE
-        play_sfx("step")
+        g_step_accum[slot] += moved
+        for g_step_accum[slot] >= FOOTSTEP_DISTANCE {
+            g_step_accum[slot] -= FOOTSTEP_DISTANCE
+            play_sfx_at("step", p)
+        }
     }
 }

@@ -40,7 +40,8 @@ dbg_inspector_windows :: proc() {
     ctx := imui_ctx()
     w   := &g_sim.world.base
 
-    g_dbg_authority.role = p2p.session_is_online(&g_session) ? ecs.SimRole.Client : ecs.SimRole.Host
+    is_client := p2p.session_is_online(&g_session) && g_session.local_slot != 0
+    g_dbg_authority.role = ecs.SimRole.Client if is_client else ecs.SimRole.Host
 
     cwui.inspector_window(
         ctx, &g_dbg_ui, &g_dbg_insp, w, &g_dbg_authority,

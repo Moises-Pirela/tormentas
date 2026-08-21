@@ -34,7 +34,7 @@ QUEST_DEFS := [QUEST_COUNT]QuestDef{
     { .QUEST_FINAL_FORM_TITLE,      .QUEST_FINAL_FORM_LORE,      .QUEST_FINAL_FORM_OBJ,      3,   0, 5 },
 }
 
-g_quest_completed:   [2]u8
+g_quest_completed:   [MAX_PLAYERS]u8
 
 g_quest_flash_timer: f32
 g_quest_flash_title: cstring

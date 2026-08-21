@@ -100,11 +100,11 @@ editor_grid_window :: proc() {
 
     if .ACTIVE in mu.header(ctx, "camera bounds", {.EXPANDED}) {
         CAM_RANGE :: mu.Real(8192)
-        mu.layout_row(ctx, {50, -1}, 0)
-        mu.label(ctx, "min X"); mu.slider(ctx, &g_level_data.cam_lims[0], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
-        mu.label(ctx, "max X"); mu.slider(ctx, &g_level_data.cam_lims[1], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
-        mu.label(ctx, "min Y"); mu.slider(ctx, &g_level_data.cam_lims[2], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
-        mu.label(ctx, "max Y"); mu.slider(ctx, &g_level_data.cam_lims[3], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
+        mu.layout_row(ctx, {70, -1}, 0)
+        mu.label(ctx, "left limit");  mu.slider(ctx, &g_level_data.cam_lims[0], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
+        mu.label(ctx, "right limit"); mu.slider(ctx, &g_level_data.cam_lims[1], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
+        mu.label(ctx, "top limit");   mu.slider(ctx, &g_level_data.cam_lims[2], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
+        mu.label(ctx, "lower limit"); mu.slider(ctx, &g_level_data.cam_lims[3], -CAM_RANGE, CAM_RANGE, 1, "%.0f")
 
         mu.layout_row(ctx, {-1}, 0)
         if .SUBMIT in mu.button(ctx, "reset to level defaults") {

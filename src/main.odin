@@ -2,8 +2,11 @@ package main
 
 import rl       "vendor:raylib"
 import p2p      "p2p"
+import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:strconv"
+import "core:time"
 
 SCREEN_WIDTH  :: 1920
 SCREEN_HEIGHT :: 1080
@@ -20,8 +23,6 @@ MAX_CATCHUP_TICKS :: 5
 g_camera:            ^rl.Camera2D
 
 g_session:    p2p.Session
-g_local_hist: p2p.HistoryBuf
-g_stall_acc:  f32
 
 g_sim:        Simulation
 g_sim_alive:  bool
@@ -29,24 +30,84 @@ g_accumulator: f64
 
 g_was_player_alive: bool = true
 
-@(private)
-do_sim_tick :: proc(sim: ^Simulation, local_frame: p2p.InputFrame, dt: f32) -> (ran: bool) {
-    result := p2p.lockstep_advance(&g_session, local_frame, &g_local_hist, &g_stall_acc, dt)
-    switch result {
-    case .Offline:
-        g_staged_input[sim.world.local_player_slot] = local_frame
-        sim_tick(sim, dt)
-        return true
-    case .Ready:
-        lf, rf := p2p.lockstep_consume(&g_session)
-        g_staged_input[g_session.local_slot]     = lf
-        g_staged_input[1 - g_session.local_slot] = rf
-        sim_tick(sim, dt)
-        return true
-    case .Stalled:
-        return false
+do_sim_tick :: proc(local_frame: p2p.InputFrame, dt: f32) {
+    if p2p.session_is_online(&g_session) && g_session.local_slot != 0 {
+        netcode_client_tick(local_frame, dt)
+    } else {
+        netcode_host_tick(local_frame, dt)
+    }
+}
+
+LOOPBACK_PORT :: 27600
+
+boot_loopback_from_args :: proc() {
+    args := os.args
+    if len(args) < 2 { return }
+    mode := args[1]
+    if mode != "hostlocal" && mode != "joinlocal" { return }
+
+    port := u16(LOOPBACK_PORT)
+    if len(args) >= 3 {
+        if v, ok := strconv.parse_int(args[2]); ok {
+            port = u16(v)
+        }
+    }
+
+    if mode == "hostlocal" {
+        _boot_hostlocal(port)
+    } else {
+        _boot_joinlocal(port)
+    }
+}
+
+LOOPBACK_CONNECT_TIMEOUT :: f32(15.0)
+
+@(private = "file")
+_boot_wait_for_connection :: proc() -> bool {
+    timer := f32(0)
+    for timer < LOOPBACK_CONNECT_TIMEOUT {
+        steam_run_callbacks()
+        p2p.session_poll(&g_session, 1.0 / 60.0)
+        if p2p.session_is_online(&g_session) { return true }
+        if p2p.session_is_disconnected(&g_session) { return false }
+        time.sleep(time.Millisecond * 16)
+        timer += 1.0 / 60.0
     }
     return false
+}
+
+@(private = "file")
+_boot_hostlocal :: proc(port: u16) {
+    g_is_host = true
+    copy(g_player_name[:], "Host")
+    copy(g_session.local_name[:], g_player_name[:])
+    if !p2p.session_host_loopback(&g_session, port) { return }
+    if !_boot_wait_for_connection() {
+        fmt.eprintln("[loopback] timed out waiting for joinlocal peer")
+        p2p.session_shutdown(&g_session)
+        return
+    }
+    init_game()
+    g_hub_active = true
+    g_app_state  = .Playing
+    set_playing_state(.Hub)
+}
+
+@(private = "file")
+_boot_joinlocal :: proc(port: u16) {
+    g_is_host = false
+    copy(g_player_name[:], "Client")
+    copy(g_session.local_name[:], g_player_name[:])
+    if !p2p.session_join_loopback(&g_session, port) { return }
+    if !_boot_wait_for_connection() {
+        fmt.eprintln("[loopback] timed out waiting for hostlocal peer")
+        p2p.session_shutdown(&g_session)
+        return
+    }
+    init_game()
+    g_hub_active = true
+    g_app_state  = .Playing
+    set_playing_state(.Hub)
 }
 
 accept_invite :: proc() {
@@ -101,49 +162,59 @@ init_game :: proc() {
     g_player_names = {}
     copy(g_player_names[g_session.local_slot][:], g_player_name[:])
     if p2p.session_is_online(&g_session) {
-        remote_slot := 1 - g_session.local_slot
-        copy(g_player_names[remote_slot][:], g_session.remote_name[:])
+        for slot in 0..<MAX_PLAYERS {
+            if slot == g_session.local_slot { continue }
+            entry := &g_session.roster[slot]
+            if entry.known { copy(g_player_names[slot][:], entry.name[:]) }
+        }
     }
 
-    sim_register_system(&g_sim, { .EarlyUpdate }, stats_system)
-    sim_register_system(&g_sim, { .EarlyUpdate }, player_input_system)
-    sim_register_system(&g_sim, { .EarlyUpdate }, dodge_system)
-    sim_register_system(&g_sim, { .Update      }, animation_system)
-    sim_register_system(&g_sim, { .Update      }, facing_system)
-    sim_register_system(&g_sim, { .Update      }, weapon_system)
+    sim_register_system(&g_sim, { .EarlyUpdate }, stats_system,        .Shared)
+    sim_register_system(&g_sim, { .EarlyUpdate }, player_input_system, .Shared)
+    sim_register_system(&g_sim, { .EarlyUpdate }, dodge_system,        .Shared)
+    sim_register_system(&g_sim, { .Update      }, animation_system,    .Shared)
+    sim_register_system(&g_sim, { .Update      }, facing_system,       .Shared)
+    sim_register_system(&g_sim, { .Update      }, weapon_system,       .HostOnly)
 
-    sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system)
-    sim_register_system(&g_sim, { .Update      }, ai_system)
-    sim_register_system(&g_sim, { .Update      }, spawn_director_system)
-    sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system)
-    sim_register_system(&g_sim, { .Update      }, reanimated_system)
-    sim_register_system(&g_sim, { .Update      }, ability_system)
-    sim_register_system(&g_sim, { .Update      }, flask_system)
-    sim_register_system(&g_sim, { .Update      }, homing_system)
-    sim_register_system(&g_sim, { .Update      }, trap_system)
-    sim_register_system(&g_sim, { .Update      }, grenade_system)
-    sim_register_system(&g_sim, { .Update      }, extraction_system)
-    sim_register_system(&g_sim, { .Update      }, melee_arc_system)
-    sim_register_system(&g_sim, { .Update      }, projectile_collision_system)
-    sim_register_system(&g_sim, { .Update      }, pickup_system)
-    sim_register_system(&g_sim, { .Update      }, status_effect_system)
-    sim_register_system(&g_sim, { .Update      }, fire_patch_system)
-    sim_register_system(&g_sim, { .Update      }, env_interaction_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, damage_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, barrel_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, env_container_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, entity_separation_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, greybox_collision_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system)
-    sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system)
+    sim_register_system(&g_sim, { .EarlyUpdate, .Update, .LateUpdate }, stealth_system, .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, ai_system,                  .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, spawn_director_system,      .HostOnly)
+    sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system, .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, reanimated_system,          .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, ability_system,             .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, flask_system,               .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, homing_system,              .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, trap_system,                .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, grenade_system,             .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, extraction_system,          .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, melee_arc_system,           .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, projectile_collision_system, .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, pickup_system,              .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, status_effect_system,       .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, fire_patch_system,          .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, env_interaction_system,     .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, env_interaction_focus_system, .Shared)
+    sim_register_system(&g_sim, { .LateUpdate  }, damage_system,              .HostOnly)
+    sim_register_system(&g_sim, { .LateUpdate  }, barrel_system,              .HostOnly)
+    sim_register_system(&g_sim, { .LateUpdate  }, env_container_system,       .HostOnly)
+    sim_register_system(&g_sim, { .LateUpdate  }, camera_follow_system,       .Shared)
+    sim_register_system(&g_sim, { .LateUpdate  }, entity_separation_system,   .Shared)
+    sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system,      .Shared)
+    sim_register_system(&g_sim, { .LateUpdate  }, greybox_collision_system,   .Shared)
+    sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system,     .HostOnly)
+    sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system,          .HostOnly)
 
     w := &g_sim.world
 
     g_sim.state = .Running
 
     w.local_player_slot = g_session.local_slot
+
+    switch {
+    case !p2p.session_is_online(&g_session): g_sim.role = .Standalone
+    case g_session.local_slot != 0:          g_sim.role = .Client
+    case:                                    g_sim.role = .Host
+    }
 
     fire_system_init()
     door_blockers_init()
@@ -154,8 +225,7 @@ init_game :: proc() {
     door_init_blockers(w)
     hub_apply(w)
     spawn_players(w)
-    g_stash[0] = stash_make_empty()
-    g_stash[1] = stash_make_empty()
+    for i in 0..<MAX_PLAYERS { g_stash[i] = stash_make_empty() }
     if !load_player(w, w.player_id) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
@@ -186,6 +256,7 @@ shutdown_game :: proc() {
     stop_music()
     stop_ambience()
 
+    netcode_predictor_shutdown()
     if g_sim_alive {
         fire_system_destroy()
         door_blockers_destroy()
@@ -194,8 +265,6 @@ shutdown_game :: proc() {
     }
 
     p2p.session_shutdown(&g_session)
-    g_local_hist = {}
-    g_stall_acc  = 0
     g_accumulator = 0
 
     ui_close_all()
@@ -204,8 +273,7 @@ shutdown_game :: proc() {
     g_pending_level_switch = 0
     g_raid_timer           = 0
     g_is_host              = false
-    g_stash[0]             = stash_make_empty()
-    g_stash[1]             = stash_make_empty()
+    for i in 0..<MAX_PLAYERS { g_stash[i] = stash_make_empty() }
     g_active_slot          = -1
     g_lifetime_stats       = {}
 }
@@ -236,11 +304,23 @@ update_playing :: proc(dt: f32) {
     if !g_sim_alive { return }
     w := &g_sim.world
 
-    if g_session.peer_ready && !g_session.char_data_sent && world_is_valid(w, w.player_id) {
-        bytes := player_to_bytes(w, w.player_id)
-        p2p.session_send_char_data(&g_session, bytes)
-        g_session.char_data_sent = true
+    if world_is_valid(w, w.player_id) {
+        if p2p.is_host(&g_session) {
+            for &p in g_session.peers {
+                if p.active && p.peer_ready && !p.char_data_sent {
+                    bytes := player_to_bytes(w, w.player_id)
+                    p2p.session_send_char_data_to_peer(&p, bytes)
+                    p.char_data_sent = true
+                }
+            }
+        } else if g_session.peer_ready && !g_session.char_data_sent {
+            bytes := player_to_bytes(w, w.player_id)
+            p2p.session_send_char_data(&g_session, bytes)
+            g_session.char_data_sent = true
+        }
     }
+
+    netcode_apply_raid_result(w)
 
     minimap_update(w)
 
@@ -286,18 +366,21 @@ update_playing :: proc(dt: f32) {
             }
 
             if p2p.session_is_online(&g_session) {
-                remote_slot := 1 - g_session.local_slot
-                if !g_hub_remote_spawned {
-                    if g_session.remote_char_ready {
-                        hub_spawn_remote_player(w)
-                        g_hub_remote_spawned = true
-                        g_hub_remote_loaded  = true
+                for slot in 0..<MAX_PLAYERS {
+                    if slot == g_session.local_slot { continue }
+                    entry := &g_session.roster[slot]
+                    if !entry.known { continue }
+
+                    if !world_is_valid(w, w.player_ids[slot]) {
+                        if !entry.char_ready { continue }
+                        hub_spawn_remote_player(w, slot)
+                        g_hub_remote_loaded[slot] = true
+                        continue
                     }
-                } else if !g_hub_remote_loaded && g_session.remote_char_ready {
-                    if world_is_valid(w, w.player_ids[remote_slot]) {
-                        load_player_from_bytes(w, w.player_ids[remote_slot],
-                            g_session.remote_char_data[:g_session.remote_char_len])
-                        g_hub_remote_loaded = true
+
+                    if !g_hub_remote_loaded[slot] && entry.char_ready {
+                        load_player_from_bytes(w, w.player_ids[slot], entry.char_data[:entry.char_len])
+                        g_hub_remote_loaded[slot] = true
                     }
                 }
             }
@@ -384,7 +467,7 @@ update_playing :: proc(dt: f32) {
         g_accumulator += f64(dt)
         n := 0
         for g_accumulator >= f64(TICK_DT) {
-            do_sim_tick(&g_sim, local_frame, TICK_DT)
+            do_sim_tick(local_frame, TICK_DT)
             g_accumulator -= f64(TICK_DT)
             local_frame.actions = {}
             n += 1
@@ -393,6 +476,7 @@ update_playing :: proc(dt: f32) {
                 break
             }
         }
+        netcode_interp_update()
     }
 
     if g_playing_state == .Gameplay &&
@@ -616,6 +700,8 @@ main :: proc() {
 
     steam_init()
     defer steam_shutdown()
+
+    boot_loopback_from_args()
 
     for !rl.WindowShouldClose() && !g_should_exit {
         dt := rl.GetFrameTime()

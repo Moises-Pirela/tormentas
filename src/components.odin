@@ -590,6 +590,8 @@ AIAgentComp :: struct {
     search_timer:   f32,
 
     tier: EnemyTier,
+
+    roster_index: u8,
 }
 
 MeleeArcComp :: struct {

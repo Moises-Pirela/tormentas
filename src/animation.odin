@@ -214,7 +214,8 @@ PLAYER_STEMS :: [?]string{
     "player_srbrain",
 }
 
-g_player_stem: string = PLAYER_STEMS[2]
+g_player_stem:  string = PLAYER_STEMS[2]
+g_player_stems: [MAX_PLAYERS]string = { PLAYER_STEMS[2], PLAYER_STEMS[2], PLAYER_STEMS[2], PLAYER_STEMS[2] }
 
 get_entity_sprite_stem :: proc(w: ^World, id: int) -> string {
     if world_has_component(w, id, .RenderConfig) {
@@ -225,7 +226,7 @@ get_entity_sprite_stem :: proc(w: ^World, id: int) -> string {
     }
 
     for slot in 0..<MAX_PLAYERS {
-        if id == w.player_ids[slot] { return g_player_stem }
+        if id == w.player_ids[slot] { return g_player_stems[slot] }
     }
     if world_has_component(w, id, .AIAgent) {
         ai := comp_get(w, id, .AIAgent, AIAgentComp)

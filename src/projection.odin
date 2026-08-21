@@ -31,6 +31,19 @@ screen_to_world_cartesian :: proc(screen: rl.Vector2) -> rl.Vector2 {
 
 camera_set_target_world :: proc(wx, wy: f32) {
     iso := world_to_iso_xy(wx, wy)
+    lims := g_level_data.cam_lims
+
+    if lims[1] > lims[0] {
+        half_w := (f32(rl.GetScreenWidth()) * 0.5) / g_camera.zoom
+        lo, hi := lims[0] + half_w, lims[1] - half_w
+        iso.x = clamp(iso.x, lo, hi) if lo <= hi else (lims[0] + lims[1]) * 0.5
+    }
+    if lims[3] > lims[2] {
+        half_h := (f32(rl.GetScreenHeight()) * 0.5) / g_camera.zoom
+        lo, hi := lims[2] + half_h, lims[3] - half_h
+        iso.y = clamp(iso.y, lo, hi) if lo <= hi else (lims[2] + lims[3]) * 0.5
+    }
+
     g_camera.target = iso
 }
 

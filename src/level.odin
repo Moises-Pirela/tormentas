@@ -1007,8 +1007,17 @@ level_apply :: proc(w: ^World) {
     level_entities_apply(w)
 }
 
+@(private = "file")
+_slot_is_present :: proc(slot: int) -> bool {
+    if slot == g_session.local_slot { return true }
+    if !p2p.session_is_online(&g_session) { return false }
+    if p2p.is_host(&g_session) {
+        return p2p.session_peer_for_slot(&g_session, slot) != nil
+    }
+    return g_session.roster[slot].known
+}
+
 spawn_players :: proc(w: ^World) {
-    slots_to_spawn := 2 if p2p.session_is_online(&g_session) else 1
     ps: [2]f32
     start_ids := world_query(w, query_mask(.PlayerStart, .Transform))
     if len(start_ids) > 0 {
@@ -1018,7 +1027,8 @@ spawn_players :: proc(w: ^World) {
     delete(start_ids)
     SLOT_OFFSET    :: f32(60)
 
-    for slot in 0..<slots_to_spawn {
+    for slot in 0..<MAX_PLAYERS {
+        if !_slot_is_present(slot) { continue }
         sp: [3]f32
         if ps[0] != 0 || ps[1] != 0 {
             sp = { ps[0] + f32(slot) * SLOT_OFFSET, ps[1], 0 }
@@ -1047,14 +1057,11 @@ spawn_players :: proc(w: ^World) {
         comp_set(w, pid, .Wallet, WalletComp{ gold = 0 })
         comp_set(w, pid, .StatusEffect, StatusEffectComp{})
         comp_set(w, pid, .KeyRing, KeyRingComp{})
-
-        if slot == 0 && world_has_component(w, pid, .RenderConfig) {
-            render_config_set_sprite(comp_get(w, pid, .RenderConfig, RenderConfigComp), g_player_stem)
-        }
         w.player_ids[slot] = pid
     }
 
     w.player_id = w.player_ids[w.local_player_slot]
+    netcode_predictor_init()
 
     if ps[0] != 0 || ps[1] != 0 {
         g_camera.target = { ps[0], ps[1] }
@@ -1260,24 +1267,26 @@ extraction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
     }
 
-    pid := w.player_id
-    if !world_is_valid(w, pid)                    { return }
-    if !world_has_component(w, pid, .Transform)   { return }
-
-    pt := comp_get(w, pid, .Transform, TransformComp).position
-
     ids := world_query(w, query_mask(.Extraction, .Transform))
     defer delete(ids)
 
     for eid in ids {
         ext := comp_get(w, eid, .Extraction, ExtractionComp)
         if ext.activated { continue }
-        et  := comp_get(w, eid, .Transform, TransformComp).position
-        dx  := pt[0] - et[0]
-        dy  := pt[1] - et[1]
-        dist := math.sqrt(dx*dx + dy*dy)
+        et := comp_get(w, eid, .Transform, TransformComp).position
 
-        if dist <= ext.interact_radius {
+        in_zone := false
+        for slot in 0..<MAX_PLAYERS {
+            pid := w.player_ids[slot]
+            if !world_is_valid(w, pid)                  { continue }
+            if !world_has_component(w, pid, .Transform) { continue }
+            pt := comp_get(w, pid, .Transform, TransformComp).position
+            dx := pt[0] - et[0]
+            dy := pt[1] - et[1]
+            if math.sqrt(dx*dx + dy*dy) <= ext.interact_radius { in_zone = true; break }
+        }
+
+        if in_zone {
             ext.timer += dt
             if ext.timer >= ext.activate_time {
                 ext.activated = true
@@ -1290,7 +1299,44 @@ extraction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 }
 
 on_player_extract :: proc(w: ^World) {
-    extract_val := compute_extract_value(w, w.player_id)
+    for slot in 0..<MAX_PLAYERS {
+        pid := w.player_ids[slot]
+        if !world_is_valid(w, pid) { continue }
+
+        extract_val := compute_extract_value(w, pid)
+
+        gold := 0
+        if world_has_component(w, pid, .Wallet) {
+            wallet := comp_get(w, pid, .Wallet, WalletComp)
+            gold    = wallet.gold
+            wallet.gold = 0
+        }
+        serums := 0
+        if world_has_component(w, pid, .MutationContainer) {
+            serums = comp_get(w, pid, .MutationContainer, MutationContainerComp).serums
+        }
+
+        if slot == w.local_player_slot {
+            _apply_raid_extract_local(w, pid, gold, serums, extract_val)
+        } else if peer := p2p.session_peer_for_slot(&g_session, slot); peer != nil {
+            p2p.session_send_raid_result_to_peer(peer, .Extracted, i32(gold), i32(serums), i32(extract_val))
+        }
+    }
+
+    quest_check_all(w)
+    set_playing_state(.ExtractScreen)
+}
+
+@(private = "file")
+_apply_raid_extract_local :: proc(w: ^World, pid: int, gold, serums, extract_val: int) {
+    raid_result_gold = gold
+    local_stash().gold += gold
+
+    serums_earned := serums - g_raid_serums_start
+    if serums_earned < 0 { serums_earned = 0 }
+    raid_result_serums   = serums_earned
+    local_stash().serums = serums
+
     g_lifetime_stats.successful_raids += 1
     if extract_val > int(g_lifetime_stats.max_extract_gold) {
         g_lifetime_stats.max_extract_gold = i32(extract_val)
@@ -1299,43 +1345,56 @@ on_player_extract :: proc(w: ^World) {
         g_lifetime_stats.deep_extracts += 1
     }
 
-    gold_earned := 0
-    if world_has_component(w, w.player_id, .Wallet) {
-        wallet       := comp_get(w, w.player_id, .Wallet, WalletComp)
-        gold_earned   = wallet.gold
-        local_stash().gold += gold_earned
-        wallet.gold   = 0
-    }
-    raid_result_gold = gold_earned
-
-    serums_earned := 0
-    if world_has_component(w, w.player_id, .MutationContainer) {
-        mc            := comp_get(w, w.player_id, .MutationContainer, MutationContainerComp)
-        serums_earned  = mc.serums - g_raid_serums_start
-        if serums_earned < 0 { serums_earned = 0 }
-
-        local_stash().serums = mc.serums
-    }
-    raid_result_serums = serums_earned
-
-    quest_check_all(w)
-
-    if world_is_valid(w, w.player_id) {
-        save_player(w, w.player_id)
-    }
-
-    set_playing_state(.ExtractScreen)
+    if world_is_valid(w, pid) { save_player(w, pid) }
 }
 
 on_player_death :: proc(w: ^World) {
+    for slot in 0..<MAX_PLAYERS {
+        pid := w.player_ids[slot]
+        if !world_is_valid(w, pid) { continue }
+
+        strip_player_carried(w, pid)
+
+        if slot == w.local_player_slot {
+            _apply_raid_death_local(w, pid)
+        } else if peer := p2p.session_peer_for_slot(&g_session, slot); peer != nil {
+            p2p.session_send_raid_result_to_peer(peer, .Died, 0, 0, 0)
+        }
+    }
+
+    set_playing_state(.DeathScreen)
+}
+
+@(private = "file")
+_apply_raid_death_local :: proc(w: ^World, pid: int) {
     g_lifetime_stats.deaths += 1
     raid_result_gold   = 0
     raid_result_serums = 0
-    strip_player_carried(w, w.player_id)
-    if world_is_valid(w, w.player_id) {
-        save_player(w, w.player_id)
+    if world_is_valid(w, pid) { save_player(w, pid) }
+}
+
+netcode_apply_raid_result :: proc(w: ^World) {
+    if !g_session.has_raid_result { return }
+    g_session.has_raid_result = false
+
+    pid := w.player_id
+    if !world_is_valid(w, pid) { return }
+
+    switch g_session.raid_result_outcome {
+    case .Extracted:
+        if world_has_component(w, pid, .Wallet) {
+            comp_get(w, pid, .Wallet, WalletComp).gold = 0
+        }
+        _apply_raid_extract_local(w, pid,
+            int(g_session.raid_result_gold), int(g_session.raid_result_serums),
+            int(g_session.raid_result_extract_value))
+        set_playing_state(.ExtractScreen)
+
+    case .Died:
+        strip_player_carried(w, pid)
+        _apply_raid_death_local(w, pid)
+        set_playing_state(.DeathScreen)
     }
-    set_playing_state(.DeathScreen)
 }
 
 level_exit_system :: proc(w: ^World, event: SystemEvent, dt: f32) {

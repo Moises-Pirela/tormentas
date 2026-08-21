@@ -38,6 +38,15 @@
       "preload": true
     },
 
+     "pistol_shot": {
+      "bus": "sfx",
+      "variants": ["sfx/pistol_shot"],
+      "gain": 0.85, "pitch_var": 0.1,
+      "max_instances": 8, "min_interval_ms": 20, "priority": 3,
+      "spatial": true, "rolloff": "linear", "outer": 800,
+      "preload": true
+    },
+
     "dodge": {
       "bus": "sfx",
       "variants": ["sfx/dodge"],
@@ -53,7 +62,7 @@
       "select": "random",
       "gain": 0.45, "gain_var": 0.08, "pitch_var": 0.12,
       "max_instances": 4, "min_interval_ms": 90, "priority": 1,
-      "spatial": false,
+      "spatial": true, "rolloff": "linear", "outer": 400,
       "preload": true
     }
   }

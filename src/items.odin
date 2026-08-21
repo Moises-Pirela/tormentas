@@ -776,6 +776,9 @@ give_class_starter_items :: proc(w: ^World, pid: int, class_idx: int) {
 
     stems := PLAYER_STEMS
     g_player_stem = stems[ci]
+    if slot := player_slot_for_id(w, pid); slot >= 0 {
+        g_player_stems[slot] = stems[ci]
+    }
     g_selected_class_idx = ci
 
     if world_has_component(w, pid, .Stats) {

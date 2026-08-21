@@ -68,12 +68,11 @@ Stash :: struct {
     grid:       [STASH_COLS * STASH_ROWS]int,
 }
 
-g_stash: [2]Stash
+g_stash: [MAX_PLAYERS]Stash
 
 local_stash :: proc() -> ^Stash { return &g_stash[g_session.local_slot] }
 
-g_hub_remote_spawned: bool
-g_hub_remote_loaded:  bool
+g_hub_remote_loaded: [MAX_PLAYERS]bool
 
 stash_make_empty :: proc() -> Stash {
     s := Stash{}

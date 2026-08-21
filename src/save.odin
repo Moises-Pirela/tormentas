@@ -525,6 +525,13 @@ player_to_bytes :: proc(w: ^World, pid: int) -> []u8 {
 
 @(private = "file")
 _apply_player_save :: proc(w: ^World, pid: int, save: ^PlayerSaveFile) {
+    if slot := player_slot_for_id(w, pid); slot >= 0 {
+        stems    := PLAYER_STEMS
+        char_idx := int(save.character)
+        if char_idx < 0 || char_idx >= len(stems) { char_idx = 0 }
+        g_player_stems[slot] = stems[char_idx]
+    }
+
     if world_has_component(w, pid, .Stats) {
         st             := comp_get(w, pid, .Stats, StatsComp)
         st.level        = int(save.level)

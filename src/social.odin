@@ -32,7 +32,13 @@ draw_social_panel :: proc() {
     status_col: rl.Color
     switch {
     case online:
-        status_msg = string(cstring(&g_session.remote_name[0]))
+        if p2p.is_host(&g_session) {
+            status_msg = fmt.tprintf("Hosting — %d connected", p2p.session_active_peer_count(&g_session))
+        } else if g_session.roster[0].known {
+            status_msg = string(cstring(&g_session.roster[0].name[0]))
+        } else {
+            status_msg = "Connected"
+        }
         status_col = rl.Color{100, 220, 100, 255}
     case hosting:
         status_msg = "Waiting for friend..."

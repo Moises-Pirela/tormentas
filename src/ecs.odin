@@ -224,9 +224,15 @@ SystemEvent     :: ecs.Phase
 SystemEventMask :: ecs.PhaseMask
 SystemProc      :: #type proc(w: ^World, event: SystemEvent, dt: f32)
 
+Authority :: enum u8 {
+    Shared,
+    HostOnly,
+}
+
 RegisteredSystem :: struct {
     mask:  SystemEventMask,
     proc_: SystemProc,
+    auth:  Authority,
 }
 
 SimState :: enum u8 {
@@ -236,14 +242,21 @@ SimState :: enum u8 {
     Stopped,
 }
 
+SimRole :: enum u8 {
+    Standalone,
+    Host,
+    Client,
+}
+
 Simulation :: struct {
     world:   World,
     systems: [dynamic]RegisteredSystem,
     state:   SimState,
+    role:    SimRole,
 }
 
 make_simulation :: proc() -> Simulation {
-    return Simulation{world = make_world(), state = .Initializing}
+    return Simulation{world = make_world(), state = .Initializing, role = .Standalone}
 }
 
 destroy_simulation :: proc(s: ^Simulation) {
@@ -251,16 +264,24 @@ destroy_simulation :: proc(s: ^Simulation) {
     delete(s.systems)
 }
 
-sim_register_system :: proc(s: ^Simulation, mask: SystemEventMask, p: SystemProc) {
-    append(&s.systems, RegisteredSystem{mask = mask, proc_ = p})
+sim_register_system :: proc(s: ^Simulation, mask: SystemEventMask, p: SystemProc, auth: Authority = .Shared) {
+    append(&s.systems, RegisteredSystem{mask = mask, proc_ = p, auth = auth})
 }
 
 sim_broadcast :: proc(s: ^Simulation, event: SystemEvent, dt: f32 = 0) {
+    run_host_only := s.role != .Client
     for &sys in s.systems {
+        if !run_host_only && sys.auth == .HostOnly { continue }
         if event in sys.mask {
             sys.proc_(&s.world, event, dt)
         }
     }
+}
+
+sim_tick_predicted :: proc(s: ^Simulation, dt: f32) {
+    sim_broadcast(s, .EarlyUpdate, dt)
+    sim_broadcast(s, .Update, dt)
+    sim_broadcast(s, .LateUpdate, dt)
 }
 
 sim_tick :: proc(s: ^Simulation, dt: f32) {
@@ -280,8 +301,8 @@ sim_tick :: proc(s: ^Simulation, dt: f32) {
 
 make_default_simulation :: proc() -> Simulation {
     s := make_simulation()
-    sim_register_system(&s, {.Update}, movement_system)
-    sim_register_system(&s, {.Update}, projectile_system)
-    sim_register_system(&s, {.Update}, self_destruct_system)
+    sim_register_system(&s, {.Update}, movement_system,      .Shared)
+    sim_register_system(&s, {.Update}, projectile_system,    .HostOnly)
+    sim_register_system(&s, {.Update}, self_destruct_system, .HostOnly)
     return s
 }

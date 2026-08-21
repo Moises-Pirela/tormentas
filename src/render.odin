@@ -699,7 +699,11 @@ draw_entity_visual_info :: proc(w: ^World, id: int) -> EntityVisualInfo {
 
     if info.sprite_key == nil {
         if is_player_entity(w, id) {
-            info.sprite_key = cstring(raw_data(g_player_stem))
+            stem := g_player_stem
+            if slot := player_slot_for_id(w, id); slot >= 0 {
+                stem = g_player_stems[slot]
+            }
+            info.sprite_key = cstring(raw_data(stem))
         } else if world_has_component(w, id, .NPC) {
             npc := comp_get(w, id, .NPC, NPCComp)
             switch npc.npc_type {

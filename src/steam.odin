@@ -132,7 +132,7 @@ steam_get_friends :: proc(allocator := context.temp_allocator) -> []SteamFriend 
 
 steam_lobby_create :: proc() {
     if !g_steam_ok || g_create_lobby_call != 0 { return }
-    g_create_lobby_call = sw.Matchmaking_CreateLobby(sw.Matchmaking(), .FriendsOnly, 2)
+    g_create_lobby_call = sw.Matchmaking_CreateLobby(sw.Matchmaking(), .FriendsOnly, MAX_PLAYERS)
 }
 
 steam_lobby_invite :: proc(friend_id: sw.CSteamID) {

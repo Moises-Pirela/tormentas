@@ -816,6 +816,32 @@ draw_editor_world :: proc() {
         }
     }
 
+    {
+        CAM_BOUNDS_COL      :: rl.Color{90, 170, 255, 220}
+        CAM_BOUNDS_FALLBACK :: f32(8192)
+        lims  := g_level_data.cam_lims
+        has_x := lims[1] > lims[0]
+        has_y := lims[3] > lims[2]
+        if has_x || has_y {
+            minx := lims[0] if has_x else -CAM_BOUNDS_FALLBACK
+            maxx := lims[1] if has_x else  CAM_BOUNDS_FALLBACK
+            miny := lims[2] if has_y else -CAM_BOUNDS_FALLBACK
+            maxy := lims[3] if has_y else  CAM_BOUNDS_FALLBACK
+            ctl := rl.Vector2{minx, miny}
+            ctr := rl.Vector2{maxx, miny}
+            cbr := rl.Vector2{maxx, maxy}
+            cbl := rl.Vector2{minx, maxy}
+            if has_y {
+                rl.DrawLineEx(ctl, ctr, lw * 2, CAM_BOUNDS_COL)
+                rl.DrawLineEx(cbl, cbr, lw * 2, CAM_BOUNDS_COL)
+            }
+            if has_x {
+                rl.DrawLineEx(ctl, cbl, lw * 2, CAM_BOUNDS_COL)
+                rl.DrawLineEx(ctr, cbr, lw * 2, CAM_BOUNDS_COL)
+            }
+        }
+    }
+
     ts := f32(TILE_SIZE)
     fs := ts * 0.22
     cr := ts * 0.30

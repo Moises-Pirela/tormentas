@@ -64,8 +64,7 @@ enter_hub :: proc(w: ^World, save_progress: bool = false) {
     if save_progress && world_is_valid(w, w.player_id) {
         save_player(w, w.player_id)
     }
-    g_hub_remote_spawned = false
-    g_hub_remote_loaded  = false
+    g_hub_remote_loaded  = {}
     g_raid_timer         = 0
     g_available_levels   = level_scan_available()
     level_clear(w)
@@ -78,18 +77,6 @@ enter_hub :: proc(w: ^World, save_progress: bool = false) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
     hub_apply_quest_npcs(w)
-
-    if p2p.session_is_online(&g_session) {
-        g_hub_remote_spawned = true
-        if g_session.remote_char_ready {
-            remote_slot := 1 - g_session.local_slot
-            if world_is_valid(w, w.player_ids[remote_slot]) {
-                load_player_from_bytes(w, w.player_ids[remote_slot],
-                    g_session.remote_char_data[:g_session.remote_char_len])
-            }
-            g_hub_remote_loaded = true
-        }
-    }
 
     if world_has_component(w, w.player_id, .Health) {
         h := comp_get(w, w.player_id, .Health, HealthComp)
@@ -120,11 +107,14 @@ enter_raid :: proc(w: ^World, n: int) {
     if !load_player(w, w.player_id) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
-    if p2p.session_is_online(&g_session) && g_session.remote_char_ready {
-        remote_slot := 1 - g_session.local_slot
-        if world_is_valid(w, w.player_ids[remote_slot]) {
-            load_player_from_bytes(w, w.player_ids[remote_slot],
-                g_session.remote_char_data[:g_session.remote_char_len])
+    if p2p.session_is_online(&g_session) {
+        for slot in 0..<MAX_PLAYERS {
+            if slot == g_session.local_slot { continue }
+            entry := &g_session.roster[slot]
+            if !entry.known || !entry.char_ready { continue }
+            if world_is_valid(w, w.player_ids[slot]) {
+                load_player_from_bytes(w, w.player_ids[slot], entry.char_data[:entry.char_len])
+            }
         }
     }
 
@@ -144,8 +134,7 @@ enter_raid :: proc(w: ^World, n: int) {
     ui_close_all()
 }
 
-hub_spawn_remote_player :: proc(w: ^World) {
-    remote_slot := 1 - g_session.local_slot
+hub_spawn_remote_player :: proc(w: ^World, remote_slot: int) {
     if world_is_valid(w, w.player_ids[remote_slot]) { return }
 
     ps: [2]f32
@@ -186,10 +175,11 @@ hub_spawn_remote_player :: proc(w: ^World) {
     comp_set(w, pid, .KeyRing, KeyRingComp{})
     w.player_ids[remote_slot] = pid
 
-    if g_session.remote_char_ready {
-        load_player_from_bytes(w, pid, g_session.remote_char_data[:g_session.remote_char_len])
+    entry := &g_session.roster[remote_slot]
+    if entry.char_ready {
+        load_player_from_bytes(w, pid, entry.char_data[:entry.char_len])
     }
-    copy(g_player_names[remote_slot][:], g_session.remote_name[:])
+    copy(g_player_names[remote_slot][:], entry.name[:])
 }
 
 update_hub_portal :: proc(w: ^World) {
