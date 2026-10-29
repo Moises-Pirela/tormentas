@@ -495,12 +495,13 @@ PointLightComp :: struct {
     intensity: f32,
 }
 
-AnimStateName :: enum u8 { Idle, Walk, Dodge, Attack, Death }
+AnimStateName :: enum u8 { Idle, Walk, Dodge, Attack, Death, Hit }
 
 AnimStateComp :: struct {
     current_state: AnimStateName,
     frame_index:   int,
     elapsed:       f32,
+    hit_elapsed:   f32,
 }
 
 ExtractionComp :: struct {

@@ -635,6 +635,7 @@ load_player :: proc(w: ^World, pid: int) -> bool {
     }
 
     _apply_player_save(w, pid, &save)
+    ensure_base_flasks(w, pid)
     return true
 }
 

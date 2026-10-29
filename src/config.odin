@@ -28,6 +28,7 @@ GameplayBinds :: struct {
 UIBinds :: struct {
     close_panel:     i32,
     compare_tooltip: i32,
+    drop_item:       i32,
 }
 
 Bindings :: struct {
@@ -37,7 +38,7 @@ Bindings :: struct {
 }
 
 GAMEPLAY_BIND_COUNT :: 16
-UI_BIND_COUNT       :: 2
+UI_BIND_COUNT       :: 3
 TOTAL_BIND_COUNT    :: GAMEPLAY_BIND_COUNT + UI_BIND_COUNT
 
 g_binds: Bindings
@@ -65,6 +66,7 @@ default_binds :: proc() -> Bindings {
         ui = UIBinds{
             close_panel     = i32(rl.KeyboardKey.ESCAPE),
             compare_tooltip = i32(rl.KeyboardKey.LEFT_ALT),
+            drop_item       = i32(rl.KeyboardKey.G),
         },
     }
 }
@@ -115,6 +117,7 @@ ui_bind_rows :: proc() -> [UI_BIND_COUNT]BindRow {
     return {
         { "Close Panel",     &g_binds.ui.close_panel     },
         { "Compare Tooltip", &g_binds.ui.compare_tooltip },
+        { "Drop Item",       &g_binds.ui.drop_item       },
     }
 }
 

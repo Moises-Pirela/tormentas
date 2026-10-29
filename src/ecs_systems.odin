@@ -10,6 +10,12 @@ movement_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         t := comp_get(w, id, .Transform, TransformComp)
         v := comp_get(w, id, .Velocity, VelocityComp)
 
+        if is_player_entity(w, id) && (player_is_dead(w, id) ||
+           (world_has_component(w, id, .AnimState) &&
+            comp_get(w, id, .AnimState, AnimStateComp).current_state == .Attack)) {
+            continue
+        }
+
         vel_mult := f32(1.0)
         if world_has_component(w, id, .StatusEffect) {
             sec := comp_get(w, id, .StatusEffect, StatusEffectComp)

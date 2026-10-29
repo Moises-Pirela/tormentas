@@ -21,6 +21,7 @@ ShadowPose :: struct {
     rot: f32,
 }
 g_shadow_interp: map[u32]ecs.Interpolator(ShadowPose)
+g_player_interp: [MAX_PLAYERS]ecs.Interpolator(ShadowPose)
 
 netcode_predict_apply :: proc(w: ^ecs.World, id: ecs.EntityId, input: p2p.InputFrame, dt: f32) {
     if !g_sim_alive { return }
@@ -56,6 +57,8 @@ netcode_predictor_init :: proc() {
         netcode_predict_apply, netcode_predict_restore, netcode_predict_read_pos)
     g_predictor_ready = true
     g_last_peer_input = {}
+    g_player_interp   = {}
+    g_ability_echo_prev_pressed = {}
     clear(&g_shadow_map)
     clear(&g_shadow_interp)
 }
@@ -117,7 +120,36 @@ netcode_host_tick :: proc(host_input: p2p.InputFrame, dt: f32) {
         ack_by_slot[p.slot] = g_last_peer_input[p.slot].tick
     }
 
-    p2p.session_broadcast_snapshot(&g_session, ack_by_slot, entities[:])
+    abilities: [MAX_PLAYERS]p2p.PlayerAbilityState
+    for slot in 0..<MAX_PLAYERS {
+        pid := w.player_ids[slot]
+        if !world_is_valid(w, pid) { continue }
+        abilities[slot] = _netcode_snapshot_abilities(w, pid)
+    }
+
+    p2p.session_broadcast_snapshot(&g_session, ack_by_slot, entities[:], abilities)
+}
+
+@(private = "file")
+_netcode_snapshot_abilities :: proc(w: ^World, pid: int) -> p2p.PlayerAbilityState {
+    st: p2p.PlayerAbilityState
+    if world_has_component(w, pid, .Health) {
+        h := comp_get(w, pid, .Health, HealthComp)
+        if h.max_energy > 0 {
+            st.energy_frac = u8(clamp(h.energy / h.max_energy, 0, 1) * 255)
+        }
+    }
+    if world_has_component(w, pid, .Ability) {
+        ab := comp_get(w, pid, .Ability, AbilityComp)
+        for slot_idx in 0..<ABILITY_SLOT_COUNT {
+            ab_type := player_ability_in_slot(w, pid, slot_idx)
+            if ab_type == .None { continue }
+            cd_max := ABILITY_DEFS[ab_type].cd_max
+            if cd_max <= 0 { continue }
+            st.cooldown_frac[slot_idx] = u8(clamp(ab.slots[slot_idx].cooldown / cd_max, 0, 1) * 255)
+        }
+    }
+    return st
 }
 
 @(private = "file")
@@ -172,6 +204,7 @@ netcode_client_tick :: proc(input: p2p.InputFrame, dt: f32) {
         ecs.predict_reconcile(&g_predictor, &g_sim.world.base,
             reconcile, g_session.snapshot_ack, dt)
         _netcode_apply_snapshot(g_session.snapshot_entities[:])
+        _netcode_apply_ability_state(g_session.snapshot_abilities[g_sim.world.local_player_slot])
         g_session.has_snapshot = false
     }
 
@@ -190,9 +223,7 @@ _netcode_apply_snapshot :: proc(entities: []p2p.SyncEntity) {
             if !world_is_valid(w, pid) { continue }
             if int(e.slot) == w.local_player_slot { continue }
             if world_has_component(w, pid, .Transform) {
-                t := comp_get(w, pid, .Transform, TransformComp)
-                t.position = e.pos
-                t.rotation = e.rot
+                ecs.interp_observe(&g_player_interp[e.slot], ShadowPose{ pos = e.pos, rot = e.rot }, now)
             }
             if world_has_component(w, pid, .Velocity) {
                 comp_get(w, pid, .Velocity, VelocityComp).value = e.vel
@@ -254,22 +285,90 @@ _netcode_apply_snapshot :: proc(entities: []p2p.SyncEntity) {
     }
 }
 
+_netcode_apply_ability_state :: proc(st: p2p.PlayerAbilityState) {
+    w   := &g_sim.world
+    pid := w.player_id
+    if !world_is_valid(w, pid) { return }
+
+    if world_has_component(w, pid, .Health) {
+        h := comp_get(w, pid, .Health, HealthComp)
+        if h.max_energy > 0 { h.energy = f32(st.energy_frac) / 255.0 * h.max_energy }
+    }
+    if world_has_component(w, pid, .Ability) {
+        ab := comp_get(w, pid, .Ability, AbilityComp)
+        for slot_idx in 0..<ABILITY_SLOT_COUNT {
+            ab_type := player_ability_in_slot(w, pid, slot_idx)
+            if ab_type == .None { continue }
+            cd_max := ABILITY_DEFS[ab_type].cd_max
+            ab.slots[slot_idx].cooldown = f32(st.cooldown_frac[slot_idx]) / 255.0 * cd_max
+        }
+    }
+}
+
+@(private = "file")
+_blend_pose_into :: proc(w: ^World, id: int, it: ^ecs.Interpolator(ShadowPose), now: f64) {
+    if !world_is_valid(w, id) || !world_has_component(w, id, .Transform) { return }
+    a, b, t, ok := ecs.interp_blend(it, now)
+    if !ok { return }
+    tr := comp_get(w, id, .Transform, TransformComp)
+    tr.position = {
+        a.pos[0] + (b.pos[0] - a.pos[0]) * t,
+        a.pos[1] + (b.pos[1] - a.pos[1]) * t,
+        a.pos[2] + (b.pos[2] - a.pos[2]) * t,
+    }
+    tr.rotation = ecs.lerp_angle(a.rot, b.rot, t)
+}
+
+netcode_apply_entity_syncs :: proc(w: ^World) {
+    for &msg in p2p.session_drain_entity_syncs(&g_session) {
+        id := int(msg.wire_id)
+        if !world_is_valid(w, id) { continue }
+
+        if msg.component == p2p.ENTITY_SYNC_DESTROY {
+            world_destroy_entity(w, id)
+            continue
+        }
+
+        ct := ComponentType(msg.component)
+        if !world_has_component(w, id, ct) { continue }
+        path  := string(msg.path[:msg.path_len])
+        value := string(msg.value[:msg.value_len])
+        for f in ecs.comp_fields(&w.base, id, ecs.comp_id(ct)) {
+            if f.path != path { continue }
+            ecs.field_set_text(f, value)
+            break
+        }
+    }
+}
+
+netcode_apply_disconnects :: proc(w: ^World) {
+    for slot in 0..<MAX_PLAYERS {
+        if !g_session.disconnect_pending[slot] { continue }
+        g_session.disconnect_pending[slot] = false
+
+        pid := w.player_ids[slot]
+        if world_is_valid(w, pid) {
+            world_destroy_entity(w, pid)
+        }
+        w.player_ids[slot] = INVALID_ENTITY
+        g_hub_remote_loaded[slot] = false
+        g_player_interp[slot]     = {}
+    }
+}
+
 netcode_interp_update :: proc() {
     if !g_sim_alive || g_sim.role != .Client { return }
     w   := &g_sim.world
     now := f64(rl.GetTime())
 
     for wire_id, id in g_shadow_map {
-        if !world_is_valid(w, id) || !world_has_component(w, id, .Transform) { continue }
         it := g_shadow_interp[wire_id]
-        a, b, t, ok := ecs.interp_blend(&it, now)
-        if !ok { continue }
-        tr := comp_get(w, id, .Transform, TransformComp)
-        tr.position = {
-            a.pos[0] + (b.pos[0] - a.pos[0]) * t,
-            a.pos[1] + (b.pos[1] - a.pos[1]) * t,
-            a.pos[2] + (b.pos[2] - a.pos[2]) * t,
-        }
-        tr.rotation = ecs.lerp_angle(a.rot, b.rot, t)
+        _blend_pose_into(w, id, &it, now)
+    }
+
+    for slot in 0..<MAX_PLAYERS {
+        if slot == w.local_player_slot { continue }
+        it := g_player_interp[slot]
+        _blend_pose_into(w, w.player_ids[slot], &it, now)
     }
 }

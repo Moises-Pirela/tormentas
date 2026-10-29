@@ -41,10 +41,11 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 col := comp_get(w, target_id, .Collider, ColliderComp)
                 if col.faction == proj.owner_faction { continue }
                 tt  := comp_get(w, target_id, .Transform, TransformComp)
-                ddx := tt.position[0] - bx
-                ddy := tt.position[1] - by
-                rr  := PROJ_RADIUS + col.radius
-                if ddx*ddx + ddy*ddy < rr*rr {
+                     bounds := entity_collider_bounds(w, target_id)
+                     if bx >= tt.position[0] + bounds.min[0] - PROJ_RADIUS &&
+                         bx <= tt.position[0] + bounds.max[0] + PROJ_RADIUS &&
+                         by >= tt.position[1] + bounds.min[1] - PROJ_RADIUS &&
+                         by <= tt.position[1] + bounds.max[1] + PROJ_RADIUS {
                     if _apply_proj_hit(w, proj_id, proj, target_id, tt.position) {
                         world_tag_destroy(w, proj_id)
                         break
@@ -63,7 +64,14 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             col := comp_get(w, target_id, .Collider, ColliderComp)
             if col.faction == proj.owner_faction { continue }
             tt := comp_get(w, target_id, .Transform, TransformComp)
-            th, hit := _ray_circle_t(ax, ay, dx, dy, tt.position[0], tt.position[1], PROJ_RADIUS + col.radius)
+            bounds := entity_collider_bounds(w, target_id)
+            th, hit := _ray_bounds_t(
+                ax, ay, dx, dy,
+                tt.position[0] + bounds.min[0] - PROJ_RADIUS,
+                tt.position[1] + bounds.min[1] - PROJ_RADIUS,
+                tt.position[0] + bounds.max[0] + PROJ_RADIUS,
+                tt.position[1] + bounds.max[1] + PROJ_RADIUS,
+            )
             if !hit || th > t_wall { continue }
             if n_hits < MAX_SWEEP_HITS {
                 k := n_hits
@@ -139,6 +147,33 @@ _ray_circle_t :: proc(ax, ay, dx, dy, cx, cy, r: f32) -> (t: f32, hit: bool) {
     tt := (-b - sq) / (2*a)
     if tt < 0 || tt > 1 { return 0, false }
     return tt, true
+}
+
+@(private = "file")
+_ray_bounds_t :: proc(ax, ay, dx, dy, min_x, min_y, max_x, max_y: f32) -> (t: f32, hit: bool) {
+    enter := f32(0)
+    exit := f32(1)
+    origins := [2]f32{ax, ay}
+    deltas  := [2]f32{dx, dy}
+    lows    := [2]f32{min_x, min_y}
+    highs   := [2]f32{max_x, max_y}
+    for i in 0..<2 {
+        origin := origins[i]
+        delta  := deltas[i]
+        low    := lows[i]
+        high   := highs[i]
+        if abs(delta) < 1e-9 {
+            if origin < low || origin > high { return 0, false }
+            continue
+        }
+        a := (low - origin) / delta
+        b := (high - origin) / delta
+        if a > b { a, b = b, a }
+        enter = max(enter, a)
+        exit = min(exit, b)
+        if enter > exit { return 0, false }
+    }
+    return enter, true
 }
 
 raycast_walls_t :: proc(ax, ay, bx, by: f32) -> f32 {

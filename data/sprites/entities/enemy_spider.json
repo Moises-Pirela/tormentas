@@ -1,0 +1,10 @@
+{
+  "frame_width": 136,
+  "frame_height": 128,
+  "columns": 1,
+  "anchor": [68, 128],
+  "collision": [42, 32, 48, 64],
+  "states": {
+    "idle": { "start_frame": 0, "frame_count": 1, "fps": 6.0, "looping": true }
+  }
+}

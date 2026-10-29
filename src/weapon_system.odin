@@ -53,20 +53,6 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     for id in wep_ids {
         wp := comp_get(w, id, .Weapon, WeaponComp)
         if wp.cooldown > 0 { wp.cooldown -= dt }
-        if wp.is_reloading {
-            wp.reload_timer -= dt
-            if wp.reload_timer <= 0 {
-                wp.reload_timer  = 0
-                wp.is_reloading  = false
-                wp.ammo_current  = wp.ammo_max
-
-                if world_has_component(w, w.player_id, .Equipment) {
-                    if comp_get(w, w.player_id, .Equipment, EquipmentComp).weapon_entity_id == id {
-                        play_sfx("reload_done")
-                    }
-                }
-            }
-        }
     }
 
     inv_ids := world_query(w, query_mask(.Inventory))
@@ -87,6 +73,7 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     defer delete(fire_ids)
 
     for shooter_id in fire_ids {
+        if is_player_entity(w, shooter_id) && player_is_dead(w, shooter_id) { continue }
         if world_has_component(w, shooter_id, .AimLock) { continue }
 
         input := comp_get(w, shooter_id, .InputState, InputStateComp)^
@@ -183,6 +170,12 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
                         mi_fresh := comp_get(w, melee_item_id, .Item, ItemComp)
                         mi_fresh.melee_cooldown = m_cd_max / melee_speed_mult
+                        if world_has_component(w, shooter_id, .AnimState) {
+                            anim := comp_get(w, shooter_id, .AnimState, AnimStateComp)
+                            anim.current_state = .Attack
+                            anim.frame_index = 0
+                            anim.elapsed = 0
+                        }
                     }
                 }
             }
@@ -209,29 +202,9 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             projectile_speed_mult = st.projectile_speed_mult
             ranged_blocked        = st.ranged_attacks_blocked
         }
-        reload_div := reload_speed_mult
-
-        if input.reload_pressed &&
-           !wp.is_reloading     &&
-           wp.ammo_max > 0      &&
-           wp.ammo_current < wp.ammo_max {
-            wp.is_reloading = true
-            wp.reload_timer = wp.reload_time / reload_div
-            play_sfx("reload_start")
-            continue
-        }
-
         if !input.fire_pressed { continue }
         if wp.type == .Melee   { continue }
-        if wp.is_reloading     { continue }
         if wp.cooldown > 0     { continue }
-
-        if wp.ammo_max > 0 && wp.ammo_current <= 0 {
-            wp.is_reloading = true
-            wp.reload_timer = wp.reload_time / reload_div
-            play_sfx("empty_click")
-            continue
-        }
 
         if ranged_blocked { continue }
 
@@ -253,6 +226,21 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
 
         pellet_count, pellet_spread := archetype_pellets(archetype)
+        muzzle_origin, has_muzzle := anim_muzzle_world_position(w, shooter_id, t_snap.position)
+        if !has_muzzle {
+            muzzle_origin = {
+                t_snap.position[0] + math.cos(t_snap.rotation) * MUZZLE_OFFSET,
+                t_snap.position[1] + math.sin(t_snap.rotation) * MUZZLE_OFFSET,
+                t_snap.position[2],
+            }
+        }
+
+        aim_dx := input.mouse_world[0] - muzzle_origin[0]
+        aim_dy := input.mouse_world[1] - muzzle_origin[1]
+        aim_angle := t_snap.rotation
+        if aim_dx*aim_dx + aim_dy*aim_dy > 0.0001 {
+            aim_angle = math.atan2(aim_dy, aim_dx)
+        }
 
         for p in 0..<pellet_count {
             angle_offset := f32(0)
@@ -260,17 +248,13 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 t_ratio      := f32(p) / f32(pellet_count - 1)
                 angle_offset  = pellet_spread * (t_ratio - 0.5)
             }
-            fire_angle := t_snap.rotation + angle_offset
+            fire_angle := aim_angle + angle_offset
             dir := [3]f32{
                 math.cos(fire_angle),
                 math.sin(fire_angle),
                 0,
             }
-            origin := [3]f32{
-                t_snap.position[0] + dir[0] * MUZZLE_OFFSET,
-                t_snap.position[1] + dir[1] * MUZZLE_OFFSET,
-                0,
-            }
+            origin := muzzle_origin
 
             proj_id := world_create_entity(w)
             comp_set(w, proj_id, .Transform, TransformComp{
@@ -307,12 +291,11 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             wfresh.cooldown = 1.0 / (wp_snap.fire_rate * fire_rate_mult)
         }
 
-        if wp_snap.ammo_max > 0 {
-            wfresh.ammo_current -= 1
-            if wfresh.ammo_current <= 0 {
-                wfresh.is_reloading = true
-                wfresh.reload_timer = wp_snap.reload_time / reload_div
-            }
+        if world_has_component(w, shooter_id, .AnimState) {
+            anim := comp_get(w, shooter_id, .AnimState, AnimStateComp)
+            anim.current_state = .Attack
+            anim.frame_index = 0
+            anim.elapsed = 0
         }
     }
 }

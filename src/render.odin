@@ -615,6 +615,81 @@ EntityVisualInfo :: struct {
     ok:           bool,
 }
 
+ColliderBounds :: struct {
+    min: [2]f32,
+    max: [2]f32,
+}
+
+entity_collider_bounds :: proc(w: ^World, id: int) -> ColliderBounds {
+    fallback := ColliderBounds{}
+    if !world_has_component(w, id, .Transform) { return fallback }
+
+    radius := f32(0)
+    if world_has_component(w, id, .Collider) {
+        radius = comp_get(w, id, .Collider, ColliderComp).radius
+    }
+    fallback = ColliderBounds{ min = {-radius, -radius}, max = {radius, radius} }
+
+    vis := draw_entity_visual_info(w, id)
+    if !vis.ok { return fallback }
+    _, src, sprite_ok := get_entity_sprite_tex(string(vis.sprite_key))
+    if !sprite_ok { return fallback }
+    src = anim_source_rect(w, id, src, string(vis.sprite_key))
+
+    anchor := [2]f32{0.5, 1.0}
+    if def, ok := get_or_load_anim_def(string(vis.sprite_key)); ok {
+        anchor = {
+            f32(def.anchor_px_x) / f32(max(def.frame_width, 1)),
+            f32(def.anchor_px_y) / f32(max(def.frame_height, 1)),
+        }
+    }
+    frame_w := f32(src.width)
+    frame_h := f32(src.height)
+    collision_x, collision_y := f32(0), f32(0)
+    collision_w, collision_h := frame_w, frame_h
+    anchor_px_x, anchor_px_y := frame_w * anchor[0], frame_h * anchor[1]
+    if def, ok := get_or_load_anim_def(string(vis.sprite_key)); ok {
+        frame_w = f32(def.frame_width)
+        frame_h = f32(def.frame_height)
+        anchor_px_x = f32(def.anchor_px_x)
+        anchor_px_y = f32(def.anchor_px_y)
+        if def.has_collision {
+            collision_x = f32(def.collision_px_x)
+            collision_y = f32(def.collision_px_y)
+            collision_w = f32(def.collision_px_w)
+            collision_h = f32(def.collision_px_h)
+        }
+    }
+    iso_h := vis.world_size * src.height / max(src.width, 1)
+    px_to_iso := vis.world_size / max(frame_w, 1)
+    py_to_iso := iso_h / max(frame_h, 1)
+    corners := [4]rl.Vector2{
+        {(collision_x - anchor_px_x) * px_to_iso, (collision_y - anchor_px_y) * py_to_iso},
+        {(collision_x + collision_w - anchor_px_x) * px_to_iso, (collision_y - anchor_px_y) * py_to_iso},
+        {(collision_x - anchor_px_x) * px_to_iso, (collision_y + collision_h - anchor_px_y) * py_to_iso},
+        {(collision_x + collision_w - anchor_px_x) * px_to_iso, (collision_y + collision_h - anchor_px_y) * py_to_iso},
+    }
+    first := iso_to_world_xy(corners[0].x, corners[0].y)
+    bounds := ColliderBounds{min = {first.x, first.y}, max = {first.x, first.y}}
+    for corner in corners[1:] {
+        p := iso_to_world_xy(corner.x, corner.y)
+        bounds.min[0] = min(bounds.min[0], p.x)
+        bounds.min[1] = min(bounds.min[1], p.y)
+        bounds.max[0] = max(bounds.max[0], p.x)
+        bounds.max[1] = max(bounds.max[1], p.y)
+    }
+    return bounds
+}
+
+entity_collider_closest_point :: proc(w: ^World, id: int, point: [2]f32) -> [2]f32 {
+    tr := comp_get(w, id, .Transform, TransformComp)
+    bounds := entity_collider_bounds(w, id)
+    return {
+        clamp(point[0], tr.position[0] + bounds.min[0], tr.position[0] + bounds.max[0]),
+        clamp(point[1], tr.position[1] + bounds.min[1], tr.position[1] + bounds.max[1]),
+    }
+}
+
 draw_world_circle :: proc(pos: rl.Vector2, radius: f32, color: rl.Color) {
     ip := world_to_iso_v(pos)
     rl.DrawEllipse(i32(ip.x), i32(ip.y), radius, max(radius * 0.55, 1), color)

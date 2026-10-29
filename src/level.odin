@@ -1044,6 +1044,7 @@ spawn_players :: proc(w: ^World) {
         }
         comp_set(w, pid, .Equipment, EquipmentComp{ weapon_entity_id = wep })
         comp_set(w, pid, .Inventory, inventory_make_empty())
+        ensure_base_flasks(w, pid)
         comp_set(w, pid, .Respawn, RespawnComp{ spawn_pos = sp, delay = RESPAWN_DELAY })
         comp_set(w, pid, .Ability, AbilityComp{})
         comp_set(w, pid, .MutationContainer, mutation_container_empty())
@@ -1070,8 +1071,6 @@ spawn_players :: proc(w: ^World) {
 
 level_clear :: proc(w: ^World) {
     g_pending_level_switch = 0
-
-    minimap_clear_explored()
 
     _clear_all_shop_stock(w)
 
@@ -1319,7 +1318,8 @@ on_player_extract :: proc(w: ^World) {
         if slot == w.local_player_slot {
             _apply_raid_extract_local(w, pid, gold, serums, extract_val)
         } else if peer := p2p.session_peer_for_slot(&g_session, slot); peer != nil {
-            p2p.session_send_raid_result_to_peer(peer, .Extracted, i32(gold), i32(serums), i32(extract_val))
+            p2p.session_send_raid_result_to_peer(peer, .Extracted, i32(gold), i32(serums), i32(extract_val),
+                g_raid_enemies_killed, g_raid_elites_killed, g_raid_bosses_killed)
         }
     }
 
@@ -1354,11 +1354,18 @@ on_player_death :: proc(w: ^World) {
         if !world_is_valid(w, pid) { continue }
 
         strip_player_carried(w, pid)
+        ensure_base_flasks(w, pid)
 
         if slot == w.local_player_slot {
             _apply_raid_death_local(w, pid)
         } else if peer := p2p.session_peer_for_slot(&g_session, slot); peer != nil {
-            p2p.session_send_raid_result_to_peer(peer, .Died, 0, 0, 0)
+            p2p.session_send_raid_result_to_peer(peer, .Died, 0, 0, 0,
+                g_raid_enemies_killed, g_raid_elites_killed, g_raid_bosses_killed)
+        }
+
+        if world_has_component(w, pid, .AnimState) {
+            anim := comp_get(w, pid, .AnimState, AnimStateComp)
+            anim.current_state = .Death
         }
     }
 
@@ -1380,6 +1387,10 @@ netcode_apply_raid_result :: proc(w: ^World) {
     pid := w.player_id
     if !world_is_valid(w, pid) { return }
 
+    g_lifetime_stats.enemies_killed += i32(g_session.raid_result_enemies_killed)
+    g_lifetime_stats.elites_killed  += i32(g_session.raid_result_elites_killed)
+    g_lifetime_stats.bosses_killed  += i32(g_session.raid_result_bosses_killed)
+
     switch g_session.raid_result_outcome {
     case .Extracted:
         if world_has_component(w, pid, .Wallet) {
@@ -1395,6 +1406,8 @@ netcode_apply_raid_result :: proc(w: ^World) {
         _apply_raid_death_local(w, pid)
         set_playing_state(.DeathScreen)
     }
+
+    quest_check_all(w)
 }
 
 level_exit_system :: proc(w: ^World, event: SystemEvent, dt: f32) {

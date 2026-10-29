@@ -289,7 +289,12 @@ _console_exec :: proc(w: ^World, raw: string) {
         if world_has_component(w, w.player_id, .Health) {
             h := comp_get(w, w.player_id, .Health, HealthComp)
             h.current = clamp(f32(n), 0, h.max)
+            if (h.current <= 0) {
+                h.current = 0
+                on_player_death(w)
+            }
         }
+
         console_logf("hp = %d", n)
 
     case "kill":

@@ -269,6 +269,14 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             push_dmg_number(pos[0], pos[1], amount, ev.target_id != w.player_id, is_crit)
         }
 
+        if amount > 0 && h.current > 0 && world_has_component(w, ev.target_id, .AnimState) {
+            anim := comp_get(w, ev.target_id, .AnimState, AnimStateComp)
+            anim.current_state = .Hit
+            anim.frame_index = 0
+            anim.elapsed = 0
+            anim.hit_elapsed = 0
+        }
+
         if h.current > 0 && !force_death {
             if ev.target_id == w.player_id && amount > 0 {
                 play_sfx("player_hurt")
@@ -370,12 +378,15 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             was_reanimated := false
             if world_has_component(w, ev.target_id, .AIAgent) {
                 g_lifetime_stats.enemies_killed += 1
+                g_raid_enemies_killed           += 1
                 ai := comp_get(w, ev.target_id, .AIAgent, AIAgentComp)
                 if ai.tier == .Legendary {
                     g_lifetime_stats.elites_killed += 1
+                    g_raid_elites_killed           += 1
                 }
                 if ev.target_id == g_boss_id {
                     g_lifetime_stats.bosses_killed += 1
+                    g_raid_bosses_killed           += 1
                 }
 
                 for pslot in 0..<MAX_PLAYERS {

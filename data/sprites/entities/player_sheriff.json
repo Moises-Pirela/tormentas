@@ -6,6 +6,9 @@
   "states": {
     "idle": { "start_frame": 0, "frame_count": 8, "fps": 8.0, "looping": true },
     "walk": { "start_frame": 8, "frame_count": 7, "fps": 12.0, "looping": true },
-    "dodge": { "start_frame": 16, "frame_count": 5, "fps": 18.0, "looping": false }
+    "dodge": { "start_frame": 16, "frame_count": 5, "fps": 18.0, "looping": false },
+    "attack": { "start_frame": 24, "frame_count": 3, "fps": 12.0, "looping": false, "muzzle": [394, 191] },
+    "death": { "start_frame": 32, "frame_count": 3, "fps": 8.0, "looping": false },
+    "hit": { "start_frame": 40, "frame_count": 1, "fps": 0.0, "looping": false }
   }
 }

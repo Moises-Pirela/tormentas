@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:math"
 import rl   "vendor:raylib"
 import clay "../clay"
 
@@ -12,6 +13,9 @@ g_drag_from_stash:   bool         = false
 g_drag_origin_equip: EquipSlot = {}
 g_hover_item_id:     int          = INVALID_ENTITY
 g_inv_backpack_bb:   clay.BoundingBox
+
+INV_DROP_OFFSET :: f32(120)
+INV_DROP_SPACING :: f32(24)
 
 @(private = "file")
 _SLOT_CLAY_ID := [EQUIP_SLOT_COUNT]string{
@@ -76,6 +80,68 @@ _inv_slot_name :: proc(w: ^World, inv: ^InventoryComp, slot: EquipSlot) -> (cstr
 _inv_is_target :: proc(inv: ^InventoryComp, drag_slot: EquipSlot, target: EquipSlot) -> bool {
     if inv == nil || g_drag_item_id == -1 { return false }
     return _item_fits_slot(drag_slot, target)
+}
+
+@(private = "file")
+_inv_drop_dragged_to_world :: proc(w: ^World) -> bool {
+    if g_drag_item_id == -1 || !world_is_valid(w, g_drag_item_id) { return false }
+    if !world_has_component(w, g_drag_item_id, .Item) { return false }
+
+    if !world_has_component(w, w.player_id, .Transform) { return false }
+    player_t := comp_get(w, w.player_id, .Transform, TransformComp)
+    drop_pos := [3]f32{
+        player_t.position[0] + math.cos(player_t.rotation) * INV_DROP_OFFSET,
+        player_t.position[1] + math.sin(player_t.rotation) * INV_DROP_OFFSET,
+        player_t.position[2],
+    }
+
+    ground_ids := world_query(w, query_mask(.GroundItem, .Transform, .Item), context.temp_allocator)
+    found_spot := false
+    for ring in 0..=3 {
+        candidate_count := 1 if ring == 0 else 8
+        for point in 0..<candidate_count {
+            if found_spot { break }
+            candidate := drop_pos
+            if ring > 0 {
+                angle := f32(point) * math.TAU / 8.0
+                distance := f32(ring) * INV_DROP_SPACING
+                candidate[0] += math.cos(angle) * distance
+                candidate[1] += math.sin(angle) * distance
+            }
+
+            occupied := false
+            for ground_id in ground_ids {
+                if ground_id == g_drag_item_id { continue }
+                ground_t := comp_get(w, ground_id, .Transform, TransformComp)
+                dx := ground_t.position[0] - candidate[0]
+                dy := ground_t.position[1] - candidate[1]
+                if dx*dx + dy*dy < INV_DROP_SPACING * INV_DROP_SPACING {
+                    occupied = true
+                    break
+                }
+            }
+            if !occupied {
+                drop_pos = candidate
+                found_spot = true
+                break
+            }
+        }
+    }
+
+    comp_set(w, g_drag_item_id, .Transform, TransformComp{position = drop_pos})
+    comp_add(w, g_drag_item_id, .GroundItem)
+    if !world_has_component(w, g_drag_item_id, .FogOfWar) {
+        comp_add(w, g_drag_item_id, .FogOfWar)
+    }
+    play_sfx_at("pickup", drop_pos)
+    ui_mark_dirty(.Inventory)
+
+    g_drag_item_id    = -1
+    g_drag_origin_x   = -1
+    g_drag_origin_y   = -1
+    g_drag_from_equip = false
+    g_drag_from_stash = false
+    return true
 }
 
 @(private = "file")
@@ -232,6 +298,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
             if item.pack_x != col || item.pack_y != row { continue }
 
             rc := rarity_color(item.rarity)
+            class_locked := item.slot == .WeaponPrimary && item.weapon_archetype != player_class_archetype()
             ix := gx + i32(col) * cs + 2
             iy := gy + i32(row) * cs + 2
             iw := i32(item.grid_w) * cs - 4
@@ -241,6 +308,10 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
                 rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
             rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1,
                 rl.Color{ rc.r, rc.g, rc.b, 220 })
+            if class_locked {
+                rl.DrawRectangle(ix, iy, iw, ih, rl.Color{ 80, 10, 10, 150 })
+                rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(ix) + uis(3), f32(iy) + uis(3)}, uis(9), 0.4, rl.Color{255, 100, 100, 240})
+            }
 
             icon_margin :: i32(3)
             icon_sz      := min(iw, ih) - icon_margin * 2
@@ -290,10 +361,15 @@ _draw_drag_item :: proc(w: ^World) {
     fy := i32(mp.y) - ih / 2
 
     rc := rarity_color(item.rarity)
+    class_locked := item.slot == .WeaponPrimary && item.weapon_archetype != player_class_archetype()
     rl.DrawRectangle(fx, fy, iw, ih,
         rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
     rl.DrawRectangleLinesEx({ f32(fx), f32(fy), f32(iw), f32(ih) }, 1,
         rl.Color{ rc.r, rc.g, rc.b, 240 })
+    if class_locked {
+        rl.DrawRectangle(fx, fy, iw, ih, rl.Color{ 80, 10, 10, 150 })
+        rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(fx) + uis(3), f32(fy) + uis(3)}, uis(9), 0.4, rl.Color{255, 100, 100, 240})
+    }
 
     drag_icon_sz    := min(iw, ih) - 6
     drag_icon_x     := fx + (iw - drag_icon_sz) / 2
@@ -386,6 +462,12 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
         }
     }
 
+    drop_key_pressed := input_pressed(rl.KeyboardKey(g_binds.ui.drop_item))
+    if g_drag_item_id != -1 && drop_key_pressed {
+        _inv_drop_dragged_to_world(w)
+        return
+    }
+
     if rl.IsMouseButtonReleased(.LEFT) && g_drag_item_id != -1 {
         item   := comp_get(w, g_drag_item_id, .Item, ItemComp)
         placed := false
@@ -446,7 +528,11 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
             }
         }
 
-        if !placed {
+        if !placed && mp.x < f32(rl.GetScreenWidth()) - f32(g_inv.panel_w) {
+            placed = _inv_drop_dragged_to_world(w)
+        }
+
+        if !placed && g_drag_item_id != -1 {
             if g_drag_from_stash {
                 if stash_return_dragged_to_origin(w, g_drag_item_id) {
                     placed = true
@@ -637,6 +723,12 @@ draw_inventory :: proc(w: ^World) {
                     d := UICustomData{ kind = .WeaponSlot }
                     d.wep_slot.has_item   = has
                     d.wep_slot.is_blocked = blocked
+                    if has && var_inv != nil {
+                        equipped_id := var_inv.equipped[int(slot)]
+                        if world_is_valid(w, equipped_id) && world_has_component(w, equipped_id, .Item) {
+                            d.wep_slot.class_locked = comp_get(w, equipped_id, .Item, ItemComp).weapon_archetype != player_class_archetype()
+                        }
+                    }
                     d.wep_slot.is_target  = !blocked && _inv_is_target(var_inv, drag_item_slot, slot)
 
                     tl_src := string(wep_types[i])

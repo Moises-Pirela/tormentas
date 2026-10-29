@@ -69,6 +69,7 @@ UICustomWeaponSlot :: struct {
     item_name:  [24]u8,
     has_item:   bool,
     is_blocked: bool,
+    class_locked: bool,
     is_target:  bool,
 }
 

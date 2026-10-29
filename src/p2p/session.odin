@@ -25,6 +25,7 @@ MsgType :: enum u8 {
     RosterName      = 12,
     RosterCharData  = 13,
     RosterLeft      = 14,
+    EntitySync      = 15,
 }
 
 SessionState :: enum {
@@ -82,13 +83,21 @@ Session :: struct {
 
     snapshot_entities:   [dynamic]SyncEntity,
     snapshot_ack:        u32,
+    snapshot_abilities:  [MAX_PLAYERS]PlayerAbilityState,
     has_snapshot:        bool,
 
-    raid_result_outcome:       RaidOutcome,
-    raid_result_gold:          i32,
-    raid_result_serums:        i32,
-    raid_result_extract_value: i32,
-    has_raid_result:           bool,
+    raid_result_outcome:        RaidOutcome,
+    raid_result_gold:           i32,
+    raid_result_serums:         i32,
+    raid_result_extract_value:  i32,
+    raid_result_enemies_killed: u16,
+    raid_result_elites_killed:  u16,
+    raid_result_bosses_killed:  u16,
+    has_raid_result:            bool,
+
+    disconnect_pending: [MAX_PLAYERS]bool,
+
+    entity_syncs: [dynamic]EntitySyncMsg,
 }
 
 is_host :: proc(s: ^Session) -> bool {
@@ -192,6 +201,7 @@ session_shutdown :: proc(s: ^Session) {
     delete(s.editor_ops)
     delete(s.editor_mod_ops)
     delete(s.snapshot_entities)
+    delete(s.entity_syncs)
     s^ = {}
 }
 
@@ -306,6 +316,7 @@ session_on_conn_changed :: proc(s: ^Session, ev: ^sw.SteamNetConnectionStatusCha
                 slot := p.slot
                 s.roster[slot] = {}
                 p^ = {}
+                s.disconnect_pending[slot] = true
                 _broadcast_roster_left(s, slot)
             }
         case .None, .FindingRoute, .FinWait, .Linger, .Dead, ._Force32Bit:
@@ -560,8 +571,11 @@ _handle_client :: proc(s: ^Session, data: []u8) {
             slot := int(data[1])
             if slot >= 0 && slot < MAX_PLAYERS {
                 s.roster[slot] = {}
+                s.disconnect_pending[slot] = true
             }
         }
+    case .EntitySync:
+        _handle_entity_sync(s, data[1:])
     case .ClientInput:
     }
 }
@@ -610,6 +624,6 @@ _handle_host :: proc(s: ^Session, p: ^Peer, data: []u8) {
             p.latest_client_input = f
             p.has_client_input    = true
         }
-    case .HostSnapshot, .RaidResult, .RosterName, .RosterCharData, .RosterLeft, .SlotAssign:
+    case .HostSnapshot, .RaidResult, .RosterName, .RosterCharData, .RosterLeft, .SlotAssign, .EntitySync:
     }
 }

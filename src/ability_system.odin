@@ -41,7 +41,6 @@ AbilityExecKind :: enum u8 {
     AoEBlast,
     ThrowGrenade,
     HealSelf,
-    InstantReload,
     BuffArmor,
     CooldownReset,
 
@@ -587,6 +586,36 @@ ability_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     }
 }
 
+g_ability_echo_prev_pressed: [MAX_PLAYERS][ABILITY_SLOT_COUNT]bool
+
+ability_echo_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
+    if event != .Update { return }
+    if g_sim.role != .Client { return }
+
+    slot := w.local_player_slot
+    id   := w.player_ids[slot]
+    if !world_is_valid(w, id)                   { return }
+    if !world_has_component(w, id, .Ability)    { return }
+    if !world_has_component(w, id, .InputState) { return }
+    if !world_has_component(w, id, .Transform)  { return }
+
+    ab    := comp_get(w, id, .Ability, AbilityComp)
+    input := comp_get(w, id, .InputState, InputStateComp)
+    pos   := comp_get(w, id, .Transform, TransformComp).position
+
+    pressed := [ABILITY_SLOT_COUNT]bool{
+        input.skill1_pressed, input.skill2_pressed, input.skill3_pressed, input.skill4_pressed,
+    }
+
+    for slot_idx in 0..<ABILITY_SLOT_COUNT {
+        was := g_ability_echo_prev_pressed[slot][slot_idx]
+        g_ability_echo_prev_pressed[slot][slot_idx] = pressed[slot_idx]
+        if pressed[slot_idx] && !was && ab.slots[slot_idx].cooldown <= 0 {
+            play_sfx_at("ability_quickdraw", pos)
+        }
+    }
+}
+
 @(private = "file")
 _ability_tick_player :: proc(w: ^World, id: int, dt: f32) {
     if world_has_component(w, id, .Respawn) &&
@@ -985,20 +1014,6 @@ _ability_tick_player :: proc(w: ^World, id: int, dt: f32) {
                 }
                 did_activate = true
                 play_sfx_at("levelup", t_snap.position)
-
-            case .InstantReload:
-                if world_has_component(w, id, .Equipment) {
-                    equip := comp_get(w, id, .Equipment, EquipmentComp)
-                    wid   := equip.weapon_entity_id
-                    if world_is_valid(w, wid) && world_has_component(w, wid, .Weapon) {
-                        wc             := comp_get(w, wid, .Weapon, WeaponComp)
-                        wc.ammo_current = wc.ammo_max
-                        wc.is_reloading = false
-                        wc.reload_timer = 0
-                    }
-                }
-                did_activate = true
-                play_sfx_at("reload", t_snap.position)
 
             case .BuffArmor:
                 st.buff_timer = ex.p2

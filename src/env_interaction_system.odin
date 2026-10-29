@@ -1,6 +1,7 @@
 package main
 
 import "core:math"
+import p2p "p2p"
 
 g_interact_focused_id: int = INVALID_ENTITY
 
@@ -107,6 +108,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
                     kr := comp_get(w, player_id, .KeyRing, KeyRingComp)
                     if int(lk.key_id) in kr.held {
                         lk.is_locked = false
+                        p2p.session_broadcast_entity_sync(&g_session, u32(target_id), u8(ComponentType.Lockable), "is_locked", "false")
                         play_sfx_at("door_unlock", pos)
                     } else {
                         play_sfx_at("door_locked", pos)
@@ -122,6 +124,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
 
         opening := !op.is_open
         door_set_open(w, target_id, opening)
+        p2p.session_broadcast_entity_sync(&g_session, u32(target_id), u8(ComponentType.Openable), "is_open", "true" if opening else "false")
         play_sfx_at("door_open" if opening else "door_close", pos)
 
         if op.link_id != 0 {
@@ -139,6 +142,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
             em.is_on = true
         }
         signal_broadcast(w, em.link_id, em.is_on)
+        p2p.session_broadcast_entity_sync(&g_session, u32(target_id), u8(ComponentType.SignalEmitter), "is_on", "true" if em.is_on else "false")
         play_sfx_at("lever_pull", pos)
         ia := comp_get(w, target_id, .Interactable, InteractableComp)
         ia.cooldown = 0.25
@@ -150,6 +154,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         if ct.is_open { return }
         ct.is_open = true
         env_container_open(w, player_id, target_id)
+        p2p.session_broadcast_entity_sync(&g_session, u32(target_id), u8(ComponentType.Container), "is_open", "true")
         play_sfx_at("chest_open", pos)
         ia := comp_get(w, target_id, .Interactable, InteractableComp)
         ia.active = false
@@ -159,6 +164,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
     if world_has_component(w, target_id, .LoreItem) {
         li := comp_get(w, target_id, .LoreItem, LoreItemComp)
         li.is_read = true
+        p2p.session_broadcast_entity_sync(&g_session, u32(target_id), u8(ComponentType.LoreItem), "is_read", "true")
         ui_open_lore(li.lore_id)
         play_sfx_at("paper_rustle", pos)
         return
@@ -171,6 +177,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
         if !ok { return }
         ph.is_playing  = true
         ph.play_timer  = rec.duration
+        p2p.session_broadcast_entity_sync(&g_session, u32(target_id), u8(ComponentType.Phonograph), "is_playing", "true")
         ui_open_phonograph(ph.recording_id, target_id)
 
         sfx := rec.sfx_key[:]
@@ -187,6 +194,7 @@ dispatch_interaction :: proc(w: ^World, player_id: int, target_id: int) {
             kr.held += {int(kp.key_id)}
         }
         play_sfx_at("key_pickup", pos)
+        p2p.session_broadcast_entity_destroy(&g_session, u32(target_id))
         world_destroy_entity(w, target_id)
         return
     }

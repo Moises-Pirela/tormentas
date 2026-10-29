@@ -51,20 +51,16 @@ resolve_wall_overlap :: proc(t: ^TransformComp, radius: f32) {
 
             near_x := clamp(cx, tile_x, tile_x + ts)
             near_y := clamp(cy, tile_y, tile_y + ts)
-
             ddx := cx - near_x
             ddy := cy - near_y
             sq  := ddx*ddx + ddy*ddy
-
             if sq >= radius * radius { continue }
-
             dist := math.sqrt(sq)
             if dist < 0.001 {
                 t.position[1] = tile_y - radius - 0.5
                 cy = t.position[1]
                 continue
             }
-
             push := radius - dist
             t.position[0] += ddx / dist * push
             t.position[1] += ddy / dist * push

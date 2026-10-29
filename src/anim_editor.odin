@@ -36,6 +36,8 @@ AnimEdField :: enum {
     FrameWidth, FrameHeight, Columns,
     StartFrame, FrameCount, FPS,
     AnchorX, AnchorY,
+    ProjectileX, ProjectileY,
+    CollisionX, CollisionY, CollisionW, CollisionH,
 }
 
 AnimEditorState :: struct {
@@ -142,7 +144,7 @@ anim_ed_handle_chars :: proc() {
                 ed.key_len    += 1
                 ed.picker_open = true
             }
-        case .FrameWidth, .FrameHeight, .Columns, .StartFrame, .FrameCount, .AnchorX, .AnchorY:
+        case .FrameWidth, .FrameHeight, .Columns, .StartFrame, .FrameCount, .AnchorX, .AnchorY, .ProjectileX, .ProjectileY, .CollisionX, .CollisionY, .CollisionW, .CollisionH:
             if ch >= '0' && ch <= '9' && ed.field_len < ANIM_ED_FIELD_CAP - 1 {
                 ed.field_buf[ed.field_len] = u8(ch)
                 ed.field_len += 1
@@ -194,6 +196,24 @@ anim_ed_focus_field :: proc(id: AnimEdField) {
         ed.field_buf[ed.field_len] = 0
     case .AnchorY:
         ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.anchor_px_y))
+        ed.field_buf[ed.field_len] = 0
+    case .ProjectileX:
+        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.clips[ed.active_state].muzzle_px_x))
+        ed.field_buf[ed.field_len] = 0
+    case .ProjectileY:
+        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.clips[ed.active_state].muzzle_px_y))
+        ed.field_buf[ed.field_len] = 0
+    case .CollisionX:
+        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.collision_px_x))
+        ed.field_buf[ed.field_len] = 0
+    case .CollisionY:
+        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.collision_px_y))
+        ed.field_buf[ed.field_len] = 0
+    case .CollisionW:
+        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.collision_px_w))
+        ed.field_buf[ed.field_len] = 0
+    case .CollisionH:
+        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ed.sheet.collision_px_h))
         ed.field_buf[ed.field_len] = 0
     }
 }
@@ -251,6 +271,44 @@ anim_ed_commit_field :: proc() {
         if v, ok := strconv.parse_int(val); ok {
             v = clamp(v, 0, max(ed.sheet.frame_height, 1))
             if ed.sheet.anchor_px_y != v { ed.sheet.anchor_px_y = v; ed.dirty = true }
+        }
+    case .ProjectileX:
+        if v, ok := strconv.parse_int(val); ok {
+            v = clamp(v, 0, max(ed.sheet.frame_width, 1))
+            if ed.sheet.clips[ed.active_state].muzzle_px_x != v {
+                ed.sheet.clips[ed.active_state].muzzle_px_x = v
+                ed.sheet.has_clip[ed.active_state] = true
+                ed.dirty = true
+            }
+        }
+    case .ProjectileY:
+        if v, ok := strconv.parse_int(val); ok {
+            v = clamp(v, 0, max(ed.sheet.frame_height, 1))
+            if ed.sheet.clips[ed.active_state].muzzle_px_y != v {
+                ed.sheet.clips[ed.active_state].muzzle_px_y = v
+                ed.sheet.has_clip[ed.active_state] = true
+                ed.dirty = true
+            }
+        }
+    case .CollisionX:
+        if v, ok := strconv.parse_int(val); ok {
+            v = clamp(v, 0, max(ed.sheet.frame_width, 1))
+            if ed.sheet.collision_px_x != v { ed.sheet.collision_px_x = v; ed.sheet.has_collision = true; ed.dirty = true }
+        }
+    case .CollisionY:
+        if v, ok := strconv.parse_int(val); ok {
+            v = clamp(v, 0, max(ed.sheet.frame_height, 1))
+            if ed.sheet.collision_px_y != v { ed.sheet.collision_px_y = v; ed.sheet.has_collision = true; ed.dirty = true }
+        }
+    case .CollisionW:
+        if v, ok := strconv.parse_int(val); ok && v > 0 {
+            v = clamp(v, 1, max(ed.sheet.frame_width - ed.sheet.collision_px_x, 1))
+            if ed.sheet.collision_px_w != v { ed.sheet.collision_px_w = v; ed.sheet.has_collision = true; ed.dirty = true }
+        }
+    case .CollisionH:
+        if v, ok := strconv.parse_int(val); ok && v > 0 {
+            v = clamp(v, 1, max(ed.sheet.frame_height - ed.sheet.collision_px_y, 1))
+            if ed.sheet.collision_px_h != v { ed.sheet.collision_px_h = v; ed.sheet.has_collision = true; ed.dirty = true }
         }
     }
 }
@@ -315,6 +373,10 @@ anim_editor_save :: proc() {
     strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], "  \"frame_height\": %d,\n", ed.sheet.frame_height))])
     strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], "  \"columns\": %d,\n",      ed.sheet.columns))])
     strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], "  \"anchor\": [%d, %d],\n", ed.sheet.anchor_px_x, ed.sheet.anchor_px_y))])
+    if ed.sheet.has_collision {
+        strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], "  \"collision\": [%d, %d, %d, %d],\n",
+            ed.sheet.collision_px_x, ed.sheet.collision_px_y, ed.sheet.collision_px_w, ed.sheet.collision_px_h))])
+    }
     strings.write_string(&sb, "  \"states\": {\n")
 
     first := true
@@ -330,6 +392,9 @@ anim_editor_save :: proc() {
         strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:],
             "\"start_frame\": %d, \"frame_count\": %d, \"fps\": %.1f, \"looping\": %s",
             clip.start_frame, clip.frame_count, clip.fps, loop_s))])
+        if clip.muzzle_px_x != 0 || clip.muzzle_px_y != 0 {
+            strings.write_bytes(&sb, tmp[:len(fmt.bprintf(tmp[:], ", \"muzzle\": [%d, %d]", clip.muzzle_px_x, clip.muzzle_px_y))])
+        }
         strings.write_string(&sb, " }")
     }
     strings.write_string(&sb, "\n  }\n}\n")
@@ -462,6 +527,12 @@ update_anim_editor :: proc(dt: f32) {
         case .Columns:     anim_ed_focus_field(.FrameWidth)
         case .AnchorX:     anim_ed_focus_field(.AnchorY)
         case .AnchorY:     anim_ed_focus_field(.AnchorX)
+        case .ProjectileX: anim_ed_focus_field(.ProjectileY)
+        case .ProjectileY: anim_ed_focus_field(.ProjectileX)
+        case .CollisionX:   anim_ed_focus_field(.CollisionY)
+        case .CollisionY:   anim_ed_focus_field(.CollisionW)
+        case .CollisionW:   anim_ed_focus_field(.CollisionH)
+        case .CollisionH:   anim_ed_focus_field(.CollisionX)
         case .None, .Key:
         }
     }
@@ -531,6 +602,12 @@ anim_ed_number_field :: proc(rect: rl.Rectangle, id: AnimEdField, mp: rl.Vector2
         case .FPS:         var_len = len(fmt.bprintf(var_buf[:], "%.1f", ed.sheet.clips[ed.active_state].fps))
         case .AnchorX:     var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.anchor_px_x))
         case .AnchorY:     var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.anchor_px_y))
+        case .ProjectileX: var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.clips[ed.active_state].muzzle_px_x))
+        case .ProjectileY: var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.clips[ed.active_state].muzzle_px_y))
+        case .CollisionX:   var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.collision_px_x))
+        case .CollisionY:   var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.collision_px_y))
+        case .CollisionW:   var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.collision_px_w))
+        case .CollisionH:   var_len = len(fmt.bprintf(var_buf[:], "%d",   ed.sheet.collision_px_h))
         case .None, .Key:
         }
     }
@@ -676,7 +753,7 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
 
     anim_ed_label(lp_x + pad, cy, "STATE", uis(7), ANIM_ED_MUTED); cy += uis(12)
 
-    state_shorts := [ANIM_STATE_COUNT]cstring{ "Idle", "Walk", "Dodg", "Atk", "Die" }
+    state_shorts := [ANIM_STATE_COUNT]cstring{ "Idle", "Walk", "Dodg", "Atk", "Die", "Hit" }
     tab_w := (lp_w - pad*2) / f32(ANIM_STATE_COUNT)
     tab_h := uis(17)
     tab_fs := uis(8)
@@ -782,7 +859,25 @@ anim_ed_draw_left_panel :: proc(lp_x, lp_y, lp_w, lp_h: f32, mp: rl.Vector2) {
     anim_ed_number_field(rl.Rectangle{fx + half_fw + uis(3) + uis(9), cy, half_fw - uis(9), fh}, .AnchorY, mp)
     cy += fh + fgap
 
-    anim_ed_label(lp_x + pad, cy, "Ctrl+drag in viewport", uis(7), ANIM_ED_MUTED)
+    anim_ed_label(lp_x + pad, cy, "PROJECTILE SPAWN", uis(7), ANIM_ED_MUTED); cy += uis(11)
+    anim_ed_label(lp_x + pad, cy + (fh-fs)*0.5, "X", fs, ANIM_ED_MUTED)
+    anim_ed_number_field(rl.Rectangle{fx, cy, half_fw, fh}, .ProjectileX, mp)
+    anim_ed_label(fx + half_fw + uis(3) + uis(2), cy + (fh-fs)*0.5, "Y", fs, ANIM_ED_MUTED)
+    anim_ed_number_field(rl.Rectangle{fx + half_fw + uis(3) + uis(9), cy, half_fw - uis(9), fh}, .ProjectileY, mp)
+    cy += fh + fgap
+
+    anim_ed_label(lp_x + pad, cy, "Ctrl-drag anchor  Shift-drag projectile", uis(7), ANIM_ED_MUTED)
+    cy += uis(15)
+    anim_ed_label(lp_x + pad, cy, "COLLISION BOX", uis(7), ANIM_ED_MUTED); cy += uis(11)
+    anim_ed_label(lp_x + pad, cy + (fh-fs)*0.5, "X", fs, ANIM_ED_MUTED)
+    anim_ed_number_field(rl.Rectangle{fx, cy, half_fw, fh}, .CollisionX, mp)
+    anim_ed_label(fx + half_fw + uis(3) + uis(2), cy + (fh-fs)*0.5, "Y", fs, ANIM_ED_MUTED)
+    anim_ed_number_field(rl.Rectangle{fx + half_fw + uis(3) + uis(9), cy, half_fw - uis(9), fh}, .CollisionY, mp)
+    cy += fh + fgap
+    anim_ed_label(lp_x + pad, cy + (fh-fs)*0.5, "W", fs, ANIM_ED_MUTED)
+    anim_ed_number_field(rl.Rectangle{fx, cy, half_fw, fh}, .CollisionW, mp)
+    anim_ed_label(fx + half_fw + uis(3) + uis(2), cy + (fh-fs)*0.5, "H", fs, ANIM_ED_MUTED)
+    anim_ed_number_field(rl.Rectangle{fx + half_fw + uis(3) + uis(9), cy, half_fw - uis(9), fh}, .CollisionH, mp)
 }
 
 @(private = "file")
@@ -813,6 +908,7 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
             ed.drag_last = mp
         }
         ctrl_held := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
+        shift_held := rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
         if rl.IsMouseButtonDown(.LEFT) && ctrl_held && fw > 0 && fh > 0 {
             sx := ed.view_offset.x + (mp.x - vp_x - vp_w*0.5) / ed.view_zoom
             sy := ed.view_offset.y + (mp.y - vp_y - vp_h*0.5) / ed.view_zoom
@@ -834,7 +930,30 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
                     }
                 }
             }
-        } else if rl.IsMouseButtonPressed(.LEFT) && fw > 0 && fh > 0 && cols > 0 && !ctrl_held {
+        } else if rl.IsMouseButtonDown(.LEFT) && shift_held && fw > 0 && fh > 0 {
+            sx := ed.view_offset.x + (mp.x - vp_x - vp_w*0.5) / ed.view_zoom
+            sy := ed.view_offset.y + (mp.y - vp_y - vp_h*0.5) / ed.view_zoom
+            if sx >= 0 && sy >= 0 && sx < f32(tex.width) && sy < f32(tex.height) {
+                lx := int(sx) %% fw
+                ly := int(sy) %% fh
+                nx := clamp(lx, 0, fw)
+                ny := clamp(ly, 0, fh)
+                clip := &ed.sheet.clips[ed.active_state]
+                if clip.muzzle_px_x != nx || clip.muzzle_px_y != ny {
+                    clip.muzzle_px_x = nx
+                    clip.muzzle_px_y = ny
+                    ed.sheet.has_clip[ed.active_state] = true
+                    ed.dirty = true
+                    if ed.focused_field == .ProjectileX {
+                        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", nx))
+                        ed.field_buf[ed.field_len] = 0
+                    } else if ed.focused_field == .ProjectileY {
+                        ed.field_len = len(fmt.bprintf(ed.field_buf[:], "%d", ny))
+                        ed.field_buf[ed.field_len] = 0
+                    }
+                }
+            }
+        } else if rl.IsMouseButtonPressed(.LEFT) && fw > 0 && fh > 0 && cols > 0 && !ctrl_held && !shift_held {
             sx := ed.view_offset.x + (mp.x - vp_x - vp_w*0.5) / ed.view_zoom
             sy := ed.view_offset.y + (mp.y - vp_y - vp_h*0.5) / ed.view_zoom
             if sx >= 0 && sy >= 0 && sx < f32(tex.width) && sy < f32(tex.height) {
@@ -928,6 +1047,25 @@ anim_ed_draw_viewport :: proc(vp_x, vp_y, vp_w, vp_h: f32, mp: rl.Vector2) {
             rl.DrawLineV({ cx_ - arm, cy_ }, { cx_ + arm, cy_ }, CROSSHAIR_COL)
             rl.DrawLineV({ cx_, cy_ - arm }, { cx_, cy_ + arm }, CROSSHAIR_COL)
             rl.DrawCircleV({ cx_, cy_ }, 3, CROSSHAIR_COL)
+
+            clip_muzzle := ed.sheet.clips[ed.active_state]
+            if clip_muzzle.muzzle_px_x != 0 || clip_muzzle.muzzle_px_y != 0 {
+                mx := frx + f32(clip_muzzle.muzzle_px_x) * ed.view_zoom
+                my := fry + f32(clip_muzzle.muzzle_px_y) * ed.view_zoom
+                PROJECTILE_COL :: rl.Color{ 255, 150, 40, 235 }
+                rl.DrawLineV({ mx - arm, my }, { mx + arm, my }, PROJECTILE_COL)
+                rl.DrawLineV({ mx, my - arm }, { mx, my + arm }, PROJECTILE_COL)
+                rl.DrawCircleV({ mx, my }, 3, PROJECTILE_COL)
+            }
+
+            if ed.sheet.has_collision {
+                cbx := frx + f32(ed.sheet.collision_px_x) * ed.view_zoom
+                cby := fry + f32(ed.sheet.collision_px_y) * ed.view_zoom
+                cbw := f32(ed.sheet.collision_px_w) * ed.view_zoom
+                cbh := f32(ed.sheet.collision_px_h) * ed.view_zoom
+                COLLISION_COL :: rl.Color{ 240, 80, 80, 210 }
+                rl.DrawRectangleLinesEx({cbx, cby, cbw, cbh}, 2, COLLISION_COL)
+            }
         }
 
         if over && fw > 0 && fh > 0 && cols > 0 {
@@ -1026,7 +1164,7 @@ anim_ed_draw_preview :: proc(rp_x, rp_y, rp_w, rp_h: f32, mp: rl.Vector2) {
     }
     cy += uis(21)
 
-    state_shorts := [ANIM_STATE_COUNT]cstring{ "Idle", "Walk", "Dodg", "Atk", "Die" }
+    state_shorts := [ANIM_STATE_COUNT]cstring{ "Idle", "Walk", "Dodg", "Atk", "Die", "Hit" }
     mini_tab_h   := uis(15)
     stw          := (rp_w - pad*2) / f32(ANIM_STATE_COUNT)
     for si in 0..<ANIM_STATE_COUNT {

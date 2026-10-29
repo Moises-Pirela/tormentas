@@ -23,6 +23,8 @@ AnimClipDef :: struct {
     frame_count: int,
     fps:         f32,
     looping:     bool,
+    muzzle_px_x: int,
+    muzzle_px_y: int,
 }
 
 AnimSheetDef :: struct {
@@ -33,6 +35,11 @@ AnimSheetDef :: struct {
     has_clip:     [ANIM_STATE_COUNT]bool,
     anchor_px_x:  int,
     anchor_px_y:  int,
+    has_collision: bool,
+    collision_px_x: int,
+    collision_px_y: int,
+    collision_px_w: int,
+    collision_px_h: int,
 }
 
 @(private = "file")
@@ -49,7 +56,7 @@ shutdown_anim_cache :: proc() {
     delete(g_anim_def_cache)
 }
 
-ANIM_STATE_NAMES := [ANIM_STATE_COUNT]string{ "idle", "walk", "dodge", "attack", "death" }
+ANIM_STATE_NAMES := [ANIM_STATE_COUNT]string{ "idle", "walk", "dodge", "attack", "death", "hit" }
 
 get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
     if cached, found := g_anim_def_cache[stem]; found {
@@ -105,6 +112,15 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
             result.anchor_px_y = int(json_f32(arr[1]))
         }
     }
+    if v, vok := root["collision"]; vok {
+        if arr, aok := v.(json.Array); aok && len(arr) >= 4 {
+            result.collision_px_x = int(json_f32(arr[0]))
+            result.collision_px_y = int(json_f32(arr[1]))
+            result.collision_px_w = int(json_f32(arr[2]))
+            result.collision_px_h = int(json_f32(arr[3]))
+            result.has_collision = result.collision_px_w > 0 && result.collision_px_h > 0
+        }
+    }
 
     if states_obj, sok := root["states"].(json.Object); sok {
         for si in AnimStateName {
@@ -120,6 +136,12 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
             if v, vok := clip_obj["fps"];         vok { clip.fps         = json_f32(v) }
             if v, vok := clip_obj["looping"];     vok {
                 if b, bok := v.(bool); bok { clip.looping = b }
+            }
+            if v, vok := clip_obj["muzzle"]; vok {
+                if arr, aok := v.(json.Array); aok && len(arr) >= 2 {
+                    clip.muzzle_px_x = int(json_f32(arr[0]))
+                    clip.muzzle_px_y = int(json_f32(arr[1]))
+                }
             }
             if clip.frame_count <= 0 { clip.frame_count = 1 }
             if clip.fps <= 0         { clip.fps = 6 }
@@ -138,6 +160,32 @@ anim_def_cache_evict :: proc(stem: string) {
     delete_key(&g_anim_def_cache, stem)
 }
 
+anim_muzzle_world_position :: proc(w: ^World, id: int, position: [3]f32) -> (muzzle: [3]f32, ok: bool) {
+    stem := get_entity_sprite_stem(w, id)
+    def, has_def := get_or_load_anim_def(stem)
+    if !has_def || !def.has_clip[AnimStateName.Attack] { return position, false }
+
+    clip := def.clips[AnimStateName.Attack]
+    if clip.muzzle_px_x == 0 && clip.muzzle_px_y == 0 { return position, false }
+
+    vis := draw_entity_visual_info(w, id)
+    if !vis.ok { return position, false }
+
+    dx := f32(clip.muzzle_px_x - def.anchor_px_x)
+    dy := f32(clip.muzzle_px_y - def.anchor_px_y)
+    if sprite_facing_flip(w, id, comp_get(w, id, .Transform, TransformComp).rotation) {
+        dx = -dx
+    }
+
+    px_to_world := vis.world_size / f32(def.frame_width)
+    iso_offset := iso_to_world_xy(dx * px_to_world, dy * px_to_world)
+    return {
+        position[0] + iso_offset.x,
+        position[1] + iso_offset.y,
+        position[2],
+    }, true
+}
+
 ANIM_WALK_SPEED_THRESH :: f32(8.0)
 
 animation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
@@ -149,14 +197,42 @@ animation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     for id in ids {
         anim := comp_get(w, id, .AnimState, AnimStateComp)
 
+        sprite_stem := get_entity_sprite_stem(w, id)
+        adef, has_def := get_or_load_anim_def(sprite_stem)
+        if !has_def { continue }
+
+        attack_finished := false
+        if anim.current_state == .Attack && adef.has_clip[AnimStateName.Attack] {
+            attack_clip := adef.clips[AnimStateName.Attack]
+            attack_finished = !attack_clip.looping &&
+                anim.frame_index >= attack_clip.frame_count - 1 && anim.elapsed <= 0
+        }
+        attack_held := world_has_component(w, id, .InputState) &&
+            comp_get(w, id, .InputState, InputStateComp).fire_pressed
+        hit_finished := true
+        if anim.current_state == .Hit && adef.has_clip[AnimStateName.Hit] {
+            hit_clip := adef.clips[AnimStateName.Hit]
+            anim.hit_elapsed += dt
+            hit_finished = !hit_clip.looping &&
+                anim.hit_elapsed >= f32(hit_clip.frame_count) / hit_clip.fps
+        }
+
         desired := AnimStateName.Idle
 
-        if world_has_component(w, id, .Respawn) &&
+        if (world_has_component(w, id, .Health) &&
+            comp_get(w, id, .Health, HealthComp).current <= 0) {
+            desired = .Death
+        }
+        else if world_has_component(w, id, .Respawn) &&
            comp_get(w, id, .Respawn, RespawnComp).timer > 0 {
             desired = .Death
         } else if world_has_component(w, id, .DodgeState) &&
                   comp_get(w, id, .DodgeState, DodgeComp).active {
             desired = .Dodge
+        } else if anim.current_state == .Hit && !hit_finished {
+            desired = .Hit
+        } else if anim.current_state == .Attack && (!attack_finished || attack_held) {
+            desired = .Attack
         } else if world_has_component(w, id, .Velocity) {
             vel := comp_get(w, id, .Velocity, VelocityComp).value
             speed := math.sqrt(vel[0]*vel[0] + vel[1]*vel[1])
@@ -169,11 +245,11 @@ animation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             anim.current_state = desired
             anim.frame_index   = 0
             anim.elapsed       = 0
+            anim.hit_elapsed   = 0
+        } else if attack_finished && attack_held && desired == .Attack {
+            anim.frame_index = 0
+            anim.elapsed = 0
         }
-
-        sprite_stem := get_entity_sprite_stem(w, id)
-        adef, has_def := get_or_load_anim_def(sprite_stem)
-        if !has_def { continue }
 
         state := anim.current_state
         if !adef.has_clip[state] {

@@ -6,6 +6,13 @@ import p2p "p2p"
 
 g_staged_input: [MAX_PLAYERS]p2p.InputFrame
 
+player_is_dead :: proc(w: ^World, id: int) -> bool {
+    if world_has_component(w, id, .Health) && comp_get(w, id, .Health, HealthComp).current <= 0 {
+        return true
+    }
+    return world_has_component(w, id, .Respawn) && comp_get(w, id, .Respawn, RespawnComp).timer > 0
+}
+
 collect_local_input :: proc() -> p2p.InputFrame {
     f: p2p.InputFrame
     f.peer = 0
@@ -28,7 +35,6 @@ collect_local_input :: proc() -> p2p.InputFrame {
     f.aim  = { mp.x, mp.y }
 
     if rl.IsMouseButtonDown(.LEFT) && !imui_wants_mouse() { f.actions += {.Fire}     }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill2))  { f.actions += {.Skill2}   }
@@ -43,7 +49,7 @@ apply_input_frame :: proc(w: ^World, entity_id: int, f: p2p.InputFrame) {
         move             = f.move,
         mouse_world      = { f.aim[0], f.aim[1], 0 },
         fire_pressed     = .Fire     in f.actions,
-        reload_pressed   = .Reload   in f.actions,
+        reload_pressed   = false,
         dodge_pressed    = .Dodge    in f.actions,
         skill1_pressed   = .Skill1   in f.actions,
         skill2_pressed   = .Skill2   in f.actions,
@@ -60,8 +66,7 @@ player_input_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         id := w.player_ids[slot]
         if !world_is_valid(w, id) { continue }
 
-        if world_has_component(w, id, .Respawn) &&
-           comp_get(w, id, .Respawn, RespawnComp).timer > 0 {
+        if player_is_dead(w, id) {
             comp_set(w, id, .InputState, InputStateComp{})
             comp_set(w, id, .Velocity, VelocityComp{})
             continue
@@ -72,6 +77,10 @@ player_input_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         move := frame.move
         move_speed := f32(MOVE_SPEED)
+        if world_has_component(w, id, .AnimState) &&
+           comp_get(w, id, .AnimState, AnimStateComp).current_state == .Attack {
+            move = {}
+        }
         if world_has_component(w, id, .Stats) {
             st := comp_get(w, id, .Stats, StatsComp)
             move_speed = st.move_speed
@@ -169,6 +178,8 @@ facing_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         if !world_is_valid(w, id) { continue }
         if !world_has_component(w, id, .Transform) { continue }
         if !world_has_component(w, id, .InputState) { continue }
+
+        if player_is_dead(w, id) { continue }
 
         t     := comp_get(w, id, .Transform, TransformComp)
         input := comp_get(w, id, .InputState, InputStateComp)

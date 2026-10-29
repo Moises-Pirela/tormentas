@@ -84,11 +84,11 @@
     },
     {
         "name": "enemy_spider",
-        "render":    { "name": "Dreadspider", "sprite": "enemy_spider", "sprite_scale": 0.9, "layer": "sprite", "show_hp_bar": true, "show_dir_tip": true, "top_down_sprite": true },
+        "render":    { "name": "Dreadspider", "sprite": "enemy_spider", "sprite_scale": 2.0, "layer": "sprite", "show_hp_bar": true, "show_dir_tip": true, "top_down_sprite": true },
         "transform": { "position": [100, 100, 0], "rotation": 0 },
         "velocity":  {},
         "health":    { "current": 30, "max": 30, "corruption": 0 },
-        "collider":  { "radius": 10, "faction": 1 },
+        "collider":  { "radius": 20, "faction": 1 },
         "ai_agent":  {
             "ai_type":      "melee",
             "aggro_range":  480,

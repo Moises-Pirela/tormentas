@@ -326,18 +326,8 @@ _hud_fill_ammo_chip :: proc(w: ^World, chip: ^UICustomAmmo) {
     }
 
     chip.ammo_ratio   = clamp(f32(wp.ammo_current) / f32(wp.ammo_max), 0, 1)
-    chip.is_reloading = wp.is_reloading
-
-    if wp.is_reloading {
-        chip.ammo_text[0] = 'R'
-        chip.ammo_text[1] = 0
-        if wp.reload_time > 0 {
-            chip.reload_ratio = 1 - clamp(wp.reload_timer / wp.reload_time, 0, 1)
-        }
-    } else {
-        s := fmt.bprintf(chip.ammo_text[:7], "%d", wp.ammo_current)
-        chip.ammo_text[len(s)] = 0
-    }
+    s := fmt.bprintf(chip.ammo_text[:7], "%d", wp.ammo_current)
+    chip.ammo_text[len(s)] = 0
 }
 
 @(private = "file")

@@ -182,6 +182,7 @@ init_game :: proc() {
     sim_register_system(&g_sim, { .EarlyUpdate, .Update }, mutation_effects_system, .HostOnly)
     sim_register_system(&g_sim, { .Update      }, reanimated_system,          .HostOnly)
     sim_register_system(&g_sim, { .Update      }, ability_system,             .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, ability_echo_system,        .Shared)
     sim_register_system(&g_sim, { .Update      }, flask_system,               .HostOnly)
     sim_register_system(&g_sim, { .Update      }, homing_system,              .HostOnly)
     sim_register_system(&g_sim, { .Update      }, trap_system,                .HostOnly)
@@ -321,8 +322,8 @@ update_playing :: proc(dt: f32) {
     }
 
     netcode_apply_raid_result(w)
-
-    minimap_update(w)
+    netcode_apply_disconnects(w)
+    netcode_apply_entity_syncs(w)
 
     if world_is_valid(w, w.player_id) &&
        world_has_component(w, w.player_id, .Transform) {
@@ -588,7 +589,6 @@ draw_playing :: proc() {
         case .Gameplay, .Hub, .Editor:
         }
 
-        draw_minimap(w)
         draw_levelup_flash()
         draw_quest_flash()
         draw_quest_hud(w)

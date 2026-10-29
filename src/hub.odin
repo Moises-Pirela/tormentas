@@ -96,6 +96,9 @@ enter_raid :: proc(w: ^World, n: int) {
     raid_result_gold     = 0
     raid_result_serums   = 0
     g_raid_timer         = RAID_TIME
+    g_raid_enemies_killed = 0
+    g_raid_elites_killed  = 0
+    g_raid_bosses_killed  = 0
     level_clear(w)
     level_load(n)
     level_apply(w)

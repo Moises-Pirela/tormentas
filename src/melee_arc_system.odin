@@ -42,8 +42,9 @@ melee_arc_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 }
             }
 
-            dx   := check_pos[0] - at.position[0]
-            dy   := check_pos[1] - at.position[1]
+            closest := entity_collider_closest_point(w, pid, {at.position[0], at.position[1]})
+            dx   := closest[0] - at.position[0]
+            dy   := closest[1] - at.position[1]
             dist := math.sqrt(dx*dx + dy*dy)
 
             if dist > arc.radius { continue }
@@ -75,9 +76,9 @@ melee_arc_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             col := comp_get(w, eid, .Collider, ColliderComp)
             if col.faction == 0 { continue }
 
-            et   := comp_get(w, eid, .Transform, TransformComp)
-            dx   := et.position[0] - at.position[0]
-            dy   := et.position[1] - at.position[1]
+            closest := entity_collider_closest_point(w, eid, {at.position[0], at.position[1]})
+            dx   := closest[0] - at.position[0]
+            dy   := closest[1] - at.position[1]
             dist := math.sqrt(dx*dx + dy*dy)
             if dist > arc.radius { continue }
 

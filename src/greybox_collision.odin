@@ -67,32 +67,25 @@ resolve_box_overlap :: proc(t: ^TransformComp, radius, cx, cy, sx, sy: f32) {
 
     px := t.position[0]
     py := t.position[1]
-
     near_x := clamp(px, min_x, max_x)
     near_y := clamp(py, min_y, max_y)
-
     ddx := px - near_x
     ddy := py - near_y
     sq  := ddx*ddx + ddy*ddy
-
     if sq >= radius * radius { return }
-
     dist := math.sqrt(sq)
     if dist < 0.001 {
-        left  := px - min_x
-        right := max_x - px
-        up    := py - min_y
-        down  := max_y - py
-        m     := min(min(left, right), min(up, down))
+        left := px - min_x; right := max_x - px
+        up := py - min_y; down := max_y - py
+        m := min(min(left, right), min(up, down))
         switch {
-        case m == left:  t.position[0] = min_x - radius - 0.5
+        case m == left: t.position[0] = min_x - radius - 0.5
         case m == right: t.position[0] = max_x + radius + 0.5
-        case m == up:    t.position[1] = min_y - radius - 0.5
-        case:            t.position[1] = max_y + radius + 0.5
+        case m == up: t.position[1] = min_y - radius - 0.5
+        case: t.position[1] = max_y + radius + 0.5
         }
         return
     }
-
     push := radius - dist
     t.position[0] += ddx / dist * push
     t.position[1] += ddy / dist * push

@@ -86,6 +86,10 @@ raid_result_serums: int
 
 g_raid_serums_start: int
 
+g_raid_enemies_killed: u16
+g_raid_elites_killed:  u16
+g_raid_bosses_killed:  u16
+
 g_paused: bool
 
 set_playing_state :: proc(next: PlayingSubstate) {

@@ -22,23 +22,18 @@ entity_separation_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             if cb.is_trigger { continue }
             tb := comp_get(w, b, .Transform, TransformComp)
             rb := cb.radius
-
-            dx      := ta.position[0] - tb.position[0]
-            dy      := ta.position[1] - tb.position[1]
+            dx := ta.position[0] - tb.position[0]
+            dy := ta.position[1] - tb.position[1]
             dist_sq := dx*dx + dy*dy
-            min_d   := ra + rb
-
+            min_d := ra + rb
             if dist_sq >= min_d * min_d { continue }
-
-            dist    := math.sqrt(dist_sq)
+            dist := math.sqrt(dist_sq)
             overlap := min_d - dist
-
             if dist < 0.5 {
                 ta.position[1] -= overlap * 0.5
                 tb.position[1] += overlap * 0.5
                 continue
             }
-
             nx := dx / dist
             ny := dy / dist
             push := overlap * 0.5

@@ -249,20 +249,7 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
 
         roller_h := bh - strip_h - i32(uis(2))
 
-        if chip.is_reloading {
-            rl.DrawRectangle(bx, by, bw, roller_h, rl.Color{ 0, 0, 0, 120 })
-            if chip.reload_ratio > 0 {
-                rl.DrawRectangle(bx, by,
-                    i32(f32(bw) * chip.reload_ratio), roller_h,
-                    rl.Color{ 100, 158, 210, 80 })
-            }
-
-            r_fs := uis(22)
-            r_sz := rl.MeasureTextEx(g_font_body, cstring("R"), r_fs, 0.5)
-            rl.DrawTextEx(g_font_body, cstring("R"),
-                { bb.x + bb.width*0.5 - r_sz.x*0.5, bb.y + f32(roller_h)*0.5 - r_sz.y*0.5 },
-                r_fs, 0.5, COL_MUTED)
-        } else if chip.ammo_text[0] != 0 {
+        if chip.ammo_text[0] != 0 {
             n_chars := 0
             for chip.ammo_text[n_chars] != 0 && n_chars < 7 { n_chars += 1 }
 
@@ -364,9 +351,9 @@ _draw_inv_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomInvSlot) {
 
 @(private = "file")
 _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
-    bg_col  := rl.Color{ 20, 16, 12, 240 } if !slot.is_blocked else rl.Color{ 14,  8,  8, 245 }
-    bdr_col := COL_RULE                    if !slot.is_blocked else rl.Color{ 70, 28, 28, 200 }
-    lbl_col := COL_BRASS                   if !slot.is_blocked else rl.Color{ 72, 52, 38, 180 }
+    bg_col  := rl.Color{ 20, 16, 12, 240 } if !slot.is_blocked && !slot.class_locked else rl.Color{ 14,  8,  8, 245 }
+    bdr_col := COL_RULE                    if !slot.is_blocked && !slot.class_locked else rl.Color{ 70, 28, 28, 200 }
+    lbl_col := COL_BRASS                   if !slot.is_blocked && !slot.class_locked else rl.Color{ 72, 52, 38, 180 }
 
     rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height), bg_col)
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, bdr_col)
@@ -382,10 +369,10 @@ _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
         { bb.x + bb.width - uis(10), bb.y + uis(27) }, 1, bdr_col)
 
     name_fs := uis(18)
-    if slot.is_blocked {
+    if slot.is_blocked || slot.class_locked {
         rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height),
             rl.Color{ 60, 0, 0, 55 })
-        lock_lbl := cstring("— 2H —")
+        lock_lbl := cstring("— CLASS —") if slot.class_locked else cstring("— 2H —")
         lksz := rl.MeasureTextEx(g_font, lock_lbl, name_fs, 1)
         rl.DrawTextEx(g_font, lock_lbl,
             { bb.x + bb.width * 0.5 - lksz.x * 0.5, bb.y + uis(34) },

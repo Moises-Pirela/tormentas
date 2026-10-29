@@ -890,7 +890,6 @@ loot_seed :: proc(tick: u64, entity_id: int) -> u64 {
 give_starter_items :: proc(w: ^World, pid: int) {
     if !world_has_component(w, pid, .Inventory) { return }
     inv := comp_get(w, pid, .Inventory, InventoryComp)
-
     hf_id := create_flask_item(w, .Health, .Small, .Normal)
     if world_is_valid(w, hf_id) {
         inv = comp_get(w, pid, .Inventory, InventoryComp)
@@ -943,5 +942,27 @@ give_starter_items :: proc(w: ^World, pid: int) {
         inv = comp_get(w, pid, .Inventory, InventoryComp)
         inv.equipped[int(EquipSlot.WeaponPrimary)] = wep_id
         break
+    }
+}
+
+ensure_base_flasks :: proc(w: ^World, pid: int) {
+    if !world_has_component(w, pid, .Inventory) { return }
+
+    inv := comp_get(w, pid, .Inventory, InventoryComp)
+    if !world_is_valid(w, inv.equipped[int(EquipSlot.Flask1)]) {
+        flask_id := create_flask_item(w, .Health, .Small, .Normal)
+        if world_is_valid(w, flask_id) {
+            inv = comp_get(w, pid, .Inventory, InventoryComp)
+            inv.equipped[int(EquipSlot.Flask1)] = flask_id
+        }
+    }
+
+    inv = comp_get(w, pid, .Inventory, InventoryComp)
+    if !world_is_valid(w, inv.equipped[int(EquipSlot.Flask2)]) {
+        flask_id := create_flask_item(w, .Energy, .Small, .Normal)
+        if world_is_valid(w, flask_id) {
+            inv = comp_get(w, pid, .Inventory, InventoryComp)
+            inv.equipped[int(EquipSlot.Flask2)] = flask_id
+        }
     }
 }

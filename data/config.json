@@ -20,6 +20,7 @@
 	},
 	"ui": {
 		"close_panel": 256,
-		"compare_tooltip": 342
+		"compare_tooltip": 342,
+		"drop_item": 71
 	}
 }
