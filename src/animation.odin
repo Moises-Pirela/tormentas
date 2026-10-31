@@ -2,7 +2,6 @@ package main
 
 import "core:encoding/json"
 import "core:math"
-import "core:os"
 import "core:strings"
 import rl  "vendor:raylib"
 
@@ -72,7 +71,7 @@ get_or_load_anim_def :: proc(stem: string) -> (def: AnimSheetDef, ok: bool) {
     n += copy(path_buf[n:], ".json")
     path_buf[n] = 0
 
-    raw, read_ok := os.read_entire_file(string(path_buf[:n]), context.temp_allocator)
+    raw, read_ok := read_game_file(string(path_buf[:n]), context.temp_allocator)
     if !read_ok || len(raw) == 0 {
         owned := strings.clone(stem)
         g_anim_def_cache[owned] = nil

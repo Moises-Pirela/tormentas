@@ -34,19 +34,24 @@ Everything here is hand-rolled — no commercial engine.
 
 ## Building
 
-**Prerequisites**
+Windows x64 and **Odin dev-2026-10 (84bc3fc)** are required. Download the complete
+toolchain from the [official release](https://github.com/odin-lang/Odin/releases/tag/dev-2026-10)
+and put `odin.exe` on PATH or set `ODIN` to its full path. See
+[SETUP.md](docs/SETUP.md) for Windows build tools and exact setup instructions.
 
-- Windows
-- The [Odin compiler](https://odin-lang.org/docs/install/). `build.ps1` expects it at
-  `C:\ODIN\odin.exe` — edit that line if yours lives elsewhere.
-- The `clockwork-ecs` repo cloned as a **sibling** of this one (i.e. `../clockwork-ecs`), so the
-  build can resolve the `cw=` collection.
-- The Steamworks SDK (`steamworks/` + `steam_api.dll`) is vendored in the repo.
+The required MIT-licensed clockwork snapshot is included in
+[`deps/clockwork-ecs`](deps/clockwork-ecs/README.md), with provenance and a verified
+SHA-256 manifest. No sibling repository or private download is needed.
+
+The default build supports single-player without Steam. Steamworks SDK material
+is excluded from submitted source; optional local Steam setup and sharing-rights
+details are in [STEAMWORKS.md](docs/STEAMWORKS.md).
 
 **Build**
 
 ```bat
-build.bat            :: debug build (-o:none -debug -vet)
+test.bat             :: automated clockwork, protocol and game logic tests
+build.bat            :: debug build (-o:none -debug -vet, LLVM lld)
 build.bat release    :: optimized build (-o:aggressive -subsystem:windows)
 ```
 
@@ -58,10 +63,17 @@ Output lands at `bin\tormentas.exe`. (`build.bat` just forwards to `build.ps1`.)
 run.bat
 ```
 
-### Local co-op testing
+### Optional co-op testing
 
-Double-click `run.bat` in two separate windows. The first instance hosts (**Host Game**); the
-second joins (**Join Game**, enter `127.0.0.1`).
+Steam and loopback multiplayer require the optional Steam build described in
+[STEAMWORKS.md](docs/STEAMWORKS.md). They are disabled in the default submission build.
+
+### Training submission
+
+Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/export-source.ps1`
+and submit `dist/tormentas-source.zip`. It includes current fixes, tests and pinned
+clockwork source, and excludes private SDK copies and Git history. Historical
+commits still contain the previously bundled Steamworks material.
 
 ## Layout
 
@@ -70,7 +82,9 @@ src/        Game and engine source (Odin)
 data/       Content: levels, sprites, sounds, fonts, loc, config, loot tables
 tools/      gen_level scripts and asset helpers
 clay/       Clay UI bindings
-steamworks/ Steamworks SDK bindings
+deps/       Pinned clockwork core and disabled Steam package
+ui/         Project-owned microui adapters
+docs/       Reproducible setup and Steamworks submission notes
 bin/ dist/  Build output
 ```
 
@@ -82,5 +96,6 @@ math.
 
 ## License
 
-[MIT](LICENSE) © 2026 Moises Pirela. Note that bundled third-party components keep their own
-licenses — notably the Steamworks SDK, which is not MIT-licensed.
+[MIT](LICENSE) © 2026 Moises Pirela, including the clockwork snapshot included with
+the owner's authorization. Existing third-party components retain their own rights;
+the MIT license does not cover separately obtained Steamworks SDK material.

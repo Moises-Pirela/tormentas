@@ -600,11 +600,11 @@ draw_playing :: proc() {
 
 main :: proc() {
     if len(os.args) > 0 {
-        exe_dir := filepath.dir(os.args[0], context.temp_allocator)
+        exe_dir := filepath.dir(os.args[0])
         if filepath.base(exe_dir) == "bin" {
-            os.set_current_directory(filepath.dir(exe_dir, context.temp_allocator))
+            _ = os.set_working_directory(filepath.dir(exe_dir))
         } else {
-            os.set_current_directory(exe_dir)
+            _ = os.set_working_directory(exe_dir)
         }
     }
 

@@ -1,7 +1,6 @@
 package main
 
 import "core:encoding/json"
-import "core:os"
 import rl "vendor:raylib"
 
 CONFIG_PATH :: "data/config.json"
@@ -73,7 +72,7 @@ default_binds :: proc() -> Bindings {
 
 load_config :: proc() {
     g_binds = default_binds()
-    data, ok := os.read_entire_file(CONFIG_PATH)
+    data, ok := read_game_file(CONFIG_PATH)
     if !ok { return }
     defer delete(data)
     json.unmarshal(data, &g_binds)
@@ -84,7 +83,7 @@ save_config :: proc() {
     data, err := json.marshal(g_binds, opt)
     if err != nil { return }
     defer delete(data)
-    os.write_entire_file(CONFIG_PATH, data)
+    write_game_file(CONFIG_PATH, data)
 }
 
 BindRow :: struct {

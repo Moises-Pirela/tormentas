@@ -2,6 +2,29 @@
 
 Source carries no comments. Every rationale that would have been a comment lives here.
 
+## Submission setup (2026-10-31)
+
+The default build uses the MIT-authorized, hashed clockwork snapshot in
+`deps/clockwork-ecs` and project-owned microui adapters in `ui/`. The original
+clockwork UI packages were unavailable in the supplied source. Odin is pinned to
+dev-2026-10 revision 84bc3fc; the file I/O wrappers preserve the game's boolean
+success interface over the compiler's error-returning OS API. Scripts use lld
+because the toolchain's default radlink crashed on this project's debug link.
+
+Steam transport is opt-in through `STEAM_ENABLED` and an external `steam`
+collection. The default collection is empty and the session entry points return
+failure without claiming to host or connect. Existing Steam integration notes
+below describe the optional private configuration, not bundled submission files.
+
+Host snapshots must contain their complete declared entity list and all four
+ability states before replacing the previous snapshot. The new truncation test
+demonstrated that accepting partial packets previously cleared valid entity
+state and marked an incomplete snapshot as available. Oversized entity counts
+are rejected before allocation or mutation.
+
+`test.ps1` covers that regression, protocol boundaries, projection speed, AI
+navigation and clockwork invariants. See `docs/SETUP.md` and `docs/STEAMWORKS.md`.
+
 ---
 
 ## Movement and screen-space projection

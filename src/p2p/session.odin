@@ -1,7 +1,17 @@
 package p2p
 
-import sw  "../../steamworks"
+STEAM_ENABLED :: #config(STEAM_ENABLED, false)
+
+import sw "steam:steamworks"
 import "core:fmt"
+
+when STEAM_ENABLED {
+    ConnectionHandle :: sw.HSteamNetConnection
+    ListenHandle :: sw.HSteamListenSocket
+} else {
+    ConnectionHandle :: u32
+    ListenHandle :: u32
+}
 
 DISCONNECT_TIMEOUT  :: f32(6.0)
 MAX_DISCONNECT_STEP :: f32(0.5)
@@ -47,7 +57,7 @@ RosterEntry :: struct {
 }
 
 Peer :: struct {
-    conn:       sw.HSteamNetConnection,
+    conn:       ConnectionHandle,
     active:     bool,
     slot:       int,
     connected:  bool,
@@ -62,8 +72,8 @@ Peer :: struct {
 
 Session :: struct {
     state:       SessionState,
-    conn:        sw.HSteamNetConnection,
-    listen_sock: sw.HSteamListenSocket,
+    conn:        ConnectionHandle,
+    listen_sock: ListenHandle,
     local_slot:  int,
     peer_ready:  bool,
 
@@ -105,6 +115,7 @@ is_host :: proc(s: ^Session) -> bool {
 }
 
 session_host :: proc(s: ^Session) -> bool {
+    when STEAM_ENABLED {
     socks  := sw.NetworkingSockets_SteamAPI()
     listen := sw.NetworkingSockets_CreateListenSocketP2P(socks, 0, 0, nil)
     if listen == 0 {
@@ -116,9 +127,14 @@ session_host :: proc(s: ^Session) -> bool {
     s.state       = .Hosting
     fmt.println("[p2p] hosting via Steam P2P — waiting for peers")
     return true
+
+    } else {
+    return false
+    }
 }
 
-session_join :: proc(s: ^Session, host_steam_id: sw.CSteamID) -> bool {
+session_join :: proc(s: ^Session, host_steam_id: u64) -> bool {
+    when STEAM_ENABLED {
     if host_steam_id == 0 { return false }
     identity: sw.SteamNetworkingIdentity
     sw.NetworkingIdentity_SetSteamID(&identity, host_steam_id)
@@ -133,9 +149,14 @@ session_join :: proc(s: ^Session, host_steam_id: sw.CSteamID) -> bool {
     s.state      = .Connecting
     fmt.printf("[p2p] connecting to %d via Steam P2P\n", u64(host_steam_id))
     return true
+
+    } else {
+    return false
+    }
 }
 
 session_host_loopback :: proc(s: ^Session, port: u16) -> bool {
+    when STEAM_ENABLED {
     _allow_unauthenticated_ip()
     socks  := sw.NetworkingSockets_SteamAPI()
     addr   := _loopback_addr(port)
@@ -149,9 +170,14 @@ session_host_loopback :: proc(s: ^Session, port: u16) -> bool {
     s.state       = .Hosting
     fmt.printf("[p2p] hosting on 127.0.0.1:%d (loopback)\n", port)
     return true
+
+    } else {
+    return false
+    }
 }
 
 session_join_loopback :: proc(s: ^Session, port: u16) -> bool {
+    when STEAM_ENABLED {
     _allow_unauthenticated_ip()
     socks := sw.NetworkingSockets_SteamAPI()
     addr  := _loopback_addr(port)
@@ -165,15 +191,22 @@ session_join_loopback :: proc(s: ^Session, port: u16) -> bool {
     s.state      = .Connecting
     fmt.printf("[p2p] connecting to 127.0.0.1:%d (loopback)\n", port)
     return true
+
+    } else {
+    return false
+    }
 }
 
+when STEAM_ENABLED {
 @(private)
 _allow_unauthenticated_ip :: proc() {
     utils := sw.NetworkingUtils_SteamAPI()
     allow: i32 = 1
     sw.NetworkingUtils_SetConfigValue(utils, .IP_AllowWithoutAuth, .Global, 0, .Int32, &allow)
 }
+}
 
+when STEAM_ENABLED {
 @(private)
 _loopback_addr :: proc(port: u16) -> sw.SteamNetworkingIPAddr {
     addr := sw.SteamNetworkingIPAddr{ port = port }
@@ -183,9 +216,11 @@ _loopback_addr :: proc(port: u16) -> sw.SteamNetworkingIPAddr {
     addr.ipv6[15] = 1
     return addr
 }
+}
 
 session_shutdown :: proc(s: ^Session) {
     if s.state == .Offline { return }
+    when STEAM_ENABLED {
     socks := sw.NetworkingSockets_SteamAPI()
     if s.conn != sw.HSteamNetConnection_Invalid {
         sw.NetworkingSockets_CloseConnection(socks, s.conn, 0, nil, false)
@@ -198,6 +233,7 @@ session_shutdown :: proc(s: ^Session) {
     if s.listen_sock != 0 {
         sw.NetworkingSockets_CloseListenSocket(socks, s.listen_sock)
     }
+    }
     delete(s.editor_ops)
     delete(s.editor_mod_ops)
     delete(s.snapshot_entities)
@@ -206,6 +242,7 @@ session_shutdown :: proc(s: ^Session) {
 }
 
 session_poll :: proc(s: ^Session, dt: f32) {
+    when STEAM_ENABLED {
     if s.state == .Offline { return }
     socks := sw.NetworkingSockets_SteamAPI()
 
@@ -238,8 +275,12 @@ session_poll :: proc(s: ^Session, dt: f32) {
             s.state = .Disconnected
         }
     }
+
+    } else {
+    }
 }
 
+when STEAM_ENABLED {
 @(private)
 _poll_peer :: proc(s: ^Session, p: ^Peer, socks: ^sw.INetworkingSockets) {
     msgs: [16]^sw.SteamNetworkingMessage
@@ -257,6 +298,7 @@ _poll_peer :: proc(s: ^Session, p: ^Peer, socks: ^sw.INetworkingSockets) {
     if p.connected {
         p.no_recv_timer += min(1.0/60.0, MAX_DISCONNECT_STEP)
     }
+}
 }
 
 @(private)
@@ -280,6 +322,7 @@ _next_free_player_slot :: proc(s: ^Session) -> int {
     return -1
 }
 
+when STEAM_ENABLED {
 session_on_conn_changed :: proc(s: ^Session, ev: ^sw.SteamNetConnectionStatusChangedCallback) {
     socks := sw.NetworkingSockets_SteamAPI()
 
@@ -339,9 +382,10 @@ session_on_conn_changed :: proc(s: ^Session, ev: ^sw.SteamNetConnectionStatusCha
     case .None, .Connecting, .FindingRoute, .FinWait, .Linger, .Dead, ._Force32Bit:
     }
 }
+}
 
 @(private)
-_peer_for_conn :: proc(s: ^Session, conn: sw.HSteamNetConnection) -> ^Peer {
+_peer_for_conn :: proc(s: ^Session, conn: ConnectionHandle) -> ^Peer {
     for &p in s.peers {
         if p.active && p.conn == conn { return &p }
     }
@@ -391,22 +435,30 @@ session_active_peer_count :: proc(s: ^Session) -> int {
 
 @(private)
 _send :: proc(s: ^Session, data: []u8, reliable: bool = true) {
+    when STEAM_ENABLED {
     if s.conn == sw.HSteamNetConnection_Invalid { return }
     socks := sw.NetworkingSockets_SteamAPI()
     flags := sw.nSteamNetworkingSend_Reliable if reliable else
              (sw.nSteamNetworkingSend_Unreliable | sw.nSteamNetworkingSend_NoNagle)
     sw.NetworkingSockets_SendMessageToConnection(socks, s.conn,
         raw_data(data), u32(len(data)), flags, nil)
+
+    } else {
+    }
 }
 
 @(private)
 _send_to_peer :: proc(p: ^Peer, data: []u8, reliable: bool = true) {
+    when STEAM_ENABLED {
     if !p.active || p.conn == sw.HSteamNetConnection_Invalid { return }
     socks := sw.NetworkingSockets_SteamAPI()
     flags := sw.nSteamNetworkingSend_Reliable if reliable else
              (sw.nSteamNetworkingSend_Unreliable | sw.nSteamNetworkingSend_NoNagle)
     sw.NetworkingSockets_SendMessageToConnection(socks, p.conn,
         raw_data(data), u32(len(data)), flags, nil)
+
+    } else {
+    }
 }
 
 @(private)
@@ -627,3 +679,5 @@ _handle_host :: proc(s: ^Session, p: ^Peer, data: []u8) {
     case .HostSnapshot, .RaidResult, .RosterName, .RosterCharData, .RosterLeft, .SlotAssign, .EntitySync:
     }
 }
+
+_ :: sw

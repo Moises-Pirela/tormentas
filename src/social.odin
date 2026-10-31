@@ -2,12 +2,11 @@ package main
 
 import rl   "vendor:raylib"
 import p2p  "p2p"
-import sw   "../steamworks"
 import clay "../clay"
 import      "core:fmt"
 
 @(private="file")
-g_invite_sent_id: sw.CSteamID
+g_invite_sent_id: u64
 @(private="file")
 g_invite_timer: f32
 
@@ -105,7 +104,7 @@ draw_social_panel :: proc() {
         case hosting:
             ui_label("SocActionBtn", "Waiting for friend...", uis(11), COL_MUTED)
         case offline:
-            if ui_button("SocActionBtn", "Open to Friends", btn_w, btn_h, .Primary) {
+            if STEAM_ENABLED && ui_button("SocActionBtn", "Open to Friends", btn_w, btn_h, .Primary) {
                 copy(g_session.local_name[:], g_player_name[:])
                 g_is_host = true
                 p2p.session_host(&g_session)

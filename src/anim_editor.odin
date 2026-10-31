@@ -2,7 +2,6 @@ package main
 
 import "core:fmt"
 import "core:path/filepath"
-import "core:os"
 import "core:strconv"
 import "core:strings"
 import rl "vendor:raylib"
@@ -404,7 +403,7 @@ anim_editor_save :: proc() {
     path_buf: [256]u8
     pn := len(fmt.bprintf(path_buf[:], "data/sprites/entities/%s.json", stem))
 
-    if os.write_entire_file(string(path_buf[:pn]), data) {
+    if write_game_file(string(path_buf[:pn]), data) {
         anim_def_cache_evict(stem)
         ed.dirty = false
         anim_editor_toast("Saved!")

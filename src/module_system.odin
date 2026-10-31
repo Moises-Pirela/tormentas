@@ -1,7 +1,6 @@
 package main
 
 import rl   "vendor:raylib"
-import      "core:os"
 import      "core:strings"
 import json "core:encoding/json"
 import      "core:fmt"
@@ -28,7 +27,7 @@ module_registry_init :: proc() {
     g_modules      = make([dynamic]ModuleDef)
     g_module_index = make(map[string]int)
 
-    data, ok := os.read_entire_file(MODULE_DIR + "modules.json")
+    data, ok := read_game_file(MODULE_DIR + "modules.json")
     if !ok { return }
     defer delete(data)
 

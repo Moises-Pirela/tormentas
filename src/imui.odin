@@ -1,6 +1,6 @@
 package main
 
-import cwrl "cw:ui/raylib"
+import cwrl "../ui/raylib"
 import mu   "vendor:microui"
 
 @(private = "file") g_imui_ctx:     ^mu.Context

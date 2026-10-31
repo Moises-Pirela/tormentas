@@ -3,7 +3,6 @@ package main
 import rl      "vendor:raylib"
 import        "core:fmt"
 import        "core:math"
-import        "core:os"
 import        "core:strings"
 import json   "core:encoding/json"
 
@@ -531,7 +530,7 @@ _resolve_stream_path :: proc(stem: string) -> (cstring, bool) {
 
 @(private = "file")
 _audio_load_manifest :: proc() {
-    data, ok := os.read_entire_file(AUDIO_MANIFEST_PATH)
+    data, ok := read_game_file(AUDIO_MANIFEST_PATH)
     if !ok { return }
     defer delete(data)
 

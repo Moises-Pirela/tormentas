@@ -2,7 +2,6 @@ package main
 
 import "core:encoding/json"
 import "core:fmt"
-import "core:os"
 import "core:strings"
 
 TransformDef :: struct {
@@ -295,7 +294,7 @@ EntityDef :: struct {
 }
 
 load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs: []EntityDef, ok: bool) {
-    data, file_ok := os.read_entire_file(path)
+    data, file_ok := read_game_file(path)
     if !file_ok {
         fmt.eprintln("[entity_config] Cannot read:", path)
         return nil, false

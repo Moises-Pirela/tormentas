@@ -197,7 +197,7 @@ g_active_slot: int = -1
 g_char_save:   CharSaveFile
 
 chars_load_all :: proc() {
-    raw, ok := os.read_entire_file(CHAR_SAVE_PATH)
+    raw, ok := read_game_file(CHAR_SAVE_PATH)
     if ok {
         defer delete(raw)
         if len(raw) >= size_of(CharSaveFile) {
@@ -232,7 +232,7 @@ chars_load_all :: proc() {
     g_char_save.magic   = CHAR_SAVE_MAGIC
     g_char_save.version = CHAR_SAVE_VER
 
-    legacy, lok := os.read_entire_file(SAVE_PATH)
+    legacy, lok := read_game_file(SAVE_PATH)
     if lok {
         defer delete(legacy)
         if len(legacy) >= size_of(PlayerSaveFile) {
@@ -264,7 +264,7 @@ chars_load_all :: proc() {
 chars_save_all :: proc() {
     os.make_directory("save")
     data := (^[size_of(CharSaveFile)]u8)(&g_char_save)^
-    os.write_entire_file(CHAR_SAVE_PATH, data[:])
+    write_game_file(CHAR_SAVE_PATH, data[:])
 }
 
 char_slot_create :: proc(idx: int, name: []u8, save_to_disk: bool = true) {

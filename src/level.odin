@@ -359,14 +359,14 @@ level_save :: proc(n: int) {
         }
     }
 
-    os.write_entire_file(level_path(n), buf[:])
+    write_game_file(level_path(n), buf[:])
 }
 
 level_load :: proc(n: int) {
     g_level_data.lighting = LIGHTING_CONFIG_DEFAULT
     defer lighting_config_apply(g_level_data.lighting)
 
-    raw, ok := os.read_entire_file(level_path(n), context.temp_allocator)
+    raw, ok := read_game_file(level_path(n), context.temp_allocator)
     if !ok || len(raw) < 10 {
         tilemap_fill_default()
         clear(&g_level_data.npcs)

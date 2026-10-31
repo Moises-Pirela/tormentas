@@ -1,6 +1,5 @@
 package main
 
-import "core:os"
 import "core:strings"
 import "core:fmt"
 
@@ -288,7 +287,7 @@ LOC_KEY_COUNT :: int(LocKey._LOC_COUNT)
 g_loc: [LANG_COUNT][LOC_KEY_COUNT]cstring
 
 loc_init :: proc() {
-    data, ok := os.read_entire_file("data/loc.csv")
+    data, ok := read_game_file("data/loc.csv")
     if !ok { return }
     defer delete(data)
 

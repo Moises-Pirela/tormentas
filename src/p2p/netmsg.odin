@@ -95,7 +95,10 @@ _handle_host_snapshot :: proc(s: ^Session, data: []u8) {
     ecount: u32
     mem.copy(&ecount, &data[cur], 4); cur += 4
 
-    n := min(int(ecount), MAX_SNAPSHOT_ENTITIES)
+    if ecount > MAX_SNAPSHOT_ENTITIES { return }
+    n := int(ecount)
+    expected := 8 + n * SYNC_ENTITY_SIZE + MAX_PLAYERS * PLAYER_ABILITY_STATE_SIZE
+    if len(data) < expected { return }
     clear(&s.snapshot_entities)
     for _ in 0..<n {
         if cur + SYNC_ENTITY_SIZE > len(data) { break }

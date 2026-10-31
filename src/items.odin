@@ -2,7 +2,6 @@ package main
 
 import "core:math"
 import "core:math/rand"
-import "core:os"
 import "core:strconv"
 import "core:fmt"
 
@@ -318,7 +317,7 @@ g_loot_table:      [dynamic]LootDef
 g_loot_file_data:  []u8
 
 loot_table_load :: proc(path: string) -> bool {
-    data, ok := os.read_entire_file(path)
+    data, ok := read_game_file(path)
     if !ok {
         fmt.eprintln("loot_table_load: could not read", path)
         return false

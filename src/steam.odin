@@ -1,9 +1,15 @@
 package main
 
-import sw  "../steamworks"
+STEAM_ENABLED :: #config(STEAM_ENABLED, false)
+
+import sw "steam:steamworks"
 import p2p "p2p"
 import "core:fmt"
 import "core:strconv"
+
+
+when STEAM_ENABLED {
+
 
 g_steam_ok:           bool
 g_steam_pipe:         sw.HSteamPipe
@@ -154,3 +160,30 @@ steam_lobby_get_host_id :: proc(lobby_id: sw.CSteamID) -> sw.CSteamID {
     if !ok { return 0 }
     return sw.CSteamID(val)
 }
+
+} else {
+
+g_steam_ok: bool
+g_steam_lobby_id: u64
+g_pending_join_lobby: u64
+g_invite_pending: bool
+g_invite_host_id: u64
+g_invite_host_name: [64]u8
+g_invite_name_len: int
+SteamFriend :: struct { steam_id: u64, name: string, in_game: bool }
+steam_init :: proc() -> bool { return false }
+steam_shutdown :: proc() {}
+steam_run_callbacks :: proc() {}
+steam_get_local_id :: proc() -> u64 { return 0 }
+steam_friend_name :: proc(id: u64) -> string { return "" }
+steam_get_friends :: proc(allocator := context.temp_allocator) -> []SteamFriend { return nil }
+steam_lobby_create :: proc() {}
+steam_lobby_invite :: proc(friend_id: u64) {}
+steam_lobby_leave :: proc() {}
+steam_lobby_get_host_id :: proc(lobby_id: u64) -> u64 { return 0 }
+}
+
+_ :: sw
+_ :: p2p
+_ :: fmt
+_ :: strconv

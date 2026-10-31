@@ -1,7 +1,7 @@
 package main
 
 import ecs  "cw:clockwork"
-import cwui "cw:ui/microui"
+import cwui "../ui/microui"
 import "core:fmt"
 import "core:strings"
 import mu "vendor:microui"

@@ -10,3 +10,6 @@ save/
 *.dylib
 /build
 *.pdb
+/.local/
+/steamworks/
+/steam_api*

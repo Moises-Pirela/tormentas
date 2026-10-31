@@ -1,7 +1,7 @@
 package main
 
 import ecs  "cw:clockwork"
-import cwui "cw:ui/microui"
+import cwui "../ui/microui"
 import p2p  "p2p"
 import mu   "vendor:microui"
 import rl   "vendor:raylib"

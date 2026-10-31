@@ -1,0 +1,7 @@
+{
+  "odin_release": "dev-2026-10",
+  "odin_revision": "84bc3fc",
+  "odin_download": "https://github.com/odin-lang/Odin/releases/tag/dev-2026-10",
+  "platform": "windows_amd64",
+  "linker": "lld"
+}

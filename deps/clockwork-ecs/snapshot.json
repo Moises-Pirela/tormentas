@@ -1,0 +1,31 @@
+{
+  "source": "git@gitlab.com:override-systems-group/override.git",
+  "base_commit": "02488ae2b94cdc9ef4edaf56a749d889d8221c23",
+  "source_directory": "ECS/clockwork",
+  "includes_local_changes": true,
+  "license": "MIT; included with the owner's explicit authorization",
+  "sha256": {
+    "clockwork.odin": "cc6cbdd07278d55e1eb34b2bf76061b363e92ac1e7c178db8ed86f295a1dc3b7",
+    "commands.odin": "725d97eeaa34568a7adaba219613d248fa000bc0879573b19220178486afc35a",
+    "console.odin": "979ba20c15007207cfdfde47704d542066c9f888924d6b0dfb39a128c13e6f6c",
+    "entity.odin": "5eae2d2eb46f531536510dbade18ebb9f60bc53668b58b4cc039edba279b511a",
+    "inbox.odin": "e6a3cee718234296a62d18de214a9e447a34dddcbb4efd0eab62139c9d2949ab",
+    "inspector.odin": "ac89b171b739ad314584becafdcbf50cdb5ac908135e334088d955f03a540a19",
+    "interp.odin": "95d25d5d534162d3cbea15acab23074cbd237216d9733aa6035eb5f39143f220",
+    "pool.odin": "d6d8b8e65146d78c90af6eb3ac17c787b8888ba472d02e8dd4fc78f09af7cb92",
+    "pose.odin": "2c5b4db9def5f3f295b06f546edae2760621dc18b12114a395ead580577cfbb7",
+    "predict.odin": "29eb806aa1b9c6305dfdf63f2cc4b7c908d14792d8d453d4bc4f94d414c79a66",
+    "query.odin": "ade10bc7134d74176fb6c0544abe33c2672aec64f1cee1753d1f0b7cf75d5a7a",
+    "reflect.odin": "409e81552210f68ff7fb68c40a124f5c0fe6bc0009a00d3fed00c741becdcd8c",
+    "registry.odin": "fb5215b05033d80bf63f4156e28a0631d189fd4668a2448db77e931d46ce5ee2",
+    "sim.odin": "7fb96c265186cd6984278e6202a5b8e0d9b34c87eedc4662783549b379114121",
+    "tick.odin": "089eb4de255b39a8fd41f3ecfaee85c5fb57fe3f506dd9d891e80da74a1040e4",
+    "transport.odin": "179664a4720676cc5dd9b45df425c1e94bc14c9a093f811466134e20724e9704",
+    "world.odin": "d766a99da67b0188a854ee4765eea23f1769ddae24c00b1820d2145543ee9721",
+    "world_editor_test.odin": "b8b73b74b0f657e2fd3f331bbf04f80e0f8453ac87dfd3f7444ec5f4d32e0303"
+  },
+  "local_patches": [
+    "registry.odin: explicitly mark reflect import used for Odin -vet compatibility",
+    "Normalize source line endings to LF; .gitattributes preserves checksum reproducibility"
+  ]
+}

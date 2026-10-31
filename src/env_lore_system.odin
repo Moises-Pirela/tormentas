@@ -1,8 +1,6 @@
 package main
 
 import "core:encoding/json"
-import "core:os"
-
 MAX_LORE_PAGES    :: 128
 MAX_RECORDINGS    :: 64
 LORE_BODY_LEN     :: 1024
@@ -51,7 +49,7 @@ lore_db_load :: proc() {
 
 @(private = "file")
 lore_load_pages :: proc(path: string) {
-    data, ok := os.read_entire_file(path)
+    data, ok := read_game_file(path)
     if !ok { return }
     defer delete(data)
 
@@ -87,7 +85,7 @@ lore_load_pages :: proc(path: string) {
 
 @(private = "file")
 lore_load_recordings :: proc(path: string) {
-    data, ok := os.read_entire_file(path)
+    data, ok := read_game_file(path)
     if !ok { return }
     defer delete(data)
 

@@ -101,12 +101,12 @@ ed_meta_save :: proc() {
     for i in 0..<ED_MAX_LEVELS+1 {
         copy(raw[i*ED_NAME_LEN:(i+1)*ED_NAME_LEN], g_ed_level_names[i][:])
     }
-    os.write_entire_file(META_PATH, raw[:])
+    write_game_file(META_PATH, raw[:])
 }
 
 @(private = "file")
 ed_meta_load :: proc() {
-    data, ok := os.read_entire_file(META_PATH, context.temp_allocator)
+    data, ok := read_game_file(META_PATH, context.temp_allocator)
     if !ok || len(data) < (ED_MAX_LEVELS+1) * ED_NAME_LEN { return }
     for i in 0..<ED_MAX_LEVELS+1 {
         copy(g_ed_level_names[i][:], data[i*ED_NAME_LEN:(i+1)*ED_NAME_LEN])
