@@ -16,3 +16,4 @@ save/
 *.a
 *.o
 *.dSYM/
+.DS_Store
