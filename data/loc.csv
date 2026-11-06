@@ -51,6 +51,7 @@ SETTINGS_WINDOW_MODE,WINDOW MODE,MODO PANTALLA,MODO DE JANELA
 SETTINGS_LANGUAGE,LANGUAGE,IDIOMA,IDIOMA
 SETTINGS_BORDERLESS,Borderless,Sin bordes,Sem borda
 SETTINGS_WINDOWED,Windowed,Ventana,Janela
+SETTINGS_FULLSCREEN,Fullscreen,Pantalla completa,Tela cheia
 SETTINGS_VOLUME,VOLUME,VOLUMEN,VOLUME
 SETTINGS_SFX,SFX,EFECTOS,EFEITOS
 SETTINGS_MUSIC,MUSIC,MÚSICA,MÚSICA
@@ -113,10 +114,10 @@ MUT_CRAFT_HINT,CLICK TO CRAFT,CLIC PARA CREAR,CLIQUE PARA CRIAR
 MUT_FOOTER,[ESC] Close   |   Scroll to browse,[ESC] Cerrar   |   Desplazar,[ESC] Fechar   |   Role para ver
 MUT_RESET,RESET ALL  [%d serums],REINICIAR  [%d sueros],REDEFINIR  [%d soros]
 # ── Hub ───────────────────────────────────────────────────────────────────────
-HUB_INTERACT,[E] Select Level,[E] Seleccionar Nivel,[E] Selecionar Nível
+HUB_INTERACT,[E] Select Dungeon,[E] Seleccionar Mazmorra,[E] Selecionar Masmorra
 HUB_LABEL,H U B,H U B,H U B
 HUB_STASH,Stash:  %d Gold   %d Serums,Reserva:  %d Oro   %d Sueros,Baú:  %d Ouro   %d Soros
-HUB_LEVEL_SELECT,S E L E C T   L E V E L,S E L E C C I O N A R,S E L E C I O N A R
+HUB_LEVEL_SELECT,S E L E C T   D U N G E O N,S E L E C C I O N A R,S E L E C I O N A R
 HUB_LEVEL_N,LEVEL %d,NIVEL %d,NÍVEL %d
 HUB_NO_LEVELS,No raid levels found.,No hay niveles disponibles.,Nenhum nivel disponivel.
 HUB_ESC_CANCEL,ESC — cancel,ESC — cancelar,ESC — cancelar
@@ -130,7 +131,7 @@ EXTRACT_SERUMS,Serums found,Sueros encontrados,Soros encontrados
 EXTRACT_STASH_TOTAL,Stash total,Total en reserva,Total no baú
 # ── Death Screen ──────────────────────────────────────────────────────────────
 DEATH_TITLE,Y O U   D I E D,H A S   M U E R T O,V O C Ê   M O R R E U
-DEATH_MSG,Everything you carried was lost to the wastes.,Todo lo que llevabas fue perdido.,Tudo que você carregava foi perdido.
+DEATH_MSG,You keep everything you carried.,Conservas todo lo que llevabas.,Você mantém tudo o que carregava.
 DEATH_STASH,Stash preserved,Reserva conservada,Baú preservado
 # ── Shop ──────────────────────────────────────────────────────────────────────
 SHOP_INTERACT,[E] Shop,[E] Tienda,[E] Loja

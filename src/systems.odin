@@ -17,7 +17,7 @@ collect_local_input :: proc() -> p2p.InputFrame {
     f: p2p.InputFrame
     f.peer = 0
 
-    if g_console_open { return f }
+    if devui_wants_text() { return f }
 
     screen_dir: [2]f32
     if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_up))    || rl.IsKeyDown(.UP)    { screen_dir[1] -= 1 }
@@ -34,13 +34,16 @@ collect_local_input :: proc() -> p2p.InputFrame {
     mp    := screen_to_world_cartesian(rl.GetMousePosition())
     f.aim  = { mp.x, mp.y }
 
-    if rl.IsMouseButtonDown(.LEFT) && !imui_wants_mouse() { f.actions += {.Fire}     }
+    if rl.IsMouseButtonDown(.LEFT) && !devui_wants_mouse() { f.actions += {.Fire}     }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill2))  { f.actions += {.Skill2}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill3))  { f.actions += {.Skill3}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill4))  { f.actions += {.Skill4}   }
     if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.interact)){ f.actions += {.Interact} }
+    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
+    if rl.IsKeyPressed(.ONE)                                     { f.actions += {.Flask1}   }
+    if rl.IsKeyPressed(.TWO)                                     { f.actions += {.Flask2}   }
     return f
 }
 
@@ -49,13 +52,15 @@ apply_input_frame :: proc(w: ^World, entity_id: int, f: p2p.InputFrame) {
         move             = f.move,
         mouse_world      = { f.aim[0], f.aim[1], 0 },
         fire_pressed     = .Fire     in f.actions,
-        reload_pressed   = false,
+        reload_pressed   = .Reload   in f.actions,
         dodge_pressed    = .Dodge    in f.actions,
         skill1_pressed   = .Skill1   in f.actions,
         skill2_pressed   = .Skill2   in f.actions,
         skill3_pressed   = .Skill3   in f.actions,
         skill4_pressed   = .Skill4   in f.actions,
         interact_pressed = .Interact in f.actions,
+        flask1_pressed   = .Flask1   in f.actions,
+        flask2_pressed   = .Flask2   in f.actions,
     })
 }
 

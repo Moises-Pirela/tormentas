@@ -35,6 +35,7 @@ trap_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     stack_behavior = .Refresh,
                     duration       = trap.status_dur,
                     strength       = trap.status_str,
+                    source_id      = trap.owner_id,
                 })
             }
             triggered = true

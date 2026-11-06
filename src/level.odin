@@ -2,7 +2,6 @@ package main
 
 import "core:os"
 import "core:fmt"
-import "core:math"
 import p2p "p2p"
 
 LEVEL_DIR :: "data/levels"
@@ -105,9 +104,8 @@ g_level_data: LevelData
 
 g_pending_level_switch: u16
 
-RAID_TIME      :: f32(30 * 60)
-EXTRACT_RADIUS :: f32(3 * TILE_SIZE)
-EXTRACT_TIME   :: f32(30.0)
+RAID_TIME           :: f32(30 * 60)
+DUNGEON_CLOCK_FLOOR :: f32(1)
 
 g_raid_timer: f32
 
@@ -363,6 +361,9 @@ level_save :: proc(n: int) {
 }
 
 level_load :: proc(n: int) {
+    ed_entity_deselect()
+    ed_insp_deselect()
+    ed_stroke_end()
     g_level_data.lighting = LIGHTING_CONFIG_DEFAULT
     defer lighting_config_apply(g_level_data.lighting)
 
@@ -1206,38 +1207,6 @@ hub_apply_quest_npcs :: proc(w: ^World) {
     }
 }
 
-spawn_extraction_at_tile :: proc(w: ^World, tx, ty: int) {
-    ext_id := world_create_entity(w)
-    comp_set(w, ext_id, .Transform, TransformComp{
-        position = { f32(tx * TILE_SIZE + TILE_SIZE/2), f32(ty * TILE_SIZE + TILE_SIZE/2), 0 },
-    })
-    comp_set(w, ext_id, .Extraction, ExtractionComp{
-        interact_radius = EXTRACT_RADIUS,
-        activate_time   = EXTRACT_TIME,
-    })
-}
-
-spawn_extraction_point :: proc(w: ^World) {
-    spawn_extraction_at_tile(w, 12, 7)
-}
-
-level_spawn_extraction_zones :: proc(w: ^World) -> (found_zone: bool) {
-    exit_ids := world_query(w, query_mask(.LevelExit, .Transform))
-    defer delete(exit_ids)
-    for id in exit_ids {
-        le := comp_get(w, id, .LevelExit, LevelExitComp)
-        if le.target_level != 0 { continue }
-        p := comp_get(w, id, .Transform, TransformComp).position
-        tx, ty := world_to_tile(p[0], p[1])
-        spawn_extraction_at_tile(w, tx, ty)
-        found_zone = true
-    }
-    if !found_zone {
-        spawn_extraction_point(w)
-    }
-    return
-}
-
 level_do_switch :: proc(w: ^World, n: int) {
     fire_system_reset()
     level_clear(w)
@@ -1246,115 +1215,21 @@ level_do_switch :: proc(w: ^World, n: int) {
     level_apply(w)
     door_init_blockers(w)
 
-    level_spawn_extraction_zones(w)
-
     spawn_players(w)
 }
 
-extraction_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
-    if event != .Update       { return }
+dungeon_clock_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
+    if event != .Update             { return }
     if g_playing_state != .Gameplay { return }
-
-    if g_raid_timer > 0 {
-        g_raid_timer -= dt
-        if g_raid_timer <= 0 {
-            g_raid_timer = 0
-            if world_is_valid(w, w.player_id) {
-                on_player_death(w)
-            }
-            return
-        }
+    if g_raid_timer > DUNGEON_CLOCK_FLOOR {
+        g_raid_timer = max(g_raid_timer - dt, DUNGEON_CLOCK_FLOOR)
     }
-
-    ids := world_query(w, query_mask(.Extraction, .Transform))
-    defer delete(ids)
-
-    for eid in ids {
-        ext := comp_get(w, eid, .Extraction, ExtractionComp)
-        if ext.activated { continue }
-        et := comp_get(w, eid, .Transform, TransformComp).position
-
-        in_zone := false
-        for slot in 0..<MAX_PLAYERS {
-            pid := w.player_ids[slot]
-            if !world_is_valid(w, pid)                  { continue }
-            if !world_has_component(w, pid, .Transform) { continue }
-            pt := comp_get(w, pid, .Transform, TransformComp).position
-            dx := pt[0] - et[0]
-            dy := pt[1] - et[1]
-            if math.sqrt(dx*dx + dy*dy) <= ext.interact_radius { in_zone = true; break }
-        }
-
-        if in_zone {
-            ext.timer += dt
-            if ext.timer >= ext.activate_time {
-                ext.activated = true
-                on_player_extract(w)
-            }
-        } else {
-            ext.timer = 0
-        }
-    }
-}
-
-on_player_extract :: proc(w: ^World) {
-    for slot in 0..<MAX_PLAYERS {
-        pid := w.player_ids[slot]
-        if !world_is_valid(w, pid) { continue }
-
-        extract_val := compute_extract_value(w, pid)
-
-        gold := 0
-        if world_has_component(w, pid, .Wallet) {
-            wallet := comp_get(w, pid, .Wallet, WalletComp)
-            gold    = wallet.gold
-            wallet.gold = 0
-        }
-        serums := 0
-        if world_has_component(w, pid, .MutationContainer) {
-            serums = comp_get(w, pid, .MutationContainer, MutationContainerComp).serums
-        }
-
-        if slot == w.local_player_slot {
-            _apply_raid_extract_local(w, pid, gold, serums, extract_val)
-        } else if peer := p2p.session_peer_for_slot(&g_session, slot); peer != nil {
-            p2p.session_send_raid_result_to_peer(peer, .Extracted, i32(gold), i32(serums), i32(extract_val),
-                g_raid_enemies_killed, g_raid_elites_killed, g_raid_bosses_killed)
-        }
-    }
-
-    quest_check_all(w)
-    set_playing_state(.ExtractScreen)
-}
-
-@(private = "file")
-_apply_raid_extract_local :: proc(w: ^World, pid: int, gold, serums, extract_val: int) {
-    raid_result_gold = gold
-    local_stash().gold += gold
-
-    serums_earned := serums - g_raid_serums_start
-    if serums_earned < 0 { serums_earned = 0 }
-    raid_result_serums   = serums_earned
-    local_stash().serums = serums
-
-    g_lifetime_stats.successful_raids += 1
-    if extract_val > int(g_lifetime_stats.max_extract_gold) {
-        g_lifetime_stats.max_extract_gold = i32(extract_val)
-    }
-    if g_current_raid_level >= 2 {
-        g_lifetime_stats.deep_extracts += 1
-    }
-
-    if world_is_valid(w, pid) { save_player(w, pid) }
 }
 
 on_player_death :: proc(w: ^World) {
     for slot in 0..<MAX_PLAYERS {
         pid := w.player_ids[slot]
         if !world_is_valid(w, pid) { continue }
-
-        strip_player_carried(w, pid)
-        ensure_base_flasks(w, pid)
 
         if slot == w.local_player_slot {
             _apply_raid_death_local(w, pid)
@@ -1369,6 +1244,7 @@ on_player_death :: proc(w: ^World) {
         }
     }
 
+    ui_close_all()
     set_playing_state(.DeathScreen)
 }
 
@@ -1393,46 +1269,12 @@ netcode_apply_raid_result :: proc(w: ^World) {
 
     switch g_session.raid_result_outcome {
     case .Extracted:
-        if world_has_component(w, pid, .Wallet) {
-            comp_get(w, pid, .Wallet, WalletComp).gold = 0
-        }
-        _apply_raid_extract_local(w, pid,
-            int(g_session.raid_result_gold), int(g_session.raid_result_serums),
-            int(g_session.raid_result_extract_value))
-        set_playing_state(.ExtractScreen)
 
     case .Died:
-        strip_player_carried(w, pid)
+        ui_close_all()
         _apply_raid_death_local(w, pid)
         set_playing_state(.DeathScreen)
     }
 
     quest_check_all(w)
-}
-
-level_exit_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
-    if event != .LateUpdate        { return }
-    if g_pending_level_switch != 0 { return }
-
-    for slot in 0..<MAX_PLAYERS {
-        pid := w.player_ids[slot]
-        if !world_is_valid(w, pid) { continue }
-        if !world_has_component(w, pid, .Transform) { continue }
-
-        pos      := comp_get(w, pid, .Transform, TransformComp).position
-        xPos, yPos := world_to_tile(pos[0], pos[1])
-
-        exit_ids := world_query(w, query_mask(.LevelExit, .Transform))
-        defer delete(exit_ids)
-        for id in exit_ids {
-            le := comp_get(w, id, .LevelExit, LevelExitComp)
-            if le.target_level == 0 { continue }
-            ep := comp_get(w, id, .Transform, TransformComp).position
-            etx, ety := world_to_tile(ep[0], ep[1])
-            if etx == xPos && ety == yPos {
-                on_player_extract(w)
-                return
-            }
-        }
-    }
 }

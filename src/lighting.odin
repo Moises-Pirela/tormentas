@@ -2,8 +2,8 @@ package main
 
 import rl "vendor:raylib"
 import "core:math"
-import "core:fmt"
 import "core:c"
+import im "../deps/imgui/imgui"
 
 g_light_widget_open: bool
 
@@ -242,11 +242,6 @@ init_cloud_shader :: proc() {
 shutdown_cloud_shader :: proc() {
     rl.UnloadShader(g_cloud_shader)
 }
-
-@(private = "file")
-g_light_active_slider: int = -1
-@(private = "file")
-g_light_widget_scroll: f32 = 0
 
 @(private = "file")
 world_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
@@ -929,165 +924,68 @@ draw_fog_and_lights :: proc(w: ^World) {
     }
 }
 
-@(private = "file")
-lighting_slider :: proc(id: int, label: cstring, value: ^f32, min_v, max_v: f32, rect: rl.Rectangle) {
-    mp := rl.GetMousePosition()
-    over := rl.CheckCollisionPointRec(mp, rect)
-
-    if rl.IsMouseButtonPressed(.LEFT) && over {
-        g_light_active_slider = id
-    }
-    if !rl.IsMouseButtonDown(.LEFT) && g_light_active_slider == id {
-        g_light_active_slider = -1
-    }
-    if g_light_active_slider == id {
-        t := clamp((mp.x - rect.x) / rect.width, 0, 1)
-        value^ = math.lerp(min_v, max_v, t)
-    }
-
-    bg := rl.Color{ 18, 22, 26, 220 }
-    fill := rl.Color{ 130, 165, 96, 220 }
-    brd := rl.Color{ 88, 98, 78, 240 }
-    if over || g_light_active_slider == id {
-        brd = rl.Color{ 176, 190, 128, 255 }
-    }
-
-    rl.DrawRectangleRounded(rect, 0.18, 6, bg)
-    t := clamp((value^ - min_v) / (max_v - min_v), 0, 1)
-    fill_rect := rect
-    fill_rect.width = max(rect.width * t, uis(8))
-    rl.DrawRectangleRounded(fill_rect, 0.18, 6, fill)
-    rl.DrawRectangleLinesEx(rect, uis(1), brd)
-
-    fs := uis(9)
-    rl.DrawTextEx(g_font, label, { rect.x, rect.y - uis(11) }, fs, 0.5, rl.Color{ 220, 228, 210, 255 })
-
-    val_buf: [32]u8
-    val_s := fmt.bprintf(val_buf[:31], "%.2f", value^)
-    val_buf[len(val_s)] = 0
-    ts := rl.MeasureTextEx(g_font, cstring(&val_buf[0]), fs, 0.5)
-    rl.DrawTextEx(g_font, cstring(&val_buf[0]), { rect.x + rect.width - ts.x, rect.y - uis(11) }, fs, 0.5, rl.Color{ 180, 190, 170, 255 })
-}
-
 update_lighting_widget :: proc() {
-    if rl.IsKeyPressed(.F2) {
+    if !devui_wants_text() && rl.IsKeyPressed(.F2) {
         g_light_widget_open = !g_light_widget_open
     }
 }
 
-draw_lighting_widget :: proc() {
+@(private = "file")
+_light_slider :: proc(label: cstring, v: ^f32, lo, hi: f32) {
+    fmt_str: cstring = "%.3f" if hi - lo < 4 else "%.1f"
+    if hi - lo < 0.05 { fmt_str = "%.4f" }
+    im.SliderFloat(label, v, lo, hi, fmt_str)
+}
+
+lighting_ui :: proc() {
     if !g_light_widget_open { return }
+    im.SetNextWindowSize({ 360, 640 }, .FirstUseEver)
+    defer im.End()
+    if !im.Begin("Lighting", &g_light_widget_open) { return }
+    im.PushItemWidth(-130)
+    defer im.PopItemWidth()
 
-    px  := uis(18)
-    py  := uis(18)
-    pw  := uis(320)
-    sh  := f32(rl.GetScreenHeight())
-    ph  := sh - py * 2
-    panel := rl.Rectangle{ px, py, pw, ph }
-
-    mp := rl.GetMousePosition()
-    if rl.CheckCollisionPointRec(mp, panel) {
-        wheel := rl.GetMouseWheelMove()
-        g_light_widget_scroll -= wheel * uis(38)
+    if im.CollapsingHeader("Sun and clouds", { .DefaultOpen }) {
+        _light_slider("Sun dir X",      &g_light_sun_dir_x,       -1.2,  1.2)
+        _light_slider("Sun dir Y",      &g_light_sun_dir_y,       -1.2,  1.2)
+        _light_slider("Sun elevation",  &g_light_sun_elevation,    10,   80)
+        _light_slider("Cloud scale",    &g_light_cloud_freq,       0.001, 0.008)
+        _light_slider("Cloud detail",   &g_light_cloud_freq_fine,  0.002, 0.02)
+        _light_slider("Cloud cell",     &g_light_cloud_cell,       12,    72)
+        _light_slider("Cloud drift X",  &g_light_cloud_drift_x,   -32,    32)
+        _light_slider("Cloud drift Y",  &g_light_cloud_drift_y,   -32,    32)
+        _light_slider("Cloud low",      &g_light_cloud_thresh_lo,  0.10,  0.85)
+        _light_slider("Cloud high",     &g_light_cloud_thresh_hi,  0.15,  0.95)
+        _light_slider("Cloud contrast", &g_light_cloud_contrast,   0.4,   2.6)
+        _light_slider("Cloud min alpha",&g_light_cloud_alpha_min,  0,     90)
+        _light_slider("Cloud max alpha",&g_light_cloud_alpha_max,  0,     180)
+        tint := [3]f32{ g_light_cloud_tint_r / 255, g_light_cloud_tint_g / 255, g_light_cloud_tint_b / 255 }
+        if im.ColorEdit3("Cloud colour", &tint) {
+            g_light_cloud_tint_r = tint[0] * 255
+            g_light_cloud_tint_g = tint[1] * 255
+            g_light_cloud_tint_b = tint[2] * 255
+        }
     }
-
-    gap := uis(27)
-    content_h := gap * 31 + uis(60)
-    view_h    := ph - uis(56)
-    max_scroll := max(content_h - view_h, 0)
-    g_light_widget_scroll = clamp(g_light_widget_scroll, 0, max_scroll)
-
-    rl.DrawRectangleRounded(panel, 0.04, 8, rl.Color{ 12, 16, 18, 230 })
-    rl.DrawRectangleLinesEx(panel, uis(1.25), rl.Color{ 88, 98, 78, 240 })
-
-    title_fs := uis(12)
-    body_fs  := uis(8.5)
-    rl.DrawTextEx(g_font, "LIGHTING", { px + uis(14), py + uis(10) }, title_fs, 0.5, rl.Color{ 225, 232, 214, 255 })
-    rl.DrawTextEx(g_font, "F2 to close  |  scroll", { px + pw - uis(140), py + uis(12) }, body_fs, 0.5, rl.Color{ 150, 160, 145, 255 })
-
-    if max_scroll > 0 {
-        track_x := px + pw - uis(7)
-        track_y := py + uis(36)
-        track_h := view_h
-        thumb_frac := view_h / content_h
-        thumb_h := max(track_h * thumb_frac, uis(20))
-        thumb_y := track_y + (track_h - thumb_h) * (g_light_widget_scroll / max_scroll)
-        rl.DrawRectangleRounded({ track_x, track_y, uis(4), track_h }, 0.5, 4, rl.Color{ 30, 34, 38, 160 })
-        rl.DrawRectangleRounded({ track_x, thumb_y, uis(4), thumb_h }, 0.5, 4, rl.Color{ 100, 120, 86, 200 })
+    if im.CollapsingHeader("God rays", { .DefaultOpen }) {
+        _light_slider("Ray spacing",   &g_light_god_ray_spacing,  50,   220)
+        _light_slider("Ray width",     &g_light_god_ray_width,    24,   180)
+        _light_slider("Ray threshold", &g_light_god_ray_thresh,   0.15, 0.92)
+        _light_slider("Ray alpha",     &g_light_god_ray_alpha,    0.0,  2.0)
     }
-
-    clip_y := i32(py + uis(34))
-    clip_h := i32(view_h)
-    rl.BeginScissorMode(i32(px), clip_y, i32(pw), clip_h)
-
-    x   := px + uis(14)
-    w   := pw - uis(28)
-    y   := py + uis(42) - g_light_widget_scroll
-    h   := uis(12)
-    sec_fs := uis(9)
-
-    lighting_slider(0,  "Sun Dir X",      &g_light_sun_dir_x,       -1.2,  1.2,  { x, y + gap *  0, w, h })
-    lighting_slider(1,  "Sun Dir Y",      &g_light_sun_dir_y,       -1.2,  1.2,  { x, y + gap *  1, w, h })
-    lighting_slider(2,  "Cloud Scale",    &g_light_cloud_freq,       0.001, 0.008,{ x, y + gap *  2, w, h })
-    lighting_slider(3,  "Cloud Detail",   &g_light_cloud_freq_fine,  0.002, 0.02, { x, y + gap *  3, w, h })
-    lighting_slider(4,  "Cloud Cell",     &g_light_cloud_cell,       12,    72,   { x, y + gap *  4, w, h })
-    lighting_slider(5,  "Cloud Drift X",  &g_light_cloud_drift_x,   -32,   32,   { x, y + gap *  5, w, h })
-    lighting_slider(6,  "Cloud Drift Y",  &g_light_cloud_drift_y,   -32,   32,   { x, y + gap *  6, w, h })
-    lighting_slider(7,  "Cloud Lo",       &g_light_cloud_thresh_lo,  0.10,  0.85, { x, y + gap *  7, w, h })
-    lighting_slider(8,  "Cloud Hi",       &g_light_cloud_thresh_hi,  0.15,  0.95, { x, y + gap *  8, w, h })
-    lighting_slider(9,  "Cloud Contrast", &g_light_cloud_contrast,   0.4,   2.6,  { x, y + gap *  9, w, h })
-    lighting_slider(10, "Cloud Min A",    &g_light_cloud_alpha_min,  0,     90,   { x, y + gap * 10, w, h })
-    lighting_slider(11, "Cloud Max A",    &g_light_cloud_alpha_max,  0,     180,  { x, y + gap * 11, w, h })
-
-    div_y := y + gap * 12 - uis(6)
-    rl.DrawLineEx({ x, div_y }, { x + w, div_y }, uis(1), rl.Color{ 88, 98, 78, 180 })
-    rl.DrawTextEx(g_font, "GOD RAYS", { x, div_y + uis(3) }, sec_fs, 0.5, rl.Color{ 200, 210, 185, 255 })
-    lighting_slider(12, "Ray Spacing",    &g_light_god_ray_spacing,  50,    220,  { x, y + gap * 13, w, h })
-    lighting_slider(13, "Ray Width",      &g_light_god_ray_width,    24,    180,  { x, y + gap * 14, w, h })
-    lighting_slider(14, "Ray Threshold",  &g_light_god_ray_thresh,   0.15,  0.92, { x, y + gap * 15, w, h })
-    lighting_slider(15, "Ray Alpha",      &g_light_god_ray_alpha,    0.0,   2.0,  { x, y + gap * 16, w, h })
-
-    div_y = y + gap * 17 - uis(6)
-    rl.DrawLineEx({ x, div_y }, { x + w, div_y }, uis(1), rl.Color{ 88, 98, 78, 180 })
-    rl.DrawTextEx(g_font, "FOG", { x, div_y + uis(3) }, sec_fs, 0.5, rl.Color{ 200, 210, 185, 255 })
-    lighting_slider(16, "Fog Density",    &g_fog_density,            0.0,   1.0,  { x, y + gap * 18, w, h })
-    lighting_slider(17, "Fog Scatter",    &g_fog_scatter,            1.0,   2.0,  { x, y + gap * 19, w, h })
-
-    div_y = y + gap * 20 - uis(6)
-    rl.DrawLineEx({ x, div_y }, { x + w, div_y }, uis(1), rl.Color{ 88, 98, 78, 180 })
-    rl.DrawTextEx(g_font, "SUN / SPRITES", { x, div_y + uis(3) }, sec_fs, 0.5, rl.Color{ 200, 210, 185, 255 })
-    lighting_slider(18, "Sun Intensity",  &g_light_sun_intensity,           0.0, 1.5, { x, y + gap * 21, w, h })
-    lighting_slider(19, "Ambient",        &g_light_ambient,                 0.1, 1.2, { x, y + gap * 22, w, h })
-    lighting_slider(20, "Shadow Alpha",   &g_light_shadow_alpha,            0.0, 1.0, { x, y + gap * 23, w, h })
-    lighting_slider(21, "Sprite Min",     &g_light_sprite_min_brightness,   0.1, 1.2, { x, y + gap * 24, w, h })
-    lighting_slider(22, "Sprite Outline", &g_light_sprite_outline,          0.0, 2.5, { x, y + gap * 25, w, h })
-    lighting_slider(23, "Sprite Diffuse", &g_light_sprite_diffuse,          0.0, 1.2, { x, y + gap * 26, w, h })
-    lighting_slider(24, "Sprite Rim",     &g_light_sprite_rim,              0.0, 1.0, { x, y + gap * 27, w, h })
-    lighting_slider(25, "Sun Elev",       &g_light_sun_elevation,            10,  80, { x, y + gap * 28, w, h })
-    lighting_slider(25, "Sprite Shadow",  &g_light_sprite_shadow_response,  0.0, 0.8, { x, y + gap * 28, w, h })
-
-    div_y = y + gap * 29 - uis(6)
-    rl.DrawLineEx({ x, div_y }, { x + w, div_y }, uis(1), rl.Color{ 88, 98, 78, 180 })
-    rl.DrawTextEx(g_font, "CLOUD COLOUR", { x, div_y + uis(3) }, sec_fs, 0.5, rl.Color{ 200, 210, 185, 255 })
-
-    swatch_sz  := uis(22)
-    swatch_x   := x + w - swatch_sz
-    swatch_y   := div_y + uis(1)
-    swatch_col := rl.Color{
-        u8(clamp(g_light_cloud_tint_r, 0, 255)),
-        u8(clamp(g_light_cloud_tint_g, 0, 255)),
-        u8(clamp(g_light_cloud_tint_b, 0, 255)),
-        255,
+    if im.CollapsingHeader("Fog", { .DefaultOpen }) {
+        _light_slider("Fog density", &g_fog_density, 0.0, 1.0)
+        _light_slider("Fog scatter", &g_fog_scatter, 1.0, 2.0)
     }
-    rl.DrawRectangleV({ swatch_x, swatch_y }, { swatch_sz, swatch_sz }, swatch_col)
-    rl.DrawRectangleLinesEx({ swatch_x, swatch_y, swatch_sz, swatch_sz }, uis(1), rl.Color{ 140, 150, 120, 220 })
-
-    col_w := w - swatch_sz - uis(10)
-    lighting_slider(26, "R", &g_light_cloud_tint_r, 0, 255, { x, y + gap * 30, col_w, h })
-    lighting_slider(27, "G", &g_light_cloud_tint_g, 0, 255, { x, y + gap * 31, col_w, h })
-    lighting_slider(28, "B", &g_light_cloud_tint_b, 0, 255, { x, y + gap * 32, col_w, h })
-
-    rl.EndScissorMode()
+    if im.CollapsingHeader("Sun and sprites", { .DefaultOpen }) {
+        _light_slider("Sun intensity",  &g_light_sun_intensity,          0.0, 1.5)
+        _light_slider("Ambient",        &g_light_ambient,                0.1, 1.2)
+        _light_slider("Shadow alpha",   &g_light_shadow_alpha,           0.0, 1.0)
+        _light_slider("Sprite min",     &g_light_sprite_min_brightness,  0.1, 1.2)
+        _light_slider("Sprite outline", &g_light_sprite_outline,         0.0, 2.5)
+        _light_slider("Sprite diffuse", &g_light_sprite_diffuse,         0.0, 1.2)
+        _light_slider("Sprite rim",     &g_light_sprite_rim,             0.0, 1.0)
+        _light_slider("Sprite shadow",  &g_light_sprite_shadow_response, 0.0, 0.8)
+    }
 
     g_light_cloud_thresh_hi = max(g_light_cloud_thresh_hi, g_light_cloud_thresh_lo + 0.01)
     g_light_cloud_freq_fine = max(g_light_cloud_freq_fine, g_light_cloud_freq + 0.0001)

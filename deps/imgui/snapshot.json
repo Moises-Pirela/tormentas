@@ -1,0 +1,39 @@
+{
+  "dear_imgui": {
+    "source": "https://github.com/ocornut/imgui",
+    "tag": "v1.92.8-docking",
+    "tag_object": "572f249ce1975f98ad9f8aabce512ffa12a52d6c",
+    "license": "MIT, LICENSE-dear-imgui.txt"
+  },
+  "odin_imgui": {
+    "source": "https://gitlab.com/L-4/odin-imgui",
+    "commit": "8fa60100505c",
+    "license": "MIT, LICENSE-odin-imgui",
+    "note": "Odin bindings and dear_bindings C wrappers (dcimgui_nodefaultargfunctions*) generated for v1.92.8-docking; imgui_windows_x64.lib is the prebuilt Windows library from the same commit"
+  },
+  "sha256": {
+    "imgui/imconfig.odin": "152840e1d5adbc0e829312dcf7493d580fc6375582a12ba53188bb2ba2a3a5ad",
+    "imgui/imgui.odin": "958291e8e0563253d7b1e3a77e1c00cbe5df1d0eb0f40e3885deba3a545f1488",
+    "imgui/imgui_internal.odin": "69bb0eeac1d40cb70ecd2e22a695b95e5718eaf35c4f852405ea56a69e7fe94c",
+    "imgui/imgui_manual.odin": "7d14d385be4952bc40403aa18f36ab2793a90e7653d31bcca8cb745ecfc6d534",
+    "imgui/imgui_windows_x64.lib": "3a03aff2d7acc4f54c3aa6e3b8569c907c20d4a1085f203953a88e4a10353a92",
+    "imgui/lib_name.odin": "22d03ed87222442365e7003123faf26462a2c9b0cb7874d9a4486244190bd7c6",
+    "src/dcimgui_nodefaultargfunctions.cpp": "e18a375db4136523ddcbabc96d274e22547b33d2c4b0bf91ef6573a51d1540b0",
+    "src/dcimgui_nodefaultargfunctions.h": "a2998116bfbadfdbbb61dea3df9c5798d5cc71a2eb804d89bdf3505198ac2c21",
+    "src/dcimgui_nodefaultargfunctions_internal.cpp": "b9e4f659d155532cbb5507bc50bd73d87e7a750217b718b7b94e584df5dfd6dd",
+    "src/dcimgui_nodefaultargfunctions_internal.h": "d2f3c9957011cbb04317b2e1ac781356313e0a7abb97c4c8195926deaf274dc0",
+    "src/imconfig.h": "1353bfa59da16eec481723fd4e5d910356f0406b79e3c4142e0c9867bafffab5",
+    "src/imgui.cpp": "49cca8475198925b69b128985148f29eb37db689a49c7c6f0dba6d2fac5415bd",
+    "src/imgui.h": "da6d77803fc8963ca6a6826d6d6d08e3be74fdd7f527841b90858e3e545bb478",
+    "src/imgui_demo.cpp": "55f93411ac9f1bdbff5a95cd266b9d1db491dad48d2e7782ec434c3d39331043",
+    "src/imgui_draw.cpp": "6814299d0618749a6fc73b0259a42bd6c2eabf5b55c0bfef293bfdcda68155af",
+    "src/imgui_internal.h": "f72ec91731b9114a6cee203f575582b9859825a4f66836cf32cc7e70488c7aa6",
+    "src/imgui_tables.cpp": "33b5146f5eb362605a166e532b336d1955579743eab719d96241a163a21222eb",
+    "src/imgui_widgets.cpp": "7b46ca08ca95e046aa57a88d2838933843851348a42f3a738d57ebdaa2f5c682",
+    "src/imstb_rectpack.h": "889b396795202d1457560a797a7242e96f6f132d4b88ca2d69be58bf05e1771f",
+    "src/imstb_textedit.h": "a985f5fa0ed97353d493b497961e9eef52082edcd045cf6954b69990ec9d0741",
+    "src/imstb_truetype.h": "c51a0f7e7ea760f2366bd3752635ec58e21fccfec4a832501639990ba6ce0528",
+    "LICENSE-odin-imgui": "d05e005e86f7b7f2ccba2afa7dfa04758f3f9845e7ad22d11395b9aad5735172",
+    "LICENSE-dear-imgui.txt": "173506a2d6f7fb67990d257fb2507f188690eca39060c39469ae7bef43aae2a3"
+  }
+}

@@ -54,6 +54,18 @@ affix_energy_regen_for_rarity :: proc(r: ItemRarity) -> f32 {
 }
 
 @(private = "file")
+affix_regen_for_rarity :: proc(r: ItemRarity) -> f32 {
+    switch r {
+    case .Normal:    return 0.002 + rand.float32() * 0.002
+    case .Rare:      return 0.004 + rand.float32() * 0.002
+    case .Epic:      return 0.006 + rand.float32() * 0.003
+    case .Legendary: return 0.009 + rand.float32() * 0.003
+    case .Unique:    return 0.012 + rand.float32() * 0.003
+    }
+    return 0.002
+}
+
+@(private = "file")
 affix_resist_for_rarity :: proc(r: ItemRarity) -> f32 {
     switch r {
     case .Normal:    return 0.05 + rand.float32() * 0.05
@@ -200,6 +212,8 @@ roll_affixes :: proc(item: ^ItemComp) {
             val = affix_stat_bonus_for_rarity(item.rarity)
         case .BonusEnergyRegen:
             val = affix_energy_regen_for_rarity(item.rarity)
+        case .HealthRegen:
+            val = affix_regen_for_rarity(item.rarity)
         case .ResistPhysical, .ResistNecrotic, .ResistFire, .ResistGalvanic, .ResistPoison:
 
             val = affix_resist_for_rarity(item.rarity)

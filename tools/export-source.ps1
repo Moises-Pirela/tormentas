@@ -11,7 +11,7 @@ foreach ($Dir in 'src', 'data', 'tools', 'clay', 'deps', 'ui', 'docs', '.github'
     $Path = Join-Path $Root $Dir
     if (Test-Path -LiteralPath $Path) { $Files += Get-ChildItem -LiteralPath $Path -Recurse -File }
 }
-foreach ($Name in 'README.md', 'LICENSE', 'TUNING.md', 'ROADMAP.md', '.gitignore', '.gitattributes', 'ols.json', 'toolchain.json', 'build.ps1', 'build.bat', 'run.bat', 'test.ps1', 'test.bat') {
+foreach ($Name in 'README.md', 'LICENSE', 'TUNING.md', 'ROADMAP.md', '.gitignore', '.gitattributes', 'ols.json', 'toolchain.json', 'build.ps1', 'build.bat', 'run.bat', 'test.ps1', 'test.bat', 'build.sh', 'test.sh', 'run.sh') {
     $Files += Get-Item -LiteralPath (Join-Path $Root $Name)
 }
 $Stream = [IO.File]::Open($Zip, [IO.FileMode]::Create)
@@ -21,8 +21,8 @@ try {
         $Relative = $File.FullName.Substring($Root.Length + 1).Replace('\', '/')
         if ($Relative -match '(^|/)(\.git|\.local|__pycache__)(/|$)' -or
             $File.Name -match '^steam_api' -or
-            $File.Extension -in '.exe', '.dll', '.so', '.dylib', '.pdb', '.pyc', '.zip' -or
-            ($File.Extension -eq '.lib' -and $Relative -ne 'clay/windows/clay.lib')) { continue }
+            $File.Extension -in '.exe', '.dll', '.so', '.dylib', '.pdb', '.pyc', '.zip', '.a', '.o' -or
+            ($File.Extension -eq '.lib' -and $Relative -ne 'clay/windows/clay.lib' -and $Relative -ne 'deps/imgui/imgui/imgui_windows_x64.lib')) { continue }
         [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($Archive, $File.FullName, $Relative, [IO.Compression.CompressionLevel]::Optimal)
     }
 } finally {

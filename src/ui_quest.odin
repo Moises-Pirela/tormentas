@@ -60,7 +60,7 @@ draw_quest_board_world :: proc(w: ^World) {
             nfs, 0.5, rl.Color{240, 215, 120, 220})
 
         if dist_sq <= npc.interact_radius * npc.interact_radius {
-            prompt := t(.QUEST_BOARD_INTERACT)
+            prompt := interact_prompt(.QUEST_BOARD_INTERACT)
             pfs    := f32(9)
             psz    := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
             t_now  := f32(rl.GetTime())

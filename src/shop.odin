@@ -211,7 +211,7 @@ draw_shop_world :: proc(w: ^World) {
             nfs, 0.5, rl.Color{ 240, 215, 120, 220 })
 
         if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
-            prompt    := t(.SHOP_INTERACT)
+            prompt    := interact_prompt(.SHOP_INTERACT)
             pfs       := f32(9)
             psz       := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
             t_now     := f32(rl.GetTime())
@@ -236,8 +236,8 @@ draw_shop_hud :: proc(w: ^World) {
     npc_name := loc_lookup(render_config_name_cstr(rc))
 
     wallet_gold := 0
-    if world_is_valid(w, pid) && world_has_component(w, pid, .Wallet) {
-        wallet_gold = comp_get(w, pid, .Wallet, WalletComp).gold
+    if world_is_valid(w, pid) {
+        wallet_gold = local_stash().gold
     }
 
     slot_idx := g_shop_npc_id % MAX_NPC_ENTITIES
@@ -331,14 +331,16 @@ _shop_buy :: proc(w: ^World, stock_i: int) {
     pid := w.player_id
     if !world_is_valid(w, pid) { return }
     if !world_has_component(w, pid, .Inventory) { return }
-    if !world_has_component(w, pid, .Wallet)    { return }
 
     slot_idx := g_shop_npc_id % MAX_NPC_ENTITIES
     ss       := &g_shop_stock[slot_idx][stock_i]
     if ss.item_entity == INVALID_ENTITY { return }
 
-    wallet := comp_get(w, pid, .Wallet, WalletComp)
-    if wallet.gold < ss.price { return }
+    bank := local_stash()
+    if bank.gold < ss.price {
+        play_sfx("ui_deny")
+        return
+    }
 
     inv  := comp_get(w, pid, .Inventory, InventoryComp)
     item := comp_get(w, ss.item_entity, .Item, ItemComp)
@@ -349,7 +351,7 @@ _shop_buy :: proc(w: ^World, stock_i: int) {
         return
     }
 
-    wallet.gold -= ss.price
+    bank.gold -= ss.price
     backpack_place(inv, item, ss.item_entity, col, row)
     ss.item_entity = INVALID_ENTITY
     play_sfx("pickup")
@@ -383,7 +385,6 @@ _shop_sell :: proc(w: ^World, item_id: int) {
     pid := w.player_id
     if !world_is_valid(w, pid)                   { return }
     if !world_has_component(w, pid, .Inventory)  { return }
-    if !world_has_component(w, pid, .Wallet)     { return }
     if !world_is_valid(w, item_id)               { return }
     if !world_has_component(w, item_id, .Item)   { return }
 
@@ -408,8 +409,7 @@ _shop_sell :: proc(w: ^World, item_id: int) {
         if slot == item_id { slot = INVALID_ENTITY }
     }
 
-    wallet := comp_get(w, pid, .Wallet, WalletComp)
-    wallet.gold += sell_val
+    local_stash().gold += sell_val
     play_sfx("pickup")
     ui_mark_dirty(.Shop)
     ui_mark_dirty(.Inventory)

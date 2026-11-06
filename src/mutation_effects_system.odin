@@ -59,7 +59,7 @@ _mut_tick_proximity_damage :: proc(w: ^World, pid: int, eid: int, dt: f32) {
             if dx*dx + dy*dy > r2 { continue }
 
             if pd.dps > 0 {
-                world_push_damage(w, ai_id, pd.dps * dt, pid)
+                world_push_periodic_damage(w, ai_id, pd.dps * dt, pid)
             }
             if pd.effect_strength > 0 {
                 status_effect_apply(w, ai_id, StatusEffect{
@@ -84,7 +84,7 @@ _mut_tick_proximity_damage :: proc(w: ^World, pid: int, eid: int, dt: f32) {
             dy := tp[1] - pos[1]
             if dx*dx + dy*dy > r2 { continue }
             if pd.dps > 0 {
-                world_push_damage(w, target_id, pd.dps * dt, pid)
+                world_push_periodic_damage(w, target_id, pd.dps * dt, pid)
             }
         }
     }
@@ -240,7 +240,7 @@ _mut_tick_black_lung :: proc(w: ^World, pid: int, eid: int, dt: f32) {
             dx := ap[0] - pos[0]
             dy := ap[1] - pos[1]
             if dx*dx + dy*dy > r2 { continue }
-            world_push_damage(w, ai_id, dps * dt, pid)
+            world_push_periodic_damage(w, ai_id, dps * dt, pid)
         }
     } else {
         for slot in 0..<MAX_PLAYERS {
@@ -253,7 +253,7 @@ _mut_tick_black_lung :: proc(w: ^World, pid: int, eid: int, dt: f32) {
             dx := tp[0] - pos[0]
             dy := tp[1] - pos[1]
             if dx*dx + dy*dy > r2 { continue }
-            world_push_damage(w, target_id, dps * dt, pid)
+            world_push_periodic_damage(w, target_id, dps * dt, pid)
         }
     }
 }
@@ -433,8 +433,8 @@ _mut_tick_corpse_trigger :: proc(w: ^World, dt: f32) {
             if dx*dx + dy*dy > r2 { continue }
 
             dmg := ct_dps * dt
-            world_push_damage(w, ai_a, dmg, ct_pid)
-            world_push_damage(w, ai_b, dmg, ct_pid)
+            world_push_periodic_damage(w, ai_a, dmg, ct_pid, .Necrotic)
+            world_push_periodic_damage(w, ai_b, dmg, ct_pid, .Necrotic)
         }
     }
 }

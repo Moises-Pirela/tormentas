@@ -11,13 +11,15 @@ InputAction :: enum u8 {
     Skill3,
     Skill4,
     Interact,
+    Flask1,
+    Flask2,
 }
 
 InputFrame :: struct {
     tick:    u32,
     peer:    u8,
-    actions: bit_set[InputAction; u8],
-    _pad:    u16,
+    _pad:    u8,
+    actions: bit_set[InputAction; u16],
     move:    [2]f32,
     aim:     [2]f32,
 }

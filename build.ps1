@@ -9,6 +9,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'tools\common.ps1')
 $Odin = Resolve-Odin $OdinPath
 Assert-ClockworkSnapshot
+Assert-ImGuiSnapshot
 $Root = $RepoRoot
 $Out = Join-Path $Root 'bin\tormentas.exe'
 $Cw = Join-Path $Root 'deps\clockwork-ecs'

@@ -151,6 +151,7 @@ play_sfx_at :: proc(name: string, world_pos: [3]f32) {
 
 @(private = "file")
 _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
+    if !rl.IsAudioDeviceReady() { return }
     idx := _event_idx(name)
     def := &g_event_defs[idx]
 

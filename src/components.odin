@@ -305,6 +305,8 @@ InputStateComp :: struct {
     skill3_pressed:   bool,
     skill4_pressed:   bool,
     interact_pressed: bool,
+    flask1_pressed:   bool,
+    flask2_pressed:   bool,
 }
 
 WeaponSlotComp :: struct {
@@ -562,7 +564,14 @@ ProjectileComp :: struct {
     owner_faction:    u8,
     visual:           ProjectileVisual,
     pierce_remaining: i8,
+    prev_pos:         [2]f32,
+    has_prev:         bool,
+    hit_count:        u8,
+    hit_ids:          [PROJECTILE_HIT_MEMORY]i32,
 }
+
+PROJECTILE_HIT_MEMORY :: 12
+DAMAGE_AMP_MAX        :: f32(3)
 
 SelfDestructComp :: struct {
     timer: f32,
@@ -593,6 +602,11 @@ AIAgentComp :: struct {
     tier: EnemyTier,
 
     roster_index: u8,
+
+    windup_max:   f32,
+    windup:       f32,
+    windup_angle: f32,
+    proj_speed:   f32,
 }
 
 MeleeArcComp :: struct {
@@ -619,6 +633,8 @@ DamageEvent :: struct {
     amount:    f32,
     source_id: int,
     kind:      DamageKind,
+    periodic:  bool,
+    self_heal: bool,
 }
 
 RespawnComp :: struct {
@@ -997,8 +1013,9 @@ status_effect_apply :: proc(w: ^World, id: int, effect: StatusEffect) {
         case .Flat, .Percent:
             current.strength += effect.strength
         case .Base:
-            current.strength = effect.strength
+            current.strength = max(current.strength, effect.strength)
         }
+        if effect.source_id != 0 { current.source_id = effect.source_id }
 
         switch effect.stack_behavior {
         case .Stack:

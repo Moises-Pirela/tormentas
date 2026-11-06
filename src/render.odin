@@ -107,96 +107,6 @@ update_draw_dmg_numbers :: proc(dt: f32) {
     }
 }
 
-draw_extraction_zones :: proc(w: ^World) {
-    if g_hub_active { return }
-
-    time := f32(rl.GetTime())
-
-    ids := world_query(w, query_mask(.Extraction, .Transform))
-    defer delete(ids)
-
-    pid := w.player_id
-
-    for eid in ids {
-        ext := comp_get(w, eid, .Extraction, ExtractionComp)
-        if ext.activated { continue }
-
-        pos := comp_get(w, eid, .Transform, TransformComp).position
-        cx  := pos[0]
-        cy  := pos[1]
-        r   := ext.interact_radius
-
-        center := rl.Vector2{ cx, cy }
-        draw_world_circle(center, r, rl.Color{ 55, 220, 85, 18 })
-
-        pulse := f32(0.5) + f32(0.5) * math.sin(time * 2.6)
-        ring_r   := r * (1.0 + 0.04 * pulse)
-        ring_col := rl.Color{ 55, 220, 85, u8(80 + i32(pulse * 60)) }
-        draw_world_circle_lines(center, ring_r, ring_col)
-
-        draw_world_circle_lines(center, r * 0.72, rl.Color{ 55, 220, 85, 45 })
-
-        SPOKES :: 3
-        for i in 0..<SPOKES {
-            angle := time * 0.7 + f32(i) * (f32(math.TAU) / SPOKES)
-            ep := rl.Vector2{
-                cx + math.cos(angle) * r * 0.88,
-                cy + math.sin(angle) * r * 0.88,
-            }
-            draw_world_line(center, ep, 1.5, rl.Color{ 55, 220, 85, 55 })
-        }
-
-        cs := f32(10)
-        draw_world_line({ cx - cs, cy }, { cx + cs, cy }, 2.0, rl.Color{ 55, 220, 85, 255 })
-        draw_world_line({ cx, cy - cs }, { cx, cy + cs }, 2.0, rl.Color{ 55, 220, 85, 255 })
-
-        lbl_fs  := f32(14)
-        lbl     := t(.HUD_EXTRACT)
-        lbl_sz  := rl.MeasureTextEx(g_font_body, lbl, lbl_fs, 0.5)
-        lbl_blink := u8(180 + i32(pulse * 60))
-        center_iso := world_to_iso_v(center)
-        rl.DrawTextEx(g_font_body, lbl,
-            { center_iso.x - lbl_sz.x * 0.5, center_iso.y - r * 0.55 - lbl_sz.y - 6 },
-            lbl_fs, 0.5,
-            rl.Color{ 100, 240, 110, lbl_blink })
-
-        if !world_is_valid(w, pid) { continue }
-        if !world_has_component(w, pid, .Transform) { continue }
-        pt  := comp_get(w, pid, .Transform, TransformComp).position
-        dx  := pt[0] - cx
-        dy  := pt[1] - cy
-        in_zone := (dx*dx + dy*dy) <= r*r
-
-        if ext.timer > 0 && in_zone {
-            progress  := clamp(ext.timer / ext.activate_time, 0, 1)
-            arc_r     := r * 0.56
-            arc_steps := 48
-            arc_span  := progress * f32(math.TAU)
-            arc_start := f32(-math.PI) * 0.5
-
-            for i in 0..<arc_steps {
-                t0 := arc_start + f32(i)   / f32(arc_steps) * arc_span
-                t1 := arc_start + f32(i+1) / f32(arc_steps) * arc_span
-                p0 := rl.Vector2{ cx + math.cos(t0) * arc_r, cy + math.sin(t0) * arc_r }
-                p1 := rl.Vector2{ cx + math.cos(t1) * arc_r, cy + math.sin(t1) * arc_r }
-                a  := u8(160 + i32(progress * 95))
-                draw_world_line(p0, p1, 3.0, rl.Color{ 80, 245, 100, a })
-            }
-
-            secs_left := ext.activate_time - ext.timer
-            secs_buf: [16]u8
-            secs_s := fmt.bprintf(secs_buf[:15], "%.0f", math.ceil(secs_left))
-            secs_buf[len(secs_s)] = 0
-            s_fs  := f32(18)
-            s_sz  := rl.MeasureTextEx(g_font_body, cstring(&secs_buf[0]), s_fs, 0.5)
-            rl.DrawTextEx(g_font_body, cstring(&secs_buf[0]),
-                { center_iso.x - s_sz.x * 0.5, center_iso.y - s_sz.y * 0.5 },
-                s_fs, 0.5,
-                rl.Color{ 130, 255, 140, 230 })
-        }
-    }
-}
-
 draw_loot_filter_hud :: proc() {
     if g_loot_filter_rarity == .Normal { return }
 
@@ -228,40 +138,6 @@ draw_loot_filter_hud :: proc() {
     rl.DrawTextEx(g_font_body, lbl,
         { f32(bx) + uis(8) + psz.x, f32(by) + uis(5) }, fs, 0.5,
         rl.Color{ rc.r, rc.g, rc.b, 230 })
-}
-
-draw_raid_timer :: proc() {
-    if g_raid_timer <= 0 { return }
-
-    mins := int(g_raid_timer) / 60
-    secs := int(g_raid_timer) % 60
-
-    buf: [32]u8
-    s   := fmt.bprintf(buf[:31], "%d:%02d", mins, secs)
-    buf[len(s)] = 0
-
-    col: rl.Color
-    if g_raid_timer < 120 {
-        flash := f32(0.5) + f32(0.5) * math.sin(f32(rl.GetTime()) * 5.0)
-        col = rl.Color{ 255, u8(80 + i32(flash * 80)), 60, 255 }
-    } else if g_raid_timer < 300 {
-        col = rl.Color{ 240, 180, 60, 255 }
-    } else {
-        col = rl.Color{ 170, 235, 145, 220 }
-    }
-
-    sw := f32(rl.GetScreenWidth())
-    fs := uis(17)
-
-    icon := t(.HUD_RAID_TIMER)
-    lbl  := cstring(&buf[0])
-
-    icon_sz := rl.MeasureTextEx(g_font_body, icon, uis(11), 0.5)
-    lbl_sz  := rl.MeasureTextEx(g_font, lbl, fs, 0.5)
-
-    x := sw - max(icon_sz.x, lbl_sz.x) - uis(20)
-    rl.DrawTextEx(g_font_body, icon, { x, uis(12) }, uis(11), 0.5, rl.Color{ 150, 200, 130, 180 })
-    rl.DrawTextEx(g_font, lbl,  { x, uis(26) }, fs, 0.5, col)
 }
 
 draw_boss_warning :: proc() {
@@ -537,7 +413,11 @@ shutdown_clay :: proc() {
 
 update_clay_input :: proc() {
     mp := rl.GetMousePosition()
-    clay.SetPointerState({ mp.x, mp.y }, rl.IsMouseButtonDown(.LEFT))
+    if devui_wants_mouse() {
+        clay.SetPointerState({ -1, -1 }, false)
+    } else {
+        clay.SetPointerState({ mp.x, mp.y }, rl.IsMouseButtonDown(.LEFT))
+    }
     clay.UpdateScrollContainers(true, { 0, rl.GetMouseWheelMove() * uis(30) }, rl.GetFrameTime())
     clay.SetLayoutDimensions({ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) })
     g_ui_scale = f32(rl.GetScreenHeight()) / 720.0
@@ -615,79 +495,19 @@ EntityVisualInfo :: struct {
     ok:           bool,
 }
 
-ColliderBounds :: struct {
-    min: [2]f32,
-    max: [2]f32,
-}
-
-entity_collider_bounds :: proc(w: ^World, id: int) -> ColliderBounds {
-    fallback := ColliderBounds{}
-    if !world_has_component(w, id, .Transform) { return fallback }
-
-    radius := f32(0)
-    if world_has_component(w, id, .Collider) {
-        radius = comp_get(w, id, .Collider, ColliderComp).radius
-    }
-    fallback = ColliderBounds{ min = {-radius, -radius}, max = {radius, radius} }
-
-    vis := draw_entity_visual_info(w, id)
-    if !vis.ok { return fallback }
-    _, src, sprite_ok := get_entity_sprite_tex(string(vis.sprite_key))
-    if !sprite_ok { return fallback }
-    src = anim_source_rect(w, id, src, string(vis.sprite_key))
-
-    anchor := [2]f32{0.5, 1.0}
-    if def, ok := get_or_load_anim_def(string(vis.sprite_key)); ok {
-        anchor = {
-            f32(def.anchor_px_x) / f32(max(def.frame_width, 1)),
-            f32(def.anchor_px_y) / f32(max(def.frame_height, 1)),
-        }
-    }
-    frame_w := f32(src.width)
-    frame_h := f32(src.height)
-    collision_x, collision_y := f32(0), f32(0)
-    collision_w, collision_h := frame_w, frame_h
-    anchor_px_x, anchor_px_y := frame_w * anchor[0], frame_h * anchor[1]
-    if def, ok := get_or_load_anim_def(string(vis.sprite_key)); ok {
-        frame_w = f32(def.frame_width)
-        frame_h = f32(def.frame_height)
-        anchor_px_x = f32(def.anchor_px_x)
-        anchor_px_y = f32(def.anchor_px_y)
-        if def.has_collision {
-            collision_x = f32(def.collision_px_x)
-            collision_y = f32(def.collision_px_y)
-            collision_w = f32(def.collision_px_w)
-            collision_h = f32(def.collision_px_h)
-        }
-    }
-    iso_h := vis.world_size * src.height / max(src.width, 1)
-    px_to_iso := vis.world_size / max(frame_w, 1)
-    py_to_iso := iso_h / max(frame_h, 1)
-    corners := [4]rl.Vector2{
-        {(collision_x - anchor_px_x) * px_to_iso, (collision_y - anchor_px_y) * py_to_iso},
-        {(collision_x + collision_w - anchor_px_x) * px_to_iso, (collision_y - anchor_px_y) * py_to_iso},
-        {(collision_x - anchor_px_x) * px_to_iso, (collision_y + collision_h - anchor_px_y) * py_to_iso},
-        {(collision_x + collision_w - anchor_px_x) * px_to_iso, (collision_y + collision_h - anchor_px_y) * py_to_iso},
-    }
-    first := iso_to_world_xy(corners[0].x, corners[0].y)
-    bounds := ColliderBounds{min = {first.x, first.y}, max = {first.x, first.y}}
-    for corner in corners[1:] {
-        p := iso_to_world_xy(corner.x, corner.y)
-        bounds.min[0] = min(bounds.min[0], p.x)
-        bounds.min[1] = min(bounds.min[1], p.y)
-        bounds.max[0] = max(bounds.max[0], p.x)
-        bounds.max[1] = max(bounds.max[1], p.y)
-    }
-    return bounds
-}
-
 entity_collider_closest_point :: proc(w: ^World, id: int, point: [2]f32) -> [2]f32 {
     tr := comp_get(w, id, .Transform, TransformComp)
-    bounds := entity_collider_bounds(w, id)
-    return {
-        clamp(point[0], tr.position[0] + bounds.min[0], tr.position[0] + bounds.max[0]),
-        clamp(point[1], tr.position[1] + bounds.min[1], tr.position[1] + bounds.max[1]),
-    }
+    r  := entity_hit_radius(w, id)
+    dx := point[0] - tr.position[0]
+    dy := point[1] - tr.position[1]
+    d  := math.sqrt(dx*dx + dy*dy)
+    if d <= r || d < 0.0001 { return point }
+    return { tr.position[0] + dx / d * r, tr.position[1] + dy / d * r }
+}
+
+entity_hit_radius :: proc(w: ^World, id: int) -> f32 {
+    if !world_has_component(w, id, .Collider) { return 0 }
+    return comp_get(w, id, .Collider, ColliderComp).radius
 }
 
 draw_world_circle :: proc(pos: rl.Vector2, radius: f32, color: rl.Color) {
@@ -1030,19 +850,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
     sprite_top := sprite_iso_h
 
     if show_hp && world_has_component(w, id, .Health) {
-        h := comp_get(w, id, .Health, HealthComp)
-        if h.max > 0 {
-            iso   := world_to_iso_v(pos)
-            bar_w := base_size * 0.65
-            bx    := iso.x - bar_w * 0.5
-            by    := iso.y - sprite_top - 5
-            rl.DrawRectangle(i32(bx - 1), i32(by - 1), i32(bar_w + 2), 5, rl.Color{ 10, 8, 8, 200 })
-            rl.DrawRectangle(i32(bx), i32(by), i32(bar_w), 3, rl.Color{ 30, 14, 14, 200 })
-            frac   := clamp(h.current / h.max, 0, 1)
-            fill_r := u8(60 + (1 - frac) * 180)
-            fill_g := u8(200 - (1 - frac) * 170)
-            rl.DrawRectangle(i32(bx), i32(by), i32(bar_w * frac), 3, rl.Color{ fill_r, fill_g, 30, 240 })
-        }
+        enemy_overlay_queue(id, pos, base_size, sprite_top)
     }
 
     if !is_player && world_has_component(w, id, .MutationContainer) {
@@ -1175,6 +983,12 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
         }
     } else if world_has_component(w, id, .NPC) && comp_get(w, id, .NPC, NPCComp).npc_type == .MutationWorkbench {
         tint = rl.Color{ 250, 242, 255, 255 }
+    }
+    if world_has_component(w, id, .AIAgent) {
+        ai := comp_get(w, id, .AIAgent, AIAgentComp)
+        if ai.windup > 0 && ai.windup_max > 0 {
+            tint = color_mix(tint, TELEGRAPH_TINT, enemy_windup_progress(ai^) * 0.6)
+        }
     }
     tint = color_mix(tint, rl.WHITE, get_hit_flash_intensity(id) * 0.75)
 
@@ -1341,33 +1155,53 @@ pause_btn_h      :: proc() -> i32 { return i32(uis(PAUSE_BTN_H_BASE))       }
 g_rebind_idx: int = -1
 
 init_pause_menu :: proc() {
+    g_borderless = g_fullscreen
+}
+
+@(private = "file")
+_current_res_idx :: proc() -> int {
     sw := rl.GetScreenWidth()
     sh := rl.GetScreenHeight()
-    for i in 0..<len(PAUSE_RESOLUTIONS) {
-        if PAUSE_RESOLUTIONS[i].w == sw && PAUSE_RESOLUTIONS[i].h == sh {
-            g_pause_res_idx = i
-            break
-        }
+    for r, i in PAUSE_RESOLUTIONS { if r.w == sw && r.h == sh { return i } }
+    return -1
+}
+
+@(private = "file")
+_step_resolution :: proc(dir: int) {
+    n   := len(PAUSE_RESOLUTIONS)
+    idx := _current_res_idx()
+    if idx < 0 { idx = g_pause_res_idx }
+    for _ in 0..<n {
+        idx = (idx + dir + n) % n
+        if platform_window_fits(PAUSE_RESOLUTIONS[idx].w, PAUSE_RESOLUTIONS[idx].h) { break }
     }
-    g_borderless = rl.IsWindowState(rl.ConfigFlags{.BORDERLESS_WINDOWED_MODE})
+    g_pause_res_idx = idx
+    platform_set_window_size(PAUSE_RESOLUTIONS[idx].w, PAUSE_RESOLUTIONS[idx].h)
+    save_config()
+}
+
+draw_display_setting_rows :: proc(prefix: string) {
+    g_borderless = g_fullscreen
+    res_label := fmt.tprintf("%d x %d", rl.GetScreenWidth(), rl.GetScreenHeight())
+    rd := ui_stepper(fmt.tprintf("%sRes", prefix), string(t(.SETTINGS_RESOLUTION)), res_label, !g_fullscreen)
+    if rd != 0 { _step_resolution(rd) }
+
+    full_key := LocKey.SETTINGS_FULLSCREEN when ODIN_OS == .Darwin else LocKey.SETTINGS_BORDERLESS
+    mode_label := t(full_key) if g_fullscreen else t(.SETTINGS_WINDOWED)
+    if ui_stepper(fmt.tprintf("%sMode", prefix), string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
+        set_window_mode(!g_fullscreen)
+    }
 }
 
 apply_resolution :: proc(idx: int) {
     res := PAUSE_RESOLUTIONS[idx]
-    rl.SetWindowSize(res.w, res.h)
-    if g_camera != nil {
-        g_camera.offset = { f32(res.w) * 0.5, f32(res.h) * 0.5 }
-    }
+    platform_set_window_size(res.w, res.h)
 }
 
-set_window_mode :: proc(borderless: bool) {
-    if borderless {
-        rl.SetWindowState(rl.ConfigFlags{.BORDERLESS_WINDOWED_MODE})
-    } else {
-        rl.ClearWindowState(rl.ConfigFlags{.BORDERLESS_WINDOWED_MODE})
-        apply_resolution(g_pause_res_idx)
-    }
-    g_borderless = borderless
+set_window_mode :: proc(fullscreen: bool) {
+    platform_set_fullscreen(fullscreen)
+    g_borderless = fullscreen
+    save_config()
 }
 
 update_pause_menu :: proc() -> (quit: bool) {
@@ -1392,20 +1226,7 @@ draw_pause_menu :: proc() {
             ui_close_top()
         }
 
-        rd := ui_stepper("PauseRes", string(t(.SETTINGS_RESOLUTION)),
-            string(PAUSE_RESOLUTIONS[g_pause_res_idx].label), !g_borderless)
-        if rd < 0 {
-            g_pause_res_idx = (g_pause_res_idx - 1 + len(PAUSE_RESOLUTIONS)) % len(PAUSE_RESOLUTIONS)
-            apply_resolution(g_pause_res_idx)
-        } else if rd > 0 {
-            g_pause_res_idx = (g_pause_res_idx + 1) % len(PAUSE_RESOLUTIONS)
-            apply_resolution(g_pause_res_idx)
-        }
-
-        mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
-        if ui_stepper("PauseMode", string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
-            set_window_mode(!g_borderless)
-        }
+        draw_display_setting_rows("Pause")
 
         ld := ui_stepper("PauseLang", string(t(.SETTINGS_LANGUAGE)), string(lang_name(g_lang)))
         if ld < 0 {
@@ -1470,7 +1291,7 @@ update_keybinds_screen :: proc() {
         input_consume_key(.ESCAPE)
         ui_mark_dirty(.Keybinds)
     } else if k != .KEY_NULL {
-        rows[g_rebind_idx].ptr^ = i32(k)
+        bind_assign_unique(&rows, g_rebind_idx, i32(k))
         g_rebind_idx = -1
         save_config()
         ui_mark_dirty(.Keybinds)
@@ -1573,20 +1394,7 @@ draw_settings_overlay :: proc() {
         title_fs = uis(24),
     })
     {
-        rd := ui_stepper("SetRes", string(t(.SETTINGS_RESOLUTION)),
-            string(PAUSE_RESOLUTIONS[g_pause_res_idx].label), !g_borderless)
-        if rd < 0 {
-            g_pause_res_idx = (g_pause_res_idx - 1 + len(PAUSE_RESOLUTIONS)) % len(PAUSE_RESOLUTIONS)
-            apply_resolution(g_pause_res_idx)
-        } else if rd > 0 {
-            g_pause_res_idx = (g_pause_res_idx + 1) % len(PAUSE_RESOLUTIONS)
-            apply_resolution(g_pause_res_idx)
-        }
-
-        mode_label := t(.SETTINGS_BORDERLESS) if g_borderless else t(.SETTINGS_WINDOWED)
-        if ui_stepper("SetMode", string(t(.SETTINGS_WINDOW_MODE)), string(mode_label)) != 0 {
-            set_window_mode(!g_borderless)
-        }
+        draw_display_setting_rows("Set")
 
         ld := ui_stepper("SetLang", string(t(.SETTINGS_LANGUAGE)), string(lang_name(g_lang)))
         if ld < 0 {

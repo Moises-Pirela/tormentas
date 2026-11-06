@@ -1,7 +1,7 @@
 package main
 
+import im  "../deps/imgui/imgui"
 import rl  "vendor:raylib"
-import     "core:fmt"
 import     "core:math"
 import p2p "p2p"
 
@@ -22,36 +22,14 @@ EditorSelection :: struct {
     ty:   i16,
 }
 
-INSP_H     :: f32(206)
-INSP_SPD   :: f32(14)
-INSP_ROW_H :: f32(24)
-INSP_PAD_X :: f32(10)
-INSP_LBL_W :: f32(112)
-INSP_VAL_W :: f32(52)
-INSP_BTN_S :: f32(18)
-
-@(private = "file") g_ed_sel:              EditorSelection
-@(private = "file") g_ed_insp_anim:        f32
-@(private = "file") g_ed_insp_text_active: bool
-@(private = "file") g_ed_insp_text_fid:    u8
+@(private = "file") g_ed_sel: EditorSelection
 
 ed_insp_deselect :: proc() {
-    g_ed_sel               = {}
-    g_ed_insp_text_active  = false
-}
-
-ed_insp_is_text_active :: proc() -> bool {
-    return g_ed_insp_text_active
+    g_ed_sel = {}
 }
 
 ed_insp_has_selection :: proc() -> bool {
     return g_ed_sel.kind != .None
-}
-
-ed_insp_update_anim :: proc(dt: f32) {
-    target := f32(1) if g_ed_sel.kind != .None else f32(0)
-    g_ed_insp_anim += (target - g_ed_insp_anim) * min(dt * INSP_SPD, 1.0)
-    if g_ed_insp_anim < 0.005 { g_ed_insp_anim = 0 }
 }
 
 ed_try_select_at :: proc(tx, ty: int) -> bool {
@@ -69,23 +47,6 @@ ed_try_select_at :: proc(tx, ty: int) -> bool {
 ed_insp_validate :: proc() {
     if g_ed_sel.kind == .None { return }
     if !_insp_sel_exists() { g_ed_sel = {} }
-}
-
-ed_insp_over_ui :: proc() -> bool {
-    if g_ed_insp_anim < 0.05 { return false }
-    return rl.CheckCollisionPointRec(rl.GetMousePosition(), ed_insp_panel_rect())
-}
-
-ed_insp_panel_rect :: proc() -> rl.Rectangle {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
-    h  := uis(INSP_H) * g_ed_insp_anim
-    return rl.Rectangle{
-        x      = 0,
-        y      = sh - h,
-        width  = sw,
-        height = h,
-    }
 }
 
 ed_insp_draw_selection_highlight :: proc() {
@@ -108,249 +69,6 @@ ed_insp_draw_selection_highlight :: proc() {
     rl.DrawLineEx(right,  bottom, lw * 2.5, col)
     rl.DrawLineEx(bottom, left,   lw * 2.5, col)
     rl.DrawLineEx(left,   top,    lw * 2.5, col)
-}
-
-ed_insp_draw_panel :: proc() {
-    if g_ed_insp_anim < 0.005 { return }
-
-    r  := ed_insp_panel_rect()
-    mp := rl.GetMousePosition()
-
-    rl.DrawRectangleRec(r, rl.Color{10, 8, 7, 248})
-    rl.DrawRectangle(i32(r.x), i32(r.y), i32(r.width), i32(uis(2)),
-        rl.Color{70, 170, 220, 210})
-    rl.DrawRectangleLinesEx(r, uis(1), rl.Color{50, 90, 130, 160})
-
-    if g_ed_sel.kind == .None { return }
-
-    kind_cs := _insp_kind_name(g_ed_sel.kind)
-    rl.DrawTextEx(g_font, kind_cs,
-        {r.x + uis(INSP_PAD_X), r.y + uis(5)},
-        uis(11), 0.5, rl.Color{80, 200, 255, 255})
-
-    tile_buf: [24]u8
-    tile_s := fmt.bprintf(tile_buf[:23], "  [%d, %d]", g_ed_sel.tx, g_ed_sel.ty)
-    tile_buf[len(tile_s)] = 0
-    km_sz := rl.MeasureTextEx(g_font, kind_cs, uis(11), 0.5)
-    rl.DrawTextEx(g_font, cstring(&tile_buf[0]),
-        {r.x + uis(INSP_PAD_X) + km_sz.x, r.y + uis(7)},
-        uis(9), 0.5, rl.Color{110, 140, 165, 200})
-
-    close_sz := uis(20)
-    close_r  := rl.Rectangle{r.x + r.width - close_sz - uis(5), r.y + uis(3), close_sz, close_sz}
-    hov_x    := rl.CheckCollisionPointRec(mp, close_r)
-    rl.DrawRectangleRec(close_r, rl.Color{90, 30, 30, 210} if hov_x else rl.Color{42, 16, 16, 170})
-    rl.DrawRectangleLinesEx(close_r, uis(1), rl.Color{180, 55, 55, 200})
-    xsz := rl.MeasureTextEx(g_font, "X", uis(9), 0.5)
-    rl.DrawTextEx(g_font, "X",
-        {close_r.x + close_r.width*0.5 - xsz.x*0.5, close_r.y + close_r.height*0.5 - xsz.y*0.5},
-        uis(9), 0.5, rl.Color{220, 80, 80, 245})
-
-    if rl.IsMouseButtonPressed(.LEFT) && hov_x {
-        ed_insp_deselect()
-        return
-    }
-
-    sep_y := r.y + uis(28)
-    rl.DrawRectangle(i32(r.x + uis(INSP_PAD_X)), i32(sep_y),
-        i32(r.width - uis(INSP_PAD_X) * 2), 1, rl.Color{55, 95, 125, 120})
-
-    cont_y0 := sep_y + uis(4)
-    cont_x  := r.x + uis(INSP_PAD_X)
-    cont_w  := r.width - uis(INSP_PAD_X) * 2
-
-    rl.BeginScissorMode(i32(r.x), i32(cont_y0), i32(r.width), i32(r.y + r.height - cont_y0))
-
-    cy := cont_y0
-
-    eid := _insp_find_entity_id(g_ed_sel.tx, g_ed_sel.ty)
-    eid_buf: [24]u8
-    if eid != INVALID_ENTITY {
-        s := fmt.bprintf(eid_buf[:23], "Entity ID:  #%d", eid)
-        eid_buf[len(s)] = 0
-    } else {
-        s := fmt.bprintf(eid_buf[:23], "Entity ID:  —")
-        eid_buf[len(s)] = 0
-    }
-    rl.DrawTextEx(g_font, cstring(&eid_buf[0]),
-        {cont_x, cy + uis(INSP_ROW_H) * 0.5 - uis(4.5)},
-        uis(9), 0.5, rl.Color{80, 110, 90, 185})
-
-    cy_sep := cy + uis(INSP_ROW_H) * 0.85
-    rl.DrawRectangle(i32(cont_x), i32(cy_sep), i32(cont_w), 1,
-        rl.Color{50, 70, 55, 80})
-    cy += uis(INSP_ROW_H) + uis(2)
-
-    switch g_ed_sel.kind {
-    case .None:
-    case .Switch:     _insp_switch(mp, cont_x, &cy, cont_w)
-    case .Container:  _insp_container(mp, cont_x, &cy, cont_w)
-    case .LoreItem:   _insp_lore_item(mp, cont_x, &cy, cont_w)
-    case .Phonograph: _insp_phonograph(mp, cont_x, &cy, cont_w)
-    case .KeyPickup:  _insp_key_pickup(mp, cont_x, &cy, cont_w)
-    case .NPC:        _insp_npc(mp, cont_x, &cy, cont_w)
-    case .Barrel:     _insp_barrel(mp, cont_x, &cy, cont_w)
-    }
-
-    rl.EndScissorMode()
-}
-
-@(private = "file")
-_insp_spin_u8 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
-                      label: cstring, val: ^u8, lo, hi: u8,
-                      mk: u8, mf: u8) {
-    h  := uis(INSP_ROW_H)
-    y  := cy^
-    rx := x + w
-
-    rl.DrawTextEx(g_font, label, {x, y + h * 0.5 - uis(4.5)},
-        uis(9), 0.5, rl.Color{158, 155, 148, 215})
-
-    bsz := uis(INSP_BTN_S)
-    vsz := uis(INSP_VAL_W)
-
-    pr := rl.Rectangle{rx - bsz,                       y + h*0.5 - bsz*0.5, bsz, bsz}
-    mr := rl.Rectangle{rx - bsz*2 - vsz - uis(2),     y + h*0.5 - bsz*0.5, bsz, bsz}
-    vr := rl.Rectangle{mr.x + bsz + uis(1),            y + h*0.5 - bsz*0.5, vsz, bsz}
-
-    hm := rl.CheckCollisionPointRec(mp, mr)
-    hp := rl.CheckCollisionPointRec(mp, pr)
-
-    _insp_draw_btn(mr, "-", rl.Color{220, 140, 80, 240}, hm)
-    _insp_draw_val_box(vr, fmt.tprintf("%d", val^))
-    _insp_draw_btn(pr, "+", rl.Color{90, 220, 120, 240}, hp)
-
-    if rl.IsMouseButtonPressed(.LEFT) {
-        if hm && val^ > lo { val^ -= 1; _insp_mod(mk, mf, u32(val^)) }
-        if hp && val^ < hi { val^ += 1; _insp_mod(mk, mf, u32(val^)) }
-    }
-    cy^ += h + uis(2)
-}
-
-@(private = "file")
-_insp_spin_u16 :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
-                       label: cstring, val: ^u16, lo, hi: u16,
-                       mk: u8, mf: u8) {
-    h  := uis(INSP_ROW_H)
-    y  := cy^
-    rx := x + w
-    bsz := uis(INSP_BTN_S)
-    vsz := uis(INSP_VAL_W)
-
-    rl.DrawTextEx(g_font, label, {x, y + h * 0.5 - uis(4.5)},
-        uis(9), 0.5, rl.Color{158, 155, 148, 215})
-
-    pr := rl.Rectangle{rx - bsz,                   y + h*0.5 - bsz*0.5, bsz, bsz}
-    mr := rl.Rectangle{rx - bsz*2 - vsz - uis(2),  y + h*0.5 - bsz*0.5, bsz, bsz}
-    vr := rl.Rectangle{mr.x + bsz + uis(1),         y + h*0.5 - bsz*0.5, vsz, bsz}
-
-    hm := rl.CheckCollisionPointRec(mp, mr)
-    hp := rl.CheckCollisionPointRec(mp, pr)
-
-    _insp_draw_btn(mr, "-", rl.Color{220, 140, 80, 240}, hm)
-    _insp_draw_val_box(vr, fmt.tprintf("%d", val^))
-    _insp_draw_btn(pr, "+", rl.Color{90, 220, 120, 240}, hp)
-
-    if rl.IsMouseButtonPressed(.LEFT) {
-        if hm && val^ > lo { val^ -= 1; _insp_mod(mk, mf, u32(val^)) }
-        if hp && val^ < hi { val^ += 1; _insp_mod(mk, mf, u32(val^)) }
-    }
-    cy^ += h + uis(2)
-}
-
-
-@(private = "file")
-_insp_dropdown :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
-                       label: cstring, val: ^u8, names: []cstring,
-                       lo, hi: u8, mk: u8, mf: u8) {
-    h  := uis(INSP_ROW_H)
-    y  := cy^
-    rx := x + w
-    bsz := uis(INSP_BTN_S)
-
-    rl.DrawTextEx(g_font, label, {x, y + h * 0.5 - uis(4.5)},
-        uis(9), 0.5, rl.Color{158, 155, 148, 215})
-
-    val_w := w - uis(INSP_LBL_W) - bsz * 2 - uis(6)
-    pr  := rl.Rectangle{rx - bsz,                      y + h*0.5 - bsz*0.5, bsz, bsz}
-    plr := rl.Rectangle{rx - bsz*2 - val_w - uis(2),   y + h*0.5 - bsz*0.5, bsz, bsz}
-    vr  := rl.Rectangle{plr.x + bsz + uis(1),           y + h*0.5 - bsz*0.5, val_w, bsz}
-
-    hpl := rl.CheckCollisionPointRec(mp, plr)
-    hpr := rl.CheckCollisionPointRec(mp, pr)
-
-    _insp_draw_btn(plr, "<", rl.Color{220, 140, 80, 240}, hpl)
-
-    name_idx := clamp(int(val^) - int(lo), 0, len(names) - 1)
-    name_cs  := names[name_idx] if name_idx >= 0 && name_idx < len(names) else cstring("?")
-    _insp_draw_val_box(vr, string(name_cs))
-
-    _insp_draw_btn(pr, ">", rl.Color{90, 220, 120, 240}, hpr)
-
-    if rl.IsMouseButtonPressed(.LEFT) {
-        if hpl && val^ > lo { val^ -= 1; _insp_mod(mk, mf, u32(val^)) }
-        if hpr && val^ < hi { val^ += 1; _insp_mod(mk, mf, u32(val^)) }
-    }
-    cy^ += h + uis(2)
-}
-
-@(private = "file")
-_insp_toggle :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32,
-                     label: cstring, flags: ^u8, bit: u8,
-                     mk: u8, mf: u8) {
-    h  := uis(INSP_ROW_H)
-    y  := cy^
-    rx := x + w
-
-    rl.DrawTextEx(g_font, label, {x, y + h * 0.5 - uis(4.5)},
-        uis(9), 0.5, rl.Color{158, 155, 148, 215})
-
-    on    := (flags^ & bit) != 0
-    bsz   := uis(INSP_BTN_S)
-    btn_r := rl.Rectangle{rx - bsz * 3.2, y + h*0.5 - bsz*0.5, bsz * 3.2, bsz}
-    hov   := rl.CheckCollisionPointRec(mp, btn_r)
-
-    bg  := rl.Color{22, 80, 42, 210} if on  else rl.Color{68, 22, 22, 185}
-    brd := rl.Color{55, 180, 80, 200} if on  else rl.Color{155, 48, 48, 180}
-    fg  := rl.Color{120, 230, 140, 245} if on else rl.Color{220, 100, 100, 240}
-    if hov { bg.a = bg.a + 20 }
-
-    rl.DrawRectangleRec(btn_r, bg)
-    rl.DrawRectangleLinesEx(btn_r, uis(1), brd)
-    lbl := cstring("ON") if on else cstring("OFF")
-    lsz := rl.MeasureTextEx(g_font, lbl, uis(8), 0.5)
-    rl.DrawTextEx(g_font, lbl,
-        {btn_r.x + btn_r.width*0.5 - lsz.x*0.5, btn_r.y + btn_r.height*0.5 - lsz.y*0.5},
-        uis(8), 0.5, fg)
-
-    if rl.IsMouseButtonPressed(.LEFT) && hov {
-        flags^ ~= bit
-        _insp_mod(mk, mf, u32(flags^))
-    }
-    cy^ += h + uis(2)
-}
-
-@(private = "file")
-_insp_draw_btn :: proc(r: rl.Rectangle, label: cstring, fg: rl.Color, hov: bool) {
-    bg  := rl.Color{38, 32, 26, 190} if !hov else rl.Color{55, 46, 36, 210}
-    brd := rl.Color{90, 78, 55, 160}
-    rl.DrawRectangleRec(r, bg)
-    rl.DrawRectangleLinesEx(r, uis(1), brd)
-    lsz := rl.MeasureTextEx(g_font, label, uis(10), 0.5)
-    rl.DrawTextEx(g_font, label,
-        {r.x + r.width*0.5 - lsz.x*0.5, r.y + r.height*0.5 - lsz.y*0.5},
-        uis(10), 0.5, fg)
-}
-
-@(private = "file")
-_insp_draw_val_box :: proc(r: rl.Rectangle, val: string) {
-    rl.DrawRectangleRec(r, rl.Color{18, 14, 10, 225})
-    rl.DrawRectangleLinesEx(r, uis(1), rl.Color{72, 64, 46, 160})
-    val_cs := fmt.ctprintf("%s", val)
-    vsz := rl.MeasureTextEx(g_font, val_cs, uis(9), 0.5)
-    rl.DrawTextEx(g_font, val_cs,
-        {r.x + r.width*0.5 - vsz.x*0.5, r.y + r.height*0.5 - vsz.y*0.5},
-        uis(9), 0.5, rl.Color{215, 195, 150, 240})
 }
 
 @(private = "file")
@@ -414,89 +132,82 @@ ed_apply_mod_op :: proc(op: p2p.EditorModOp) {
     }
 }
 
-@(private = "file")
-_insp_switch :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &s in g_level_data.switches {
-        if s.tx == g_ed_sel.tx && s.ty == g_ed_sel.ty {
-            _insp_spin_u8(mp, x, cy, w, "Link ID (door)", &s.link_id, 0, 99, u8(EditorSelKind.Switch), 0)
-            _insp_toggle(mp, x, cy, w, "Toggle mode",     &s.flags, 0x01,     u8(EditorSelKind.Switch), 1)
-            _insp_toggle(mp, x, cy, w, "Pressure plate",  &s.flags, 0x02,     u8(EditorSelKind.Switch), 1)
-            return
+ed_insp_object_ui :: proc() {
+    if g_ed_sel.kind == .None { return }
+    ui_text_col(DEVUI_GOLD, "%s", _insp_kind_name(g_ed_sel.kind))
+    im.SameLine()
+    ui_hint("tile %d, %d", g_ed_sel.tx, g_ed_sel.ty)
+    if eid := _insp_find_entity_id(g_ed_sel.tx, g_ed_sel.ty); eid != INVALID_ENTITY {
+        ui_hint("live entity #%d", eid)
+    } else {
+        ui_hint("no live entity")
+    }
+    im.Separator()
+
+    tx, ty := g_ed_sel.tx, g_ed_sel.ty
+    switch g_ed_sel.kind {
+    case .None:
+    case .Switch:
+        for &sw in g_level_data.switches {
+            if sw.tx != tx || sw.ty != ty { continue }
+            if ui_input_u8("Link ID (door)", &sw.link_id, 0, 99) { _insp_mod(u8(EditorSelKind.Switch), 0, u32(sw.link_id)) }
+            if ui_toggle_bit("Toggle mode", &sw.flags, 0x01)     { _insp_mod(u8(EditorSelKind.Switch), 1, u32(sw.flags)) }
+            if ui_toggle_bit("Pressure plate", &sw.flags, 0x02)  { _insp_mod(u8(EditorSelKind.Switch), 1, u32(sw.flags)) }
+            break
+        }
+    case .Container:
+        for &c in g_level_data.containers {
+            if c.tx != tx || c.ty != ty { continue }
+            kind := u8(c.kind)
+            if ui_combo_u8("Kind", &kind, { "Chest", "Crate", "Locker", "Cabinet" }) {
+                c.kind = ContainerKind(kind)
+                _insp_mod(u8(EditorSelKind.Container), 0, u32(kind))
+            }
+            if ui_input_u8("Loot table", &c.loot_table_id, 0, 255) { _insp_mod(u8(EditorSelKind.Container), 1, u32(c.loot_table_id)) }
+            if ui_input_u16("Gold min", &c.gold_min, 0, 9999)      { _insp_mod(u8(EditorSelKind.Container), 2, u32(c.gold_min)) }
+            if ui_input_u16("Gold max", &c.gold_max, 0, 9999)      { _insp_mod(u8(EditorSelKind.Container), 3, u32(c.gold_max)) }
+            if c.gold_max < c.gold_min { ui_text_col(DEVUI_RED, "Gold max is below gold min.") }
+            break
+        }
+    case .LoreItem:
+        for &li in g_level_data.lore_items {
+            if li.tx != tx || li.ty != ty { continue }
+            if ui_input_u8("Lore ID", &li.lore_id, 1, 255) { _insp_mod(u8(EditorSelKind.LoreItem), 0, u32(li.lore_id)) }
+            break
+        }
+    case .Phonograph:
+        for &ph in g_level_data.phonographs {
+            if ph.tx != tx || ph.ty != ty { continue }
+            if ui_input_u8("Recording ID", &ph.recording_id, 1, 255) { _insp_mod(u8(EditorSelKind.Phonograph), 0, u32(ph.recording_id)) }
+            break
+        }
+    case .KeyPickup:
+        for &kp in g_level_data.key_pickups {
+            if kp.tx != tx || kp.ty != ty { continue }
+            if ui_input_u8("Key ID", &kp.key_id, 1, 63) { _insp_mod(u8(EditorSelKind.KeyPickup), 0, u32(kp.key_id)) }
+            break
+        }
+    case .NPC:
+        for &npc in g_level_data.npcs {
+            if npc.tx != tx || npc.ty != ty { continue }
+            nt := u8(npc.npc_type)
+            if ui_combo_u8("NPC type", &nt, { "Shopkeeper", "Mutator", "Stash", "Ability vendor" }) {
+                npc.npc_type = NPCType(nt)
+                _insp_mod(u8(EditorSelKind.NPC), 0, u32(nt))
+            }
+            break
+        }
+    case .Barrel:
+        for &b in g_level_data.barrels {
+            if b.tx != tx || b.ty != ty { continue }
+            if ui_combo_u8("Barrel type", &b.btype, { "Fire", "Water" }) { _insp_mod(u8(EditorSelKind.Barrel), 0, u32(b.btype)) }
+            break
         }
     }
-}
 
-@(private = "file")
-_insp_container :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &c in g_level_data.containers {
-        if c.tx == g_ed_sel.tx && c.ty == g_ed_sel.ty {
-            kind_val   := u8(c.kind)
-            kind_names := []cstring{"Chest", "Crate", "Locker", "Cabinet"}
-            _insp_dropdown(mp, x, cy, w, "Kind",       &kind_val, kind_names, 0, 3, u8(EditorSelKind.Container), 0)
-            c.kind = ContainerKind(kind_val)
-
-            _insp_spin_u8( mp, x, cy, w, "Loot Table",  &c.loot_table_id, 0, 255, u8(EditorSelKind.Container), 1)
-            _insp_spin_u16(mp, x, cy, w, "Gold Min",    &c.gold_min,      0, 9999, u8(EditorSelKind.Container), 2)
-            _insp_spin_u16(mp, x, cy, w, "Gold Max",    &c.gold_max,      0, 9999, u8(EditorSelKind.Container), 3)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_lore_item :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &li in g_level_data.lore_items {
-        if li.tx == g_ed_sel.tx && li.ty == g_ed_sel.ty {
-            _insp_spin_u8(mp, x, cy, w, "Lore ID", &li.lore_id, 1, 255, u8(EditorSelKind.LoreItem), 0)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_phonograph :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &ph in g_level_data.phonographs {
-        if ph.tx == g_ed_sel.tx && ph.ty == g_ed_sel.ty {
-            _insp_spin_u8(mp, x, cy, w, "Recording ID", &ph.recording_id, 1, 255, u8(EditorSelKind.Phonograph), 0)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_key_pickup :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &kp in g_level_data.key_pickups {
-        if kp.tx == g_ed_sel.tx && kp.ty == g_ed_sel.ty {
-            _insp_spin_u8(mp, x, cy, w, "Key ID", &kp.key_id, 1, 63, u8(EditorSelKind.KeyPickup), 0)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_npc :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &npc in g_level_data.npcs {
-        if npc.tx == g_ed_sel.tx && npc.ty == g_ed_sel.ty {
-            nt_val   := u8(npc.npc_type)
-            nt_names := []cstring{"Shopkeeper", "Mutator", "Stash", "AbilityVendor"}
-            _insp_dropdown(mp, x, cy, w, "NPC Type", &nt_val, nt_names, 0, 3, u8(EditorSelKind.NPC), 0)
-            npc.npc_type = NPCType(nt_val)
-            return
-        }
-    }
-}
-
-@(private = "file")
-_insp_barrel :: proc(mp: rl.Vector2, x: f32, cy: ^f32, w: f32) {
-    for &b in g_level_data.barrels {
-        if b.tx == g_ed_sel.tx && b.ty == g_ed_sel.ty {
-            bt_val   := b.btype
-            bt_names := []cstring{"Fire", "Water"}
-            _insp_dropdown(mp, x, cy, w, "Barrel Type", &bt_val, bt_names, 0, 1, u8(EditorSelKind.Barrel), 0)
-            b.btype = bt_val
-            return
-        }
-    }
+    im.Spacing()
+    if im.Button("Deselect") { ed_insp_deselect() }
+    ui_tooltip("Escape")
 }
 
 @(private = "file")
@@ -533,7 +244,7 @@ _insp_sel_exists :: proc() -> bool {
 }
 
 @(private = "file")
-_insp_kind_name :: proc(k: EditorSelKind) -> cstring {
+_insp_kind_name :: proc(k: EditorSelKind) -> string {
     switch k {
     case .None:       return "None"
     case .Switch:     return "Lever / Switch"

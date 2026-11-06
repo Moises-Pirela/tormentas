@@ -48,6 +48,7 @@ melee_arc_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             dist := math.sqrt(dx*dx + dy*dy)
 
             if dist > arc.radius { continue }
+            if !ai_has_line_of_sight(at.position, check_pos) { continue }
 
             if dist > 0.5 {
                 to_player := math.atan2(dy, dx)
@@ -81,6 +82,7 @@ melee_arc_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             dy   := closest[1] - at.position[1]
             dist := math.sqrt(dx*dx + dy*dy)
             if dist > arc.radius { continue }
+            if !ai_has_line_of_sight(at.position, comp_get(w, eid, .Transform, TransformComp).position) { continue }
 
             if dist > 0.5 {
                 to_enemy := math.atan2(dy, dx)

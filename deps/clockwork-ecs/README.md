@@ -14,5 +14,5 @@ On 2026-10-31 the owner explicitly authorized including this package under the
 project's MIT license. See `LICENSE`. `snapshot.json` records the subsequent
 vet compatibility patch and hashes of the files actually included here.
 
-The absent `cw:ui/microui` and `cw:ui/raylib` adapters are replaced by project-owned
-adapters in the repository's `ui/` directory.
+The absent `cw:ui/microui` and `cw:ui/raylib` adapters are not used. The game's
+developer tools draw the clockwork inspector with Dear ImGui (`src/devui_widgets.odin`).

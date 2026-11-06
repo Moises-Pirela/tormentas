@@ -15,7 +15,7 @@
 		"loot_filter": 90,
 		"open_inventory": 73,
 		"open_stats": 67,
-		"open_abilities": 65,
+		"open_abilities": 0,
 		"pause": 256
 	},
 	"ui": {

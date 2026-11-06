@@ -76,6 +76,7 @@ enter_hub :: proc(w: ^World, save_progress: bool = false) {
     if !load_player(w, w.player_id) {
         give_class_starter_items(w, w.player_id, class_idx_for_slot(g_active_slot))
     }
+    bank_wallet_gold(w, w.player_id)
     hub_apply_quest_npcs(w)
 
     if world_has_component(w, w.player_id, .Health) {
@@ -103,8 +104,6 @@ enter_raid :: proc(w: ^World, n: int) {
     level_load(n)
     level_apply(w)
     door_init_blockers(w)
-
-    level_spawn_extraction_zones(w)
 
     spawn_players(w)
     if !load_player(w, w.player_id) {
@@ -226,7 +225,7 @@ draw_hub_world :: proc(w: ^World) {
             if online && g_session.local_slot != 0 {
                 lbl = "Waiting for host..."
             } else {
-                lbl = t(.HUB_INTERACT)
+                lbl = interact_prompt(.HUB_INTERACT)
             }
             lbl_fs := f32(12)
             lsz    := rl.MeasureTextEx(g_font_body, lbl, lbl_fs, 0.5)
@@ -286,57 +285,6 @@ draw_level_select :: proc(w: ^World) {
         ui_grow("LSCancelL")
         ui_label("LSCancel", string(t(.HUB_ESC_CANCEL)), uis(10), COL_MUTED)
         ui_grow("LSCancelR")
-        ui_hstack_end()
-    }
-    ui_panel_end()
-    cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
-}
-
-draw_extract_screen :: proc(w: ^World) {
-    ui_scrim(185)
-
-    pw := uis(360)
-    ph := uis(310)
-
-    green_title  := rl.Color{100, 230, 100, 255}
-    green_accent := rl.Color{ 60, 200,  80, 200}
-    green_border := rl.Color{ 48, 140,  55, 200}
-
-    clay.BeginLayout()
-    ui_panel_begin("ExtractPanel", string(t(.EXTRACT_TITLE)), pw, ph, {
-        anchor     = .CenterCenter,
-        bg_col     = rl.Color{10, 14, 10, 252},
-        border_col = green_border,
-        accent_col = green_accent,
-        title_col  = green_title,
-        title_fs   = uis(20),
-    })
-    {
-        ui_hstack_begin("ExSubRow", 0, 0, .Center)
-        ui_grow("ExSubL")
-        ui_label("ExSub", string(t(.EXTRACT_SUBTITLE)), uis(16), rl.Color{80, 200, 80, 200})
-        ui_grow("ExSubR")
-        ui_hstack_end()
-
-        _hub_reward_row("ExGold",   string(t(.EXTRACT_GOLD)),
-            fmt.tprintf("+ %d", raid_result_gold), COL_BRASS)
-        _hub_reward_row("ExSerums", string(t(.EXTRACT_SERUMS)),
-            fmt.tprintf("+ %d", raid_result_serums), COL_BRASS)
-
-        ui_divider("ExSep")
-
-        _hub_reward_row("ExStash", string(t(.EXTRACT_STASH_TOTAL)),
-            fmt.tprintf("%d gold   %d serums", local_stash().gold, local_stash().serums),
-            COL_PARCH)
-
-        ui_grow("ExSpacer")
-        ui_hstack_begin("ExBtnRow", 0, 0, .Center)
-        ui_grow("ExBtnL")
-        if ui_button("ExReturn", string(t(.HUB_BTN_RETURN)), uis(200), uis(44), .Primary) {
-            enter_hub(w, true)
-        }
-        ui_grow("ExBtnR")
         ui_hstack_end()
     }
     ui_panel_end()

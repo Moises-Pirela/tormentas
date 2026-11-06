@@ -81,6 +81,7 @@ ui_open :: proc(panel: UIPanel) {
             if l.state == .FadeOut {
                 l.state = .FadeIn
                 l.dirty = true
+                _ui_on_open(panel)
             }
             return
         }

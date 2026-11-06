@@ -1,7 +1,7 @@
 package main
 
-import "core:os"
 import "core:mem"
+import "core:fmt"
 
 SAVE_PATH        :: "save/player.bin"
 CHAR_SAVE_PATH   :: "save/characters.bin"
@@ -197,7 +197,7 @@ g_active_slot: int = -1
 g_char_save:   CharSaveFile
 
 chars_load_all :: proc() {
-    raw, ok := read_game_file(CHAR_SAVE_PATH)
+    raw, ok := read_game_file(user_path(CHAR_SAVE_PATH))
     if ok {
         defer delete(raw)
         if len(raw) >= size_of(CharSaveFile) {
@@ -226,13 +226,15 @@ chars_load_all :: proc() {
                 return
             }
         }
+        write_game_file(user_path(CHAR_SAVE_PATH + ".unreadable"), raw)
+        fmt.eprintf("[save] %s unreadable; preserved a copy as %s.unreadable\n", user_path(CHAR_SAVE_PATH), user_path(CHAR_SAVE_PATH))
     }
 
     g_char_save = {}
     g_char_save.magic   = CHAR_SAVE_MAGIC
     g_char_save.version = CHAR_SAVE_VER
 
-    legacy, lok := read_game_file(SAVE_PATH)
+    legacy, lok := read_game_file(user_path(SAVE_PATH))
     if lok {
         defer delete(legacy)
         if len(legacy) >= size_of(PlayerSaveFile) {
@@ -262,9 +264,9 @@ chars_load_all :: proc() {
 }
 
 chars_save_all :: proc() {
-    os.make_directory("save")
+    ensure_user_dir("save")
     data := (^[size_of(CharSaveFile)]u8)(&g_char_save)^
-    write_game_file(CHAR_SAVE_PATH, data[:])
+    write_game_file(user_path(CHAR_SAVE_PATH), data[:])
 }
 
 char_slot_create :: proc(idx: int, name: []u8, save_to_disk: bool = true) {
@@ -320,36 +322,6 @@ class_idx_for_slot :: proc(slot_idx: int) -> int {
         if b > 0 { return int(b) - 1 }
     }
     return g_selected_class_idx
-}
-
-strip_player_carried :: proc(w: ^World, pid: int) {
-    if !world_is_valid(w, pid)                  { return }
-    if !world_has_component(w, pid, .Inventory) { return }
-
-    inv := comp_get(w, pid, .Inventory, InventoryComp)
-
-    for slot_idx in 0..<EQUIP_SLOT_COUNT {
-        slot := EquipSlot(slot_idx)
-        eid  := inv.equipped[slot_idx]
-
-        if (slot == .Flask1 || slot == .Flask2) &&
-            world_is_valid(w, eid) &&
-            world_has_component(w, eid, .Item) &&
-            comp_get(w, eid, .Item, ItemComp).rarity == .Normal &&
-            world_has_component(w, eid, .Flask) {
-            fc         := comp_get(w, eid, .Flask, FlaskComp)
-            fc.charges  = fc.max_charges
-            continue
-        }
-
-        inv.equipped[slot_idx] = INVALID_ENTITY
-    }
-
-    for &cell in inv.backpack { cell = INVALID_ENTITY }
-
-    if world_has_component(w, pid, .Wallet) {
-        comp_get(w, pid, .Wallet, WalletComp).gold = 0
-    }
 }
 
 compute_extract_value :: proc(w: ^World, pid: int) -> int {

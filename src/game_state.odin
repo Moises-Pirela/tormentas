@@ -13,7 +13,6 @@ PlayingSubstate :: enum {
     Hub,
     Editor,
     DeathScreen,
-    ExtractScreen,
 }
 
 g_playing_state: PlayingSubstate
@@ -39,7 +38,7 @@ update_music_state :: proc(w: ^World) {
         state = .Menu
     case .Playing:
         switch g_playing_state {
-        case .Hub, .ExtractScreen:
+        case .Hub:
             state = .Hub
         case .DeathScreen, .Editor:
             state = .None

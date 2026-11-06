@@ -232,7 +232,7 @@ draw_stash_world :: proc(w: ^World) {
     _, pos, ok := find_nearby_stash(w)
     if !ok { return }
 
-    prompt := t(.STASH_INTERACT)
+    prompt := interact_prompt(.STASH_INTERACT)
     fs := f32(10)
     sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))

@@ -1,5 +1,7 @@
 # Reproducible Windows setup
 
+For macOS see [SETUP-MACOS.md](SETUP-MACOS.md).
+
 1. Download the **Windows amd64** archive from the official
    [Odin dev-2026-10 release](https://github.com/odin-lang/Odin/releases/tag/dev-2026-10).
    Extract the complete archive, including `core`, `vendor`, `bin` and LLVM files.
@@ -26,8 +28,10 @@ The required clockwork core is included at `deps/clockwork-ecs/clockwork`. Its
 exact version, origin, permission and hashes are documented in
 [the snapshot README](../deps/clockwork-ecs/README.md). The scripts check every
 source file against that manifest. There is no private sibling dependency.
-Raylib and microui come from the pinned Odin archive. Clay's existing Windows
-binding and static library remain in `clay/`.
+Raylib comes from the pinned Odin archive. Clay's existing Windows binding and
+static library remain in `clay/`. Dear ImGui for the developer tools is vendored in
+`deps/imgui` (see its `snapshot.json`); Windows links the prebuilt
+`deps/imgui/imgui/imgui_windows_x64.lib` from the pinned odin-imgui commit.
 
 The scripts select LLVM's **lld** linker. The default radlink shipped with this
 Odin release crashed linking this game's debug build locally; lld links the same

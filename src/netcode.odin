@@ -172,14 +172,19 @@ _netcode_snapshot_entity :: proc(w: ^World, id: int, kind: p2p.SyncKind, slot: u
         h := comp_get(w, id, .Health, HealthComp)
         if h.max > 0 { hp_frac = u8(clamp(h.current / h.max, 0, 1) * 255) }
     }
-    archetype := u8(0)
+    archetype   := u8(0)
+    windup_frac := u8(0)
     if kind == .Enemy && world_has_component(w, id, .AIAgent) {
-        archetype = comp_get(w, id, .AIAgent, AIAgentComp).roster_index
+        ai := comp_get(w, id, .AIAgent, AIAgentComp)
+        archetype = ai.roster_index
+        if ai.windup > 0 && ai.windup_max > 0 {
+            windup_frac = u8(clamp(1 - ai.windup / ai.windup_max, 0, 1) * 254) + 1
+        }
     }
     return p2p.SyncEntity{
         wire_id = u32(id), kind = kind, slot = slot,
         pos = t.position, rot = t.rotation, vel = vel, hp_frac = hp_frac,
-        archetype = archetype,
+        archetype = archetype, windup_frac = windup_frac,
     }
 }
 
@@ -274,6 +279,15 @@ _netcode_apply_snapshot :: proc(entities: []p2p.SyncEntity) {
         if world_has_component(w, id, .Health) {
             h := comp_get(w, id, .Health, HealthComp)
             if h.max > 0 { h.current = f32(e.hp_frac) / 255.0 * h.max }
+        }
+        if e.kind == .Enemy && world_has_component(w, id, .AIAgent) {
+            ai := comp_get(w, id, .AIAgent, AIAgentComp)
+            if e.windup_frac > 0 && ai.windup_max > 0 {
+                ai.windup       = (1 - f32(e.windup_frac - 1) / 254) * ai.windup_max
+                ai.windup_angle = e.rot
+            } else {
+                ai.windup = 0
+            }
         }
     }
 

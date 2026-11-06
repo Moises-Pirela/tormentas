@@ -589,3 +589,14 @@ _mm_text_input :: proc(buf: []u8) {
         buf[cur] = 0
     }
 }
+
+probe_start_singleplayer :: proc() {
+    name := "Probe"
+    char_slot_create(0, transmute([]u8)name)
+    stems := PLAYER_STEMS
+    g_player_stem        = stems[0]
+    g_selected_class_idx = 0
+    g_char_save.slots[0]._reserved[0] = 1
+    _mm_select_slot(0)
+    _on_black_singleplayer()
+}

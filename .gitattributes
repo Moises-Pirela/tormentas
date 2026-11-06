@@ -1,1 +1,5 @@
 /deps/clockwork-ecs/clockwork/*.odin text eol=lf
+/clay/upstream/clay.h text eol=lf
+/clay/upstream/LICENSE.md text eol=lf
+*.sh text eol=lf
+/deps/imgui/** -text

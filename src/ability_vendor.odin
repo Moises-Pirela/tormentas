@@ -119,7 +119,7 @@ draw_ability_vendor_world :: proc(w: ^World) {
 
         if !ui_has(.AbilityVendor) &&
            dist_sq <= ABILITY_VENDOR_PROMPT_DIST * ABILITY_VENDOR_PROMPT_DIST {
-            prompt  := t(.ABILITY_VENDOR_INTERACT)
+            prompt  := interact_prompt(.ABILITY_VENDOR_INTERACT)
             pfs     := f32(9)
             psz     := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
             t_now   := f32(rl.GetTime())

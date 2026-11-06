@@ -23,6 +23,9 @@ input_begin_frame :: proc() {
     g_input.key_consumed = {}
     g_input.btn_consumed = {}
     g_input.mode = .UI if ui_any() else .Gameplay
+    if devui_wants_text() {
+        for &k in g_input.key_consumed { k = true }
+    }
 }
 
 input_is_gameplay :: proc() -> bool { return g_input.mode == .Gameplay }

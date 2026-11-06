@@ -21,7 +21,10 @@ movement_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             sec := comp_get(w, id, .StatusEffect, StatusEffectComp)
             if status_effect_is_active(sec, .Slow) {
                 slow := status_effect_get(sec, .Slow)
-                vel_mult *= (1.0 - slow.strength)
+                vel_mult *= (1.0 - clamp(slow.strength, 0, 1))
+            }
+            if status_effect_is_active(sec, .Stun) || status_effect_is_active(sec, .Root) {
+                vel_mult = 0
             }
         }
 
@@ -41,6 +44,12 @@ projectile_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         t := comp_get(w, id, .Transform, TransformComp)
         p := comp_get(w, id, .Projectile, ProjectileComp)
 
+        if !p.has_prev {
+            p.prev_pos = projectile_segment_start(w, p, t.position)
+            p.has_prev = true
+        } else {
+            p.prev_pos = { t.position[0], t.position[1] }
+        }
         t.position[0] += p.direction[0] * p.speed * dt
         t.position[1] += p.direction[1] * p.speed * dt
         t.position[2] += p.direction[2] * p.speed * dt

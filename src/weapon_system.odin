@@ -112,10 +112,10 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
             new_ammo_max := int(f32(p.ammo_max) * (1.0 + bonus_ammo_pct)) if p.ammo_max > 0 else 0
             if new_ammo_max != wp.ammo_max {
-                wp.ammo_max = new_ammo_max
-                if new_ammo_max > 0 {
-                    wp.ammo_current = clamp(wp.ammo_current, 0, new_ammo_max)
-                }
+                wp.ammo_max     = new_ammo_max
+                wp.ammo_current = new_ammo_max
+                wp.is_reloading = false
+                wp.reload_timer = 0
             }
         }
 
@@ -201,6 +201,21 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             reload_speed_mult     = st.reload_speed_mult
             projectile_speed_mult = st.projectile_speed_mult
             ranged_blocked        = st.ranged_attacks_blocked
+        }
+        if wp.type != .Melee && wp.ammo_max > 0 {
+            if wp.is_reloading {
+                wp.reload_timer -= dt * max(reload_speed_mult, 0.1)
+                if wp.reload_timer > 0 { continue }
+                wp.is_reloading = false
+                wp.reload_timer = 0
+                wp.ammo_current = wp.ammo_max
+            } else if wp.ammo_current <= 0 ||
+                      (input.reload_pressed && wp.ammo_current < wp.ammo_max) {
+                wp.is_reloading = true
+                wp.reload_timer = max(wp.reload_time, 0.1)
+                play_sfx_at("reload_start", comp_get(w, shooter_id, .Transform, TransformComp).position)
+                continue
+            }
         }
         if !input.fire_pressed { continue }
         if wp.type == .Melee   { continue }
@@ -288,7 +303,11 @@ weapon_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
         wfresh := comp_get(w, wid, .Weapon, WeaponComp)
         if wp_snap.fire_rate > 0 {
-            wfresh.cooldown = 1.0 / (wp_snap.fire_rate * fire_rate_mult)
+            interval       := 1.0 / max(wp_snap.fire_rate * fire_rate_mult, 0.01)
+            wfresh.cooldown = max(wfresh.cooldown, -TICK_DT) + interval
+        }
+        if wfresh.ammo_max > 0 && wfresh.ammo_current > 0 {
+            wfresh.ammo_current -= 1
         }
 
         if world_has_component(w, shooter_id, .AnimState) {

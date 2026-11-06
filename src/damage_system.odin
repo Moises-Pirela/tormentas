@@ -6,6 +6,7 @@ import "core:math/rand"
 DropPending :: struct { pos: [3]f32, seed: u64, entity_id: int, was_boss: bool }
 
 RESPAWN_DELAY      :: f32(2.0)
+MAX_MITIGATION     :: f32(0.75)
 XP_PER_KILL        :: f32(20)
 LEVELUP_FLASH_TIME :: f32(2.5)
 
@@ -18,7 +19,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     bomb_skip   : [32]int
     bomb_skip_n : int
 
-    for ev in w.damage_events {
+    for ev, ev_i in w.damage_events {
         {
             skip := false
             for i in 0..<bomb_skip_n { if bomb_skip[i] == ev.target_id { skip = true; break } }
@@ -26,6 +27,13 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
         if !world_is_valid(w, ev.target_id)               { continue }
         if !world_has_component(w, ev.target_id, .Health) { continue }
+        if comp_get(w, ev.target_id, .Health, HealthComp).current <= 0 { continue }
+        if ev.amount > 0 && world_has_component(w, ev.target_id, .DodgeState) &&
+           comp_get(w, ev.target_id, .DodgeState, DodgeComp).active {
+            continue
+        }
+        direct_hit := !ev.periodic && ev.kind != .Poison && ev.kind != .Fire
+        self_heal  := ev.amount < 0 && ev.self_heal
 
         if ev.amount > 0 && (ev.target_id == w.player_id || ev.source_id == w.player_id) {
             mark_combat()
@@ -34,9 +42,10 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         h := comp_get(w, ev.target_id, .Health, HealthComp)
         amount := ev.amount
 
+        phys_reduction := f32(0)
         if ev.amount > 0 && ev.kind == .Physical &&
            world_has_component(w, ev.target_id, .Stats) {
-            amount *= (1.0 - comp_get(w, ev.target_id, .Stats, StatsComp).armor)
+            phys_reduction = clamp(comp_get(w, ev.target_id, .Stats, StatsComp).armor, 0, MAX_MITIGATION)
         }
 
         if ev.amount > 0 && world_has_component(w, ev.target_id, .DamageAmp) {
@@ -53,9 +62,15 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             case .Galvanic:  resist = res.galvanic
             case .Poison:    resist = res.poison
             }
-            if resist > 0 {
-                amount *= (1.0 - clamp(resist, 0, 0.75))
+            resist = clamp(resist, 0, MAX_MITIGATION)
+            if ev.kind == .Physical {
+                phys_reduction = 1 - (1 - phys_reduction) * (1 - resist)
+            } else if resist > 0 {
+                amount *= (1.0 - resist)
             }
+        }
+        if phys_reduction > 0 {
+            amount *= 1 - min(phys_reduction, MAX_MITIGATION)
         }
 
         if amount > 0 && h.shield > 0 {
@@ -141,19 +156,17 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
 
         is_crit := false
-        if amount > 0 && world_has_component(w, ev.target_id, .AIAgent) {
-            best_crit := f32(0.05)
-            for slot in 0..<MAX_PLAYERS {
-                pid := w.player_ids[slot]
-                if !world_is_valid(w, pid) { continue }
-                if !world_has_component(w, pid, .Stats) { continue }
-                c := comp_get(w, pid, .Stats, StatsComp).crit_chance
-                if c > best_crit { best_crit = c }
+        if amount > 0 && !ev.periodic && world_has_component(w, ev.target_id, .AIAgent) {
+            crit_chance := f32(0)
+            if direct_hit && world_is_valid(w, ev.source_id) &&
+               world_has_component(w, ev.source_id, .Player) &&
+               world_has_component(w, ev.source_id, .Stats) {
+                crit_chance = max(f32(0.05), comp_get(w, ev.source_id, .Stats, StatsComp).crit_chance)
             }
 
-            crit_state               := rand.create(loot_seed(w.tick, ev.target_id) ~ 0xdeadbeef_cafebabe)
+            crit_state               := rand.create(loot_seed(w.tick, ev.target_id) ~ 0xdeadbeef_cafebabe ~ (u64(ev_i) * 0x9e3779b97f4a7c15))
             context.random_generator  = rand.default_random_generator(&crit_state)
-            if rand.float32() < best_crit {
+            if rand.float32() < crit_chance {
                 is_crit = true
                 amount *= 2.0
                 if ev.source_id == w.player_id {
@@ -167,13 +180,13 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-        if amount < 0 &&
+        if amount < 0 && !self_heal &&
            world_has_component(w, ev.target_id, .Stats) &&
            comp_get(w, ev.target_id, .Stats, StatsComp).healing_blocked {
             amount = 0
         }
 
-        if amount < 0 && ev.source_id == 0 &&
+        if amount < 0 && !self_heal && ev.source_id == 0 &&
            world_has_component(w, ev.target_id, .Stats) &&
            comp_get(w, ev.target_id, .Stats, StatsComp).pickup_healing_blocked {
             amount = 0
@@ -201,7 +214,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
 
         if !force_death && amount > 0 && world_has_component(w, ev.target_id, .AIAgent) {
-            if ev.source_id != 0 &&
+            if ev.source_id != 0 && ev.kind == .Physical &&
                world_has_component(w, ev.source_id, .Stats) &&
                comp_get(w, ev.source_id, .Stats, StatsComp).nonlethal_shots {
                 if h.current - amount <= 0 {
@@ -211,7 +224,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-        if amount > 0 && ev.source_id != 0 &&
+        if amount > 0 && ev.source_id != 0 && direct_hit &&
            world_has_component(w, ev.target_id, .MutationContainer) {
             tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
@@ -224,7 +237,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-        if amount > 0 && world_has_component(w, ev.target_id, .MutationContainer) {
+        if amount > 0 && !ev.periodic && world_has_component(w, ev.target_id, .MutationContainer) {
             tgt_mc := comp_get(w, ev.target_id, .MutationContainer, MutationContainerComp)
             for mi in 0..<tgt_mc.entity_count {
                 meid := tgt_mc.entities[mi]
@@ -250,7 +263,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             if h.current > 1 { h.current = 1 }
         }
 
-        if amount > 0 && ev.source_id != 0 &&
+        if amount > 0 && ev.source_id != 0 && direct_hit &&
            world_has_component(w, ev.source_id, .MutationContainer) &&
            world_has_component(w, ev.target_id, .AIAgent) {
             src_mc := comp_get(w, ev.source_id, .MutationContainer, MutationContainerComp)
@@ -259,17 +272,17 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 if !world_is_valid(w, meid)                 { continue }
                 if !world_has_component(w, meid, .MutLifesteal) { continue }
                 ls := comp_get(w, meid, .MutLifesteal, MutLifestealComp)
-                world_push_heal(w, ev.source_id, ls.hp_per_hit)
+                world_push_self_heal(w, ev.source_id, ls.hp_per_hit)
                 break
             }
         }
 
-        if amount > 0 && world_has_component(w, ev.target_id, .Transform) {
+        if amount >= 1 && !ev.periodic && world_has_component(w, ev.target_id, .Transform) {
             pos := comp_get(w, ev.target_id, .Transform, TransformComp).position
             push_dmg_number(pos[0], pos[1], amount, ev.target_id != w.player_id, is_crit)
         }
 
-        if amount > 0 && h.current > 0 && world_has_component(w, ev.target_id, .AnimState) {
+        if amount > 0 && !ev.periodic && h.current > 0 && world_has_component(w, ev.target_id, .AnimState) {
             anim := comp_get(w, ev.target_id, .AnimState, AnimStateComp)
             anim.current_state = .Hit
             anim.frame_index = 0
@@ -278,7 +291,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
 
         if h.current > 0 && !force_death {
-            if ev.target_id == w.player_id && amount > 0 {
+            if ev.target_id == w.player_id && amount > 0 && !ev.periodic {
                 play_sfx("player_hurt")
             }
             continue
@@ -336,8 +349,10 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         }
 
         if bomb_triggered {
-            bomb_skip[min(bomb_skip_n, len(bomb_skip) - 1)] = ev.target_id
-            bomb_skip_n += 1
+            if bomb_skip_n < len(bomb_skip) {
+                bomb_skip[bomb_skip_n] = ev.target_id
+                bomb_skip_n += 1
+            }
             continue
         }
 
@@ -443,11 +458,14 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     for mi in 0..<kh_mc.entity_count {
                         meid := kh_mc.entities[mi]
                         if !world_is_valid(w, meid)                  { continue }
+                        if world_has_component(w, meid, .MutTimedSelfDamage) {
+                            comp_get(w, meid, .MutTimedSelfDamage, MutTimedSelfDamageComp).timer = 0
+                        }
                         if !world_has_component(w, meid, .MutKillHeal) { continue }
                         kh := comp_get(w, meid, .MutKillHeal, MutKillHealComp)
                         if world_has_component(w, ppid, .Health) {
                             ph := comp_get(w, ppid, .Health, HealthComp)
-                            world_push_heal(w, ppid, ph.max * kh.heal_pct)
+                            world_push_self_heal(w, ppid, ph.max * kh.heal_pct)
                         }
                         break
                     }
@@ -486,6 +504,7 @@ damage_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                                     stack_behavior = .Refresh,
                                     duration       = 4.0,
                                     strength       = 1.0,
+                                    source_id      = ev.source_id,
                                 })
                             }
                         }

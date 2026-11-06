@@ -13,3 +13,6 @@ save/
 /.local/
 /steamworks/
 /steam_api*
+*.a
+*.o
+*.dSYM/

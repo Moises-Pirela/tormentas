@@ -1,5 +1,8 @@
 package main
 
+MAX_HP_REGEN_PCT         :: f32(0.03)
+MAX_MUTATION_DAMAGE_MULT :: f32(12)
+
 status_is_stationary :: proc(w: ^World, id: int, slot: int) -> bool {
     moving_input := false
     if slot >= 0 && slot < MAX_PLAYERS {
@@ -209,7 +212,7 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                     tsd := comp_get(w, eid, .MutTimedSelfDamage, MutTimedSelfDamageComp)
                     tsd.timer += dt
                     if tsd.timer >= tsd.grace && h.current > 1.0 {
-                        world_push_damage(w, id, tsd.dps * dt)
+                        world_push_periodic_damage(w, id, tsd.dps * dt)
                     }
                 }
 
@@ -235,17 +238,16 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         sci_hp_mult   := 1.0 + f32(eff_sci - 1) * 0.12
         sci_cd_mult   := 1.0 + f32(eff_sci - 1) * 0.05
         crit_chance   := clamp(0.05 + f32(eff_dex - 1) * 0.025, 0.05, 0.75)
-        damage_mult   := 1.0 + affix_damage_pct
-        damage_mult *= mut_damage_mult
-        damage_mult *= missing_hp_damage_mult
+        mutation_mult := mut_damage_mult * missing_hp_damage_mult
 
         projectile_speed_mult := 1.0 + affix_proj_speed_pct
         movement_blocked      := false
         if root_on_fire_active {
             movement_blocked       = true
-            damage_mult           *= root_damage_mult
+            mutation_mult         *= root_damage_mult
             projectile_speed_mult *= root_proj_speed_mult
         }
+        damage_mult := (1.0 + affix_damage_pct) * min(mutation_mult, MAX_MUTATION_DAMAGE_MULT)
 
         overcharge_fire_rate := f32(1.0)
         overcharge_reload    := f32(1.0)
@@ -263,7 +265,7 @@ stats_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         st.reload_speed_mult        = dex_mult * (1.0 + affix_reload_spd_pct) * overcharge_reload
         st.projectile_speed_mult    = projectile_speed_mult
         st.armor                    = clamp(affix_armor + base_armor_sum, 0, 0.75)
-        st.hp_regen_pct             = affix_hp_regen
+        st.hp_regen_pct             = min(affix_hp_regen, MAX_HP_REGEN_PCT)
         st.crit_chance              = clamp(crit_chance, 0, 0.95)
         st.special_ability_crit     = 0
         st.dodge_cooldown_reduction = 0

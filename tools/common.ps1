@@ -13,6 +13,18 @@ function Resolve-Odin([string]$Requested) {
     return $Compiler
 }
 
+function Assert-ImGuiSnapshot {
+    $Base = Join-Path $RepoRoot 'deps\imgui'
+    $Snapshot = Get-Content -LiteralPath (Join-Path $Base 'snapshot.json') -Raw | ConvertFrom-Json
+    foreach ($Entry in @($Snapshot.sha256.PSObject.Properties)) {
+        $File = Join-Path $Base ($Entry.Name -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $File)) { throw "imgui snapshot file missing: $($Entry.Name)" }
+        if ((Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Entry.Value) {
+            throw "imgui snapshot mismatch: $($Entry.Name)"
+        }
+    }
+}
+
 function Assert-ClockworkSnapshot {
     $Base = Join-Path $RepoRoot 'deps\clockwork-ecs'
     $Snapshot = Get-Content -LiteralPath (Join-Path $Base 'snapshot.json') -Raw | ConvertFrom-Json

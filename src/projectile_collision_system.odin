@@ -11,6 +11,38 @@ SweepHit :: struct {
     id: int,
 }
 
+PLAYER_SHOT_GRACE    :: f32(6)
+ENEMY_SHOT_FORGIVE   :: f32(4)
+
+projectile_hit_radius :: proc(target_radius: f32, shooter_faction: u8) -> f32 {
+    r := target_radius + PROJ_RADIUS
+    r += PLAYER_SHOT_GRACE if shooter_faction == 0 else -ENEMY_SHOT_FORGIVE
+    return max(r, 2)
+}
+
+@(private = "file")
+_projectile_can_hit :: proc(w: ^World, target_id: int, proj: ^ProjectileComp) -> bool {
+    if world_tag_is_destroy(w, target_id) { return false }
+    col := comp_get(w, target_id, .Collider, ColliderComp)
+    if col.is_trigger                      { return false }
+    if col.faction == proj.owner_faction   { return false }
+    if comp_get(w, target_id, .Health, HealthComp).current <= 0 { return false }
+    if world_has_component(w, target_id, .Respawn) &&
+       comp_get(w, target_id, .Respawn, RespawnComp).timer > 0 { return false }
+    if world_has_component(w, target_id, .DodgeState) &&
+       comp_get(w, target_id, .DodgeState, DodgeComp).active { return false }
+    return true
+}
+
+projectile_segment_start :: proc(w: ^World, proj: ^ProjectileComp, pos: [3]f32) -> [2]f32 {
+    if proj.has_prev { return proj.prev_pos }
+    if world_is_valid(w, proj.owner_id) && world_has_component(w, proj.owner_id, .Transform) {
+        op := comp_get(w, proj.owner_id, .Transform, TransformComp).position
+        return { op[0], op[1] }
+    }
+    return { pos[0], pos[1] }
+}
+
 projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
@@ -20,59 +52,53 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     target_ids := world_query(w, query_mask(.Collider, .Health, .Transform))
     defer delete(target_ids)
 
-    for proj_id in proj_ids {
-        if world_tag_is_destroy(w, proj_id) { continue }
+    boxes := world_query(w, query_mask(.Greybox, .Transform))
+    defer delete(boxes)
 
+    for proj_id in proj_ids {
         proj   := comp_get(w, proj_id, .Projectile, ProjectileComp)
+        if world_tag_is_destroy(w, proj_id) && proj.lifetime > 0 { continue }
         proj_t := comp_get(w, proj_id, .Transform, TransformComp)
 
+        a  := projectile_segment_start(w, proj, proj_t.position)
+        ax := a[0]
+        ay := a[1]
         bx := proj_t.position[0]
         by := proj_t.position[1]
-
-        ax := bx - proj.direction[0] * proj.speed * dt
-        ay := by - proj.direction[1] * proj.speed * dt
-
         dx := bx - ax
         dy := by - ay
+        proj.prev_pos = { bx, by }
+        proj.has_prev = true
 
-        if dx*dx + dy*dy < 1.0 {
-            for target_id in target_ids {
-                if target_id == proj_id { continue }
-                col := comp_get(w, target_id, .Collider, ColliderComp)
-                if col.faction == proj.owner_faction { continue }
-                tt  := comp_get(w, target_id, .Transform, TransformComp)
-                     bounds := entity_collider_bounds(w, target_id)
-                     if bx >= tt.position[0] + bounds.min[0] - PROJ_RADIUS &&
-                         bx <= tt.position[0] + bounds.max[0] + PROJ_RADIUS &&
-                         by >= tt.position[1] + bounds.min[1] - PROJ_RADIUS &&
-                         by <= tt.position[1] + bounds.max[1] + PROJ_RADIUS {
-                    if _apply_proj_hit(w, proj_id, proj, target_id, tt.position) {
-                        world_tag_destroy(w, proj_id)
-                        break
-                    }
-                }
+        t_block := raycast_walls_t(ax, ay, bx, by)
+        for bid in boxes {
+            gb := comp_get(w, bid, .Greybox, GreyboxComp)
+            if !gb.solid { continue }
+            bt := comp_get(w, bid, .Transform, TransformComp).position
+            hx := max(gb.size[0], 1) * 0.5
+            hy := max(gb.size[1], 1) * 0.5
+            if tb, hit := _ray_bounds_t(ax, ay, dx, dy, bt[0] - hx, bt[1] - hy, bt[0] + hx, bt[1] + hy); hit {
+                t_block = min(t_block, tb)
             }
-            continue
         }
-
-        t_wall := raycast_walls_t(ax, ay, bx, by)
 
         hits:   [MAX_SWEEP_HITS]SweepHit
         n_hits: int
         for target_id in target_ids {
-            if target_id == proj_id { continue }
-            col := comp_get(w, target_id, .Collider, ColliderComp)
-            if col.faction == proj.owner_faction { continue }
-            tt := comp_get(w, target_id, .Transform, TransformComp)
-            bounds := entity_collider_bounds(w, target_id)
-            th, hit := _ray_bounds_t(
-                ax, ay, dx, dy,
-                tt.position[0] + bounds.min[0] - PROJ_RADIUS,
-                tt.position[1] + bounds.min[1] - PROJ_RADIUS,
-                tt.position[0] + bounds.max[0] + PROJ_RADIUS,
-                tt.position[1] + bounds.max[1] + PROJ_RADIUS,
-            )
-            if !hit || th > t_wall { continue }
+            if target_id == proj_id || target_id == proj.owner_id { continue }
+            if !_projectile_can_hit(w, target_id, proj) { continue }
+            tp := comp_get(w, target_id, .Transform, TransformComp).position
+            r  := projectile_hit_radius(entity_hit_radius(w, target_id), proj.owner_faction)
+            th: f32
+            hit: bool
+            if dx*dx + dy*dy < 1e-6 {
+                ox := bx - tp[0]
+                oy := by - tp[1]
+                hit = ox*ox + oy*oy <= r*r
+            } else {
+                th, hit = _ray_circle_t(ax, ay, dx, dy, tp[0], tp[1], r)
+            }
+            if !hit || th > t_block { continue }
             if n_hits < MAX_SWEEP_HITS {
                 k := n_hits
                 for k > 0 && hits[k-1].t > th { hits[k] = hits[k-1]; k -= 1 }
@@ -81,8 +107,8 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
             }
         }
 
-        destroyed := false
         stop_t    := f32(1)
+        destroyed := false
         for k in 0..<n_hits {
             tid := hits[k].id
             tt  := comp_get(w, tid, .Transform, TransformComp)
@@ -92,14 +118,14 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
                 break
             }
         }
+        if !destroyed && t_block < 1 {
+            stop_t    = t_block
+            destroyed = true
+        }
 
         if destroyed {
             proj_t.position[0] = ax + dx * stop_t
             proj_t.position[1] = ay + dy * stop_t
-            world_tag_destroy(w, proj_id)
-        } else if t_wall < 1 {
-            proj_t.position[0] = ax + dx * t_wall
-            proj_t.position[1] = ay + dy * t_wall
             world_tag_destroy(w, proj_id)
         }
     }
@@ -107,13 +133,20 @@ projectile_collision_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
 @(private = "file")
 _apply_proj_hit :: proc(w: ^World, proj_id: int, proj: ^ProjectileComp, target_id: int, target_pos: [3]f32) -> (destroy: bool) {
+    for i in 0..<int(proj.hit_count) {
+        if int(proj.hit_ids[i]) == target_id { return false }
+    }
+    if int(proj.hit_count) < PROJECTILE_HIT_MEMORY {
+        proj.hit_ids[proj.hit_count] = i32(target_id)
+        proj.hit_count += 1
+    }
     world_push_damage(w, target_id, proj.damage, proj.owner_id)
 
     if world_has_component(w, proj_id, .DamageAmpOnHit) {
         dah := comp_get(w, proj_id, .DamageAmpOnHit, DamageAmpOnHitComp)
         if world_has_component(w, target_id, .DamageAmp) {
             da      := comp_get(w, target_id, .DamageAmp, DamageAmpComp)
-            da.mult *= dah.mult
+            da.mult  = min(da.mult * dah.mult, DAMAGE_AMP_MAX)
             da.timer = max(da.timer, dah.dur)
         } else {
             comp_set(w, target_id, .DamageAmp, DamageAmpComp{ mult = dah.mult, timer = dah.dur })
@@ -178,7 +211,7 @@ _ray_bounds_t :: proc(ax, ay, dx, dy, min_x, min_y, max_x, max_y: f32) -> (t: f3
 
 raycast_walls_t :: proc(ax, ay, bx, by: f32) -> f32 {
     ix, iy := world_to_tile(ax, ay)
-    if tile_base(tile_at(ix, iy)) != .Floor { return 0 }
+    if !tile_is_walkable(ix, iy) { return 0 }
 
     ts := f32(TILE_SIZE)
     dx := bx - ax
@@ -220,6 +253,6 @@ raycast_walls_t :: proc(ax, ay, bx, by: f32) -> f32 {
             t_max_y += t_dlt_y
         }
         if t_enter > 1 { return 1 }
-        if tile_base(tile_at(ix, iy)) != .Floor { return t_enter }
+        if !tile_is_walkable(ix, iy) { return t_enter }
     }
 }

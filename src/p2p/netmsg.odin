@@ -16,9 +16,10 @@ SyncEntity :: struct {
     pos:     [3]f32,
     rot:     f32,
     vel:     [3]f32,
-    hp_frac:   u8,
-    archetype: u8,
-    _pad2:     u16,
+    hp_frac:     u8,
+    archetype:   u8,
+    windup_frac: u8,
+    _pad2:       u8,
 }
 
 SYNC_ENTITY_SIZE :: size_of(SyncEntity)

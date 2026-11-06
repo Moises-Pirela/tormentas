@@ -85,6 +85,14 @@ world_push_heal :: proc(w: ^World, target_id: int, amount: f32) {
     append(&w.damage_events, DamageEvent{target_id = target_id, amount = -amount})
 }
 
+world_push_self_heal :: proc(w: ^World, target_id: int, amount: f32) {
+    append(&w.damage_events, DamageEvent{target_id = target_id, amount = -amount, source_id = target_id, self_heal = true})
+}
+
+world_push_periodic_damage :: proc(w: ^World, target_id: int, amount: f32, source_id: int = 0, kind: DamageKind = .Physical) {
+    append(&w.damage_events, DamageEvent{target_id = target_id, amount = amount, source_id = source_id, kind = kind, periodic = true})
+}
+
 world_clear_damage_events :: proc(w: ^World) {
     clear(&w.damage_events)
 }

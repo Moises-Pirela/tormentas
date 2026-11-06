@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'tools\common.ps1')
 $Odin = Resolve-Odin $OdinPath
 Assert-ClockworkSnapshot
+Assert-ImGuiSnapshot
 New-Item -ItemType Directory -Force -Path (Join-Path $RepoRoot 'bin') | Out-Null
 $Cw = Join-Path $RepoRoot 'deps\clockwork-ecs'
 $Offline = Join-Path $RepoRoot 'deps\offline'

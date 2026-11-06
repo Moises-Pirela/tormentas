@@ -1,18 +1,19 @@
 # Las Tormentas
 
-An isometric extraction-roguelite with co-op, built from scratch in [Odin](https://odin-lang.org/)
+An isometric action RPG with co-op, built from scratch in [Odin](https://odin-lang.org/)
 on a custom ECS and [raylib](https://www.raylib.com/). Drop into a storm-wracked frontier, fight
-your way through a raid, and extract with your loot — or lose it.
+your way through a dungeon, and keep everything you find.
 
 > **Status:** in active development. The engine and systems are deep; content is still being
 > filled in. Not yet feature-complete or balanced.
 
 ## Gameplay
 
-The core loop is **raid → extract → hub → upgrade → raid again**:
+The core loop is **hub → dungeon → hub → upgrade → dungeon again**:
 
-- **Raids.** Hand-placed isometric levels full of enemies, traps, loot, and environmental
-  interactables. Reach an extraction point and channel out to bank what you found.
+- **Dungeons.** Hand-placed isometric levels full of enemies, traps, loot, and environmental
+  interactables, entered from the portal in the hub. There is no extraction: you leave a
+  dungeon by dying or quitting, and you keep everything either way.
 - **The hub.** Between raids, spend your haul at the shop, stash gear, buy abilities, grow your
   mutation tree, and take quests.
 - **Buildcraft.** Four character classes, each locked to a single weapon archetype that matches
@@ -27,17 +28,18 @@ Everything here is hand-rolled — no commercial engine.
 - **Language:** Odin
 - **Rendering / platform:** raylib (via Odin's `vendor:raylib`)
 - **ECS:** `clockwork` — a separate package (`clockwork-ecs`), wired in as a `cw` collection
-- **UI:** Clay (immediate-mode layout) with render-texture-cached panels
+- **UI:** Clay (immediate-mode layout) with render-texture-cached panels for the game; Dear ImGui (docking) for the developer tools
 - **Netcode:** fixed 60 Hz timestep, lockstep P2P determinism (only inputs cross the wire), Steamworks for lobbies/invites
 - **Localization:** English, Spanish, Portuguese (`data/loc.csv`)
 - **In-house tools:** a level editor, an animation-sheet editor, and a dev console, all built into the game
 
 ## Building
 
-Windows x64 and **Odin dev-2026-10 (84bc3fc)** are required. Download the complete
+**Odin dev-2026-10 (84bc3fc)** is required on every platform. Download the complete
 toolchain from the [official release](https://github.com/odin-lang/Odin/releases/tag/dev-2026-10)
-and put `odin.exe` on PATH or set `ODIN` to its full path. See
-[SETUP.md](docs/SETUP.md) for Windows build tools and exact setup instructions.
+and put `odin` on PATH or set `ODIN` to its full path. See
+[SETUP.md](docs/SETUP.md) for Windows build tools and exact setup instructions, and
+[SETUP-MACOS.md](docs/SETUP-MACOS.md) for the macOS port.
 
 The required MIT-licensed clockwork snapshot is included in
 [`deps/clockwork-ecs`](deps/clockwork-ecs/README.md), with provenance and a verified
@@ -63,6 +65,19 @@ Output lands at `bin\tormentas.exe`. (`build.bat` just forwards to `build.ps1`.)
 run.bat
 ```
 
+**macOS (Apple silicon)**
+
+```sh
+tools/setup-macos.sh     # one-time: pinned Odin toolchain into ~/odin + Clay static libs
+./test.sh                # same three suites as test.bat
+./build.sh               # debug build -> bin/tormentas
+./run.sh                 # launch
+./build.sh release       # optimized build -> dist/macos/Tormentas.app + zip
+```
+
+Raylib and rlgl ship inside the Odin archive; Clay and Dear ImGui are compiled from the
+pinned sources in `clay/upstream/` and `deps/imgui/` on first build. Details in [SETUP-MACOS.md](docs/SETUP-MACOS.md).
+
 ### Optional co-op testing
 
 Steam and loopback multiplayer require the optional Steam build described in
@@ -81,9 +96,9 @@ commits still contain the previously bundled Steamworks material.
 src/        Game and engine source (Odin)
 data/       Content: levels, sprites, sounds, fonts, loc, config, loot tables
 tools/      gen_level scripts and asset helpers
-clay/       Clay UI bindings
-deps/       Pinned clockwork core and disabled Steam package
-ui/         Project-owned microui adapters
+clay/       Clay UI bindings, pinned upstream header, Windows static lib
+deps/       Pinned clockwork core, Dear ImGui, and disabled Steam package
+ui/         Project-owned Dear ImGui backend for raylib
 docs/       Reproducible setup and Steamworks submission notes
 bin/ dist/  Build output
 ```
@@ -98,4 +113,5 @@ math.
 
 [MIT](LICENSE) © 2026 Moises Pirela, including the clockwork snapshot included with
 the owner's authorization. Existing third-party components retain their own rights;
-the MIT license does not cover separately obtained Steamworks SDK material.
+the MIT license does not cover separately obtained Steamworks SDK material. Clay
+(`clay/upstream`) is zlib/libpng licensed by Nic Barker.

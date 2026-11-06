@@ -109,6 +109,8 @@ AIAgentDef :: struct {
     ai_type:      AIType,
     pellet_count: int,
     spread_angle: f32,
+    windup:       f32,
+    proj_speed:   f32,
 }
 
 DodgeDef :: struct {
@@ -516,6 +518,8 @@ load_entity_defs :: proc(path: string, allocator := context.allocator) -> (defs:
             if v, ok2 := a_obj["damage"];       ok2 { a.damage       = jf32(v) }
             if v, ok2 := a_obj["pellet_count"]; ok2 { a.pellet_count = int(jf32(v)) }
             if v, ok2 := a_obj["spread_angle"]; ok2 { a.spread_angle = jf32(v) }
+            if v, ok2 := a_obj["windup"];       ok2 { a.windup       = jf32(v) }
+            if v, ok2 := a_obj["projectile_speed"]; ok2 { a.proj_speed = jf32(v) }
             if v, ok2 := a_obj["ai_type"].(string); ok2 {
                 a.ai_type = .Ranged if v == "ranged" else .Melee
             }
@@ -914,6 +918,8 @@ spawn_from_def :: proc(w: ^World, def: ^EntityDef) -> int {
             ai_type      = a.ai_type,
             pellet_count = a.pellet_count,
             spread_angle = a.spread_angle,
+            windup_max   = ai_resolve_windup(a),
+            proj_speed   = a.proj_speed,
         })
     }
     if d, ok := def.dodge.?; ok {

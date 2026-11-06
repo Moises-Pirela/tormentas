@@ -3,6 +3,7 @@ package main
 import rl   "vendor:raylib"
 import clay "../clay"
 import      "core:fmt"
+import      "core:strings"
 
 @(private = "file")
 STATUS_EFFECT_LABELS := [len(StatusEffectType)]string{
@@ -225,7 +226,7 @@ draw_hud :: proc(w: ^World) {
 
             GOLD_SZ  := uis(44)
             gold_data := UICustomData{ kind = .GoldChip,
-                gold = UICustomGold{ gold_val = i32(local_stash().gold) } }
+                gold = UICustomGold{ gold_val = i32(hud_gold_display(w)) } }
             if clay.UI(clay.ID("GoldChip"))({
                 layout = { sizing = { clay.SizingFixed(GOLD_SZ),
                                       clay.SizingFixed(GOLD_SZ) } },
@@ -287,7 +288,7 @@ draw_interact_prompt :: proc(w: ^World) {
     rl.DrawTextEx(g_font_body, prompt_cs, {px, py},
         prompt_fs, 1, rl.Color{255, 235, 160, 240})
 
-    key_cs  := cstring("[E]")
+    key_cs  := strings.clone_to_cstring(fmt.tprintf("[%s]", bound_key_label(g_binds.gameplay.interact)), context.temp_allocator)
     key_fs  := uis(13)
     ksz     := rl.MeasureTextEx(g_font_body, key_cs, key_fs, 0.5)
     kx      := sw * 0.5 - ksz.x * 0.5
@@ -326,6 +327,10 @@ _hud_fill_ammo_chip :: proc(w: ^World, chip: ^UICustomAmmo) {
     }
 
     chip.ammo_ratio   = clamp(f32(wp.ammo_current) / f32(wp.ammo_max), 0, 1)
+    chip.is_reloading = wp.is_reloading
+    if wp.is_reloading && wp.reload_time > 0 {
+        chip.reload_ratio = clamp(1 - wp.reload_timer / wp.reload_time, 0, 1)
+    }
     s := fmt.bprintf(chip.ammo_text[:7], "%d", wp.ammo_current)
     chip.ammo_text[len(s)] = 0
 }

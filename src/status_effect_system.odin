@@ -2,6 +2,10 @@ package main
 
 import math "core:math"
 
+POISON_PCT_PER_SEC :: f32(0.04)
+POISON_MIN_DPS     :: f32(6)
+POISON_MAX_POTENCY :: f32(3)
+
 status_effect_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     #partial switch event {
     case .Update:
@@ -43,7 +47,8 @@ _apply_poison_damage :: proc(w: ^World, id: int, effect: ^StatusEffect, dt: f32)
 
     h := comp_get(w, id, .Health, HealthComp)
 
-    damage_per_sec := effect.strength * h.max
+    potency        := clamp(effect.strength, 0, POISON_MAX_POTENCY)
+    damage_per_sec := potency * max(POISON_MIN_DPS, POISON_PCT_PER_SEC * h.max)
     damage_this_tick := damage_per_sec * dt
     effect.acumulator += damage_this_tick
 

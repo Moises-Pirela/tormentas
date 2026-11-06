@@ -1,9 +1,12 @@
 package main
 
 import "core:encoding/json"
+import "core:fmt"
+import "core:strings"
 import rl "vendor:raylib"
 
-CONFIG_PATH :: "data/config.json"
+CONFIG_PATH      :: "data/config.json"
+USER_CONFIG_NAME :: "config.json"
 
 GameplayBinds :: struct {
     move_up:        i32,
@@ -34,9 +37,10 @@ Bindings :: struct {
     language: u8,
     gameplay: GameplayBinds,
     ui:       UIBinds,
+    display:  DisplaySettings,
 }
 
-GAMEPLAY_BIND_COUNT :: 16
+GAMEPLAY_BIND_COUNT :: 15
 UI_BIND_COUNT       :: 3
 TOTAL_BIND_COUNT    :: GAMEPLAY_BIND_COUNT + UI_BIND_COUNT
 
@@ -55,11 +59,11 @@ default_binds :: proc() -> Bindings {
             skill2         = i32(rl.KeyboardKey.E),
             skill3         = i32(rl.KeyboardKey.F),
             skill4         = i32(rl.KeyboardKey.G),
-            interact       = i32(rl.KeyboardKey.E),
+            interact       = i32(rl.KeyboardKey.LEFT_ALT),
             loot_filter    = i32(rl.KeyboardKey.Z),
             open_inventory = i32(rl.KeyboardKey.I),
             open_stats     = i32(rl.KeyboardKey.C),
-            open_abilities = i32(rl.KeyboardKey.A),
+            open_abilities = i32(rl.KeyboardKey.KEY_NULL),
             pause          = i32(rl.KeyboardKey.ESCAPE),
         },
         ui = UIBinds{
@@ -72,7 +76,8 @@ default_binds :: proc() -> Bindings {
 
 load_config :: proc() {
     g_binds = default_binds()
-    data, ok := read_game_file(CONFIG_PATH)
+    data, ok := read_game_file(user_path(USER_CONFIG_NAME))
+    if !ok { data, ok = read_game_file(CONFIG_PATH) }
     if !ok { return }
     defer delete(data)
     json.unmarshal(data, &g_binds)
@@ -83,7 +88,8 @@ save_config :: proc() {
     data, err := json.marshal(g_binds, opt)
     if err != nil { return }
     defer delete(data)
-    write_game_file(CONFIG_PATH, data)
+    ensure_user_dir(".")
+    write_game_file(user_path(USER_CONFIG_NAME), data)
 }
 
 BindRow :: struct {
@@ -107,7 +113,6 @@ gameplay_bind_rows :: proc() -> [GAMEPLAY_BIND_COUNT]BindRow {
         { "Loot Filter",      &g_binds.gameplay.loot_filter    },
         { "Inventory",        &g_binds.gameplay.open_inventory },
         { "Stats",            &g_binds.gameplay.open_stats     },
-        { "Abilities",        &g_binds.gameplay.open_abilities },
         { "Pause",            &g_binds.gameplay.pause          },
     }
 }
@@ -176,8 +181,10 @@ key_name :: proc(k: rl.KeyboardKey, buf: []u8) -> cstring {
     case .RIGHT_SHIFT:   s = "R.Shift"
     case .LEFT_CONTROL:  s = "L.Ctrl"
     case .RIGHT_CONTROL: s = "R.Ctrl"
-    case .LEFT_ALT:      s = "L.Alt"
-    case .RIGHT_ALT:     s = "R.Alt"
+    case .LEFT_ALT:      s = "L.Opt" when ODIN_OS == .Darwin else "L.Alt"
+    case .RIGHT_ALT:     s = "R.Opt" when ODIN_OS == .Darwin else "R.Alt"
+    case .LEFT_SUPER:    s = "L.Cmd" when ODIN_OS == .Darwin else "L.Win"
+    case .RIGHT_SUPER:   s = "R.Cmd" when ODIN_OS == .Darwin else "R.Win"
     case .UP:            s = "Up"
     case .DOWN:          s = "Down"
     case .LEFT:          s = "Left"
@@ -245,4 +252,27 @@ key_name :: proc(k: rl.KeyboardKey, buf: []u8) -> cstring {
     n := copy(buf, s)
     if n < len(buf) { buf[n] = 0 }
     return cstring(&buf[0])
+}
+
+bound_key_label :: proc(key: i32) -> string {
+    buf: [32]u8
+    name := string(key_name(rl.KeyboardKey(key), buf[:]))
+    return strings.clone(name, context.temp_allocator)
+}
+
+interact_prompt :: proc(key: LocKey) -> cstring {
+    text := string(t(key))
+    tag  := fmt.tprintf("[%s]", bound_key_label(g_binds.gameplay.interact))
+    out, _ := strings.replace(text, "[E]", tag, 1, context.temp_allocator)
+    return strings.clone_to_cstring(out, context.temp_allocator)
+}
+
+bind_assign_unique :: proc(rows: ^[TOTAL_BIND_COUNT]BindRow, idx: int, k: i32) {
+    lo, hi := 0, GAMEPLAY_BIND_COUNT
+    if idx >= GAMEPLAY_BIND_COUNT { lo, hi = GAMEPLAY_BIND_COUNT, TOTAL_BIND_COUNT }
+    prev := rows[idx].ptr^
+    for j in lo..<hi {
+        if j != idx && rows[j].ptr^ == k { rows[j].ptr^ = prev }
+    }
+    rows[idx].ptr^ = k
 }

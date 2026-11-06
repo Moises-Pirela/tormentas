@@ -106,7 +106,12 @@ quest_check_all :: proc(w: ^World) {
         }
 
         if def.reward_gold   > 0 { local_stash().gold   += def.reward_gold }
-        if def.reward_serums > 0 { local_stash().serums += def.reward_serums }
+        if def.reward_serums > 0 {
+            local_stash().serums += def.reward_serums
+            if world_is_valid(w, pid) && world_has_component(w, pid, .MutationContainer) {
+                comp_get(w, pid, .MutationContainer, MutationContainerComp).serums += def.reward_serums
+            }
+        }
 
         last_title = t(def.title_key)
         any_done   = true

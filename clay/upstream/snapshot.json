@@ -1,0 +1,17 @@
+{
+  "project": "clay",
+  "source": "https://github.com/nicbarker/clay",
+  "commit": "3be87f190b0cb43ee197dc9e9ea70247eaf19e74",
+  "commit_date": "2026-03-30",
+  "header_version": "0.14 (main branch after the v0.14 tag; last commit before the transitions API)",
+  "license": "zlib/libpng, see LICENSE.md",
+  "why_this_commit": "clay/clay.odin requires Clay__OpenElementWithId, Clay__HashStringWithOffset and Clay__GetParentElementId, which the v0.14 release lacks. Commits from 2025-11-26 (0c8e3005) through 2026-03-30 (3be87f19) share one public API and struct layout that matches the binding and the exported symbol set of clay/windows/clay.lib; later commits add transitions and change the API.",
+  "files": {
+    "clay.h": "https://raw.githubusercontent.com/nicbarker/clay/3be87f190b0cb43ee197dc9e9ea70247eaf19e74/clay.h",
+    "LICENSE.md": "https://raw.githubusercontent.com/nicbarker/clay/3be87f190b0cb43ee197dc9e9ea70247eaf19e74/LICENSE.md"
+  },
+  "sha256": {
+    "clay.h": "2a50d77a9bff94fe3e0d66ec2cbe2b8de9d9723454ab7ce65c9b4d92b6f35297",
+    "LICENSE.md": "5dd30f9f52093076b7574458f5efb8242fe6cbbd4669d4a2914e7616810d0df8"
+  }
+}

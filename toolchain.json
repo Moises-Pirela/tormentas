@@ -3,5 +3,19 @@
   "odin_revision": "84bc3fc",
   "odin_download": "https://github.com/odin-lang/Odin/releases/tag/dev-2026-10",
   "platform": "windows_amd64",
-  "linker": "lld"
+  "linker": "lld",
+  "platforms": {
+    "windows_amd64": {
+      "archive": "odin-windows-amd64-dev-2026-10.zip",
+      "url": "https://github.com/odin-lang/Odin/releases/download/dev-2026-10/odin-windows-amd64-dev-2026-10.zip",
+      "sha256": "b6b2e426a8b6f147b74ec7e18bef8df27cf40fe16193159df7ca09a0cc0c2011",
+      "linker": "lld"
+    },
+    "macos_arm64": {
+      "archive": "odin-macos-arm64-dev-2026-10.tar.gz",
+      "url": "https://github.com/odin-lang/Odin/releases/download/dev-2026-10/odin-macos-arm64-dev-2026-10.tar.gz",
+      "sha256": "b276c6ac87c3eea17446a6ca9080089b6e9f492057fb773591775ee49d92a1cf",
+      "linker": "default"
+    }
+  }
 }

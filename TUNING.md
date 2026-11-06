@@ -1105,3 +1105,192 @@ ZIP spec forbids — it requires `/`. Windows tools tolerate this; macOS Archive
 `tormentas\data\sprites\...` rather than a nested folder tree. The release zip step opens the
 archive directly and writes each entry with `\`→`/` replaced, so the archive is spec-correct and
 opens as a proper `tormentas/` folder on every platform.
+
+## Core loop and combat rules (2026-11-06)
+
+### One spendable gold pool: the stash
+`WalletComp.gold` is gold carried in a raid and at risk; `local_stash().gold` is banked gold and the only
+thing the shop spends or credits. Extraction moves wallet to stash, death zeroes the wallet, and
+`enter_hub` banks any leftover wallet gold (`bank_wallet_gold`). The HUD shows the wallet during a raid
+and the stash in the hub (`hud_gold_display`). Before this the shop read the wallet that extraction had
+just zeroed, so extracted gold could never be spent.
+
+### Leaving a raid any way other than extraction is a death
+`shutdown_game` runs `raid_abandon_local` while `g_raid_in_progress` and the state is `.Gameplay`: carried
+gear and wallet are stripped, serums return to the raid-entry count, and a death is recorded. Pause→Quit
+asks for a second click inside a raid. Without this, quitting saved the full carried inventory.
+
+### Raid stakes are measured from a snapshot at raid entry
+`raid_snapshot_entry` records each slot's `compute_extract_value` and serum count. Extract value (Perfect
+Run, best-extract stat) is the gain over that snapshot, and death forfeits serums picked up in the raid.
+
+### Pause stops the simulation only offline
+`update_playing` skips sim ticks and drops the accumulator while `g_paused` and not online. Online
+sessions keep running because peers cannot be paused unilaterally.
+
+### Poison strength is potency, not a fraction of max HP
+Burn already used 0.03–0.05 of max HP/s; poison sites all passed 1.0, i.e. 100 % max HP/s, which killed
+the boss in about a second. Poison now deals `potency × max(6, 4 % max HP)` per second, potency clamped
+to 3. `.Base` re-application keeps the stronger of the two strengths and DoTs carry the caster in
+`source_id` so poison kills credit the player.
+
+### Damage events: once per entity, i-frames, periodic and self-heal flags
+`damage_system` ignores every event for a target already at 0 HP (tagged entities stay valid until the
+sweep, so multi-hit kills used to re-run the death branch), and positive events for a target whose
+`DodgeComp.active` is set. Aura and self-damage ticks use `world_push_periodic_damage`: no crit, number,
+hit animation, hurt sound, thorns, Black Lung pressure or lifesteal. Mutation heals use
+`world_push_self_heal`, which bypasses the target's own heal blocks; this is what made Blood Frenzy and
+Parasite King cancel themselves. Corpse Tide's trigger is Necrotic, and the nonlethal clamp only applies
+to Physical hits. Crit uses the attacker's own chance and only direct hits can crit.
+
+### Mitigation and multiplier caps
+Armor and physical resist combine as `1 − (1−armor)(1−resist)` with one 75 % cap (`MAX_MITIGATION`);
+they used to multiply to 6.25 % damage taken. The product of mutation damage multipliers is capped at
+12× (`MAX_MUTATION_DAMAGE_MULT`), item regen at 3 % max HP/s, and `DamageAmp` stacking at 3×.
+
+### Magazines are back
+`weapon_system` decrements `ammo_current` per shot, auto-reloads at zero, reloads on the Reload bind,
+scales reload by `reload_speed_mult`, and refills when the magazine size changes on equip. Fire cadence
+carries up to one tick of cooldown debt so fire rates no longer round down to tick multiples.
+
+### Interact defaults to Left Alt
+The code default (`E`) collided with Skill 2; the shipped `config.json` already used Left Alt. Defaults now
+match it, prompts render the bound key, and rebinding a used key swaps the two bindings.
+
+## Enemy readability and projectile hits (2026-11-06)
+
+### Every enemy attack has a windup, and the strike follows the telegraph
+`AIAgentComp.windup_max` (`"windup"` in `entities.json`, defaults 0.4 s melee / 0.55 s ranged) is the
+delay between committing to an attack and the hit. The enemy stops, locks `windup_angle`, and strikes
+along it even if the player has moved; that is what makes dodging readable. Ranged enemies keep
+tracking for the first 60 % of the windup (`AI_RANGED_AIM_LOCK_AT`), then lock; the telegraph turns
+from amber to red at the lock. The random aim deviation was removed so the shot always matches the
+drawn line. Cooldown starts at windup start, so attack cadence is unchanged. Stun cancels a windup.
+Attacks only start with line of sight; without it ranged enemies keep chasing instead of shooting walls.
+Melee arcs also need line of sight, so they no longer hit through one-tile walls.
+
+### Enemy shot reach follows attack range
+Enemies have no weapon entity, so shots used the 380 × 0.5 s fallback (≈190 units) while Pistolero and
+Sniper attack from 544 and 896. Reach is now `attack_range × 1.2` at `"projectile_speed"` (default 420).
+
+### Projectile hits use the ground circle and the real swept segment
+Hitboxes used to be the sprite's current animation frame projected into world space: tall sprites got
+long diagonal boxes that changed every frame and depended on loaded textures. Hits now test
+`Collider.radius + PROJ_RADIUS` as a circle, +6 for player shots and −4 for enemy shots, so close calls
+favour the player. Each projectile records `prev_pos`; the sweep runs from there to the current
+position, and a freshly spawned shot sweeps from its owner's centre. The old code rebuilt the segment
+backwards from the current position, which deleted shots fired with a wall at the shooter's back and was
+wrong for homing shots. Closed doors and solid greyboxes now block shots and line of sight. Dodging,
+dead, respawning and trigger targets don't consume shots.
+
+### Enemy health bars show on damage, fade, and show on hover
+Bars draw after lighting and fog (they used to be inside the sprite pass and got darkened) and only for
+enemies whose sprite was drawn this frame, so fogged enemies stay hidden. A bar appears when the
+enemy's HP drops, holds 2.5 s, fades over 0.6 s, and stays up while the cursor is over the enemy. The
+boss bar is always shown. A pale chip trails the red fill to show the size of the last hit. Elite
+borders are blue (Rare) or gold (Legendary). State is render-side and keyed on HP changes, so it works
+the same for co-op clients. Windup progress rides in the spare byte of `SyncEntity` for client telegraphs.
+
+## macOS window and user data (2026-11-06)
+
+### Native fullscreen, not raylib's ToggleFullscreen
+raylib's `ToggleFullscreen` asks GLFW for exclusive fullscreen, and on macOS GLFW picked a different
+video mode (the 1440 × 900 desktop switched to 1920 × 1200). `platform_darwin.odin` calls
+`-[NSWindow toggleFullScreen:]` instead and reads `styleMask` back every frame, so the green button,
+Ctrl+Cmd+F and the settings menu all agree. The Objective-C calls go through `objc_msgSend` resolved
+with `dlsym` and cast to the exact signature: the `objc_send` intrinsic crashes this Odin release's
+compiler in debug builds ("missing procedure sel_registerName"), and the runtime's own declarations
+are private. Windows keeps borderless windowed mode.
+
+### HighDPI stays off
+With `FLAG_WINDOW_HIGHDPI` the HUD is drawn at 2× but the world, lighting and sprite composites land
+at the wrong scale and offset (verified with `--window-probe` screenshots). Turning it on needs the
+render targets in `lighting.odin` and their shaders to use render size, not screen size.
+
+### User files are outside the executable folder on macOS
+`user_path` resolves saves and `config.json` under `~/Library/Application Support/Tormentas`.
+`data/config.json` remains the shipped default and is only read when no user config exists. The
+editor and animation editor still write into `data/` because they are run from the repository.
+
+## Developer tools on Dear ImGui (2026-11-06)
+
+### One ImGui context, a custom raylib backend
+The level editor, animation editor, console, lighting panel and ECS inspector all draw through
+Dear ImGui 1.92.8-docking (`deps/imgui`, pinned and hash-checked). The stock GLFW/OpenGL backends
+can't attach to the window raylib owns, so `ui/imgui_raylib/backend.odin` feeds input from raylib and
+renders `ImDrawData` through rlgl. It supports ImGui 1.92's texture protocol
+(`RendererHasTextures`): the font atlas and any later updates are uploaded as raylib textures, and
+an ImGui texture id is the raylib GL texture id, so `devui_texture(tex)` shows any raylib texture.
+`devui_begin_frame` runs before the game update so `WantCaptureMouse`/`WantTextInput` reflect the
+previous frame's windows; all tool windows are built in `devui_tools_frame` and rendered last.
+
+### Keyboard navigation is off; shortcuts are blocked only while typing
+With ImGui's keyboard navigation enabled, any focused panel sets `WantCaptureKeyboard`, which would
+swallow WASD panning and brush hotkeys after a single click on a panel. Editor and game hotkeys
+check `devui_wants_text()` instead, and `input_begin_frame` marks every key consumed while a text
+field is active. Mouse input over ImGui windows is withheld from the editor, the player's fire input
+and Clay.
+
+### Layout
+The editor uses a dockspace over the main viewport with a passthrough central node, so the world
+stays visible and clickable in the middle. `_devui_dockspace` builds the default layout when no
+saved layout exists or after View → Reset layout. Window positions and docking persist in
+`imgui.ini` next to the user config.
+
+### The old tile-object panel and the level-entity windows are one Inspector
+Selecting a placed entity shows its level data, overrides and live components; selecting a tile
+object (lever, chest, NPC, barrel...) shows its properties. Edits still go through `_insp_mod` so
+co-op peers receive them.
+
+### Animation editor fields bind directly to the sheet
+The old per-field text buffers, focus tracking and Tab cycling are gone; each field is an ImGui
+input clamped to the same ranges the commit step used. "Has collision box" is now an explicit toggle.
+The lighting panel's "Sun elevation" slider used to share a row and id with "Sprite shadow" and could
+not be edited; it is now separate.
+
+## Editor brush, grid and gizmo (2026-11-06)
+
+### Painting is stroke-based and only applies real changes
+`update_editor` used to re-apply every tile under the brush every frame while the button was held.
+Each application set `g_wall_mask_dirty`, so the lighting wall mask (one pixel per tile, ~5,400 tiles)
+was redrawn every frame, and each tile was re-sent to co-op peers every frame. Fast drags also left
+gaps because only the cell under the cursor that frame was painted. `editor_brush.odin` now runs a
+stroke per mouse press: the cursor's path between frames is walked cell by cell (Bresenham), each
+footprint cell is stamped once per stroke, each underlying tile is touched once, and a tile whose
+type and overlay already match the brush is skipped (`ed_tile_paint_is_noop`). A stroke over
+unchanged tiles therefore does nothing at all. Erase only touches tiles that have content.
+
+### Brush size N is an N×N footprint
+Unsnapped brushes used `2·(N/2)+1`, so even sizes were one cell larger than the Paint panel said.
+Snapped and unsnapped brushes now both cover exactly N×N (centred on the cursor, or aligned to the
+grid with Shift), and the cursor label shows the size it will paint.
+
+### Editor overlays draw above lighting and fog
+The grid, object markers and brush cursor were drawn in the world pass and were darkened by lighting,
+covered by sprites and hidden by fog. They now draw after `draw_fog_and_lights`. Screen-space labels,
+the gizmo and hover highlights use ImGui's background draw list: above the game, below the panels.
+The brush cursor only appears with the Paint or Erase tool and never over a panel; its colour, name
+and size match the swatch in the Paint panel. Dark brush colours (Oil) are lifted for the outline and
+swatch, and every footprint has a dark halo so it reads on any background.
+
+### Gizmo
+Handles highlight on hover and can be grabbed anywhere along the axis line, not just at the tip.
+While dragging, a ghost marks the start position with a live offset readout; Esc restores the start
+position; holding Cmd (macOS) or Ctrl inverts tile snapping for that drag. The world is only
+respawned on release if the entity actually moved.
+
+### Selection is cleared on every level load
+`g_ed_sel_entity` is an index into the level's entity list and survived level changes, so after
+switching level the Inspector silently pointed at an unrelated entity. `level_load` now clears
+entity, object and stroke state.
+
+## Raid mode removed (2026-11-06)
+
+Dungeons are entered from the hub portal (`Select Dungeon`). There is no extraction, no raid timer
+and no loss: extraction zones, `extraction_system`, `level_exit_system`, the extract screen and the
+raid HUD timer are gone, and death and quitting keep the full inventory, wallet and serums. This
+supersedes the earlier sections on extraction, raid-entry snapshots, abandon-on-quit and serum
+forfeit. Wallet gold is still banked into the stash on hub entry, so gold found in a dungeon becomes
+spendable the next time the player is in the hub. `g_raid_timer` remains only as the spawn director's
+pacing clock: `dungeon_clock_system` counts it down and holds it at `DUNGEON_CLOCK_FLOOR`, so spawn
+pressure and the boss still ramp over 30 minutes, but reaching the end no longer kills the player.

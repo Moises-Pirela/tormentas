@@ -404,7 +404,7 @@ ability_base_damage :: proc(w: ^World, id: int, def: ^AbilityDef, level: int, ex
 }
 
 @(private = "file")
-_maybe_apply_status :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
+_maybe_apply_status :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp, caster_id: int) {
     if exec.status == StatusEffectType(0) { return }
     status_effect_apply(w, enemy_id, StatusEffect{
         type            = exec.status,
@@ -412,6 +412,7 @@ _maybe_apply_status :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp) {
         stack_behavior  = .Refresh,
         duration        = exec.status_dur,
         strength        = exec.status_str,
+        source_id       = caster_id,
     })
 }
 
@@ -420,7 +421,7 @@ _maybe_stamp_damage_amp :: proc(w: ^World, enemy_id: int, exec: AbilityExecComp)
     if exec.damage_amp_mult <= 0 { return }
     if world_has_component(w, enemy_id, .DamageAmp) {
         da := comp_get(w, enemy_id, .DamageAmp, DamageAmpComp)
-        da.mult  *= exec.damage_amp_mult
+        da.mult   = min(da.mult * exec.damage_amp_mult, DAMAGE_AMP_MAX)
         da.timer  = max(da.timer, exec.damage_amp_dur)
     } else {
         comp_set(w, enemy_id, .DamageAmp, DamageAmpComp{
@@ -522,7 +523,7 @@ ability_blast_aoe :: proc(w: ^World, shooter_id: int, radius, damage: f32,
         dy := et.position[1] - origin[1]
         if dx*dx + dy*dy <= r2 {
             world_push_damage(w, eid, damage, shooter_id)
-            _maybe_apply_status(w, eid, exec)
+            _maybe_apply_status(w, eid, exec, shooter_id)
             _maybe_stamp_damage_amp(w, eid, exec)
             _maybe_stamp_contagion(w, eid, exec)
             hit_any = true
@@ -564,7 +565,7 @@ ability_blast_cone :: proc(w: ^World, shooter_id: int,
 
         if math.abs(diff) <= half_angle_rad {
             world_push_damage(w, eid, damage, shooter_id)
-            _maybe_apply_status(w, eid, exec)
+            _maybe_apply_status(w, eid, exec, shooter_id)
             _maybe_stamp_damage_amp(w, eid, exec)
             _maybe_stamp_contagion(w, eid, exec)
             hit_any = true
@@ -986,11 +987,21 @@ _ability_tick_player :: proc(w: ^World, id: int, dt: f32) {
                     er, eg, eb = 160, 100, 255
                 }
 
+                throw_target := input.mouse_world
+                {
+                    tdx := throw_target[0] - t_snap.position[0]
+                    tdy := throw_target[1] - t_snap.position[1]
+                    td  := math.sqrt(tdx*tdx + tdy*tdy)
+                    if td > GRENADE_MAX_RANGE {
+                        k := GRENADE_MAX_RANGE / td
+                        throw_target = { t_snap.position[0] + tdx * k, t_snap.position[1] + tdy * k, throw_target[2] }
+                    }
+                }
                 gid := world_create_entity(w)
                 comp_set(w, gid, .Transform, t_snap)
                 comp_set(w, gid, .Grenade, GrenadeComp{
                     owner_id         = id,
-                    target           = input.mouse_world,
+                    target           = throw_target,
                     speed            = 360,
                     fuse_timer       = 3.0,
                     damage           = blast_dmg,

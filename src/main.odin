@@ -187,7 +187,7 @@ init_game :: proc() {
     sim_register_system(&g_sim, { .Update      }, homing_system,              .HostOnly)
     sim_register_system(&g_sim, { .Update      }, trap_system,                .HostOnly)
     sim_register_system(&g_sim, { .Update      }, grenade_system,             .HostOnly)
-    sim_register_system(&g_sim, { .Update      }, extraction_system,          .HostOnly)
+    sim_register_system(&g_sim, { .Update      }, dungeon_clock_system,       .HostOnly)
     sim_register_system(&g_sim, { .Update      }, melee_arc_system,           .HostOnly)
     sim_register_system(&g_sim, { .Update      }, projectile_collision_system, .HostOnly)
     sim_register_system(&g_sim, { .Update      }, pickup_system,              .HostOnly)
@@ -203,7 +203,6 @@ init_game :: proc() {
     sim_register_system(&g_sim, { .LateUpdate  }, wall_collision_system,      .Shared)
     sim_register_system(&g_sim, { .LateUpdate  }, greybox_collision_system,   .Shared)
     sim_register_system(&g_sim, { .LateUpdate  }, projectile_wall_system,     .HostOnly)
-    sim_register_system(&g_sim, { .LateUpdate  }, level_exit_system,          .HostOnly)
 
     w := &g_sim.world
 
@@ -330,23 +329,24 @@ update_playing :: proc(dt: f32) {
         set_audio_listener(comp_get(w, w.player_id, .Transform, TransformComp).position)
     }
 
-    if input_pressed(.F1) && g_is_host && !g_console_open && !g_anim_ed.open &&
+    typing := devui_wants_text()
+    if input_pressed(.F1) && g_is_host && !typing && !g_anim_ed.open &&
        (g_playing_state == .Editor || g_playing_state == .Gameplay || g_playing_state == .Hub) {
         editor_toggle()
     }
-    if input_pressed(.F3) && g_is_host && !g_console_open &&
+    if input_pressed(.F3) && g_is_host && !typing &&
        (g_playing_state == .Editor || g_playing_state == .Gameplay || g_playing_state == .Hub) {
         if g_anim_ed.open { anim_editor_close() } else { anim_editor_open() }
     }
-    if input_pressed(.F6) && !g_console_open && !g_anim_ed.open {
+    if input_pressed(.F6) && !typing && !g_anim_ed.open {
         dbg_inspector_toggle()
     }
-    if input_pressed(.F5) && g_editor_mode && !g_console_open {
+    if input_pressed(.F5) && g_editor_mode && !typing {
         ed_set_mode(g_ed_mode == .Edit ? EditorMode.Live : EditorMode.Edit)
     }
     update_lighting_widget()
 
-    if !g_console_open && !g_anim_ed.open && !imui_wants_keys() {
+    if !g_anim_ed.open {
         switch g_playing_state {
         case .Editor:
             update_editor(dt)
@@ -434,7 +434,7 @@ update_playing :: proc(dt: f32) {
                 }
             }
 
-        case .ExtractScreen, .DeathScreen:
+        case .DeathScreen:
         }
 
         if input_is_ui() {
@@ -463,7 +463,9 @@ update_playing :: proc(dt: f32) {
         }
     }
 
-    if g_playing_state != .DeathScreen && g_playing_state != .ExtractScreen {
+    sim_paused := g_paused && !p2p.session_is_online(&g_session)
+    if sim_paused { g_accumulator = 0 }
+    if !sim_paused && g_playing_state != .DeathScreen {
         local_frame := collect_local_input() if playing_collects_input() else p2p.InputFrame{}
         g_accumulator += f64(dt)
         n := 0
@@ -522,9 +524,7 @@ draw_playing :: proc() {
     if g_playing_state == .Hub {
         draw_hub_world(w)
     }
-    draw_editor_world()
     draw_entities(w, .WorldFX)
-    draw_extraction_zones(w)
     draw_shop_world(w)
     rl.EndMode2D()
     rl.EndTextureMode()
@@ -551,6 +551,8 @@ draw_playing :: proc() {
 
     rl.BeginMode2D(g_camera^)
     draw_editor_cell_overlay()
+    draw_editor_world()
+    draw_editor_brush_world()
     if !g_editor_mode { draw_player_aim_line(w) }
     draw_mutation_workbench_world(w)
     draw_stash_world(w)
@@ -561,6 +563,8 @@ draw_playing :: proc() {
     draw_fire_patches()
     draw_barrels()
     draw_status_effects(w)
+    draw_enemy_telegraphs(w)
+    draw_enemy_health_bars(w, rl.GetFrameTime())
     draw_ground_item_labels(w)
     draw_explosions()
     draw_grenades_and_clouds(w)
@@ -569,12 +573,10 @@ draw_playing :: proc() {
     if !g_editor_mode { draw_stealth_indicators(w) }
     rl.EndMode2D()
 
-    draw_editor_hud()
     if !g_editor_mode {
         update_entity_hover(w)
         draw_boss_warning()
         draw_entity_inspect_hud(w)
-        draw_raid_timer()
         draw_hud(w)
 
         if g_playing_state == .Hub {
@@ -582,8 +584,6 @@ draw_playing :: proc() {
         }
 
         switch g_playing_state {
-        case .ExtractScreen:
-            draw_extract_screen(w)
         case .DeathScreen:
             draw_death_screen(w)
         case .Gameplay, .Hub, .Editor:
@@ -595,7 +595,7 @@ draw_playing :: proc() {
         draw_loot_filter_hud()
     }
 
-    draw_lighting_widget()
+
 }
 
 main :: proc() {
@@ -608,7 +608,10 @@ main :: proc() {
         }
     }
 
-    rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Tormentas")
+    window_probe_from_args()
+    migrate_legacy_user_files()
+    load_config()
+    platform_init_window("Tormentas")
     defer rl.CloseWindow()
     app_icon := rl.LoadImage("data/app/tormentas_icon.png")
     if app_icon.data != nil {
@@ -619,7 +622,6 @@ main :: proc() {
 
     rl.SetExitKey(.KEY_NULL)
 
-    load_config()
     g_lang = Language(min(g_binds.language, u8(LANG_COUNT - 1)))
 
     loc_init()
@@ -708,6 +710,8 @@ main :: proc() {
         defer free_all(context.temp_allocator)
 
         steam_run_callbacks()
+        platform_update_window()
+        if window_probe_tick() { break }
 
         if g_pending_join_lobby != 0 && !g_invite_pending && !p2p.session_is_online(&g_session) {
             host_id := steam_lobby_get_host_id(g_pending_join_lobby)
@@ -724,13 +728,14 @@ main :: proc() {
         }
 
         if g_invite_pending && !p2p.session_is_online(&g_session) {
-            typing := g_console_open || (g_app_state == .MainMenu && g_mm.focus == .NewName)
+            typing := devui_wants_text() || (g_app_state == .MainMenu && g_mm.focus == .NewName)
             if !typing {
                 if rl.IsKeyPressed(.J) { accept_invite() }
                 if rl.IsKeyPressed(.N) { g_invite_pending = false }
             }
         }
 
+        devui_begin_frame(dt)
         update_clay_input()
         input_begin_frame()
         update_audio()
@@ -774,24 +779,17 @@ main :: proc() {
         }
 
         draw_invite_toast()
-        draw_anim_editor()
         draw_fade()
-        draw_console()
-        if g_editor_mode { ed_gizmo_draw() }
-        imui_begin()
-        dbg_inspector_windows()
-        editor_imui_windows()
-        editor_entity_windows()
-        if g_editor_mode {
-            editor_paint_window()
-            editor_grid_window()
-            editor_levels_window()
-        }
-        imui_end()
+        draw_editor_overlay_screen()
+        devui_tools_frame()
+        devui_end_frame()
         rl.EndDrawing()
     }
 
+    platform_store_display_settings()
+    save_config()
+
     dbg_inspector_shutdown()
-    imui_shutdown()
+    devui_shutdown()
     if g_sim_alive { shutdown_game() }
 }

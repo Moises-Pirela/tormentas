@@ -3,6 +3,8 @@ package main
 import "core:math"
 import rl "vendor:raylib"
 
+GRENADE_MAX_RANGE :: f32(560)
+
 grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
 
@@ -20,15 +22,24 @@ grenade_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 
             g.fuse_timer -= dt
 
-            arrived := dist <= g.speed * dt || g.fuse_timer <= 0
-
-            if !arrived {
-                step          := g.speed * dt
-                inv           := step / dist
-                t.position[0] += dx * inv
-                t.position[1] += dy * inv
-            } else {
+            detonate := g.fuse_timer <= 0
+            if !detonate && dist <= g.speed * dt {
                 t.position = g.target
+                detonate   = true
+            } else if !detonate {
+                step := g.speed * dt
+                inv  := step / dist
+                nx   := t.position[0] + dx * inv
+                ny   := t.position[1] + dy * inv
+                ntx, nty := world_to_tile(nx, ny)
+                if tile_is_walkable(ntx, nty) {
+                    t.position[0] = nx
+                    t.position[1] = ny
+                } else {
+                    detonate = true
+                }
+            }
+            if detonate {
                 _grenade_detonate(w, gid)
                 world_destroy_entity(w, gid)
             }
@@ -122,6 +133,7 @@ _cloud_damage_nearby :: proc(w: ^World, owner_id: int,
                 stack_behavior = .Refresh,
                 duration       = status_dur,
                 strength       = 1.0,
+                source_id      = owner_id,
             })
         }
     }

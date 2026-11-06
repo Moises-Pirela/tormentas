@@ -242,7 +242,9 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
     } else {
         strip_y := by + bh - strip_h
         rl.DrawRectangle(bx, strip_y, bw, strip_h, rl.Color{ 40, 34, 24, 255 })
-        if chip.ammo_ratio > 0 {
+        if chip.is_reloading {
+            rl.DrawRectangle(bx, strip_y, i32(f32(bw) * chip.reload_ratio), strip_h, rl.Color{ 150, 170, 190, 255 })
+        } else if chip.ammo_ratio > 0 {
             ammo_col := COL_CRIMSON if chip.ammo_ratio <= 0.334 else rl.Color{ 192, 152, 44, 255 }
             rl.DrawRectangle(bx, strip_y, i32(f32(bw) * chip.ammo_ratio), strip_h, ammo_col)
         }

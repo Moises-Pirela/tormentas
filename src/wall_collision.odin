@@ -26,7 +26,7 @@ projectile_wall_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
         if world_tag_is_destroy(w, id) { continue }
         t      := comp_get(w, id, .Transform, TransformComp)
         tx, ty := world_to_tile(t.position[0], t.position[1])
-        if tile_base(tile_at(tx, ty)) != .Floor {
+        if !tile_is_walkable(tx, ty) {
             world_tag_destroy(w, id)
         }
     }

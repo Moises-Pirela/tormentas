@@ -41,6 +41,14 @@ x64 library files from your separately acquired SDK into that private layout.
 .\build.ps1 -EnableSteam -SteamCollection 'C:\private\steam-collection'
 ```
 
+On macOS the collection additionally needs
+`<collection>/steamworks/redistributable_bin/osx/libsteam_api.dylib`, and the binding
+must declare its own Darwin foreign import:
+
+```sh
+./build.sh --enable-steam --steam-collection ~/private/steam-collection
+```
+
 For the preserved local copy, use `.\build.ps1 -EnableSteam`. The build copies
 `steam_api64.dll` beside the executable. For direct development launches, place
 your authorized development App ID in ignored `bin/steam_appid.txt`, following

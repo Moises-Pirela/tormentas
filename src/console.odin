@@ -1,5 +1,6 @@
 package main
 
+import im       "../deps/imgui/imgui"
 import rl       "vendor:raylib"
 import          "core:fmt"
 import          "core:strings"
@@ -7,8 +8,6 @@ import          "core:strconv"
 
 CONSOLE_MAX_LINES  :: 48
 CONSOLE_LINE_CAP   :: 320
-CONSOLE_SLIDE_SPD  :: f32(12.0)
-CONSOLE_SCROLL_AMT :: 3
 
 g_console_open: bool
 g_god_mode:     bool
@@ -24,9 +23,6 @@ ConsoleLine :: struct {
 @(private = "file") g_console_count:    int
 @(private = "file") g_console_input:    [512]u8
 @(private = "file") g_console_in_len:   int
-@(private = "file") g_console_bs_timer: f32
-@(private = "file") g_console_slide:    f32
-@(private = "file") g_console_scroll:   int
 
 console_log :: proc(msg: string) {
     idx := g_console_cursor % CONSOLE_MAX_LINES
@@ -45,168 +41,117 @@ console_logf :: proc(format: string, args: ..any) {
     console_log(s)
 }
 
-@(private = "file")
-ConsoleGeo :: struct {
-    panel_h, y_off: f32,
-    fs, line_h, pad: f32,
-    input_y, log_bot_y: f32,
-    visible: int,
-}
+CONSOLE_HISTORY :: 16
 
-@(private = "file")
-console_geo :: proc() -> ConsoleGeo {
-    sh      := f32(rl.GetScreenHeight())
-    panel_h := sh * 0.46
-    y_off   := panel_h * (g_console_slide - 1)
-    fs      := uis(12)
-    pad     := uis(8)
-    line_h  := fs * 1.4
-    input_y   := y_off + panel_h - line_h - pad
-    log_bot_y := input_y - pad * 0.5
-    visible   := int((panel_h - line_h - pad * 1.5) / line_h)
-    if visible < 1 { visible = 1 }
-    return { panel_h, y_off, fs, line_h, pad, input_y, log_bot_y, visible }
+@(private = "file") g_console_hist:      [CONSOLE_HISTORY][512]u8
+@(private = "file") g_console_hist_len:  [CONSOLE_HISTORY]int
+@(private = "file") g_console_hist_n:    int
+@(private = "file") g_console_hist_pos:  int = -1
+@(private = "file") g_console_refocus:   bool
+@(private = "file") g_console_autoscroll: bool = true
+@(private = "file") g_console_follow:    bool
+
+console_set_open :: proc(open: bool) {
+    g_console_open = open
+    if open {
+        g_console_in_len   = 0
+        g_console_hist_pos = -1
+        g_console_refocus  = true
+        g_console_follow   = true
+    }
 }
 
 update_console :: proc(dt: f32) {
     if rl.IsKeyPressed(.GRAVE) {
-        g_console_open = !g_console_open
-        if g_console_open {
-            g_console_in_len   = 0
-            g_console_bs_timer = 0
-            g_console_scroll   = 0
-        }
-    }
-
-    target := f32(1) if g_console_open else f32(0)
-    if g_console_slide < target {
-        g_console_slide = min(g_console_slide + dt * CONSOLE_SLIDE_SPD, f32(1))
-    } else if g_console_slide > target {
-        g_console_slide = max(g_console_slide - dt * CONSOLE_SLIDE_SPD, f32(0))
-    }
-
-    if !g_console_open { return }
-
-    wh := rl.GetMouseWheelMove()
-    if wh != 0 {
-        g_console_scroll -= int(wh) * CONSOLE_SCROLL_AMT
-        if g_console_scroll < 0 { g_console_scroll = 0 }
-    }
-
-    for {
-        ch := rl.GetCharPressed()
-        if ch == 0 { break }
-        if ch == '`' || ch == '~' { continue }
-        if g_console_in_len < len(g_console_input) - 1 {
-            g_console_input[g_console_in_len] = u8(ch)
-            g_console_in_len += 1
-        }
-    }
-
-    if rl.IsKeyPressed(.BACKSPACE) {
-        if g_console_in_len > 0 { g_console_in_len -= 1 }
-        g_console_bs_timer = 0.4
-    } else if rl.IsKeyDown(.BACKSPACE) {
-        g_console_bs_timer -= dt
-        if g_console_bs_timer <= 0 {
-            if g_console_in_len > 0 { g_console_in_len -= 1 }
-            g_console_bs_timer = 0.05
-        }
-    }
-
-    if rl.IsKeyPressed(.ENTER) {
-        raw := string(g_console_input[:g_console_in_len])
-        console_logf("> %s", raw)
-        w: ^World = nil
-        if g_sim_alive { w = &g_sim.world }
-        _console_exec(w, raw)
-        g_console_in_len = 0
-        g_console_scroll = 0
-    }
-}
-
-draw_console :: proc() {
-    if g_console_slide <= 0 { return }
-
-    sw  := f32(rl.GetScreenWidth())
-    g   := console_geo()
-    bar_w := uis(6)
-    spacing := f32(0.4)
-
-    max_scroll := max(g_console_count - g.visible, 0)
-    if g_console_scroll > max_scroll { g_console_scroll = max_scroll }
-
-    rl.DrawRectangle(0, i32(g.y_off), i32(sw), i32(g.panel_h),
-        rl.Color{ 8, 8, 12, 225 })
-    rl.DrawRectangle(0, i32(g.y_off + g.panel_h) - 1, i32(sw), 1,
-        rl.Color{ 140, 90, 35, 255 })
-
-    log_clip_y := i32(max(g.y_off, 0))
-    log_clip_h := i32(g.log_bot_y) - log_clip_y
-    if log_clip_h > 0 {
-        rl.BeginScissorMode(0, log_clip_y, i32(sw - bar_w - g.pad), log_clip_h)
-
-        draw_y := g.log_bot_y - g.line_h
-        for i in 0..<min(g.visible, g_console_count) {
-            raw_idx := g_console_cursor - 1 - i - g_console_scroll
-            if raw_idx < g_console_cursor - g_console_count { break }
-            idx  := ((raw_idx % CONSOLE_MAX_LINES) + CONSOLE_MAX_LINES) % CONSOLE_MAX_LINES
-            line := &g_console_lines[idx]
-            if line.len == 0 { draw_y -= g.line_h; continue }
-            alpha := u8(clamp(230 - i * 5, 60, 230))
-            rl.DrawTextEx(g_font, cstring(&line.buf[0]),
-                { g.pad, draw_y }, g.fs, spacing,
-                rl.Color{ 200, 194, 178, alpha })
-            draw_y -= g.line_h
-        }
-
-        rl.EndScissorMode()
-    }
-
-    if max_scroll > 0 {
-        track_x := sw - bar_w - g.pad * 0.5
-        track_y := g.y_off + g.pad
-        track_h := g.log_bot_y - track_y
-
-        thumb_frac := f32(g.visible) / f32(g_console_count)
-        thumb_h    := max(track_h * thumb_frac, uis(20))
-
-        t := f32(g_console_scroll) / f32(max_scroll)
-        thumb_y := track_y + (track_h - thumb_h) * (1.0 - t)
-
-        if track_y + track_h > 0 {
-            rl.DrawRectangleRounded(
-                { track_x, track_y, bar_w, track_h }, 0.5, 4,
-                rl.Color{ 30, 26, 20, 160 })
-            rl.DrawRectangleRounded(
-                { track_x, thumb_y, bar_w, thumb_h }, 0.5, 4,
-                rl.Color{ 160, 100, 40, 220 })
-        }
-    }
-
-    prompt     := cstring("> ")
-    prompt_col := rl.Color{ 160, 120, 55, 255 }
-    rl.DrawTextEx(g_font, prompt, { g.pad, g.input_y }, g.fs, spacing, prompt_col)
-    prompt_w := rl.MeasureTextEx(g_font, prompt, g.fs, spacing).x
-
-    input_x := g.pad + prompt_w
-    if g_console_in_len > 0 {
-        g_console_input[g_console_in_len] = 0
-        rl.DrawTextEx(g_font, cstring(&g_console_input[0]),
-            { input_x, g.input_y }, g.fs, spacing,
-            rl.Color{ 240, 234, 216, 255 })
-        input_x += rl.MeasureTextEx(g_font,
-            cstring(&g_console_input[0]), g.fs, spacing).x
-    }
-
-    if int(rl.GetTime() * 2) % 2 == 0 {
-        rl.DrawTextEx(g_font, "_",
-            { input_x, g.input_y + g.fs * 0.15 },
-            g.fs, spacing, rl.Color{ 200, 155, 70, 210 })
+        devui_ignore_char('`')
+        devui_ignore_char('~')
+        console_set_open(!g_console_open)
     }
 }
 
 @(private = "file")
+_console_submit :: proc() {
+    raw := strings.trim_space(string(g_console_input[:g_console_in_len]))
+    if raw == "" { return }
+    console_logf("> %s", raw)
+    slot := g_console_hist_n % CONSOLE_HISTORY
+    copy(g_console_hist[slot][:], raw)
+    g_console_hist_len[slot] = len(raw)
+    g_console_hist_n += 1
+    w: ^World = nil
+    if g_sim_alive { w = &g_sim.world }
+    _console_exec(w, raw)
+    g_console_in_len   = 0
+    g_console_hist_pos = -1
+    g_console_follow   = true
+}
+
+@(private = "file")
+_console_history_step :: proc(dir: int) {
+    count := min(g_console_hist_n, CONSOLE_HISTORY)
+    if count == 0 { return }
+    if g_console_hist_pos < 0 {
+        if dir > 0 { return }
+        g_console_hist_pos = 0
+    } else {
+        g_console_hist_pos = clamp(g_console_hist_pos - dir, -1, count - 1)
+    }
+    if g_console_hist_pos < 0 { g_console_in_len = 0; return }
+    slot := (g_console_hist_n - 1 - g_console_hist_pos) %% CONSOLE_HISTORY
+    n := g_console_hist_len[slot]
+    copy(g_console_input[:], g_console_hist[slot][:n])
+    g_console_in_len = n
+}
+
+console_ui :: proc() {
+    if !g_console_open { return }
+    vp := im.GetMainViewport()
+    im.SetNextWindowPos({ vp.WorkPos.x + 20, vp.WorkPos.y + vp.WorkSize.y * 0.55 }, .FirstUseEver)
+    im.SetNextWindowSize({ vp.WorkSize.x * 0.6, vp.WorkSize.y * 0.38 }, .FirstUseEver)
+    open := true
+    defer im.End()
+    if !im.Begin("Console", &open) {
+        if !open { console_set_open(false) }
+        return
+    }
+    if !open { console_set_open(false); return }
+
+    footer := im.GetFrameHeightWithSpacing() + im.GetStyle().ItemSpacing.y
+    if im.BeginChild("##log", { 0, -footer }, { .Borders }, { .HorizontalScrollbar }) {
+        first := g_console_cursor - g_console_count
+        for i in first..<g_console_cursor {
+            line := &g_console_lines[((i % CONSOLE_MAX_LINES) + CONSOLE_MAX_LINES) % CONSOLE_MAX_LINES]
+            text := string(line.buf[:line.len])
+            if strings.has_prefix(text, "> ") {
+                ui_text_col(DEVUI_GOLD, "%s", text)
+            } else {
+                ui_text("%s", text)
+            }
+        }
+        if g_console_follow || (g_console_autoscroll && im.GetScrollY() >= im.GetScrollMaxY()) {
+            im.SetScrollHereY(1)
+            g_console_follow = false
+        }
+    }
+    im.EndChild()
+
+    if g_console_refocus {
+        im.SetKeyboardFocusHere()
+        g_console_refocus = false
+    }
+    im.SetNextItemWidth(-90)
+    if ui_input_buf("##cin", g_console_input[:], &g_console_in_len, { .EnterReturnsTrue }, "command  (help for a list)") {
+        _console_submit()
+        g_console_refocus = true
+    }
+    if im.IsItemActive() {
+        if im.IsKeyPressed(.UpArrow)   { _console_history_step(-1) }
+        if im.IsKeyPressed(.DownArrow) { _console_history_step(+1) }
+    }
+    im.SameLine()
+    im.Checkbox("Follow", &g_console_autoscroll)
+}
+
 _console_exec :: proc(w: ^World, raw: string) {
     s := strings.trim_space(raw)
     if len(s) == 0 { return }
@@ -236,7 +181,6 @@ _console_exec :: proc(w: ^World, raw: string) {
     case "clear":
         g_console_count  = 0
         g_console_cursor = 0
-        g_console_scroll = 0
 
     case "mut":
         if w == nil { console_log("ERROR: no world active"); return }

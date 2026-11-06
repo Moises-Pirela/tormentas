@@ -89,10 +89,10 @@
         "velocity":  {},
         "health":    { "current": 30, "max": 30, "corruption": 0 },
         "collider":  { "radius": 20, "faction": 1 },
-        "ai_agent":  {
+        "ai_agent":  { "windup": 0.3,
             "ai_type":      "melee",
             "aggro_range":  480,
-            "attack_range": 36,
+            "attack_range": 44,
             "cooldown":     0.9,
             "speed":        184,
             "damage":       8
@@ -107,7 +107,7 @@
         "velocity":  {},
         "health":    { "current": 50, "max": 50, "corruption": 0 },
         "collider":  { "radius": 14, "faction": 1 },
-        "ai_agent":  {
+        "ai_agent":  { "windup": 0.45,
             "ai_type":      "melee",
             "aggro_range":  448,
             "attack_range": 44,
@@ -125,7 +125,7 @@
         "velocity":  {},
         "health":    { "current": 160, "max": 160, "corruption": 0 },
         "collider":  { "radius": 20, "faction": 1 },
-        "ai_agent":  {
+        "ai_agent":  { "windup": 0.7,
             "ai_type":      "melee",
             "aggro_range":  496,
             "attack_range": 54,
@@ -143,10 +143,10 @@
         "velocity":  {},
         "health":    { "current": 28, "max": 28, "corruption": 0 },
         "collider":  { "radius": 11, "faction": 1 },
-        "ai_agent":  {
+        "ai_agent":  { "windup": 0.3,
             "ai_type":      "melee",
             "aggro_range":  576,
-            "attack_range": 36,
+            "attack_range": 44,
             "cooldown":     0.75,
             "speed":        232,
             "damage":       8
@@ -161,7 +161,7 @@
         "velocity":  {},
         "health":    { "current": 40, "max": 40, "corruption": 0 },
         "collider":  { "radius": 14, "faction": 1 },
-        "ai_agent":  {
+        "ai_agent":  { "windup": 0.6, "projectile_speed": 440,
             "ai_type":      "ranged",
             "aggro_range":  640,
             "attack_range": 544,
@@ -181,7 +181,7 @@
         "velocity":  {},
         "health":    { "current": 35, "max": 35, "corruption": 0 },
         "collider":  { "radius": 13, "faction": 1 },
-        "ai_agent":  {
+        "ai_agent":  { "windup": 1.0, "projectile_speed": 950,
             "ai_type":      "ranged",
             "aggro_range":  992,
             "attack_range": 896,
@@ -290,7 +290,7 @@
     {
         "name": "mut_blind_fire",
         "mut_hide_enemy_sprites": {},
-        "mut_unseen_damage_mult": { "mult": 4.0, "vision_radius": 0.0 }
+        "mut_unseen_damage_mult": { "mult": 4.0, "vision_radius": 180.0 }
     },
     {
         "name": "mut_timelock",
@@ -309,7 +309,7 @@
     {
         "name": "mut_toxic_flesh",
         "mut_proximity_damage": {
-            "radius": 90,
+            "radius": 90, "dps": 8,
             "effect_type": "poison", "effect_strength": 0.00025, "effect_duration": 1.5,
             "light_r": 100, "light_g": 200, "light_b": 80,
             "light_radius": 90, "light_intensity": 0.55
@@ -350,7 +350,7 @@
         "health":    { "current": 1400, "max": 1400 },
         "collider":  { "radius": 38, "faction": 1 },
         "fog_of_war": {},
-        "ai_agent":  {
+        "ai_agent":  { "windup": 0.75,
             "ai_type":      "melee",
             "aggro_range":  600,
             "attack_range": 72,
