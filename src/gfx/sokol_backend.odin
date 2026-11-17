@@ -54,7 +54,6 @@ Run_Desc :: struct {
 @(private) _app: struct {
     desc:          Run_Desc,
     shutdown_done: bool,
-    quit_wanted:   bool,
     resized:       bool,
     fullscreen:    bool,
     focused:       bool,
@@ -281,8 +280,6 @@ key_modifiers :: proc() -> (ctrl, shift, alt, super: bool) {
 // ---- window ----------------------------------------------------------------------------------
 
 @(private) _b_window_init          :: proc(w, h: i32, title: cstring, fullscreen: bool) { /* sapp.run owns creation */ }
-@(private) _b_window_close         :: proc() { sapp.request_quit() }
-@(private) _b_window_should_close  :: proc() -> bool { return _app.quit_wanted }
 @(private) _b_window_is_fullscreen :: proc() -> bool { return sapp.is_fullscreen() }
 @(private) _b_window_toggle_fullscreen :: proc() { sapp.toggle_fullscreen() }
 @(private) _b_window_resized :: proc() -> bool { return _app.resized }

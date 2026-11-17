@@ -12,14 +12,10 @@ Window_Desc :: struct {
     fullscreen:    bool,
 }
 
+// The window is created by gfx.run from this description; this only records it.
 window_init :: proc(desc: Window_Desc) {
     _b_window_init(desc.width, desc.height, desc.title, desc.fullscreen)
 }
-
-window_close :: proc() { _b_window_close() }
-
-// True when the user asked to close the window (close button, Cmd+Q).
-window_should_close :: proc() -> bool { return _b_window_should_close() }
 
 window_is_fullscreen     :: proc() -> bool { return _b_window_is_fullscreen() }
 window_toggle_fullscreen :: proc()         { _b_window_toggle_fullscreen() }
