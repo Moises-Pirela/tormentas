@@ -51,7 +51,7 @@ run :: proc() -> bool {
     ok   := true
     if s.world.tick != u64(ticks)                                 { ok = false; fmt.eprintln("[server] tick count drifted") }
     if abs(pos[0] - 30 * secs) > 0.1 || abs(pos[1] + 15 * secs) > 0.1 { ok = false; fmt.eprintln("[server] movement integration wrong") }
-    if secs > 0.5 && !sim.world_tag_is_destroy(w, fuse)           { ok = false; fmt.eprintln("[server] self-destruct did not fire") }
+    if secs > 0.5 && sim.world_is_valid(w, fuse)                  { ok = false; fmt.eprintln("[server] self-destruct did not free its entity") }
 
     fmt.printfln("[server] headless sim: %d ticks (%.1fs) at %d Hz, mover at (%.1f, %.1f), %s",
         ticks, secs, TICK_RATE, pos[0], pos[1], "OK" if ok else "FAILED")

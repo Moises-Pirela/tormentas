@@ -13,7 +13,6 @@ World :: struct {
     player_id:         int,
 
     damage_events:     [dynamic]DamageEvent,
-    tagged:            [dynamic]int,
 }
 
 world_is_valid :: proc(w: ^World, id: int) -> bool {
@@ -74,7 +73,6 @@ world_reset :: proc(w: ^World) {
     w.player_id = INVALID_ENTITY
     w.local_player_slot = 0
     clear(&w.damage_events)
-    clear(&w.tagged)
 }
 
 world_push_damage :: proc(w: ^World, target_id: int, amount: f32, source_id: int = 0, kind: DamageKind = .Physical) {
@@ -97,23 +95,17 @@ world_clear_damage_events :: proc(w: ^World) {
     clear(&w.damage_events)
 }
 
+// Hides the entity from queries at once; it stays readable by id until the end-of-tick sweep in
+// sim_tick frees it. Goes through clockwork's mark so the id actually reaches pending_destroy:
+// setting .ToDestroy here directly made world_mark_destroy early-return, so tagged entities were
+// never freed and their component bits survived world_reset into the next level.
 world_tag_destroy :: proc(w: ^World, id: int) {
-    if id < 0 || id >= len(w.entities) {return}
-    if .ToDestroy in w.entities[id].flags {return}
-    w.entities[id].flags += {.ToDestroy}
-    append(&w.tagged, id)
+    ecs.world_mark_destroy(&w.base, id)
 }
 
 world_tag_is_destroy :: proc(w: ^World, id: int) -> bool {
     if id < 0 || id >= len(w.entities) {return false}
     return .ToDestroy in w.entities[id].flags
-}
-
-world_reap_tagged :: proc(w: ^World) {
-    for id in w.tagged {
-        ecs.world_mark_destroy(&w.base, id)
-    }
-    clear(&w.tagged)
 }
 
 make_world :: proc() -> World {
@@ -224,7 +216,6 @@ make_world :: proc() -> World {
 
 destroy_world :: proc(w: ^World) {
     delete(w.damage_events)
-    delete(w.tagged)
     ecs.destroy_world(&w.base)
 }
 
@@ -300,7 +291,6 @@ sim_tick :: proc(s: ^Simulation, dt: f32) {
     sim_broadcast(s, .LateUpdate, dt)
 
     sim_broadcast(s, .EntityDestroyed, dt)
-    world_reap_tagged(&s.world)
     ecs.world_sweep(&s.world.base)
     sim_broadcast(s, .EntityCreated, dt)
 

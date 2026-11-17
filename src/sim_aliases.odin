@@ -183,7 +183,6 @@ world_push_periodic_damage :: sim.world_push_periodic_damage
 world_clear_damage_events  :: sim.world_clear_damage_events
 world_tag_destroy          :: sim.world_tag_destroy
 world_tag_is_destroy       :: sim.world_tag_is_destroy
-world_reap_tagged          :: sim.world_reap_tagged
 make_world                 :: sim.make_world
 destroy_world              :: sim.destroy_world
 SystemEvent                :: sim.SystemEvent
