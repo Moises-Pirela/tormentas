@@ -98,13 +98,11 @@ body leans.
 
 ### Shadow quad winding is chosen per-draw, never via global cull state
 
-Corner order for the shadow quad must match raylib's batch winding or the batch culls it
-silently. The shear flips that winding when the sun crosses the horizontal, so the order is
-picked from `sign(iso_d.y)` on every draw rather than toggling `EnableBackfaceCulling` /
-`DisableBackfaceCulling` around the call. GL state changes apply immediately, but the raylib batch
-doesn't flush until later — so a toggle-around-the-call pattern silently does nothing, and the
-quad renders (or doesn't) according to whatever culling state was left by something else entirely.
-Cost an afternoon to find; don't reintroduce it.
+Corner order for the shadow quad is picked from `sign(iso_d.y)` on every draw, because the shear
+flips the winding when the sun crosses the horizontal. Under raylib this was mandatory: its batch
+culled the quad silently, and toggling cull state around the call did nothing because the batch
+flushed later. The sokol backend disables culling entirely, so the per-draw order is now harmless
+rather than load-bearing. Left as is: it costs nothing and keeps the geometry orientation explicit.
 
 ---
 
@@ -1193,19 +1191,22 @@ the same for co-op clients. Windup progress rides in the spare byte of `SyncEnti
 
 ## macOS window and user data (2026-11-06)
 
-### Native fullscreen, not raylib's ToggleFullscreen
-raylib's `ToggleFullscreen` asks GLFW for exclusive fullscreen, and on macOS GLFW picked a different
-video mode (the 1440 × 900 desktop switched to 1920 × 1200). `platform_darwin.odin` calls
-`-[NSWindow toggleFullScreen:]` instead and reads `styleMask` back every frame, so the green button,
-Ctrl+Cmd+F and the settings menu all agree. The Objective-C calls go through `objc_msgSend` resolved
-with `dlsym` and cast to the exact signature: the `objc_send` intrinsic crashes this Odin release's
-compiler in debug builds ("missing procedure sel_registerName"), and the runtime's own declarations
-are private. Windows keeps borderless windowed mode.
+### Native fullscreen on macOS, borderless on Windows
+sokol_app calls `-[NSWindow toggleFullScreen:]` on macOS and uses a borderless `WS_POPUP` window on
+Windows, which is exactly the behaviour we want, so the Objective-C helpers this project used to
+carry (`platform_darwin.odin`, `objc_msgSend` through `dlsym`) are gone. `platform_update_window`
+re-reads `gfx.window_is_fullscreen()` every frame, so the green button, the hotkey and the settings
+menu stay in agreement.
+
+Window size and position are no longer ours to set: sokol_app takes the size at creation and has no
+resize or monitor API. The resolution presets, fit-to-monitor and centering went with it
+(docs/BACKEND_SWAP_PLAN.md, decisions D3 and D9).
 
 ### HighDPI stays off
-With `FLAG_WINDOW_HIGHDPI` the HUD is drawn at 2× but the world, lighting and sprite composites land
-at the wrong scale and offset (verified with `--window-probe` screenshots). Turning it on needs the
-render targets in `lighting.odin` and their shaders to use render size, not screen size.
+The HUD draws at 2× while the world, lighting and sprite composites land at the wrong scale and
+offset (verified with `--window-probe` screenshots). Every render target and the shaders' screen
+reconstruction are sized in screen coordinates, so turning it on means moving all of them to
+framebuffer size. `sapp_desc.high_dpi` stays false until then (BACKEND_SWAP_PLAN decision D1).
 
 ### User files are outside the executable folder on macOS
 `user_path` resolves saves and `config.json` under `~/Library/Application Support/Tormentas`.
@@ -1214,13 +1215,14 @@ editor and animation editor still write into `data/` because they are run from t
 
 ## Developer tools on Dear ImGui (2026-11-06)
 
-### One ImGui context, a custom raylib backend
+### One ImGui context, a custom sokol backend
 The level editor, animation editor, console, lighting panel and ECS inspector all draw through
-Dear ImGui 1.92.8-docking (`deps/imgui`, pinned and hash-checked). The stock GLFW/OpenGL backends
-can't attach to the window raylib owns, so `ui/imgui_raylib/backend.odin` feeds input from raylib and
-renders `ImDrawData` through rlgl. It supports ImGui 1.92's texture protocol
-(`RendererHasTextures`): the font atlas and any later updates are uploaded as raylib textures, and
-an ImGui texture id is the raylib GL texture id, so `devui_texture(tex)` shows any raylib texture.
+Dear ImGui 1.92.8-docking (`deps/imgui`, pinned and hash-checked). The stock backends can't attach
+to the window sokol_app owns, so `ui/imgui_sokol/backend.odin` feeds input from `gfx` and renders
+`ImDrawData` through gfx's triangle stream — which means ImGui is recorded like any other drawing,
+lands in the main target, and therefore appears in screenshots. It supports ImGui 1.92's texture
+protocol (`RendererHasTextures`): the font atlas and later updates become gfx textures, and an
+ImGui texture id is a gfx texture id, so `devui_texture(tex)` shows any game texture.
 `devui_begin_frame` runs before the game update so `WantCaptureMouse`/`WantTextInput` reflect the
 previous frame's windows; all tool windows are built in `devui_tools_frame` and rendered last.
 

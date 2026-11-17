@@ -1,7 +1,7 @@
 # Las Tormentas
 
 An isometric action RPG with co-op, built from scratch in [Odin](https://odin-lang.org/)
-on a custom ECS and [raylib](https://www.raylib.com/). Drop into a storm-wracked frontier, fight
+on a custom ECS and [sokol](https://github.com/floooh/sokol). Drop into a storm-wracked frontier, fight
 your way through a dungeon, and keep everything you find.
 
 > **Status:** in active development. The engine and systems are deep; content is still being
@@ -26,7 +26,7 @@ The core loop is **hub → dungeon → hub → upgrade → dungeon again**:
 Everything here is hand-rolled — no commercial engine.
 
 - **Language:** Odin
-- **Rendering / platform:** raylib (via Odin's `vendor:raylib`)
+- **Rendering / platform:** sokol_gfx + sokol_app + sokol_gl (vendored in `deps/sokol`), with fontstash for text and miniaudio for audio
 - **ECS:** `clockwork` — a separate package (`clockwork-ecs`), wired in as a `cw` collection
 - **UI:** Clay (immediate-mode layout) with render-texture-cached panels for the game; Dear ImGui (docking) for the developer tools
 - **Netcode:** fixed 60 Hz timestep, lockstep P2P determinism (only inputs cross the wire), Steamworks for lobbies/invites
@@ -75,7 +75,7 @@ tools/setup-macos.sh     # one-time: pinned Odin toolchain into ~/odin + Clay st
 ./build.sh release       # optimized build -> dist/macos/Tormentas.app + zip
 ```
 
-Raylib and rlgl ship inside the Odin archive; Clay and Dear ImGui are compiled from the
+sokol is vendored in `deps/sokol` and its static libraries are built on first use; Clay and Dear ImGui are compiled from the
 pinned sources in `clay/upstream/` and `deps/imgui/` on first build. Details in [SETUP-MACOS.md](docs/SETUP-MACOS.md).
 
 ### Optional co-op testing
@@ -98,7 +98,7 @@ data/       Content: levels, sprites, sounds, fonts, loc, config, loot tables
 tools/      gen_level scripts and asset helpers
 clay/       Clay UI bindings, pinned upstream header, Windows static lib
 deps/       Pinned clockwork core, Dear ImGui, and disabled Steam package
-ui/         Project-owned Dear ImGui backend for raylib
+ui/         Project-owned Dear ImGui backend for sokol
 docs/       Reproducible setup and Steamworks submission notes
 bin/ dist/  Build output
 ```

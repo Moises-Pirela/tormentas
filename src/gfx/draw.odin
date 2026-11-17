@@ -123,6 +123,14 @@ quad_color  :: proc(col: Color) { _b_quad_color(col) }
 quad_uv     :: proc(u, v: f32)  { _b_quad_uv(u, v) }
 quad_vertex :: proc(p: Vec2)    { _b_quad_vertex(p) }
 
+// ---- immediate-mode triangles ------------------------------------------------------------------
+
+// A stream of triangles with per-vertex colour and UV. ImGui draw lists use this.
+tris_begin           :: proc()             { _b_tris_begin({}, false) }
+tris_begin_textured  :: proc(tex: Texture) { _b_tris_begin(tex, true) }
+tris_end             :: proc()             { _b_tris_end() }
+tri_vertex           :: proc(p, uv: Vec2, col: Color) { _b_tri_vertex(p, uv, col) }
+
 // ---- misc ----------------------------------------------------------------------------------
 
 point_in_rect :: proc(p: Vec2, r: Rect) -> bool {

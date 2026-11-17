@@ -257,7 +257,7 @@ draw_hud :: proc(w: ^World) {
             gfx.Color{ 140, 100, 40, 180 })
     }
 
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 
     _draw_flask_charges(w)
 

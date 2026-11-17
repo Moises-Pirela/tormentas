@@ -10,7 +10,7 @@ clay_color :: #force_inline proc(c: clay.Color) -> gfx.Color {
     return { u8(c[0]), u8(c[1]), u8(c[2]), u8(c[3]) }
 }
 
-clay_raylib_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
+clay_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
     for i in 0..<cmds.length {
         cmd := clay.RenderCommandArray_Get(cmds, i)
         bb  := cmd.boundingBox

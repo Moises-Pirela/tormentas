@@ -114,7 +114,7 @@ shutdown_audio :: proc() {
     for &p in g_pools {
         for v in p.voices { snd.unload_sound_alias(v.sound) }
         delete(p.voices)
-        if p.source.frameCount > 0 { snd.unload_sound(p.source) }
+        if snd.sound_valid(p.source) { snd.unload_sound(p.source) }
     }
     delete(g_pools)
     delete(g_pool_index)
@@ -162,7 +162,7 @@ _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
 
     variant := _select_variant(def)
     pidx    := _get_or_make_pool(variant)
-    if g_pools[pidx].source.frameCount == 0 { return }
+    if !snd.sound_valid(g_pools[pidx].source) { return }
 
     gain := def.gain
     if def.gain_var > 0 { gain += _rand_pm(def.gain_var) }
@@ -441,8 +441,8 @@ _cf_set :: proc(cf: ^CrossfadeStream, stem: string, fade_ms: f32) {
     }
     if pcs, ok := _resolve_stream_path(stem); ok {
         m := snd.load_music(pcs)
-        m.looping = true
-        if m.frameCount > 0 {
+        snd.music_set_looping(m, true)
+        if snd.music_valid(m) {
             cf.streams[incoming] = m
             cf.loaded[incoming]  = true
             snd.music_set_volume(m, 0)

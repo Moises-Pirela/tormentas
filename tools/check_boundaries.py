@@ -19,12 +19,17 @@ RULES = {
     "src/sim":    ["core:", "base:", "cw:"],
     "src/server": ["core:", "base:", "cw:", "../sim"],
     # The rendering API. Its backend is raylib until P1a step 7 swaps in sokol.
-    "src/gfx":    ["core:", "base:", "vendor:raylib", "vendor:raylib/rlgl"],
-    "src/snd":    ["core:", "base:", "vendor:raylib"],
+    # The renderer: sokol, the text and image libraries it uses, the generated shader packages,
+    # and the Windows readback path.
+    "src/gfx":    ["core:", "base:", "sokol:", "vendor:fontstash", "vendor:stb/image",
+                   "vendor:directx/d3d11", "shaders/directional", "shaders/sprite_light",
+                   "shaders/fog_lights"],
+    "src/snd":    ["core:", "base:", "vendor:miniaudio"],
 }
 
-# Package main is off raylib entirely since P1a step 4: src/gfx owns rendering, input and the
-# window, src/snd owns audio. This pattern catches leftovers that a raylib import would reintroduce.
+# Package main never calls a graphics or audio library directly: src/gfx owns rendering, input and
+# the window, src/snd owns audio. raylib is gone entirely (P1a step 8); the pattern stays as a
+# guard against it coming back through a stray import.
 MAIN_FORBIDDEN_RL = re.compile(
     r"\brl\.(Is(Key|Mouse)\w*|Get(Mouse|Key|Char)\w*|SetMouse\w*|GetScreen(Width|Height)|GetTime|"
     r"GetFrameTime|WindowShouldClose|KeyboardKey|MouseButton|Color|Rectangle|Vector2)\b")

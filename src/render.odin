@@ -1199,7 +1199,7 @@ draw_pause_menu :: proc() {
     }
     ui_panel_end()
     cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 }
 
 @(private = "file") BIND_ROW_H :: f32(30)
@@ -1314,7 +1314,7 @@ draw_keybinds_screen :: proc() {
     }
     ui_panel_end()
     cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 }
 SETTINGS_H_BASE :: f32(648)
 
@@ -1372,7 +1372,7 @@ draw_settings_overlay :: proc() {
     }
     ui_panel_end()
     cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 }
 
 @(private = "file")

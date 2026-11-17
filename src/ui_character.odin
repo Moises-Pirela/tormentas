@@ -275,5 +275,5 @@ draw_stats_screen :: proc(w: ^World) {
         }
     }
 
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 }

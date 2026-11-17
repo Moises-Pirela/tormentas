@@ -1,7 +1,7 @@
 package main
 
 import im   "../deps/imgui/imgui"
-import imrl "../ui/imgui_raylib"
+import imrl "../ui/imgui_sokol"
 import gfx  "gfx"
 
 g_devui_demo: bool
@@ -45,7 +45,7 @@ devui_ignore_char :: proc(r: rune) {
 }
 
 devui_texture :: proc(t: gfx.Texture) -> im.TextureRef {
-    return imrl.texture_ref(t.id)
+    return imrl.texture_ref(t)
 }
 
 devui_apply_style :: proc() {

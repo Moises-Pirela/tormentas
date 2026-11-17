@@ -36,7 +36,7 @@ official `odin-macos-arm64` archive, Apple clang 21, system linker.
 - `./test.sh`: **14 tests passed** across clockwork (4), protocol (7) and game (3),
   with memory tracking enabled.
 - `./build.sh` (debug, `-vet`): passed. The binary links Cocoa, OpenGL and IOKit only.
-- `./run.sh`: the game initialized raylib 6.0 on OpenGL 4.1, loaded fonts, shaders
+- `./run.sh`: the game initialized sokol on Metal, loaded fonts, shaders
   (GLSL 330), sprites and levels, and ran until terminated. GLFW logs a harmless warning
   that macOS windows have no icon. Missing tile files `wall_04.png`, `water_01.png` and
   `pillar_03.png` are reported on every platform and are a content gap, not a port issue.

@@ -190,5 +190,5 @@ draw_mutation_tree :: proc(w: ^World) {
     }
     ui_panel_end()
     cmds := clay.EndLayout()
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 }

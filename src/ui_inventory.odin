@@ -890,7 +890,7 @@ draw_inventory :: proc(w: ^World) {
 
     _inv_handle_input(w, slot_bbs[:], grid_bb)
 
-    clay_raylib_render(&cmds)
+    clay_render(&cmds)
 
     _draw_backpack_raw(w, var_inv, grid_bb)
 

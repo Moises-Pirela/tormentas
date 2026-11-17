@@ -1,11 +1,8 @@
-# usage: .\build.ps1 [debug|release] [-Target game|spike] [-OdinPath PATH] [-EnableSteam] [-SteamCollection DIR]
+# usage: .\build.ps1 [debug|release] [-OdinPath PATH] [-EnableSteam] [-SteamCollection DIR]
 #   game   (default) -> bin\tormentas.exe; release also packages dist\tormentas-release.zip
-#   spike  P1a sokol spike (D3D11), throwaway -> bin\tormentas_spike.exe
 param(
     [ValidateSet('debug', 'release')]
     [string]$Mode = 'debug',
-    [ValidateSet('game', 'spike')]
-    [string]$Target = 'game',
     [string]$OdinPath,
     [switch]$EnableSteam,
     [string]$SteamCollection = (Join-Path $PSScriptRoot '.local')
@@ -13,21 +10,10 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'tools\common.ps1')
 $Odin = Resolve-Odin $OdinPath
-if ($Target -eq 'spike') {
-    # P1a step 1 (docs/BUILD_PLAN.md): sokol + shdc + D3D11 readback, isolated from the game.
-    Initialize-SokolLibs
-    Invoke-ShaderCompile (Join-Path $RepoRoot 'src\spike')
-    $SpikeFlags = @('-o:none', '-debug', '-vet')
-    if ($Mode -eq 'release') { $SpikeFlags = @('-o:aggressive', '-vet') }
-    $SpikeOut = Join-Path $RepoRoot 'bin\tormentas_spike.exe'
-    New-Item -ItemType Directory -Force -Path (Join-Path $RepoRoot 'bin') | Out-Null
-    & $Odin build (Join-Path $RepoRoot 'src\spike') "-out:$SpikeOut" "-collection:sokol=$(Join-Path $RepoRoot 'deps\sokol\sokol')" '-linker:lld' @SpikeFlags
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Write-Host "[BUILD] OK -> $SpikeOut (run it from the repository root: it loads data\ relative to the working directory)"
-    exit 0
-}
 Assert-ClockworkSnapshot
 Assert-ImGuiSnapshot
+Initialize-SokolLibs
+Invoke-ShaderCompile (Join-Path $RepoRoot 'src\gfx\shaders')
 $Root = $RepoRoot
 $Out = Join-Path $Root 'bin\tormentas.exe'
 $Cw = Join-Path $Root 'deps\clockwork-ecs'
@@ -44,7 +30,9 @@ if ($EnableSteam) {
     $Flags += '-define:STEAM_ENABLED=true'
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $Root 'bin') | Out-Null
-& $Odin build (Join-Path $Root 'src') "-out:$Out" "-collection:cw=$Cw" "-collection:steam=$Steam" '-linker:lld' "-resource:$(Join-Path $Root 'data\app\tormentas.rc')" @Flags
+& $Odin build (Join-Path $Root 'src') "-out:$Out" "-collection:cw=$Cw" "-collection:steam=$Steam" `
+    "-collection:sokol=$(Join-Path $Root 'deps\sokol\sokol')" '-linker:lld' `
+    "-resource:$(Join-Path $Root 'data\app\tormentas.rc')" @Flags
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($EnableSteam) {
     Copy-Item -LiteralPath (Join-Path $Steam 'steamworks\redistributable_bin\win64\steam_api64.dll') -Destination (Join-Path $Root 'bin\steam_api64.dll') -Force

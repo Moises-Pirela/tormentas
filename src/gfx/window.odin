@@ -44,5 +44,18 @@ window_set_icon :: proc(img: Image) { _b_set_window_icon(img) }
 // Writes the current frame to a PNG. The backend reads it back from the GPU.
 screenshot :: proc(path: cstring) -> bool { return _b_screenshot(path) }
 
+// Clipboard text, UTF-8. Valid until the next call.
+clipboard_text :: proc "c" () -> cstring { return _b_clipboard_text() }
+set_clipboard_text :: proc "c" (text: cstring) { _b_set_clipboard_text(text) }
+
+// True while the window has keyboard focus.
+window_focused :: proc() -> bool { return _b_window_focused() }
+
+Cursor :: enum u8 {
+    Default, Text, Resize_All, Resize_NS, Resize_EW, Resize_NESW, Resize_NWSE, Hand, Not_Allowed,
+}
+
+set_mouse_cursor :: proc(c: Cursor) { _b_set_mouse_cursor(c) }
+
 // Native window handle (NSWindow on macOS, HWND on Windows).
 window_handle :: proc() -> rawptr { return _b_window_handle() }

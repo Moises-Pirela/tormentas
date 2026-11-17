@@ -198,3 +198,21 @@ compile_shaders() {
         fi
     done < <(find "$dir" -name '*.glsl' -type f | sort)
 }
+
+ensure_capture_lib() {
+    # Builds the Metal readback helper used for screenshots (src/gfx/native/capture_metal.m).
+    local arch tag native out
+    arch="$(uname -m)"
+    case "$arch" in arm64) tag=arm64 ;; *) tag=x64 ;; esac
+    native="$REPO_ROOT/src/gfx/native"
+    out="$native/capture_metal_$tag.a"
+    if [ ! -f "$out" ] || [ "$native/capture_metal.m" -nt "$out" ]; then
+        log "[BUILD] native/capture_metal.m ($tag)"
+        local tmp
+        tmp="$(mktemp -d)"
+        clang -c -fobjc-arc -O2 -arch "$arch" -mmacosx-version-min=11.0 "$native/capture_metal.m" -o "$tmp/capture_metal.o"
+        rm -f "$out"
+        ar rcs "$out" "$tmp/capture_metal.o"
+        rm -rf "$tmp"
+    fi
+}

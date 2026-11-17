@@ -28,7 +28,7 @@ The required clockwork core is included at `deps/clockwork-ecs/clockwork`. Its
 exact version, origin, permission and hashes are documented in
 [the snapshot README](../deps/clockwork-ecs/README.md). The scripts check every
 source file against that manifest. There is no private sibling dependency.
-Raylib comes from the pinned Odin archive. Clay's existing Windows binding and
+sokol is vendored in `deps/sokol`; `tools/build-sokol.ps1` compiles its D3D11 libraries with the C++ build tools from step 2 on first build. Clay's existing Windows binding and
 static library remain in `clay/`. Dear ImGui for the developer tools is vendored in
 `deps/imgui` (see its `snapshot.json`); Windows links the prebuilt
 `deps/imgui/imgui/imgui_windows_x64.lib` from the pinned odin-imgui commit.

@@ -20,3 +20,11 @@ save/
 
 # sokol static libraries are built locally (tools/build-sokol.sh / tools/build-sokol.ps1)
 /deps/sokol/sokol/*/*.lib
+
+# rc.exe leaves these next to the resource script
+data/app/RC*
+data/app/RD*
+data/app/*.res
+
+# python bytecode from tools/
+__pycache__/

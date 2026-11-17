@@ -6,7 +6,6 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strconv"
-import "core:time"
 
 SCREEN_WIDTH  :: 1920
 SCREEN_HEIGHT :: 1080
@@ -52,61 +51,53 @@ boot_loopback_from_args :: proc() {
         }
     }
 
-    if mode == "hostlocal" {
-        _boot_hostlocal(port)
-    } else {
-        _boot_joinlocal(port)
-    }
+    _boot_start(mode == "hostlocal", port)
 }
 
 LOOPBACK_CONNECT_TIMEOUT :: f32(15.0)
 
-@(private = "file")
-_boot_wait_for_connection :: proc() -> bool {
-    timer := f32(0)
-    for timer < LOOPBACK_CONNECT_TIMEOUT {
-        steam_run_callbacks()
-        p2p.session_poll(&g_session, 1.0 / 60.0)
-        if p2p.session_is_online(&g_session) { return true }
-        if p2p.session_is_disconnected(&g_session) { return false }
-        time.sleep(time.Millisecond * 16)
-        timer += 1.0 / 60.0
-    }
-    return false
-}
+// Waiting for the peer used to block for up to 15 seconds. sokol_app calls init once and then
+// drives frames, so the wait is a state the frame loop polls instead.
+@(private = "file") g_boot_waiting: bool
+@(private = "file") g_boot_timer:   f32
 
 @(private = "file")
-_boot_hostlocal :: proc(port: u16) {
-    g_is_host = true
-    copy(g_player_name[:], "Host")
+_boot_start :: proc(host: bool, port: u16) {
+    g_is_host = host
+    copy(g_player_name[:], "Host" if host else "Client")
     copy(g_session.local_name[:], g_player_name[:])
-    if !p2p.session_host_loopback(&g_session, port) { return }
-    if !_boot_wait_for_connection() {
-        fmt.eprintln("[loopback] timed out waiting for joinlocal peer")
+    ok := p2p.session_host_loopback(&g_session, port) if host else p2p.session_join_loopback(&g_session, port)
+    if !ok { return }
+    g_boot_waiting = true
+    g_boot_timer   = 0
+}
+
+// Returns once the loopback session is up, or gives up after the timeout.
+boot_loopback_update :: proc(dt: f32) {
+    if !g_boot_waiting { return }
+    p2p.session_poll(&g_session, dt)
+
+    if p2p.session_is_online(&g_session) {
+        g_boot_waiting = false
+        init_game()
+        g_hub_active = true
+        g_app_state  = .Playing
+        set_playing_state(.Hub)
+        return
+    }
+
+    if p2p.session_is_disconnected(&g_session) {
+        g_boot_waiting = false
         p2p.session_shutdown(&g_session)
         return
     }
-    init_game()
-    g_hub_active = true
-    g_app_state  = .Playing
-    set_playing_state(.Hub)
-}
 
-@(private = "file")
-_boot_joinlocal :: proc(port: u16) {
-    g_is_host = false
-    copy(g_player_name[:], "Client")
-    copy(g_session.local_name[:], g_player_name[:])
-    if !p2p.session_join_loopback(&g_session, port) { return }
-    if !_boot_wait_for_connection() {
-        fmt.eprintln("[loopback] timed out waiting for hostlocal peer")
+    g_boot_timer += dt
+    if g_boot_timer >= LOOPBACK_CONNECT_TIMEOUT {
+        fmt.eprintln("[loopback] timed out waiting for peer")
+        g_boot_waiting = false
         p2p.session_shutdown(&g_session)
-        return
     }
-    init_game()
-    g_hub_active = true
-    g_app_state  = .Playing
-    set_playing_state(.Hub)
 }
 
 accept_invite :: proc() {
@@ -611,98 +602,104 @@ main :: proc() {
         }
     }
 
+    // These must run before the window exists: sokol_app takes the size and mode at creation.
     window_probe_from_args()
     migrate_legacy_user_files()
     load_config()
-    platform_init_window("Tormentas")
-    defer gfx.window_close()
+
+    // sokol_app owns the loop and never returns on macOS, so everything else is a callback.
+    gfx.run({
+        window  = platform_window_desc("Tormentas"),
+        init    = game_init,
+        frame   = game_frame,
+        cleanup = game_cleanup,
+    })
+}
+
+// Runs once, after the window and the GPU exist.
+game_init :: proc() {
+    g_fullscreen = gfx.window_is_fullscreen()
+
     if app_icon, ok := gfx.load_image("data/app/tormentas_icon.png"); ok {
         gfx.window_set_icon(app_icon)
         gfx.unload_image(app_icon)
     }
-    gfx.set_target_fps(60)
 
     g_lang = Language(min(g_binds.language, u8(LANG_COUNT - 1)))
 
     loc_init()
-    defer loc_destroy()
-
     init_audio()
-    defer shutdown_audio()
-
     init_clay()
-    defer shutdown_clay()
-
     ui_init()
-    defer ui_destroy()
-
     init_font()
-    defer shutdown_font()
-
     init_icon_cache()
-    defer shutdown_icon_cache()
-
     init_anim_cache()
-    defer shutdown_anim_cache()
-
     init_fog()
-    defer shutdown_fog()
-
     init_lighting()
-    defer shutdown_lighting()
-
     init_wall_mask()
-    defer shutdown_wall_mask()
-
     init_pause_menu()
-
     cam_init()
-
     tilemap_init()
-    defer tilemap_destroy()
-
     module_registry_init()
-    defer module_registry_destroy()
-
     ai_paths_init()
-    defer ai_paths_destroy()
-
     level_data_init()
-    defer level_data_destroy()
 
-    if !loot_table_load("data/loot_table.csv") { return }
-    defer loot_table_destroy()
+    if !loot_table_load("data/loot_table.csv") {
+        fmt.eprintln("[boot] failed to load data/loot_table.csv")
+        gfx.request_quit()
+        return
+    }
 
     lore_db_load()
 
-    {
-        defs, ok := load_entity_defs("data/entities.json")
-        if !ok { return }
-        g_entity_defs = defs
+    defs, ok := load_entity_defs("data/entities.json")
+    if !ok {
+        fmt.eprintln("[boot] failed to load data/entities.json")
+        gfx.request_quit()
+        return
     }
-    defer destroy_entity_defs(g_entity_defs)
+    g_entity_defs = defs
 
     // Needs the entity definitions, and must happen before any frame draws (see the proc).
     prebuild_entity_sprites()
 
     chars_load_all()
     _mm_init()
-
     steam_init()
-    defer steam_shutdown()
-
     boot_loopback_from_args()
+}
 
-    for !gfx.window_should_close() && !g_should_exit {
-        if !app_frame() { break }
-    }
+game_frame :: proc() {
+    if !app_frame() || g_should_exit { gfx.request_quit() }
+}
 
+// Runs on the way out: on a quit request, and again from sokol's cleanup if it fires. gfx calls it
+// exactly once. Saves come first, because this is the only place they can happen.
+game_cleanup :: proc() {
     platform_store_display_settings()
     save_config()
 
     dbg_inspector_shutdown()
     devui_shutdown()
     if g_sim_alive { shutdown_game() }
+
+    steam_shutdown()
+    destroy_entity_defs(g_entity_defs)
+    loot_table_destroy()
+    level_data_destroy()
+    ai_paths_destroy()
+    module_registry_destroy()
+    tilemap_destroy()
+    shutdown_wall_mask()
+    shutdown_lighting()
+    shutdown_fog()
+    shutdown_anim_cache()
+    shutdown_icon_cache()
+    shutdown_font()
+    ui_destroy()
+    shutdown_clay()
+    shutdown_audio()
+    loc_destroy()
 }
 
 // One frame of the whole app: input, update, draw. The raylib loop in main calls it; under
@@ -712,6 +709,7 @@ app_frame :: proc() -> (keep_running: bool) {
     defer free_all(context.temp_allocator)
 
     steam_run_callbacks()
+    boot_loopback_update(dt)
     platform_update_window()
     if window_probe_tick() { return false }
 

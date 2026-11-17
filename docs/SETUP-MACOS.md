@@ -23,7 +23,7 @@ tools/setup-macos.sh --dest ~/sdk/odin   # alternative location (or set ODIN_HOM
 The script downloads `odin-macos-arm64-dev-2026-10.tar.gz` from the official GitHub
 release, verifies the SHA-256 from `toolchain.json`, unpacks it, confirms `odin version`
 reports revision `84bc3fc`, and then runs `tools/build-clay.sh --arch all`. The release
-is self-contained: it bundles LLVM and the raylib and rlgl vendor libraries.
+is self-contained: it bundles LLVM and the vendor libraries (fontstash, stb, miniaudio).
 
 Afterwards either add the install directory to `PATH` or export `ODIN=~/odin/odin`.
 `build.sh` and `test.sh` look for `--odin PATH`, then `$ODIN`, then `odin` on `PATH`,
@@ -33,7 +33,7 @@ then `~/odin/odin`.
 
 | Library | Source on macOS |
 | --- | --- |
-| raylib 6.0 / rlgl | `vendor/raylib/macos/libraylib.a` from the pinned Odin archive (universal arm64 + x86_64). Linked statically together with the Cocoa, OpenGL and IOKit frameworks. No install needed. |
+| sokol (gfx/app/gl/glue/log/time/shape) | Vendored in `deps/sokol` (see its `snapshot.json`). `tools/build-sokol.sh` compiles the Metal static libraries on first build; shaders are compiled by the pinned `sokol-shdc`. Linked with the Cocoa, Metal and QuartzCore frameworks. |
 | Dear ImGui 1.92.8-docking | `deps/imgui`: upstream C++ sources, dear_bindings C wrappers and the odin-imgui binding, hash-verified against `deps/imgui/snapshot.json`. `tools/build-imgui.sh` compiles `imgui_darwin_arm64.a` (and `imgui_darwin_x64.a`) on first build. Used only by the developer tools. |
 | clockwork | `deps/clockwork-ecs`, hash-verified against `snapshot.json` exactly as on Windows. |
 | Clay | Compiled from `clay/upstream/clay.h` by `tools/build-clay.sh` into `clay/macos-arm64/clay.a` (and `clay/macos/clay.a` for x86_64). `clay/clay.odin` already selects these paths for Darwin. |
@@ -95,7 +95,7 @@ Override the bundle identifier or marketing version with `TORMENTAS_BUNDLE_ID` a
   Settings → Window Mode. The choice and the last windowed size are saved in `config.json`.
 - Windowed sizes are clamped to fit the current display.
 - Rendering is at the display's point resolution (1440 × 900 on a 2560 × 1600 Retina
-  panel), which macOS upscales. raylib's HighDPI mode is **not** enabled: with it the HUD is
+  panel), which macOS upscales. HighDPI is **not** enabled: with it the HUD is
   sharp but the lighting and sprite composites are drawn at the wrong scale and offset.
   Supporting Retina needs those render targets and shaders to work in framebuffer pixels.
 - Keyboard labels use Mac names (Opt, Cmd). Editor and animation-editor shortcuts accept
