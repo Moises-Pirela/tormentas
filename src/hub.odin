@@ -196,7 +196,7 @@ update_hub_portal :: proc(w: ^World) {
 
     online := p2p.session_is_online(&g_session)
     if near && (!online || g_session.local_slot == 0) &&
-       input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+       input_pressed(gfx.Key(g_binds.gameplay.interact)) {
         ui_open(.LevelSelect)
     }
 }
@@ -204,7 +204,7 @@ update_hub_portal :: proc(w: ^World) {
 draw_hub_world :: proc(w: ^World) {
     px := HUB_PORTAL_POS[0]
     py := HUB_PORTAL_POS[1]
-    tt := f32(rl.GetTime())
+    tt := f32(gfx.time())
     center := gfx.Vec2{ px, py }
     iso := world_to_iso_v(center)
 
@@ -238,7 +238,7 @@ draw_hub_world :: proc(w: ^World) {
 }
 
 draw_hub_hud :: proc(w: ^World) {
-    sw := f32(rl.GetScreenWidth())
+    sw := f32(gfx.screen_width())
 
     loc    := t(.HUB_LABEL)
     loc_fs := uis(11)

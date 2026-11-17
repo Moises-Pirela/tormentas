@@ -130,7 +130,7 @@ accept_invite :: proc() {
 draw_invite_toast :: proc() {
     if !g_invite_pending || p2p.session_is_online(&g_session) { return }
 
-    sw := f32(rl.GetScreenWidth())
+    sw := f32(gfx.screen_width())
     pw := uis(380)
     ph := uis(60)
     px := sw * 0.5 - pw * 0.5
@@ -289,8 +289,8 @@ update_playing :: proc(dt: f32) {
     p2p.session_poll(&g_session, dt)
 
     {
-        sw       := f32(rl.GetScreenWidth())
-        sh       := f32(rl.GetScreenHeight())
+        sw       := f32(gfx.screen_width())
+        sh       := f32(gfx.screen_height())
         inv_open := ui_has(.Inventory) || ui_has(.Shop) || ui_has(.Stash)
         if inv_open {
             g_camera.offset = { (sw - f32(g_inv.panel_w)) * 0.5, sh * 0.5 }
@@ -299,7 +299,7 @@ update_playing :: proc(dt: f32) {
         }
     }
     if !g_editor_mode {
-        g_camera.zoom = f32(rl.GetScreenHeight()) / 1080.0
+        g_camera.zoom = f32(gfx.screen_height()) / 1080.0
     }
 
     if !g_sim_alive { return }
@@ -388,16 +388,16 @@ update_playing :: proc(dt: f32) {
             }
 
             if input_is_gameplay() {
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.pause)) {
                     ui_open(.PauseMenu)
                 }
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_inventory)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.open_inventory)) {
                     ui_open(.Inventory)
                 }
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_stats)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.open_stats)) {
                     ui_open(.Stats)
                 }
-                if rl.IsKeyPressed(.O) {
+                if gfx.key_pressed(.O) {
                     if ui_has(.Social) { ui_close(.Social) } else { ui_open(.Social) }
                 }
                 update_mutation_workbench(w)
@@ -410,13 +410,13 @@ update_playing :: proc(dt: f32) {
 
         case .Gameplay:
             if input_is_gameplay() {
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.pause)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.pause)) {
                     ui_open(.PauseMenu)
                 }
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_inventory)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.open_inventory)) {
                     ui_open(.Inventory)
                 }
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.open_stats)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.open_stats)) {
                     ui_open(.Stats)
                 }
                 update_mutation_workbench(w)
@@ -424,7 +424,7 @@ update_playing :: proc(dt: f32) {
                 update_stash(w)
                 update_ability_vendor(w)
 
-                if input_pressed(rl.KeyboardKey(g_binds.gameplay.loot_filter)) {
+                if input_pressed(gfx.Key(g_binds.gameplay.loot_filter)) {
                     switch g_loot_filter_rarity {
                     case .Normal:    g_loot_filter_rarity = .Rare
                     case .Rare:      g_loot_filter_rarity = .Epic
@@ -565,12 +565,12 @@ draw_playing :: proc() {
     draw_barrels()
     draw_status_effects(w)
     draw_enemy_telegraphs(w)
-    draw_enemy_health_bars(w, rl.GetFrameTime())
+    draw_enemy_health_bars(w, gfx.frame_time())
     draw_ground_item_labels(w)
     draw_explosions()
     draw_grenades_and_clouds(w)
     draw_traps(w)
-    update_draw_dmg_numbers(rl.GetFrameTime())
+    update_draw_dmg_numbers(gfx.frame_time())
     if !g_editor_mode { draw_stealth_indicators(w) }
     rl.EndMode2D()
 
@@ -706,85 +706,8 @@ main :: proc() {
 
     boot_loopback_from_args()
 
-    for !rl.WindowShouldClose() && !g_should_exit {
-        dt := rl.GetFrameTime()
-        defer free_all(context.temp_allocator)
-
-        steam_run_callbacks()
-        platform_update_window()
-        if window_probe_tick() { break }
-
-        if g_pending_join_lobby != 0 && !g_invite_pending && !p2p.session_is_online(&g_session) {
-            host_id := steam_lobby_get_host_id(g_pending_join_lobby)
-            if host_id != 0 && host_id != steam_get_local_id() {
-                g_steam_lobby_id     = g_pending_join_lobby
-                g_pending_join_lobby = 0
-                g_invite_host_id     = host_id
-                nm := steam_friend_name(host_id)
-                g_invite_name_len = min(len(nm), len(g_invite_host_name) - 1)
-                copy(g_invite_host_name[:], nm[:g_invite_name_len])
-                g_invite_host_name[g_invite_name_len] = 0
-                g_invite_pending = true
-            }
-        }
-
-        if g_invite_pending && !p2p.session_is_online(&g_session) {
-            typing := devui_wants_text() || (g_app_state == .MainMenu && g_mm.focus == .NewName)
-            if !typing {
-                if rl.IsKeyPressed(.J) { accept_invite() }
-                if rl.IsKeyPressed(.N) { g_invite_pending = false }
-            }
-        }
-
-        devui_begin_frame(dt)
-        update_clay_input()
-        input_begin_frame()
-        update_audio()
-        update_music_state(&g_sim.world)
-        update_fade(dt)
-        update_console(dt)
-        update_anim_editor(dt)
-
-        switch g_app_state {
-        case .MainMenu:
-            update_main_menu(dt)
-        case .Connecting:
-            update_connecting(dt)
-        case .Playing:
-            update_playing(dt)
-        }
-
-        if ui_any() && input_pressed(rl.KeyboardKey(g_binds.ui.close_panel)) {
-            ui_close_top()
-        }
-        ui_update(dt)
-
-        rl.BeginDrawing()
-        rl.ClearBackground({10, 10, 14, 255})
-
-        switch g_app_state {
-        case .MainMenu:
-            draw_main_menu()
-        case .Connecting:
-            draw_connecting()
-        case .Playing:
-            draw_playing()
-        }
-
-        {
-            ui_w := (^World)(nil)
-            if g_app_state == .Playing && g_sim_alive {
-                ui_w = &g_sim.world
-            }
-            ui_draw(ui_w)
-        }
-
-        draw_invite_toast()
-        draw_fade()
-        draw_editor_overlay_screen()
-        devui_tools_frame()
-        devui_end_frame()
-        rl.EndDrawing()
+    for !gfx.window_should_close() && !g_should_exit {
+        if !app_frame() { break }
     }
 
     platform_store_display_settings()
@@ -793,4 +716,89 @@ main :: proc() {
     dbg_inspector_shutdown()
     devui_shutdown()
     if g_sim_alive { shutdown_game() }
+}
+
+// One frame of the whole app: input, update, draw. The raylib loop in main calls it; under
+// sokol_app (P1a step 7) it becomes the body of the frame callback, because sokol owns the loop.
+app_frame :: proc() -> (keep_running: bool) {
+    dt := gfx.frame_time()
+    defer free_all(context.temp_allocator)
+
+    steam_run_callbacks()
+    platform_update_window()
+    if window_probe_tick() { return false }
+
+    if g_pending_join_lobby != 0 && !g_invite_pending && !p2p.session_is_online(&g_session) {
+        host_id := steam_lobby_get_host_id(g_pending_join_lobby)
+        if host_id != 0 && host_id != steam_get_local_id() {
+            g_steam_lobby_id     = g_pending_join_lobby
+            g_pending_join_lobby = 0
+            g_invite_host_id     = host_id
+            nm := steam_friend_name(host_id)
+            g_invite_name_len = min(len(nm), len(g_invite_host_name) - 1)
+            copy(g_invite_host_name[:], nm[:g_invite_name_len])
+            g_invite_host_name[g_invite_name_len] = 0
+            g_invite_pending = true
+        }
+    }
+
+    if g_invite_pending && !p2p.session_is_online(&g_session) {
+        typing := devui_wants_text() || (g_app_state == .MainMenu && g_mm.focus == .NewName)
+        if !typing {
+            if gfx.key_pressed(.J) { accept_invite() }
+            if gfx.key_pressed(.N) { g_invite_pending = false }
+        }
+    }
+
+    devui_begin_frame(dt)
+    update_clay_input()
+    input_begin_frame()
+    update_audio()
+    update_music_state(&g_sim.world)
+    update_fade(dt)
+    update_console(dt)
+    update_anim_editor(dt)
+
+    switch g_app_state {
+    case .MainMenu:
+        update_main_menu(dt)
+    case .Connecting:
+        update_connecting(dt)
+    case .Playing:
+        update_playing(dt)
+    }
+
+    if ui_any() && input_pressed(gfx.Key(g_binds.ui.close_panel)) {
+        ui_close_top()
+    }
+    ui_update(dt)
+
+    rl.BeginDrawing()
+    rl.ClearBackground({10, 10, 14, 255})
+
+    switch g_app_state {
+    case .MainMenu:
+        draw_main_menu()
+    case .Connecting:
+        draw_connecting()
+    case .Playing:
+        draw_playing()
+    }
+
+    {
+        ui_w := (^World)(nil)
+        if g_app_state == .Playing && g_sim_alive {
+            ui_w = &g_sim.world
+        }
+        ui_draw(ui_w)
+    }
+
+    draw_invite_toast()
+    draw_fade()
+    draw_editor_overlay_screen()
+    devui_tools_frame()
+    devui_end_frame()
+    rl.EndDrawing()
+    gfx.end_input_frame()
+    return true
 }

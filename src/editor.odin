@@ -71,7 +71,7 @@ g_ed_filtered:       [ED_MAX_LEVELS+1]int
 g_ed_filtered_count: int
 
 @(private = "file")
-ed_base_zoom :: proc() -> f32 { return f32(rl.GetScreenHeight()) / 720.0 }
+ed_base_zoom :: proc() -> f32 { return f32(gfx.screen_height()) / 720.0 }
 
 @(private = "file")
 ed_level_file :: proc(n: int) -> string {
@@ -157,14 +157,14 @@ update_editor :: proc(dt: f32) {
 
     ed_insp_validate()
 
-    mp      := rl.GetMousePosition()
+    mp      := gfx.mouse_position()
     over_ui := devui_wants_mouse()
     typing  := devui_wants_text()
 
     if ed_gizmo_dragging() || (!over_ui && (g_ed_tool == .Select || g_ed_tool == .Place)) {
         ed_gizmo_update(mp)
 
-        if !ed_gizmo_dragging() && rl.IsMouseButtonPressed(.LEFT) && !over_ui {
+        if !ed_gizmo_dragging() && gfx.mouse_pressed(.LEFT) && !over_ui {
             switch g_ed_tool {
             case .Place:
                 ed_entity_place(screen_to_world_cartesian(mp))
@@ -175,45 +175,45 @@ update_editor :: proc(dt: f32) {
             case .Paint, .Erase:
             }
         }
-        if !typing && rl.IsKeyPressed(.DELETE) { ed_entity_delete_selected() }
-        if !typing && rl.IsKeyPressed(.ESCAPE) && !ed_gizmo_dragging() { ed_entity_deselect() }
+        if !typing && gfx.key_pressed(.DELETE) { ed_entity_delete_selected() }
+        if !typing && gfx.key_pressed(.ESCAPE) && !ed_gizmo_dragging() { ed_entity_deselect() }
     }
 
     if !typing {
-        PAL_KEYS := [10]rl.KeyboardKey{
+        PAL_KEYS := [10]gfx.Key{
             .ONE, .TWO, .THREE, .FOUR, .FIVE,
             .SIX, .SEVEN, .EIGHT, .NINE, .ZERO,
         }
         for ki in 0..<10 {
-            if rl.IsKeyPressed(PAL_KEYS[ki]) && ki < len(ED_BRUSHES) {
+            if gfx.key_pressed(PAL_KEYS[ki]) && ki < len(ED_BRUSHES) {
                 g_ed_brush = ED_BRUSHES[ki]
                 g_ed_tool  = .Paint
             }
         }
 
-        if rl.IsKeyPressed(.G) { g_ed_grid_visible = !g_ed_grid_visible }
+        if gfx.key_pressed(.G) { g_ed_grid_visible = !g_ed_grid_visible }
 
         if g_ed_brush == .Module {
-            if rl.IsKeyPressed(.COMMA)  { ed_cycle_module(-1) }
-            if rl.IsKeyPressed(.PERIOD) { ed_cycle_module(+1) }
+            if gfx.key_pressed(.COMMA)  { ed_cycle_module(-1) }
+            if gfx.key_pressed(.PERIOD) { ed_cycle_module(+1) }
         }
 
-        shift := rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
+        shift := gfx.key_down(.LEFT_SHIFT) || gfx.key_down(.RIGHT_SHIFT)
         if shift {
-            if rl.IsKeyPressed(.LEFT_BRACKET)  { g_ed_brush_size = max(g_ed_cell_size, g_ed_brush_size - g_ed_cell_size) }
-            if rl.IsKeyPressed(.RIGHT_BRACKET) { g_ed_brush_size = min(512,             g_ed_brush_size + g_ed_cell_size) }
+            if gfx.key_pressed(.LEFT_BRACKET)  { g_ed_brush_size = max(g_ed_cell_size, g_ed_brush_size - g_ed_cell_size) }
+            if gfx.key_pressed(.RIGHT_BRACKET) { g_ed_brush_size = min(512,             g_ed_brush_size + g_ed_cell_size) }
         } else {
-            if rl.IsKeyPressed(.LEFT_BRACKET)  && g_ed_target_level > 0  { g_ed_target_level -= 1 }
-            if rl.IsKeyPressed(.RIGHT_BRACKET) && g_ed_target_level < 99 { g_ed_target_level += 1 }
+            if gfx.key_pressed(.LEFT_BRACKET)  && g_ed_target_level > 0  { g_ed_target_level -= 1 }
+            if gfx.key_pressed(.RIGHT_BRACKET) && g_ed_target_level < 99 { g_ed_target_level += 1 }
         }
 
-        if rl.IsKeyPressed(.MINUS) && g_ed_level > 0 {
+        if gfx.key_pressed(.MINUS) && g_ed_level > 0 {
             g_ed_level -= 1
             ed_rebuild_filtered()
             level_load(g_ed_level)
             p2p.session_send_level_load(&g_session, g_ed_level)
         }
-        if rl.IsKeyPressed(.EQUAL) && g_ed_level < 99 {
+        if gfx.key_pressed(.EQUAL) && g_ed_level < 99 {
             g_ed_level += 1
             ed_rebuild_filtered()
             level_load(g_ed_level)
@@ -221,7 +221,7 @@ update_editor :: proc(dt: f32) {
         }
     }
 
-    wheel := rl.GetMouseWheelMove()
+    wheel := gfx.mouse_wheel()
     if wheel != 0 && !over_ui {
         g_ed_zoom = clamp(g_ed_zoom * (1.0 + wheel * 0.12), 0.10, 6.0)
     }
@@ -230,23 +230,23 @@ update_editor :: proc(dt: f32) {
     PAN :: f32(400)
     pan_screen: [2]f32
     if !typing {
-        if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    { pan_screen[1] -= 1 }
-        if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  { pan_screen[1] += 1 }
-        if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT)  { pan_screen[0] -= 1 }
-        if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) { pan_screen[0] += 1 }
+        if gfx.key_down(.W) || gfx.key_down(.UP)    { pan_screen[1] -= 1 }
+        if gfx.key_down(.S) || gfx.key_down(.DOWN)  { pan_screen[1] += 1 }
+        if gfx.key_down(.A) || gfx.key_down(.LEFT)  { pan_screen[0] -= 1 }
+        if gfx.key_down(.D) || gfx.key_down(.RIGHT) { pan_screen[0] += 1 }
     }
     pan_mag := math.sqrt(pan_screen[0]*pan_screen[0] + pan_screen[1]*pan_screen[1])
     if pan_mag > 0 {
         pan_screen[0] /= pan_mag
         pan_screen[1] /= pan_mag
     }
-    pan_mult := f32(1.8) if rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT) else f32(1.0)
+    pan_mult := f32(1.8) if gfx.key_down(.LEFT_SHIFT) || gfx.key_down(.RIGHT_SHIFT) else f32(1.0)
     spd := PAN / g_ed_zoom * pan_mult
     g_camera.target.x += pan_screen[0] * spd * dt
     g_camera.target.y += pan_screen[1] * spd * dt
 
-    if rl.IsMouseButtonDown(.MIDDLE) && !over_ui {
-        d := rl.GetMouseDelta()
+    if gfx.mouse_down(.MIDDLE) && !over_ui {
+        d := gfx.mouse_delta()
         g_camera.target.x -= d.x / g_camera.zoom
         g_camera.target.y -= d.y / g_camera.zoom
     }
@@ -256,19 +256,19 @@ update_editor :: proc(dt: f32) {
         tx, ty   := world_to_tile(world_mp.x, world_mp.y)
 
         if g_ed_brush == .Module && g_ed_tool == .Paint && !g_hub_active {
-            if rl.IsMouseButtonPressed(.LEFT)  { module_place_at(g_ed_module_idx, tx, ty) }
-            if rl.IsMouseButtonPressed(.RIGHT) { module_erase_at(tx, ty) }
+            if gfx.mouse_pressed(.LEFT)  { module_place_at(g_ed_module_idx, tx, ty) }
+            if gfx.mouse_pressed(.RIGHT) { module_erase_at(tx, ty) }
         } else if !ed_stroke_active() {
-            if rl.IsMouseButtonPressed(.LEFT) {
+            if gfx.mouse_pressed(.LEFT) {
                 ed_stroke_begin(.Erase if g_ed_tool == .Erase else .Paint, .LEFT)
-            } else if rl.IsMouseButtonPressed(.RIGHT) && !ed_try_select_at(tx, ty) {
+            } else if gfx.mouse_pressed(.RIGHT) && !ed_try_select_at(tx, ty) {
                 ed_stroke_begin(.Erase if g_hub_active else .EraseObjects, .RIGHT)
             }
         }
     }
 
     if ed_stroke_active() {
-        if !rl.IsMouseButtonDown(g_ed_stroke.button) {
+        if !gfx.mouse_down(g_ed_stroke.button) {
             ed_stroke_end()
         } else if over_ui {
             g_ed_stroke.has_last = false
@@ -277,17 +277,17 @@ update_editor :: proc(dt: f32) {
         }
     }
 
-    if !typing && rl.IsKeyPressed(.ESCAPE) {
+    if !typing && gfx.key_pressed(.ESCAPE) {
         if ed_gizmo_dragging() { ed_gizmo_cancel() } else { ed_insp_deselect() }
     }
 
     ctrl := platform_cmd_down() && !typing
-    if ctrl && rl.IsKeyPressed(.S) {
+    if ctrl && gfx.key_pressed(.S) {
         level_save(g_ed_level)
         ed_refresh_exists()
         g_ed_save_msg = 2.0
     }
-    if ctrl && rl.IsKeyPressed(.L) {
+    if ctrl && gfx.key_pressed(.L) {
         level_load(g_ed_level)
         p2p.session_send_level_load(&g_session, g_ed_level)
     }
@@ -351,8 +351,8 @@ ed_fill_walkable :: proc(cols, rows: int) {
 }
 
 ed_visible_world_aabb :: proc() -> (x0, y0, x1, y1: f32) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     c  := [4]gfx.Vec2{
         screen_to_world_cartesian({ 0,  0}),
         screen_to_world_cartesian({sw,  0}),
@@ -377,7 +377,7 @@ ed_grid_visible_range :: proc(half_cw, half_ch, cs: f32, num_x, num_y: int) -> (
 }
 
 ed_paint_snap_held :: proc() -> bool {
-    return rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
+    return gfx.key_down(.LEFT_SHIFT) || gfx.key_down(.RIGHT_SHIFT)
 }
 
 ed_brush_footprint :: proc(cx, cy, unit: int, snap: bool) -> (x0, y0, n: int) {
@@ -719,8 +719,8 @@ ed_erase_objects :: proc(tx, ty: int) {
 draw_editor_world :: proc() {
     if !g_editor_mode { return }
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     lw := 1.0 / g_camera.zoom
 
     tl := screen_to_world_cartesian({0, 0})

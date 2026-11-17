@@ -1,6 +1,6 @@
 package main
 
-import rl  "vendor:raylib"
+import gfx "gfx"
 import     "core:math"
 import p2p "p2p"
 
@@ -13,10 +13,10 @@ collect_local_input :: proc() -> p2p.InputFrame {
     if devui_wants_text() { return f }
 
     screen_dir: [2]f32
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_up))    || rl.IsKeyDown(.UP)    { screen_dir[1] -= 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_down))  || rl.IsKeyDown(.DOWN)  { screen_dir[1] += 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_left))  || rl.IsKeyDown(.LEFT)  { screen_dir[0] -= 1 }
-    if rl.IsKeyDown(rl.KeyboardKey(g_binds.gameplay.move_right)) || rl.IsKeyDown(.RIGHT) { screen_dir[0] += 1 }
+    if gfx.key_down(gfx.Key(g_binds.gameplay.move_up))    || gfx.key_down(.UP)    { screen_dir[1] -= 1 }
+    if gfx.key_down(gfx.Key(g_binds.gameplay.move_down))  || gfx.key_down(.DOWN)  { screen_dir[1] += 1 }
+    if gfx.key_down(gfx.Key(g_binds.gameplay.move_left))  || gfx.key_down(.LEFT)  { screen_dir[0] -= 1 }
+    if gfx.key_down(gfx.Key(g_binds.gameplay.move_right)) || gfx.key_down(.RIGHT) { screen_dir[0] += 1 }
     mag := math.sqrt(screen_dir[0]*screen_dir[0] + screen_dir[1]*screen_dir[1])
     if mag > 0 {
         screen_dir[0] /= mag
@@ -24,19 +24,19 @@ collect_local_input :: proc() -> p2p.InputFrame {
     }
     f.move = screen_dir_to_world_dir(screen_dir)
 
-    mp    := screen_to_world_cartesian(rl.GetMousePosition())
+    mp    := screen_to_world_cartesian(gfx.mouse_position())
     f.aim  = { mp.x, mp.y }
 
-    if rl.IsMouseButtonDown(.LEFT) && !devui_wants_mouse() { f.actions += {.Fire}     }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill2))  { f.actions += {.Skill2}   }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill3))  { f.actions += {.Skill3}   }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.skill4))  { f.actions += {.Skill4}   }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.interact)){ f.actions += {.Interact} }
-    if rl.IsKeyPressed(rl.KeyboardKey(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
-    if rl.IsKeyPressed(.ONE)                                     { f.actions += {.Flask1}   }
-    if rl.IsKeyPressed(.TWO)                                     { f.actions += {.Flask2}   }
+    if gfx.mouse_down(.LEFT) && !devui_wants_mouse() { f.actions += {.Fire}     }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill2))  { f.actions += {.Skill2}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill3))  { f.actions += {.Skill3}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill4))  { f.actions += {.Skill4}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.interact)){ f.actions += {.Interact} }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
+    if gfx.key_pressed(.ONE)                                     { f.actions += {.Flask1}   }
+    if gfx.key_pressed(.TWO)                                     { f.actions += {.Flask2}   }
     return f
 }
 

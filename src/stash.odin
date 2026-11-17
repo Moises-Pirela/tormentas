@@ -105,7 +105,7 @@ stash_mouse_to_cell :: proc(mx, my: f32) -> (col, row: int, ok: bool) {
 }
 
 stash_place_dragged_at_mouse :: proc(w: ^World, item_id: int) -> bool {
-    mp := rl.GetMousePosition()
+    mp := gfx.mouse_position()
     col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
     if !hit { return false }
     if stash_place_item(w, item_id, col, row) {
@@ -222,7 +222,7 @@ find_nearby_stash :: proc(w: ^World) -> (id: int, pos: [3]f32, ok: bool) {
 update_stash :: proc(w: ^World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
     id, _, ok := find_nearby_stash(w)
-    if ok && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+    if ok && input_pressed(gfx.Key(g_binds.gameplay.interact)) {
         g_stash_npc_id = id
         ui_open(.Stash)
     }
@@ -236,7 +236,7 @@ draw_stash_world :: proc(w: ^World) {
     prompt := interact_prompt(.STASH_INTERACT)
     fs := f32(10)
     sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
-    pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
+    pulse := u8(185 + i32((0.5 + 0.5 * math.sin(gfx.time() * 4.0)) * 45))
     p := world_to_iso_xy(pos[0], pos[1])
     rl.DrawTextEx(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
@@ -266,7 +266,7 @@ stash_draw_grid :: proc(w: ^World, grid_r: gfx.Rect) {
     }
 
     if g_drag_item_id != -1 && world_is_valid(w, g_drag_item_id) {
-        mp := rl.GetMousePosition()
+        mp := gfx.mouse_position()
         drag_item := comp_get(w, g_drag_item_id, .Item, ItemComp)
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
@@ -310,9 +310,9 @@ stash_draw_grid :: proc(w: ^World, grid_r: gfx.Rect) {
 }
 
 stash_handle_grid_input :: proc(w: ^World) {
-    mp := rl.GetMousePosition()
+    mp := gfx.mouse_position()
 
-    if rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
+    if gfx.mouse_pressed(.LEFT) && g_drag_item_id == -1 {
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
             cell_id := local_stash().grid[row * STASH_COLS + col]
@@ -348,7 +348,7 @@ draw_stash_hud :: proc(w: ^World) {
     PW := i32(uis(500))
     PH := i32(uis(440))
     px := i32(uis(18))
-    py := i32((f32(rl.GetScreenHeight()) - f32(PH)) * 0.5)
+    py := i32((f32(gfx.screen_height()) - f32(PH)) * 0.5)
     cs := g_inv.cell_sz
 
     rl.DrawRectangle(px, py, PW, PH, gfx.Color{ 8, 6, 4, 252 })
@@ -380,7 +380,7 @@ draw_stash_hud :: proc(w: ^World) {
     stash_handle_grid_input(w)
     stash_draw_grid(w, g_stash_grid_bb)
 
-    mp := rl.GetMousePosition()
+    mp := gfx.mouse_position()
     btn_r := gfx.Rect{ f32(px) + uis(16), f32(py + PH) - uis(54), f32(PW) - uis(32), uis(34) }
     hot := rl.CheckCollisionPointRec(mp, btn_r)
     rl.DrawRectangleRec(btn_r, gfx.Color{ 74, 54, 18, 245 } if hot else gfx.Color{ 42, 31, 14, 235 })
@@ -390,7 +390,7 @@ draw_stash_hud :: proc(w: ^World) {
     btn_sz := rl.MeasureTextEx(g_font_body, btn_lbl, btn_fs, 0.5)
     rl.DrawTextEx(g_font_body, btn_lbl, { btn_r.x + (btn_r.width - btn_sz.x) * 0.5, btn_r.y + (btn_r.height - btn_fs) * 0.5 },
         btn_fs, 0.5, COL_BRASS if hot else COL_PARCH)
-    if hot && rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
+    if hot && gfx.mouse_pressed(.LEFT) && g_drag_item_id == -1 {
         if stash_deposit_all_carried(w) == 0 { play_sfx("ui_deny") }
     }
 

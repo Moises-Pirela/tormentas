@@ -3,7 +3,7 @@ package main
 import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
-import rl "vendor:raylib"
+import gfx "gfx"
 
 CONFIG_PATH      :: "data/config.json"
 USER_CONFIG_NAME :: "config.json"
@@ -49,27 +49,27 @@ g_binds: Bindings
 default_binds :: proc() -> Bindings {
     return Bindings{
         gameplay = GameplayBinds{
-            move_up        = i32(rl.KeyboardKey.W),
-            move_down      = i32(rl.KeyboardKey.S),
-            move_left      = i32(rl.KeyboardKey.A),
-            move_right     = i32(rl.KeyboardKey.D),
-            reload         = i32(rl.KeyboardKey.R),
-            dodge          = i32(rl.KeyboardKey.SPACE),
-            skill1         = i32(rl.KeyboardKey.Q),
-            skill2         = i32(rl.KeyboardKey.E),
-            skill3         = i32(rl.KeyboardKey.F),
-            skill4         = i32(rl.KeyboardKey.G),
-            interact       = i32(rl.KeyboardKey.LEFT_ALT),
-            loot_filter    = i32(rl.KeyboardKey.Z),
-            open_inventory = i32(rl.KeyboardKey.I),
-            open_stats     = i32(rl.KeyboardKey.C),
-            open_abilities = i32(rl.KeyboardKey.KEY_NULL),
-            pause          = i32(rl.KeyboardKey.ESCAPE),
+            move_up        = i32(gfx.Key.W),
+            move_down      = i32(gfx.Key.S),
+            move_left      = i32(gfx.Key.A),
+            move_right     = i32(gfx.Key.D),
+            reload         = i32(gfx.Key.R),
+            dodge          = i32(gfx.Key.SPACE),
+            skill1         = i32(gfx.Key.Q),
+            skill2         = i32(gfx.Key.E),
+            skill3         = i32(gfx.Key.F),
+            skill4         = i32(gfx.Key.G),
+            interact       = i32(gfx.Key.LEFT_ALT),
+            loot_filter    = i32(gfx.Key.Z),
+            open_inventory = i32(gfx.Key.I),
+            open_stats     = i32(gfx.Key.C),
+            open_abilities = i32(gfx.Key.KEY_NULL),
+            pause          = i32(gfx.Key.ESCAPE),
         },
         ui = UIBinds{
-            close_panel     = i32(rl.KeyboardKey.ESCAPE),
-            compare_tooltip = i32(rl.KeyboardKey.LEFT_ALT),
-            drop_item       = i32(rl.KeyboardKey.G),
+            close_panel     = i32(gfx.Key.ESCAPE),
+            compare_tooltip = i32(gfx.Key.LEFT_ALT),
+            drop_item       = i32(gfx.Key.G),
         },
     }
 }
@@ -134,7 +134,7 @@ all_bind_rows :: proc() -> [TOTAL_BIND_COUNT]BindRow {
     return out
 }
 
-key_name :: proc(k: rl.KeyboardKey, buf: []u8) -> cstring {
+key_name :: proc(k: gfx.Key, buf: []u8) -> cstring {
     s: string
     #partial switch k {
     case .A:             s = "A"
@@ -256,7 +256,7 @@ key_name :: proc(k: rl.KeyboardKey, buf: []u8) -> cstring {
 
 bound_key_label :: proc(key: i32) -> string {
     buf: [32]u8
-    name := string(key_name(rl.KeyboardKey(key), buf[:]))
+    name := string(key_name(gfx.Key(key), buf[:]))
     return strings.clone(name, context.temp_allocator)
 }
 

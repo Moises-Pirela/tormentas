@@ -104,8 +104,8 @@ update_main_menu :: proc(dt: f32) {
 }
 
 draw_main_menu :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     cx := sw * 0.5
 
     title    := t(.MENU_TITLE)
@@ -150,13 +150,13 @@ draw_main_menu :: proc() {
         sh - btn_bh - uis(12),
         set_bw, btn_bh,
     }
-    set_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), set_r)
+    set_hot := rl.CheckCollisionPointRec(gfx.mouse_position(), set_r)
     rl.DrawRectangleRec(set_r, gfx.Color{24, 20, 14, 240} if set_hot else gfx.Color{14, 11, 8, 200})
     rl.DrawRectangleLinesEx(set_r, 1, COL_BRASS if set_hot else COL_RULE)
     rl.DrawTextEx(g_font_body, set_lbl,
         {set_r.x + (set_bw - set_sz.x) * 0.5, set_r.y + (btn_bh - btn_fs) * 0.5},
         btn_fs, 0.5, COL_BRASS if set_hot else COL_MUTED)
-    if set_hot && rl.IsMouseButtonReleased(.LEFT) {
+    if set_hot && gfx.mouse_released(.LEFT) {
         ui_open(.Settings)
     }
 
@@ -168,13 +168,13 @@ draw_main_menu :: proc() {
         sh - btn_bh - uis(12),
         exit_bw, btn_bh,
     }
-    exit_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_r)
+    exit_hot := rl.CheckCollisionPointRec(gfx.mouse_position(), exit_r)
     rl.DrawRectangleRec(exit_r, gfx.Color{24, 14, 14, 240} if exit_hot else gfx.Color{14, 11, 8, 200})
     rl.DrawRectangleLinesEx(exit_r, 1, gfx.Color{200, 80, 60, 220} if exit_hot else COL_RULE)
     rl.DrawTextEx(g_font_body, exit_lbl,
         {exit_r.x + (exit_bw - exit_sz.x) * 0.5, exit_r.y + (btn_bh - btn_fs) * 0.5},
         btn_fs, 0.5, gfx.Color{220, 100, 80, 255} if exit_hot else COL_MUTED)
-    if exit_hot && rl.IsMouseButtonReleased(.LEFT) {
+    if exit_hot && gfx.mouse_released(.LEFT) {
         g_should_exit = true
     }
 }
@@ -185,8 +185,8 @@ SLOT_CARD_GAP :: f32(14)
 
 @(private = "file")
 _mm_update_char_select :: proc() {
-    sw  := f32(rl.GetScreenWidth())
-    sh  := f32(rl.GetScreenHeight())
+    sw  := f32(gfx.screen_width())
+    sh  := f32(gfx.screen_height())
 
     card_w   := uis(SLOT_CARD_W)
     card_h   := uis(SLOT_CARD_H)
@@ -219,7 +219,7 @@ _mm_update_char_select :: proc() {
 
     if g_mm.focus == .NewName {
         _mm_text_input(g_mm.new_name[:PLAYER_NAME_MAX])
-        if rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.KP_ENTER) {
+        if gfx.key_pressed(.ENTER) || gfx.key_pressed(.KP_ENTER) {
             _mm_confirm_create()
         }
     }
@@ -254,7 +254,7 @@ _mm_update_char_select :: proc() {
             } else {
                 g_mm.confirm_delete = true
             }
-        } else if rl.IsMouseButtonPressed(.LEFT) {
+        } else if gfx.mouse_pressed(.LEFT) {
             g_mm.confirm_delete = false
         }
     }
@@ -283,8 +283,8 @@ _mm_select_slot :: proc(idx: int) {
 
 @(private = "file")
 _mm_draw_char_select :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
     card_w   := uis(SLOT_CARD_W)
     card_h   := uis(SLOT_CARD_H)
@@ -344,7 +344,7 @@ _mm_draw_slot_card :: proc(r: gfx.Rect, idx: int) {
     s       := &g_char_save.slots[idx]
     sel     := g_mm.selected_slot == idx
     creating := g_mm.creating_slot == idx
-    mp      := rl.GetMousePosition()
+    mp      := gfx.mouse_position()
     over    := rl.CheckCollisionPointRec(mp, r)
     hot     := over || sel
 
@@ -410,8 +410,8 @@ _mm_draw_slot_card :: proc(r: gfx.Rect, idx: int) {
 
 @(private = "file")
 _mm_update_play_options :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
     cx    := sw * 0.5
     btn_w := sw * 0.20
@@ -434,8 +434,8 @@ _mm_update_play_options :: proc() {
 
 @(private = "file")
 _mm_draw_play_options :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     cx := sw * 0.5
 
     if g_active_slot >= 0 && g_active_slot < MAX_CHAR_SLOTS {
@@ -486,7 +486,7 @@ update_connecting :: proc(dt: f32) {
         return
     }
 
-    if rl.IsKeyPressed(.ESCAPE) || g_mm.conn_timer >= CONN_TIMEOUT {
+    if gfx.key_pressed(.ESCAPE) || g_mm.conn_timer >= CONN_TIMEOUT {
         p2p.session_shutdown(&g_session)
         g_is_host   = false
         g_app_state = .MainMenu
@@ -494,8 +494,8 @@ update_connecting :: proc(dt: f32) {
 }
 
 draw_connecting :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     cx := sw * 0.5
 
     msg_cs: cstring = t(.MENU_WAITING)
@@ -523,12 +523,12 @@ draw_connecting :: proc() {
 }
 
 _mm_btn_hit :: proc(r: gfx.Rect) -> bool {
-    return rl.IsMouseButtonReleased(.LEFT) &&
-           rl.CheckCollisionPointRec(rl.GetMousePosition(), r)
+    return gfx.mouse_released(.LEFT) &&
+           rl.CheckCollisionPointRec(gfx.mouse_position(), r)
 }
 
 _mm_btn_draw :: proc(r: gfx.Rect, label: cstring, active: bool) {
-    mp   := rl.GetMousePosition()
+    mp   := gfx.mouse_position()
     over := rl.CheckCollisionPointRec(mp, r)
     hot  := over || active
 
@@ -564,7 +564,7 @@ _mm_field_draw :: proc(r: gfx.Rect, buf: []u8, focused: bool, placeholder: cstri
     } else {
         rl.DrawTextEx(g_font_body, cstr, {tx, ty}, fs, 0.5,
             gfx.Color{218, 206, 160, 255})
-        if focused && (int(rl.GetTime() * 2) % 2 == 0) {
+        if focused && (int(gfx.time() * 2) % 2 == 0) {
             tw := rl.MeasureTextEx(g_font_body, cstr, fs, 0.5).x
             rl.DrawRectangle(i32(tx + tw + 2), i32(ty), 2, i32(fs),
                 gfx.Color{218, 206, 160, 255})
@@ -577,15 +577,15 @@ _mm_text_input :: proc(buf: []u8) {
     max := len(buf) - 1
     cur := 0
     for cur < max && buf[cur] != 0 { cur += 1 }
-    c := rl.GetCharPressed()
+    c := gfx.char_pressed()
     for c != 0 {
         if cur < max && c >= 32 && c < 127 {
             buf[cur] = u8(c)
             cur += 1
         }
-        c = rl.GetCharPressed()
+        c = gfx.char_pressed()
     }
-    if rl.IsKeyPressed(.BACKSPACE) && cur > 0 {
+    if gfx.key_pressed(.BACKSPACE) && cur > 0 {
         cur -= 1
         buf[cur] = 0
     }

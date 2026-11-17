@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import p2p  "p2p"
 import clay "../clay"
@@ -12,7 +11,7 @@ g_invite_sent_id: u64
 g_invite_timer: f32
 
 draw_social_panel :: proc() {
-    g_invite_timer = max(g_invite_timer - rl.GetFrameTime(), 0)
+    g_invite_timer = max(g_invite_timer - gfx.frame_time(), 0)
 
     online   := p2p.session_is_online(&g_session)
     hosting  := g_session.state == .Hosting

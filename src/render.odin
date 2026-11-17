@@ -120,7 +120,7 @@ draw_loot_filter_hud :: proc() {
     }
     lbl := filter_labels[g_loot_filter_rarity]
 
-    sw  := f32(rl.GetScreenWidth())
+    sw  := f32(gfx.screen_width())
     _   = sw
     fs  := uis(12)
     prefix    := t(.HUD_LOOT_FILTER)
@@ -145,10 +145,10 @@ draw_boss_warning :: proc() {
     if (g_hub_active) {return}
     if g_boss_warning_timer <= 0 { return }
 
-    tt    := f32(rl.GetTime())
+    tt    := f32(gfx.time())
     pulse := f32(0.5) + f32(0.5) * math.sin(tt * 6.0)
-    sw    := f32(rl.GetScreenWidth())
-    sh    := f32(rl.GetScreenHeight())
+    sw    := f32(gfx.screen_width())
+    sh    := f32(gfx.screen_height())
 
     overlay_alpha := u8(35 + i32(pulse * 35))
     rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.Color{ 180, 0, 0, overlay_alpha })
@@ -187,7 +187,7 @@ update_entity_hover :: proc(w: ^World) {
         return
     }
 
-    mp         := screen_to_world_cartesian(rl.GetMousePosition())
+    mp         := screen_to_world_cartesian(gfx.mouse_position())
     best_dist2 := f32(1e30)
     g_inspected_entity = INVALID_ENTITY
 
@@ -229,7 +229,7 @@ draw_entity_inspect_hud :: proc(w: ^World) {
     if h.max <= 0 { return }
     frac := clamp(h.current / h.max, 0, 1)
 
-    sw := f32(rl.GetScreenWidth())
+    sw := f32(gfx.screen_width())
     bw := sw * 0.42
     bh := uis(18)
     bx := sw * 0.5 - bw * 0.5
@@ -244,7 +244,7 @@ draw_entity_inspect_hud :: proc(w: ^World) {
         } else if frac > 0.25 {
             fill_col = gfx.Color{ 220, 90, 30, 230 }
         } else {
-            t        := f32(0.5) + f32(0.5) * math.sin(f32(rl.GetTime()) * 8.0)
+            t        := f32(0.5) + f32(0.5) * math.sin(f32(gfx.time()) * 8.0)
             fill_col = gfx.Color{ 255, u8(30 + i32(t * 40)), 20, 255 }
         }
         rl.DrawRectangleRec({ bx, by, bw * frac, bh }, fill_col)
@@ -413,15 +413,15 @@ shutdown_clay :: proc() {
 }
 
 update_clay_input :: proc() {
-    mp := rl.GetMousePosition()
+    mp := gfx.mouse_position()
     if devui_wants_mouse() {
         clay.SetPointerState({ -1, -1 }, false)
     } else {
-        clay.SetPointerState({ mp.x, mp.y }, rl.IsMouseButtonDown(.LEFT))
+        clay.SetPointerState({ mp.x, mp.y }, gfx.mouse_down(.LEFT))
     }
-    clay.UpdateScrollContainers(true, { 0, rl.GetMouseWheelMove() * uis(30) }, rl.GetFrameTime())
-    clay.SetLayoutDimensions({ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) })
-    g_ui_scale = f32(rl.GetScreenHeight()) / 720.0
+    clay.UpdateScrollContainers(true, { 0, gfx.mouse_wheel() * uis(30) }, gfx.frame_time())
+    clay.SetLayoutDimensions({ f32(gfx.screen_width()), f32(gfx.screen_height()) })
+    g_ui_scale = f32(gfx.screen_height()) / 720.0
     g_inv = InvLayout{
         panel_w       = i32(uis(420)),
         panel_h       = i32(uis(720)),
@@ -674,9 +674,9 @@ draw_entity_world_fx :: proc(w: ^World, id: int) {
     if world_has_component(w, id, .GroundItem) && world_has_component(w, id, .Item) {
         item := comp_get(w, id, .Item, ItemComp)
 
-        alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
+        alt_held := gfx.key_down(.LEFT_ALT) || gfx.key_down(.RIGHT_ALT)
         if !alt_held && item.rarity < g_loot_filter_rarity { return }
-        t     := f32(rl.GetTime())
+        t     := f32(gfx.time())
         pulse := (math.sin(t * 3.2) + 1) * 0.5
         rc    := rarity_color(item.rarity)
         draw_world_circle(pos, 12, gfx.Color{ rc.r, rc.g, rc.b, u8(70 + pulse * 90) })
@@ -718,8 +718,8 @@ draw_ground_item_labels :: proc(w: ^World) {
     ids := world_query(w, query_mask(.GroundItem, .Item, .Transform),
         context.temp_allocator)
 
-    alt_held := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
-    tt       := f32(rl.GetTime())
+    alt_held := gfx.key_down(.LEFT_ALT) || gfx.key_down(.RIGHT_ALT)
+    tt       := f32(gfx.time())
 
     for id in ids {
         if is_fog_hidden(w, id)                             { continue }
@@ -780,7 +780,7 @@ draw_player_aim_line :: proc(w: ^World) {
     tp  := comp_get(w, id, .Transform, TransformComp).position
     pos := gfx.Vec2{ tp[0], tp[1] }
 
-    mouse := screen_to_world_cartesian(rl.GetMousePosition())
+    mouse := screen_to_world_cartesian(gfx.mouse_position())
     dx    := mouse.x - pos.x
     dy    := mouse.y - pos.y
     dist  := math.sqrt(dx*dx + dy*dy)
@@ -899,7 +899,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
                 if !world_is_valid(w, hmeid)                     { continue }
                 if !world_has_component(w, hmeid, .MutHeartCage) { continue }
                 hc    := comp_get(w, hmeid, .MutHeartCage, MutHeartCageComp)
-                t_now := f32(rl.GetTime())
+                t_now := f32(gfx.time())
                 hrad  := f32(12.0)
 
                 hworld: gfx.Vec2
@@ -1147,8 +1147,8 @@ init_pause_menu :: proc() {
 
 @(private = "file")
 _current_res_idx :: proc() -> int {
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
+    sw := gfx.screen_width()
+    sh := gfx.screen_height()
     for r, i in PAUSE_RESOLUTIONS { if r.w == sw && r.h == sh { return i } }
     return -1
 }
@@ -1169,7 +1169,7 @@ _step_resolution :: proc(dir: int) {
 
 draw_display_setting_rows :: proc(prefix: string) {
     g_borderless = g_fullscreen
-    res_label := fmt.tprintf("%d x %d", rl.GetScreenWidth(), rl.GetScreenHeight())
+    res_label := fmt.tprintf("%d x %d", gfx.screen_width(), gfx.screen_height())
     rd := ui_stepper(fmt.tprintf("%sRes", prefix), string(t(.SETTINGS_RESOLUTION)), res_label, !g_fullscreen)
     if rd != 0 { _step_resolution(rd) }
 
@@ -1272,7 +1272,7 @@ update_keybinds_screen :: proc() {
     if g_rebind_idx < 0   { return }
 
     rows := all_bind_rows()
-    k := rl.GetKeyPressed()
+    k := gfx.key_pressed_any()
     if k == .ESCAPE {
         g_rebind_idx = -1
         input_consume_key(.ESCAPE)
@@ -1298,13 +1298,13 @@ _kb_draw_row :: proc(i: int, rows: ^[TOTAL_BIND_COUNT]BindRow, listening: bool) 
             key_str = string(t(.KEYBINDS_PRESS_KEY))
         } else {
             name_buf: [16]u8
-            key_str = fmt.tprintf("%s", key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:]))
+            key_str = fmt.tprintf("%s", key_name(gfx.Key(rows[i].ptr^), name_buf[:]))
         }
         ui_label(fmt.tprintf("KBKey%d", i), key_str, uis(13),
             COL_BRASS if active else gfx.Color{ 180, 160, 90, 220 })
     }
     ui_clickable_end()
-    if hovered && rl.IsMouseButtonReleased(.LEFT) && !listening {
+    if hovered && gfx.mouse_released(.LEFT) && !listening {
         g_rebind_idx = i
     }
 }
@@ -1827,9 +1827,9 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
 
     tx := i32(mx) + i32(uis(18))
     ty := i32(my) - TH / 2
-    if tx + TW  > rl.GetScreenWidth()  { tx = i32(mx) - TW - i32(uis(10)) }
+    if tx + TW  > gfx.screen_width()  { tx = i32(mx) - TW - i32(uis(10)) }
     if ty < 4                          { ty = 4 }
-    if ty + TH  > rl.GetScreenHeight() { ty = rl.GetScreenHeight() - TH - 4 }
+    if ty + TH  > gfx.screen_height() { ty = gfx.screen_height() - TH - 4 }
 
     rl.DrawRectangle(tx, ty, TW, TH, gfx.Color{ 6, 4, 3, 252 })
     rl.DrawRectangle(tx, ty, TW, 3,  gfx.Color{ rc.r, rc.g, rc.b, 230 })
@@ -2164,7 +2164,7 @@ equipped_item_for_compare :: proc(w: ^World, item_id: int) -> int {
 }
 
 draw_item_tooltip_or_compare :: proc(w: ^World, item_id: int, mx, my: f32) {
-    compare_key := rl.KeyboardKey(g_binds.ui.compare_tooltip)
+    compare_key := gfx.Key(g_binds.ui.compare_tooltip)
     equipped_id := equipped_item_for_compare(w, item_id) if input_down(compare_key) else INVALID_ENTITY
 
     if equipped_id == INVALID_ENTITY {
@@ -2173,7 +2173,7 @@ draw_item_tooltip_or_compare :: proc(w: ^World, item_id: int, mx, my: f32) {
     }
 
     gap := uis(264)
-    if mx + gap + uis(238) < f32(rl.GetScreenWidth()) {
+    if mx + gap + uis(238) < f32(gfx.screen_width()) {
         draw_item_tooltip(w, item_id, mx, my)
         draw_item_tooltip(w, equipped_id, mx + gap, my)
     } else {
@@ -2185,8 +2185,8 @@ draw_item_tooltip_or_compare :: proc(w: ^World, item_id: int, mx, my: f32) {
 draw_levelup_flash :: proc() {
     if g_levelup_flash <= 0 { return }
 
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
+    sw := gfx.screen_width()
+    sh := gfx.screen_height()
 
     alpha := u8(clamp(g_levelup_flash / LEVELUP_FLASH_TIME, 0, 1) * 230)
     fs    := uis(52)
@@ -2206,7 +2206,7 @@ draw_levelup_flash :: proc() {
 }
 
 draw_enemy_mutation_auras :: proc(w: ^World) {
-    t   := f32(rl.GetTime())
+    t   := f32(gfx.time())
     ids := world_query(w, query_mask(.MutationContainer, .Transform, .AIAgent),
                           context.temp_allocator)
     for id in ids {

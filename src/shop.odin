@@ -177,7 +177,7 @@ update_shop :: proc(w: ^World) {
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         if dx*dx + dy*dy <= npc.interact_radius * npc.interact_radius {
-            if input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+            if input_pressed(gfx.Key(g_binds.gameplay.interact)) {
                 g_shop_npc_id = nid
                 ui_open(.Shop)
             }
@@ -215,7 +215,7 @@ draw_shop_world :: proc(w: ^World) {
             prompt    := interact_prompt(.SHOP_INTERACT)
             pfs       := f32(9)
             psz       := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
-            t_now     := f32(rl.GetTime())
+            t_now     := f32(gfx.time())
             pulse     := u8(180 + 60 * (t_now - f32(int(t_now))))
             rl.DrawTextEx(g_font_body, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
@@ -298,7 +298,7 @@ draw_shop_hud :: proc(w: ^World) {
             }
             ui_clickable_end()
 
-            if hovered && rl.IsMouseButtonReleased(.LEFT) && can_afford {
+            if hovered && gfx.mouse_released(.LEFT) && can_afford {
                 _shop_buy(w, i)
             }
         }

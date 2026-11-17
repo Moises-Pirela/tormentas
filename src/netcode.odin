@@ -3,7 +3,7 @@ package main
 import ecs "cw:clockwork"
 import p2p "p2p"
 import "core:math"
-import rl  "vendor:raylib"
+import gfx "gfx"
 
 PredictReconcileState :: struct {
     pos: [3]f32,
@@ -218,7 +218,7 @@ netcode_client_tick :: proc(input: p2p.InputFrame, dt: f32) {
 
 _netcode_apply_snapshot :: proc(entities: []p2p.SyncEntity) {
     w   := &g_sim.world
-    now := f64(rl.GetTime())
+    now := f64(gfx.time())
     seen: map[u32]bool
     defer delete(seen)
 
@@ -373,7 +373,7 @@ netcode_apply_disconnects :: proc(w: ^World) {
 netcode_interp_update :: proc() {
     if !g_sim_alive || g_sim.role != .Client { return }
     w   := &g_sim.world
-    now := f64(rl.GetTime())
+    now := f64(gfx.time())
 
     for wire_id, id in g_shadow_map {
         it := g_shadow_interp[wire_id]

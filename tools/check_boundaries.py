@@ -22,6 +22,12 @@ RULES = {
     "src/gfx":    ["core:", "base:", "vendor:raylib"],
 }
 
+# Raylib calls package main may no longer make directly, because gfx owns them now (P1a step 3:
+# input, screen size, time). The list grows with each P1a step until raylib is gone from main.
+MAIN_FORBIDDEN_RL = re.compile(
+    r"\brl\.(Is(Key|Mouse)\w*|Get(Mouse|Key|Char)\w*|SetMouse\w*|GetScreen(Width|Height)|GetTime|"
+    r"GetFrameTime|WindowShouldClose|KeyboardKey|MouseButton|Color|Rectangle|Vector2)\b")
+
 IMPORT = re.compile(r'^\s*import\s+(?:[A-Za-z_]\w*\s+)?"([^"]+)"', re.M)
 
 
@@ -40,6 +46,11 @@ def check(root: Path) -> list[str]:
                     line = text.count("\n", 0, m.start()) + 1
                     errors.append(f'{f.relative_to(root)}:{line}: import "{path}" not allowed in {pkg} '
                                   f"(allowed: {', '.join(allowed)})")
+    for f in sorted((root / "src").glob("*.odin")):
+        text = f.read_text()
+        for m in MAIN_FORBIDDEN_RL.finditer(text):
+            line = text.count("\n", 0, m.start()) + 1
+            errors.append(f"{f.relative_to(root)}:{line}: {m.group(0)} is owned by gfx now; use the gfx equivalent")
     return errors
 
 
@@ -51,7 +62,7 @@ def main() -> int:
     if errors:
         print(f"[BOUNDARY] {len(errors)} violation(s)", file=sys.stderr)
         return 1
-    print(f"[BOUNDARY] OK: {', '.join(RULES)}")
+    print(f"[BOUNDARY] OK: {', '.join(RULES)}, src (no direct raylib input/screen/time/value types)")
     return 0
 
 

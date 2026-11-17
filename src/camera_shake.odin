@@ -1,6 +1,6 @@
 package main
 
-import rl   "vendor:raylib"
+import gfx  "gfx"
 import      "core:math"
 
 SHAKE_TRAUMA_DECAY :: f32(4.0)
@@ -17,7 +17,7 @@ tick_camera_shake :: proc(dt: f32) {
 
     shake := g_cam_trauma * g_cam_trauma
 
-    t := f32(rl.GetTime())
+    t := f32(gfx.time())
     noise_x := math.sin(t * 71.3) * math.cos(t * 33.7)
     noise_y := math.sin(t * 53.1) * math.cos(t * 47.9)
 

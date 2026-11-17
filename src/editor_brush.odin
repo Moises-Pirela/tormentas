@@ -10,7 +10,7 @@ EdStrokeKind :: enum u8 { None, Paint, Erase, EraseObjects }
 
 EdStroke :: struct {
     kind:      EdStrokeKind,
-    button:    rl.MouseButton,
+    button:    gfx.MouseButton,
     has_last:  bool,
     last_cell: [2]int,
     cells:     map[[2]int]bool,
@@ -22,7 +22,7 @@ g_ed_stroke: EdStroke
 
 ed_stroke_active :: proc() -> bool { return g_ed_stroke.kind != .None }
 
-ed_stroke_begin :: proc(kind: EdStrokeKind, button: rl.MouseButton) {
+ed_stroke_begin :: proc(kind: EdStrokeKind, button: gfx.MouseButton) {
     s := &g_ed_stroke
     if s.cells == nil { s.cells = make(map[[2]int]bool) }
     if s.tiles == nil { s.tiles = make(map[[2]int]bool) }
@@ -50,7 +50,7 @@ ed_brush_unit :: proc() -> int {
 }
 
 ed_mouse_cell :: proc() -> [2]int {
-    wp := screen_to_world_cartesian(rl.GetMousePosition())
+    wp := screen_to_world_cartesian(gfx.mouse_position())
     u  := f32(ed_brush_unit())
     return { int(math.floor(wp.x / u)), int(math.floor(wp.y / u)) }
 }
@@ -182,7 +182,7 @@ draw_editor_brush_world :: proc() {
     fx, fy, n := ed_brush_footprint(cell[0], cell[1], unit, ed_paint_snap_held())
     _, col := ed_brush_label_full()
     active := ed_stroke_active()
-    pulse  := 0.5 + 0.5 * math.sin(f32(rl.GetTime()) * 6)
+    pulse  := 0.5 + 0.5 * math.sin(f32(gfx.time()) * 6)
     fill_a := u8(70 + 50 * pulse) if !active else u8(140)
     q := _iso_quad(f32(fx) * u, f32(fy) * u, f32(fx + n) * u, f32(fy + n) * u)
     _fill_quad(q, gfx.Color{ col.r, col.g, col.b, fill_a })
@@ -234,7 +234,7 @@ ed_world_to_screen :: proc(wx, wy: f32) -> im.Vec2 {
 draw_editor_overlay_screen :: proc() {
     if !g_editor_mode { return }
     dl := im.GetBackgroundDrawList()
-    mp := rl.GetMousePosition()
+    mp := gfx.mouse_position()
     over_ui := devui_wants_mouse()
 
     ed_gizmo_draw(dl)
@@ -276,7 +276,7 @@ draw_editor_overlay_screen :: proc() {
 }
 
 ed_place_preview :: proc(dl: ^im.DrawList) {
-    wp  := screen_to_world_cartesian(rl.GetMousePosition())
+    wp  := screen_to_world_cartesian(gfx.mouse_position())
     pos := [2]f32{ wp.x, wp.y }
     if g_ed_snap {
         pos[0] = math.round(wp.x / f32(TILE_SIZE)) * f32(TILE_SIZE)

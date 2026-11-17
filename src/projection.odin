@@ -35,12 +35,12 @@ camera_set_target_world :: proc(wx, wy: f32) {
     lims := g_level_data.cam_lims
 
     if lims[1] > lims[0] {
-        half_w := (f32(rl.GetScreenWidth()) * 0.5) / g_camera.zoom
+        half_w := (f32(gfx.screen_width()) * 0.5) / g_camera.zoom
         lo, hi := lims[0] + half_w, lims[1] - half_w
         iso.x = clamp(iso.x, lo, hi) if lo <= hi else (lims[0] + lims[1]) * 0.5
     }
     if lims[3] > lims[2] {
-        half_h := (f32(rl.GetScreenHeight()) * 0.5) / g_camera.zoom
+        half_h := (f32(gfx.screen_height()) * 0.5) / g_camera.zoom
         lo, hi := lims[2] + half_h, lims[3] - half_h
         iso.y = clamp(iso.y, lo, hi) if lo <= hi else (lims[2] + lims[3]) * 0.5
     }
@@ -80,8 +80,8 @@ iso_tile_bounds :: proc(tx, ty: int) -> (center: gfx.Vec2, top: gfx.Vec2, right:
 }
 
 cartesian_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     p0 := screen_to_world_cartesian({ -pad, -pad })
     p1 := screen_to_world_cartesian({ sw + pad, -pad })
     p2 := screen_to_world_cartesian({ -pad, sh + pad })

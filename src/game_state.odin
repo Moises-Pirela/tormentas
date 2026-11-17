@@ -30,7 +30,7 @@ g_combat_timer: f32
 mark_combat :: proc() { g_combat_timer = COMBAT_MUSIC_HOLD }
 
 update_music_state :: proc(w: ^World) {
-    dt := rl.GetFrameTime()
+    dt := gfx.frame_time()
     if g_combat_timer > 0 { g_combat_timer = max(g_combat_timer - dt, 0) }
 
     state := MusicState.None
@@ -158,6 +158,6 @@ update_fade :: proc(dt: f32) {
 draw_fade :: proc() {
     if g_fade_alpha <= 0 { return }
     a := u8(g_fade_alpha * 255)
-    rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(),
+    rl.DrawRectangle(0, 0, gfx.screen_width(), gfx.screen_height(),
         gfx.Color{0, 0, 0, a})
 }

@@ -270,7 +270,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
     if inv == nil { return }
 
     if g_drag_item_id != -1 && world_is_valid(w, g_drag_item_id) {
-        mp            := rl.GetMousePosition()
+        mp            := gfx.mouse_position()
         drag_item     := comp_get(w, g_drag_item_id, .Item, ItemComp)
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
@@ -352,7 +352,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
 
 _draw_drag_item :: proc(w: ^World) {
     if g_drag_item_id == -1 || !world_is_valid(w, g_drag_item_id) { return }
-    mp   := rl.GetMousePosition()
+    mp   := gfx.mouse_position()
     item := comp_get(w, g_drag_item_id, .Item, ItemComp)
     cs   := g_inv.cell_sz
 
@@ -403,9 +403,9 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
     if !world_has_component(w, w.player_id, .Inventory) { return }
 
     inv := comp_get(w, w.player_id, .Inventory, InventoryComp)
-    mp  := rl.GetMousePosition()
+    mp  := gfx.mouse_position()
 
-    if (ui_has(.Shop) || ui_has(.Stash)) && rl.IsMouseButtonPressed(.RIGHT) && g_drag_item_id == -1 {
+    if (ui_has(.Shop) || ui_has(.Stash)) && gfx.mouse_pressed(.RIGHT) && g_drag_item_id == -1 {
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
             cell_id := inv.backpack[row * BACKPACK_COLS + col]
@@ -432,7 +432,7 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
         }
     }
 
-    if rl.IsMouseButtonPressed(.LEFT) && g_drag_item_id == -1 {
+    if gfx.mouse_pressed(.LEFT) && g_drag_item_id == -1 {
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
             cell_id := inv.backpack[row * BACKPACK_COLS + col]
@@ -463,13 +463,13 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
         }
     }
 
-    drop_key_pressed := input_pressed(rl.KeyboardKey(g_binds.ui.drop_item))
+    drop_key_pressed := input_pressed(gfx.Key(g_binds.ui.drop_item))
     if g_drag_item_id != -1 && drop_key_pressed {
         _inv_drop_dragged_to_world(w)
         return
     }
 
-    if rl.IsMouseButtonReleased(.LEFT) && g_drag_item_id != -1 {
+    if gfx.mouse_released(.LEFT) && g_drag_item_id != -1 {
         item   := comp_get(w, g_drag_item_id, .Item, ItemComp)
         placed := false
 
@@ -529,7 +529,7 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
             }
         }
 
-        if !placed && mp.x < f32(rl.GetScreenWidth()) - f32(g_inv.panel_w) {
+        if !placed && mp.x < f32(gfx.screen_width()) - f32(g_inv.panel_w) {
             placed = _inv_drop_dragged_to_world(w)
         }
 
@@ -618,7 +618,7 @@ draw_inventory :: proc(w: ^World) {
     GRID_W    := f32(BACKPACK_COLS) * f32(g_inv.cell_sz)
     GRID_H    := f32(BACKPACK_ROWS) * f32(g_inv.cell_sz)
     PANEL_W   := f32(g_inv.panel_w)
-    PANEL_H   := f32(rl.GetScreenHeight())
+    PANEL_H   := f32(gfx.screen_height())
 
     ui_frame_reset()
     clay.BeginLayout()
@@ -898,7 +898,7 @@ draw_inventory :: proc(w: ^World) {
     _draw_drag_item(w)
 
     if g_hover_item_id != INVALID_ENTITY && g_drag_item_id == -1 {
-        mp2 := rl.GetMousePosition()
+        mp2 := gfx.mouse_position()
         draw_item_tooltip_or_compare(w, g_hover_item_id, mp2.x, mp2.y)
     }
 }

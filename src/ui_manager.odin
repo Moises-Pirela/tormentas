@@ -46,8 +46,8 @@ UI_FADE_SPEED :: f32(8.0)
 g_ui: UIManager
 
 ui_init :: proc() {
-    g_ui.rt_w = rl.GetScreenWidth()
-    g_ui.rt_h = rl.GetScreenHeight()
+    g_ui.rt_w = gfx.screen_width()
+    g_ui.rt_h = gfx.screen_height()
 }
 
 ui_destroy :: proc() {
@@ -61,8 +61,8 @@ ui_destroy :: proc() {
 
 @(private = "file")
 _ui_ensure_rt :: proc() {
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
+    sw := gfx.screen_width()
+    sh := gfx.screen_height()
     if sw == g_ui.rt_w && sh == g_ui.rt_h { return }
     for i in 0..<g_ui.count {
         l := &g_ui.layers[i]
@@ -88,8 +88,8 @@ ui_open :: proc(panel: UIPanel) {
         }
     }
     if g_ui.count >= MAX_UI_LAYERS { return }
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
+    sw := gfx.screen_width()
+    sh := gfx.screen_height()
     g_ui.layers[g_ui.count] = UILayer{
         panel = panel,
         alpha = 0,
@@ -167,17 +167,17 @@ ui_mark_dirty :: proc(panel: UIPanel) {
 ui_update :: proc(dt: f32) {
     _ui_ensure_rt()
 
-    mp  := rl.GetMousePosition()
+    mp  := gfx.mouse_position()
     ddx := mp.x - g_ui.last_mouse_pos.x
     ddy := mp.y - g_ui.last_mouse_pos.y
     mouse_event :=
         (ddx*ddx + ddy*ddy > 0.25)        ||
-        rl.IsMouseButtonPressed (.LEFT)    ||
-        rl.IsMouseButtonPressed (.RIGHT)   ||
-        rl.IsMouseButtonPressed (.MIDDLE)  ||
-        rl.IsMouseButtonReleased(.LEFT)    ||
-        rl.IsMouseButtonReleased(.RIGHT)   ||
-        rl.IsMouseButtonReleased(.MIDDLE)
+        gfx.mouse_pressed (.LEFT)    ||
+        gfx.mouse_pressed (.RIGHT)   ||
+        gfx.mouse_pressed (.MIDDLE)  ||
+        gfx.mouse_released(.LEFT)    ||
+        gfx.mouse_released(.RIGHT)   ||
+        gfx.mouse_released(.MIDDLE)
     g_ui.last_mouse_pos = mp
 
     i := 0
@@ -213,8 +213,8 @@ ui_update :: proc(dt: f32) {
 ui_draw :: proc(w: ^World) {
     if g_ui.count == 0 { return }
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
     for i in 0..<g_ui.count {
         l := &g_ui.layers[i]

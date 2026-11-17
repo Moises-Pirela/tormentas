@@ -37,7 +37,7 @@ g_hpbar_state:    map[int]HpBarState
 g_enemy_overlay_frame: f64
 
 enemy_overlay_queue :: proc(id: int, pos: gfx.Vec2, base_size, top: f32) {
-    now := rl.GetTime()
+    now := gfx.time()
     if now != g_enemy_overlay_frame {
         clear(&g_enemy_overlays)
         g_enemy_overlay_frame = now
@@ -160,7 +160,7 @@ draw_enemy_telegraphs :: proc(w: ^World) {
 
 @(private = "file")
 _hovered :: proc(o: EnemyOverlayAnchor, bar_w: f32) -> bool {
-    m   := rl.GetScreenToWorld2D(rl.GetMousePosition(), g_camera^)
+    m   := rl.GetScreenToWorld2D(gfx.mouse_position(), g_camera^)
     iso := world_to_iso_v(o.pos)
     hw  := max(bar_w, o.base_size * 0.5) * 0.5 + 6
     return m.x >= iso.x - hw && m.x <= iso.x + hw && m.y >= iso.y - o.top - 10 && m.y <= iso.y + 8
@@ -207,7 +207,7 @@ draw_enemy_health_bars :: proc(w: ^World, dt: f32) {
         rl.DrawRectangleRec({ bx, by, bar_w, HPBAR_H }, _fade(gfx.Color{ 34, 14, 14, 235 }, alpha))
         rl.DrawRectangleRec({ bx, by, bar_w * st.chip_frac, HPBAR_H }, _fade(gfx.Color{ 245, 225, 190, 230 }, alpha))
         fill := gfx.Color{ 215, 45, 40, 255 }
-        if frac <= 0.25 { fill = _mix(fill, gfx.Color{ 255, 140, 60, 255 }, 0.5 + 0.5 * math.sin(f32(rl.GetTime()) * 10)) }
+        if frac <= 0.25 { fill = _mix(fill, gfx.Color{ 255, 140, 60, 255 }, 0.5 + 0.5 * math.sin(f32(gfx.time()) * 10)) }
         rl.DrawRectangleRec({ bx, by, bar_w * frac, HPBAR_H }, _fade(fill, alpha))
     }
 }

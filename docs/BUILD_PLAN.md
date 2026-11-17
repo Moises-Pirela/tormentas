@@ -236,6 +236,22 @@ run-to-run noise (max channel diff 9–18 both ways). The first comparison flagg
 turned out to be the probe itself: it moves the real OS cursor, and in one run the cursor didn't
 land on the gizmo (`hover=None`). Step 3's synthetic mouse input removes that flakiness.
 
+**Step 3 results (2026-11-17): done.** `src/gfx/platform.odin` owns input, screen size and time:
+`gfx.Key`, `gfx.MouseButton`, `key_pressed/down/released`, `key_pressed_any`, `char_pressed`,
+`mouse_position/delta/pressed/down/released/wheel`, `screen_width/height`, `time`, `frame_time`.
+348 call sites in 37 files moved by script; 7 files no longer import raylib. The main loop body is
+now `app_frame()` (`main.odin`), ready to become sokol_app's frame callback.
+- **Synthetic input for the tools probe.** While `gfx.set_synthetic_pointer` is on, all real
+  keyboard and mouse input is ignored, in the game *and* in ImGui (devui passes the state to the
+  ImGui backend). This fixed a real flake found while verifying step 2: a mouse release that
+  happened during a probe run ended its scripted gizmo drag early. Three consecutive probe runs now
+  differ by at most 0.25% of pixels (max channel diff 18, time-driven animation only), against up to
+  9% and 235 before. The probe is now usable as step 6's reference set.
+- `check_boundaries.py` now fails if package main calls raylib's input, screen-size, time or value
+  types directly.
+- Still to do in step 7: the event-driven key/mouse state under sokol_app. Today these procedures
+  forward to raylib's polling; their signatures are already what the sokol version needs.
+
 **Exit:** the current game, still isometric 2D, runs on sokol with raylib gone.
 **Verify:** reference-set comparison · input latency unchanged · all dev tools work (editor,
 inspector, console, anim editor, lighting widget).
@@ -385,7 +401,7 @@ Done so far: P0 slice 1 of the package split, the headless server target with it
 1. **Client-side sweep** (P0, above), as its own change with a two-client playtest. The
    entity-leak fix itself is committed (`72325c4`).
 2. **Finish P1a step 1:** a Windows/D3D11 run and an interactive resize/fullscreen check.
-   P1a step 2 is done; **step 3** (platform + input layer) is next.
+   P1a steps 2 and 3 are done; **step 4** (draw layer on raylib) is next.
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.

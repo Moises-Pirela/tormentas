@@ -14,10 +14,10 @@ ui_open_phonograph :: proc(recording_id: u8, entity_id: int = INVALID_ENTITY) {
 }
 
 draw_phonograph_panel :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
-    if rl.IsKeyPressed(.ESCAPE) {
+    if gfx.key_pressed(.ESCAPE) {
         ui_close(.Phonograph)
         return
     }
@@ -58,7 +58,7 @@ draw_phonograph_panel :: proc() {
 
     mach_cx := px + PW * 0.28
     mach_cy := py + PH * 0.48
-    t_anim   := f32(rl.GetTime())
+    t_anim   := f32(gfx.time())
 
     rl.DrawRectangleRec({mach_cx - uis(45), mach_cy + uis(14), uis(90), uis(40)},
         gfx.Color{50, 24, 10, 255})
@@ -163,8 +163,8 @@ draw_phonograph_panel :: proc() {
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(18)},
         uis(9), 0.5, gfx.Color{100, 80, 40, 140})
 
-    mp := rl.GetMousePosition()
-    if rl.IsMouseButtonPressed(.LEFT) &&
+    mp := gfx.mouse_position()
+    if gfx.mouse_pressed(.LEFT) &&
        !rl.CheckCollisionPointRec(mp, {px, py, PW, PH}) {
         ui_close(.Phonograph)
     }

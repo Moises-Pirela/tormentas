@@ -251,8 +251,8 @@ update_anim_editor :: proc(dt: f32) {
     }
 
     if devui_wants_text() { return }
-    if rl.IsKeyPressed(.ESCAPE) { anim_editor_close(); return }
-    if platform_cmd_down() && rl.IsKeyPressed(.S) { anim_editor_save() }
+    if gfx.key_pressed(.ESCAPE) { anim_editor_close(); return }
+    if platform_cmd_down() && gfx.key_pressed(.S) { anim_editor_save() }
 }
 
 @(private = "file")
@@ -448,7 +448,7 @@ _ae_canvas :: proc() {
     if active && inside && im.IsMouseDown(.Left) {
         lx := clamp(int(sx) %% fw, 0, fw)
         ly := clamp(int(sy) %% fh, 0, fh)
-        shift := rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT)
+        shift := gfx.key_down(.LEFT_SHIFT) || gfx.key_down(.RIGHT_SHIFT)
         switch {
         case platform_cmd_down():
             if ed.sheet.anchor_px_x != lx || ed.sheet.anchor_px_y != ly {

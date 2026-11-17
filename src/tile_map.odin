@@ -268,7 +268,7 @@ _tile_variant :: proc(tt: TileType, tx, ty: int) -> TileSpriteEntry {
 TileSortEntry :: struct { tx, ty: int, v: TileType }
 
 draw_tilemap :: proc() {
-    t_anim := f32(rl.GetTime())
+    t_anim := f32(gfx.time())
 
     min_x, min_y, max_x, max_y := cartesian_view_bounds(f32(TILE_SIZE))
 

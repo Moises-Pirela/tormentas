@@ -61,7 +61,7 @@ find_nearby_mutation_workbench :: proc(w: ^World) -> (id: int, pos: [3]f32, ok: 
 
 update_mutation_workbench :: proc(w: ^World) {
     if g_playing_state != .Gameplay && g_playing_state != .Hub { return }
-    if _, _, ok := find_nearby_mutation_workbench(w); ok && input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+    if _, _, ok := find_nearby_mutation_workbench(w); ok && input_pressed(gfx.Key(g_binds.gameplay.interact)) {
         g_mut_tab = .Corpus
         ui_open(.MutationTree)
     }
@@ -75,7 +75,7 @@ draw_mutation_workbench_world :: proc(w: ^World) {
     prompt := interact_prompt(.MUT_INTERACT)
     fs := f32(10)
     sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
-    pulse := u8(185 + i32((0.5 + 0.5 * math.sin(rl.GetTime() * 4.0)) * 45))
+    pulse := u8(185 + i32((0.5 + 0.5 * math.sin(gfx.time() * 4.0)) * 45))
     p := world_to_iso_xy(pos[0], pos[1])
     rl.DrawTextEx(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
@@ -173,7 +173,7 @@ draw_mutation_tree :: proc(w: ^World) {
             ui_hstack_end()
             ui_card_end()
 
-            if hovered && rl.IsMouseButtonReleased(.LEFT) {
+            if hovered && gfx.mouse_released(.LEFT) {
                 if mutation_unlock(w, w.player_id, mt) { play_sfx("stat_up") }
             }
         }

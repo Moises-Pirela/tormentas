@@ -2,6 +2,7 @@ package main
 
 import im   "../deps/imgui/imgui"
 import imrl "../ui/imgui_raylib"
+import gfx  "gfx"
 
 g_devui_demo: bool
 
@@ -25,7 +26,7 @@ devui_shutdown :: proc() {
 
 devui_begin_frame :: proc(dt: f32) {
     devui_init()
-    imrl.new_frame(&g_devui, dt)
+    imrl.new_frame(&g_devui, dt, gfx.mouse_position(), gfx.real_input_enabled())
     g_devui_frame = true
 }
 

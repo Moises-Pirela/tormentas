@@ -107,7 +107,10 @@ ignore_char_this_frame :: proc(b: ^Backend, r: rune) {
     append(&b.skip_chars, r)
 }
 
-new_frame :: proc(b: ^Backend, dt: f32) {
+// `mouse` is the pointer position in screen coordinates, passed in (gfx.mouse_position) so ImGui sees
+// the same pointer as the game. When `real_input` is false (the tools probe's synthetic input), real
+// keys, buttons, wheel and text are not forwarded, so ImGui can't diverge from a scripted run.
+new_frame :: proc(b: ^Backend, dt: f32, mouse: [2]f32, real_input := true) {
     io := im.GetIO()
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
@@ -124,10 +127,10 @@ new_frame :: proc(b: ^Backend, dt: f32) {
     }
 
     mods := [4]bool{
-        rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL),
-        rl.IsKeyDown(.LEFT_SHIFT)   || rl.IsKeyDown(.RIGHT_SHIFT),
-        rl.IsKeyDown(.LEFT_ALT)     || rl.IsKeyDown(.RIGHT_ALT),
-        rl.IsKeyDown(.LEFT_SUPER)   || rl.IsKeyDown(.RIGHT_SUPER),
+        real_input && (rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)),
+        real_input && (rl.IsKeyDown(.LEFT_SHIFT)   || rl.IsKeyDown(.RIGHT_SHIFT)),
+        real_input && (rl.IsKeyDown(.LEFT_ALT)     || rl.IsKeyDown(.RIGHT_ALT)),
+        real_input && (rl.IsKeyDown(.LEFT_SUPER)   || rl.IsKeyDown(.RIGHT_SUPER)),
     }
     MOD_KEYS := [4]im.Key{ .ImGuiMod_Ctrl, .ImGuiMod_Shift, .ImGuiMod_Alt, .ImGuiMod_Super }
     for i in 0..<4 {
@@ -136,24 +139,24 @@ new_frame :: proc(b: ^Backend, dt: f32) {
     b.mods = mods
 
     for km, i in KEY_MAP {
-        down := rl.IsKeyDown(km.rl_key)
+        down := real_input && rl.IsKeyDown(km.rl_key)
         if down != b.key_down[i] {
             im.IO_AddKeyEvent(io, km.im_key, down)
             b.key_down[i] = down
         }
     }
 
-    mp := rl.GetMousePosition()
-    im.IO_AddMousePosEvent(io, mp.x, mp.y)
+    im.IO_AddMousePosEvent(io, mouse.x, mouse.y)
     BUTTONS := [3]rl.MouseButton{ .LEFT, .RIGHT, .MIDDLE }
     for btn, i in BUTTONS {
+        if !real_input { break }
         if rl.IsMouseButtonPressed(btn)  { im.IO_AddMouseButtonEvent(io, i32(i), true) }
         if rl.IsMouseButtonReleased(btn) { im.IO_AddMouseButtonEvent(io, i32(i), false) }
     }
-    wheel := rl.GetMouseWheelMoveV()
+    wheel := rl.GetMouseWheelMoveV() if real_input else {}
     if wheel.x != 0 || wheel.y != 0 { im.IO_AddMouseWheelEvent(io, wheel.x, wheel.y) }
 
-    if io.WantTextInput {
+    if real_input && io.WantTextInput {
         for cp := rl.GetCharPressed(); cp != 0; cp = rl.GetCharPressed() {
             skip := false
             for s in b.skip_chars { if s == cp { skip = true; break } }

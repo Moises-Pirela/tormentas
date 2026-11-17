@@ -1,6 +1,7 @@
 package main
 
 import rl      "vendor:raylib"
+import gfx     "gfx"
 import        "core:fmt"
 import        "core:math"
 import        "core:strings"
@@ -132,7 +133,7 @@ shutdown_audio :: proc() {
 }
 
 update_audio :: proc() {
-    dt := rl.GetFrameTime()
+    dt := gfx.frame_time()
     _duck_update(dt)
     _cf_update(&g_music_cf, dt)
     _cf_update(&g_amb_cf, dt)
@@ -155,7 +156,7 @@ _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
     idx := _event_idx(name)
     def := &g_event_defs[idx]
 
-    now := rl.GetTime()
+    now := gfx.time()
     if def.min_interval > 0 && now - def.last_play_t < f64(def.min_interval) { return }
     if len(def.variants) == 0 { return }
 

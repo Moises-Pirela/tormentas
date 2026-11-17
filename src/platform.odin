@@ -5,6 +5,7 @@ import    "core:os"
 import    "core:path/filepath"
 import    "core:strings"
 import rl "vendor:raylib"
+import gfx "gfx"
 
 APP_DIR_NAME       :: "Tormentas"
 WINDOW_DEFAULT_W   :: 1600
@@ -120,14 +121,14 @@ platform_init_window :: proc(title: cstring) {
 platform_set_fullscreen :: proc(on: bool) {
     when ODIN_OS == .Darwin {
         if on != native_is_fullscreen() {
-            if on { g_windowed_size = { rl.GetScreenWidth(), rl.GetScreenHeight() } }
+            if on { g_windowed_size = { gfx.screen_width(), gfx.screen_height() } }
             native_toggle_fullscreen()
         }
     } else {
         if on == g_fullscreen { return }
         if on {
             if !rl.IsWindowState({ .BORDERLESS_WINDOWED_MODE }) {
-                g_windowed_size = { rl.GetScreenWidth(), rl.GetScreenHeight() }
+                g_windowed_size = { gfx.screen_width(), gfx.screen_height() }
             }
             rl.ToggleBorderlessWindowed()
         } else {
@@ -158,16 +159,16 @@ platform_update_window :: proc() {
         g_fullscreen = native_is_fullscreen()
     }
     if !g_fullscreen && rl.IsWindowResized() {
-        g_windowed_size = { rl.GetScreenWidth(), rl.GetScreenHeight() }
+        g_windowed_size = { gfx.screen_width(), gfx.screen_height() }
     }
     toggle := false
     when ODIN_OS == .Darwin {
-        cmd  := rl.IsKeyDown(.LEFT_SUPER) || rl.IsKeyDown(.RIGHT_SUPER)
-        ctrl := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
-        toggle = cmd && ctrl && rl.IsKeyPressed(.F)
+        cmd  := gfx.key_down(.LEFT_SUPER) || gfx.key_down(.RIGHT_SUPER)
+        ctrl := gfx.key_down(.LEFT_CONTROL) || gfx.key_down(.RIGHT_CONTROL)
+        toggle = cmd && ctrl && gfx.key_pressed(.F)
     } else {
-        alt := rl.IsKeyDown(.LEFT_ALT) || rl.IsKeyDown(.RIGHT_ALT)
-        toggle = alt && (rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.KP_ENTER))
+        alt := gfx.key_down(.LEFT_ALT) || gfx.key_down(.RIGHT_ALT)
+        toggle = alt && (gfx.key_pressed(.ENTER) || gfx.key_pressed(.KP_ENTER))
     }
     if toggle {
         platform_set_fullscreen(!g_fullscreen)
@@ -182,9 +183,9 @@ platform_store_display_settings :: proc() {
 }
 
 platform_cmd_down :: proc() -> bool {
-    ctrl := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
+    ctrl := gfx.key_down(.LEFT_CONTROL) || gfx.key_down(.RIGHT_CONTROL)
     when ODIN_OS == .Darwin {
-        return ctrl || rl.IsKeyDown(.LEFT_SUPER) || rl.IsKeyDown(.RIGHT_SUPER)
+        return ctrl || gfx.key_down(.LEFT_SUPER) || gfx.key_down(.RIGHT_SUPER)
     } else {
         return ctrl
     }
@@ -210,7 +211,7 @@ window_probe_from_args :: proc() {
 @(private = "file")
 _probe_log :: proc(tag: string) {
     fmt.printf("[probe] %-14s fullscreen=%v rl_fullscreen=%v screen=%dx%d render=%dx%d monitor=%dx%d dpi=%.2f resized=%v\n",
-        tag, g_fullscreen, rl.IsWindowFullscreen(), rl.GetScreenWidth(), rl.GetScreenHeight(),
+        tag, g_fullscreen, rl.IsWindowFullscreen(), gfx.screen_width(), gfx.screen_height(),
         rl.GetRenderWidth(), rl.GetRenderHeight(), _monitor_size()[0], _monitor_size()[1],
         rl.GetWindowScaleDPI().x, rl.IsWindowResized())
 }
@@ -227,6 +228,9 @@ g_tools_probe: bool
 
 tools_probe_tick :: proc(f: int) -> (done: bool) {
     switch f {
+    case 1:
+        // Synthetic input for the whole run: no frame depends on the real cursor, clicks or keys.
+        gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2) })
     case 5:   probe_start_singleplayer()
     case 40:  editor_toggle()
     case 90:  _probe_shot("t1_editor")
@@ -236,7 +240,7 @@ tools_probe_tick :: proc(f: int) -> (done: bool) {
         g_ed_tool = .Select
     case 100:
         h := ed_gizmo_probe_handle()
-        rl.SetMousePosition(i32(h.x), i32(h.y))
+        gfx.set_synthetic_pointer(h)
     case 129: fmt.printf("[probe] selected=%d entities=%d tool=%v hover=%v\n", g_ed_sel_entity, len(g_level_data.entities), g_ed_tool, ed_gizmo_hover())
     case 130: _probe_shot("t2_inspector")
     case 131: ed_gizmo_probe_drag(128, 64)
@@ -246,7 +250,7 @@ tools_probe_tick :: proc(f: int) -> (done: bool) {
         g_ed_tool       = .Paint
         g_ed_brush      = .HubCollision
         g_ed_brush_size = g_ed_cell_size * 4
-        rl.SetMousePosition(rl.GetScreenWidth() / 2, rl.GetScreenHeight() / 2 + 60)
+        gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2 + 60) })
     case 150:
         c := ed_mouse_cell()
         ed_stroke_begin(.Paint, .LEFT)
@@ -280,7 +284,7 @@ tools_probe_tick :: proc(f: int) -> (done: bool) {
         g_ed_tool       = .Paint
         g_ed_brush      = .Oil
         g_ed_brush_size = TILE_SIZE * 3
-        rl.SetMousePosition(rl.GetScreenWidth() / 2, rl.GetScreenHeight() / 2)
+        gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2) })
     case 350: _probe_shot("t5_raid_brush")
     case 351: return true
     }

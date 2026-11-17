@@ -448,8 +448,8 @@ rebuild_wall_mask :: proc() {
 }
 
 ensure_lighting_render_targets :: proc() {
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
+    sw := gfx.screen_width()
+    sh := gfx.screen_height()
     if sw <= 0 || sh <= 0 { return }
     if g_light_rt_w == sw && g_light_rt_h == sh && g_world_rt.id != 0 && g_shadow_rt.id != 0 && g_sprite_rt.id != 0 { return }
 
@@ -529,10 +529,10 @@ sun_dir :: proc() -> [2]f32 {
 }
 
 draw_cloud_shadow_field :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
-    time        := f32(rl.GetTime())
+    time        := f32(gfx.time())
     screen_size := [2]f32{ sw, sh }
     cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
     cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
@@ -703,7 +703,7 @@ draw_directional_world_composite :: proc() {
     ensure_lighting_render_targets()
     if g_world_rt.id == 0 || g_shadow_rt.id == 0 { return }
 
-    screen_size := [2]f32{ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) }
+    screen_size := [2]f32{ f32(gfx.screen_width()), f32(gfx.screen_height()) }
     sd := sun_dir()
     sun_color := [3]f32{ g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
 
@@ -747,7 +747,7 @@ draw_directional_sprite_composite :: proc(w: ^World) {
         intensities[i] = pl.intensity
     }
 
-    screen_size := [2]f32{ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) }
+    screen_size := [2]f32{ f32(gfx.screen_width()), f32(gfx.screen_height()) }
     sprite_src  := gfx.Rect{ 0, 0, f32(g_sprite_rt.texture.width), -f32(g_sprite_rt.texture.height) }
     dst         := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
     sd          := sun_dir()
@@ -798,10 +798,10 @@ draw_directional_sprite_composite :: proc(w: ^World) {
 }
 
 draw_world_god_rays :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
-    time        := f32(rl.GetTime())
+    time        := f32(gfx.time())
     screen_size := [2]f32{ sw, sh }
     cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
     cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
@@ -855,8 +855,8 @@ draw_fog_and_lights :: proc(w: ^World) {
         intensities[i] = pl.intensity
     }
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
     screen_size := [2]f32{ sw, sh }
     cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
     cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
@@ -926,7 +926,7 @@ draw_fog_and_lights :: proc(w: ^World) {
 }
 
 update_lighting_widget :: proc() {
-    if !devui_wants_text() && rl.IsKeyPressed(.F2) {
+    if !devui_wants_text() && gfx.key_pressed(.F2) {
         g_light_widget_open = !g_light_widget_open
     }
 }

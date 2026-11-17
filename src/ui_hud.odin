@@ -239,8 +239,8 @@ draw_hud :: proc(w: ^World) {
     cmds := clay.EndLayout()
 
     if world_is_valid(w, w.player_id) {
-        sw     := f32(rl.GetScreenWidth())
-        sh     := f32(rl.GetScreenHeight())
+        sw     := f32(gfx.screen_width())
+        sh     := f32(gfx.screen_height())
         CHIP_SZ  := uis(54)
         CHIP_GAP := uis(6)
         HPAD     := uis(6)
@@ -274,8 +274,8 @@ draw_interact_prompt :: proc(w: ^World) {
     ia := comp_get(w, g_interact_focused_id, .Interactable, InteractableComp)
     if !ia.active || ia.prompt[0] == 0 { return }
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
     prompt_cs := cstring(&ia.prompt[0])
     prompt_fs := uis(15)
@@ -379,8 +379,8 @@ _draw_flask_charges :: proc(w: ^World) {
 
     inv := comp_get(w, pid, .Inventory, InventoryComp)
 
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
     ORB_SZ   := uis(80)
     CHIP_SZ  := uis(54)
@@ -451,7 +451,7 @@ _draw_flask_pip_row :: proc(
         cx := dot_x + f32(i) * (pip_r * 2 + pip_gap) + pip_r
         c  := col_filled if i < int(fc.charges) else col_empty
         if active_glow && i < int(fc.charges) {
-            c.a = u8(180 + 75 * 0.5 * (1 + rl.GetTime() * 4))
+            c.a = u8(180 + 75 * 0.5 * (1 + gfx.time() * 4))
         }
         rl.DrawCircleV({ cx, py + pip_r + uis(1) }, pip_r, c)
         rl.DrawCircleLines(i32(cx), i32(py + pip_r + uis(1)), pip_r,

@@ -25,7 +25,7 @@ update_quest_board :: proc(w: ^World) {
         dx  := nt.position[0] - player_pos[0]
         dy  := nt.position[1] - player_pos[1]
         if dx*dx + dy*dy <= npc.interact_radius * npc.interact_radius {
-            if input_pressed(rl.KeyboardKey(g_binds.gameplay.interact)) {
+            if input_pressed(gfx.Key(g_binds.gameplay.interact)) {
                 g_quest_board_npc_id = nid
                 ui_open(.QuestBoard)
             }
@@ -64,7 +64,7 @@ draw_quest_board_world :: proc(w: ^World) {
             prompt := interact_prompt(.QUEST_BOARD_INTERACT)
             pfs    := f32(9)
             psz    := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
-            t_now  := f32(rl.GetTime())
+            t_now  := f32(gfx.time())
             pulse  := u8(180 + 60 * (t_now - f32(int(t_now))))
             rl.DrawTextEx(g_font_body, prompt,
                 {pos.x - psz.x*0.5, pos.y + 18},
@@ -75,7 +75,7 @@ draw_quest_board_world :: proc(w: ^World) {
 }
 
 draw_quest_board_panel :: proc(w: ^World) {
-    sh := f32(rl.GetScreenHeight())
+    sh := f32(gfx.screen_height())
 
     clay.BeginLayout()
     ui_panel_begin("QuestBoardPanel", string(t(.QUEST_BOARD_TITLE)), uis(520), sh * 0.86, {
@@ -151,10 +151,10 @@ _quest_reward_cstr :: proc(def: ^QuestDef) -> cstring {
 
 draw_quest_flash :: proc() {
     if g_quest_flash_timer <= 0 || g_quest_flash_title == nil { return }
-    g_quest_flash_timer = max(g_quest_flash_timer - rl.GetFrameTime(), 0)
+    g_quest_flash_timer = max(g_quest_flash_timer - gfx.frame_time(), 0)
 
-    sw := rl.GetScreenWidth()
-    sh := rl.GetScreenHeight()
+    sw := gfx.screen_width()
+    sh := gfx.screen_height()
     t0 := g_quest_flash_timer / QUEST_FLASH_TIME
     a  := u8(clamp(t0, 0, 1) * 220)
 
@@ -189,7 +189,7 @@ draw_quest_hud :: proc(w: ^World) {
     }
     if count == 0 { return }
 
-    sw    := f32(rl.GetScreenWidth())
+    sw    := f32(gfx.screen_width())
     row_h := uis(17)
     px    := sw - uis(205)
     py    := uis(90)

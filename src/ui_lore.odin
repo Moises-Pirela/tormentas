@@ -11,10 +11,10 @@ ui_open_lore :: proc(lore_id: u8) {
 }
 
 draw_lore_panel :: proc() {
-    sw := f32(rl.GetScreenWidth())
-    sh := f32(rl.GetScreenHeight())
+    sw := f32(gfx.screen_width())
+    sh := f32(gfx.screen_height())
 
-    if rl.IsKeyPressed(.ESCAPE) {
+    if gfx.key_pressed(.ESCAPE) {
         ui_close(.Lore)
         return
     }
@@ -103,8 +103,8 @@ draw_lore_panel :: proc() {
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(22)},
         uis(9), 0.5, gfx.Color{90, 68, 32, 160})
 
-    mp := rl.GetMousePosition()
-    if rl.IsMouseButtonPressed(.LEFT) &&
+    mp := gfx.mouse_position()
+    if gfx.mouse_pressed(.LEFT) &&
        !rl.CheckCollisionPointRec(mp, {px, py, PW, PH}) {
         ui_close(.Lore)
     }

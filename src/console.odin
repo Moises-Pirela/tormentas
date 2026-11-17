@@ -1,7 +1,7 @@
 package main
 
 import im       "../deps/imgui/imgui"
-import rl       "vendor:raylib"
+import gfx      "gfx"
 import          "core:fmt"
 import          "core:strings"
 import          "core:strconv"
@@ -62,7 +62,7 @@ console_set_open :: proc(open: bool) {
 }
 
 update_console :: proc(dt: f32) {
-    if rl.IsKeyPressed(.GRAVE) {
+    if gfx.key_pressed(.GRAVE) {
         devui_ignore_char('`')
         devui_ignore_char('~')
         console_set_open(!g_console_open)

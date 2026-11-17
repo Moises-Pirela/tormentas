@@ -1,6 +1,6 @@
 package main
 
-import rl "vendor:raylib"
+import gfx "gfx"
 
 InputMode :: enum {
     Gameplay,
@@ -31,25 +31,25 @@ input_begin_frame :: proc() {
 input_is_gameplay :: proc() -> bool { return g_input.mode == .Gameplay }
 input_is_ui       :: proc() -> bool { return g_input.mode == .UI       }
 
-input_pressed :: proc(key: rl.KeyboardKey, consume := true) -> bool {
+input_pressed :: proc(key: gfx.Key, consume := true) -> bool {
     idx := int(key)
     if idx < 0 || idx >= _IM_KEY_CAP     { return false }
     if g_input.key_consumed[idx]          { return false }
-    if !rl.IsKeyPressed(key)              { return false }
+    if !gfx.key_pressed(key)              { return false }
     if consume { g_input.key_consumed[idx] = true }
     return true
 }
 
-input_down :: proc(key: rl.KeyboardKey, consume := false) -> bool {
+input_down :: proc(key: gfx.Key, consume := false) -> bool {
     idx := int(key)
     if idx < 0 || idx >= _IM_KEY_CAP     { return false }
     if g_input.key_consumed[idx]          { return false }
-    if !rl.IsKeyDown(key)                 { return false }
+    if !gfx.key_down(key)                 { return false }
     if consume { g_input.key_consumed[idx] = true }
     return true
 }
 
-input_consume_key :: proc(key: rl.KeyboardKey) {
+input_consume_key :: proc(key: gfx.Key) {
     idx := int(key)
     if idx >= 0 && idx < _IM_KEY_CAP {
         g_input.key_consumed[idx] = true

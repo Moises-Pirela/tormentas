@@ -253,8 +253,8 @@ draw_stats_screen :: proc(w: ^World) {
 
     cmds := clay.EndLayout()
 
-    if btn_active && rl.IsMouseButtonPressed(.LEFT) {
-        mp := rl.GetMousePosition()
+    if btn_active && gfx.mouse_pressed(.LEFT) {
+        mp := gfx.mouse_position()
         for i in 0..<3 {
             el := clay.GetElementData(clay.ID(fmt.tprintf("CharStatBtn%d", i)))
             if !el.found { continue }

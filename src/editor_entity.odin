@@ -167,7 +167,7 @@ ed_gizmo_update :: proc(mouse: gfx.Vec2) {
 
     if g_gz_axis == .None { g_gz_hover = _gizmo_hit(e, mouse) }
 
-    if rl.IsMouseButtonPressed(.LEFT) && g_gz_hover != .None {
+    if gfx.mouse_pressed(.LEFT) && g_gz_hover != .None {
         world := screen_to_world_cartesian(mouse)
         g_gz_grab  = { e.position[0] - world.x, e.position[1] - world.y }
         g_gz_start = e.position
@@ -176,13 +176,13 @@ ed_gizmo_update :: proc(mouse: gfx.Vec2) {
 
     if g_gz_axis != .None || g_gz_hover != .None { im.SetMouseCursor(.ResizeAll) }
 
-    if rl.IsMouseButtonReleased(.LEFT) && g_gz_axis != .None {
+    if gfx.mouse_released(.LEFT) && g_gz_axis != .None {
         g_gz_axis = .None
         if e.position != g_gz_start { ed_entity_respawn_world() }
         return
     }
 
-    if g_gz_axis == .None || !rl.IsMouseButtonDown(.LEFT) { return }
+    if g_gz_axis == .None || !gfx.mouse_down(.LEFT) { return }
 
     world := screen_to_world_cartesian(mouse)
     want  := [2]f32{ world.x + g_gz_grab[0], world.y + g_gz_grab[1] }

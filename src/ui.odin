@@ -198,7 +198,7 @@ UIButtonVariant :: enum { Default, Primary, Danger }
 ui_button :: proc(id, label: string, w, h: f32, variant := UIButtonVariant.Default) -> bool {
     btn_id  := clay.ID(id)
     hovered := clay.PointerOver(btn_id)
-    clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
+    clicked := hovered && gfx.mouse_released(.LEFT)
 
     bg_col, bdr_col, lbl_col: gfx.Color
     switch variant {
@@ -237,7 +237,7 @@ ui_button :: proc(id, label: string, w, h: f32, variant := UIButtonVariant.Defau
 ui_selectable :: proc(id, label: string, w, h: f32, selected: bool) -> bool {
     btn_id  := clay.ID(id)
     hovered := clay.PointerOver(btn_id)
-    clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
+    clicked := hovered && gfx.mouse_released(.LEFT)
 
     bg_col  := gfx.Color{ 45, 34, 16, 255 } if selected else (gfx.Color{ 28, 20, 10, 240 } if hovered else gfx.Color{ 12, 9, 6, 220 })
     bdr_col := COL_BRASS if (selected || hovered) else COL_RULE
@@ -378,7 +378,7 @@ ui_scroll_end :: proc() { clay._CloseElement() }
 ui_tab :: proc(id, label: string, w, h: f32, active: bool, accent := COL_BRASS, active_bg := gfx.Color{}) -> bool {
     tid     := clay.ID(id)
     hovered := clay.PointerOver(tid)
-    clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
+    clicked := hovered && gfx.mouse_released(.LEFT)
 
     abg := active_bg
     if abg.a == 0 { abg = gfx.Color{ 50, 38, 14, 245 } }
@@ -405,7 +405,7 @@ ui_tab :: proc(id, label: string, w, h: f32, active: bool, accent := COL_BRASS, 
 }
 
 ui_scrim :: proc(a: u8) {
-    rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), gfx.Color{ 0, 0, 0, a })
+    rl.DrawRectangle(0, 0, gfx.screen_width(), gfx.screen_height(), gfx.Color{ 0, 0, 0, a })
 }
 
 UIPanelStyle :: struct {
@@ -575,11 +575,11 @@ ui_slider :: proc(id, label: string, value: f32, label_w: f32 = 0) -> (new_value
     new_value = value
     track_id  := clay.ID(fmt.tprintf("%sTrack", id))
 
-    if rl.IsMouseButtonDown(.LEFT) && clay.PointerOver(track_id) {
+    if gfx.mouse_down(.LEFT) && clay.PointerOver(track_id) {
         el := clay.GetElementData(track_id)
         if el.found && el.boundingBox.width > 0 {
             bb := el.boundingBox
-            nv := clamp((rl.GetMousePosition().x - bb.x) / bb.width, 0, 1)
+            nv := clamp((gfx.mouse_position().x - bb.x) / bb.width, 0, 1)
             if nv != value { new_value = nv; changed = true }
         }
     }
@@ -616,7 +616,7 @@ ui_item_row :: proc(id, name, value: string, h: f32 = 0) -> bool {
     row_h   := uis(40) if h <= 0 else h
     row_id  := clay.ID(id)
     hovered := clay.PointerOver(row_id)
-    clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
+    clicked := hovered && gfx.mouse_released(.LEFT)
 
     bg       := gfx.Color{ 28, 20, 10, 235 } if hovered else gfx.Color{ 14, 10, 7, 220 }
     bdr      := COL_BRASS if hovered else COL_RULE

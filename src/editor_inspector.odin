@@ -56,7 +56,7 @@ ed_insp_draw_selection_highlight :: proc() {
     ty := int(g_ed_sel.ty)
     center, top, right, bottom, left := iso_tile_bounds(tx, ty)
 
-    pulse := 0.5 + 0.5 * math.sin_f32(f32(rl.GetTime()) * 5.0)
+    pulse := 0.5 + 0.5 * math.sin_f32(f32(gfx.time()) * 5.0)
     alpha := u8(130 + u8(90.0 * pulse))
     lw    := 2.2 / g_camera.zoom
 

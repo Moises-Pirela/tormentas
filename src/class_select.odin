@@ -76,12 +76,12 @@ CLASS_STARTER_ABILITIES := [4]AbilityType{
 }
 
 _mm_update_class_select :: proc() {
-    dt := rl.GetFrameTime()
+    dt := gfx.frame_time()
     g_mm.cs_anim_t += dt
 
-    sw      := f32(rl.GetScreenWidth())
-    sh      := f32(rl.GetScreenHeight())
-    mp      := rl.GetMousePosition()
+    sw      := f32(gfx.screen_width())
+    sh      := f32(gfx.screen_height())
+    mp      := gfx.mouse_position()
     n       := 4
     card_w  := uis(160)
     card_h  := uis(260)
@@ -108,7 +108,7 @@ _mm_update_class_select :: proc() {
     back_r  := gfx.Rect{sw * 0.30 - btn_w * 0.5, btn_y, btn_w, btn_h}
     begin_r := gfx.Rect{sw * 0.70 - btn_w * 0.5, btn_y, btn_w, btn_h}
 
-    if _mm_btn_hit(back_r) || rl.IsKeyPressed(.ESCAPE) {
+    if _mm_btn_hit(back_r) || gfx.key_pressed(.ESCAPE) {
         char_slot_delete(g_mm.cs_pending_slot)
         g_mm.cs_pending_slot = -1
         g_mm.selected_slot   = -1
@@ -141,8 +141,8 @@ _cs_confirm_class :: proc() {
 }
 
 _mm_draw_class_select :: proc() {
-    sw      := f32(rl.GetScreenWidth())
-    sh      := f32(rl.GetScreenHeight())
+    sw      := f32(gfx.screen_width())
+    sh      := f32(gfx.screen_height())
     n       := 4
     card_w  := uis(160)
     card_h  := uis(260)

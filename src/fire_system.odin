@@ -403,7 +403,7 @@ fire_patch_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
 }
 
 draw_fire_patches :: proc() {
-    tt := f32(rl.GetTime())
+    tt := f32(gfx.time())
     for i in 0..<g_fire_n {
         fp    := g_fire[i]
         max_l := FIRE_OIL_LIFE if fp.from_oil else FIRE_PATCH_LIFE
@@ -432,7 +432,7 @@ draw_fire_patches :: proc() {
 }
 
 draw_water_puddles :: proc() {
-    tt := f32(rl.GetTime())
+    tt := f32(gfx.time())
     for i in 0..<g_water_n {
         wp    := g_water[i]
         t     := wp.lifetime / WATER_PUDDLE_LIFE
@@ -450,7 +450,7 @@ draw_water_puddles :: proc() {
 }
 
 draw_status_effects :: proc(w: ^World) {
-    tt := f32(rl.GetTime())
+    tt := f32(gfx.time())
     for id in 0..<len(w.entities) {
         if !world_is_valid(w, id)                     { continue }
         if !world_has_component(w, id, .StatusEffect) { continue }
