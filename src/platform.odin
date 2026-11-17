@@ -179,63 +179,79 @@ tools_probe_tick :: proc(f: int) -> (done: bool) {
         // Windowed too, so shots are the same size on any monitor.
         platform_set_fullscreen(false)
         gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2) })
+    case 3:   _probe_shot("t00_menu")  // main menu: Clay layout and the arrow glyph
     case 5:   probe_start_singleplayer()
-    case 35:  _probe_shot("t0_hub")   // lit gameplay: composites, fog, vision radius, wall mask
-    case 40:  editor_toggle()
-    case 90:  _probe_shot("t1_editor")
-    case 91:
+
+    // Lit gameplay, then the Clay panels: each renders into its own cached target and composites.
+    case 35:  _probe_shot("t0_hub")
+    case 36:  ui_open(.Inventory)
+    case 50:  _probe_shot("t0b_inventory")
+    case 51:
+        ui_close_top()
+        ui_open(.PauseMenu)
+    case 65:  _probe_shot("t0c_pause")
+    case 66:
+        ui_close_top()
+        ui_open(.Settings)
+    case 80:  _probe_shot("t0d_settings")
+    case 81:  ui_close_top()
+
+    // Editor: placement, gizmo, brushes, dev tools.
+    case 90:  editor_toggle()
+    case 140: _probe_shot("t1_editor")
+    case 141:
         for d, i in g_entity_defs { if d.name == "enemy_brute" { g_ed_def_idx = i } }
         ed_entity_place({ 160, 96 })
         g_ed_tool = .Select
-    case 100:
+    case 150:
         h := ed_gizmo_probe_handle()
         gfx.set_synthetic_pointer(h)
-    case 129: fmt.printf("[probe] selected=%d entities=%d tool=%v hover=%v\n", g_ed_sel_entity, len(g_level_data.entities), g_ed_tool, ed_gizmo_hover())
-    case 130: _probe_shot("t2_inspector")
-    case 131: ed_gizmo_probe_drag(128, 64)
-    case 140: _probe_shot("t2b_gizmo_drag")
-    case 141:
+    case 179: fmt.printf("[probe] selected=%d entities=%d tool=%v hover=%v\n", g_ed_sel_entity, len(g_level_data.entities), g_ed_tool, ed_gizmo_hover())
+    case 180: _probe_shot("t2_inspector")
+    case 181: ed_gizmo_probe_drag(128, 64)
+    case 190: _probe_shot("t2b_gizmo_drag")
+    case 191:
         ed_gizmo_cancel()
         g_ed_tool       = .Paint
         g_ed_brush      = .HubCollision
         g_ed_brush_size = g_ed_cell_size * 4
         gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2 + 60) })
-    case 150:
+    case 200:
         c := ed_mouse_cell()
         ed_stroke_begin(.Paint, .LEFT)
         ed_stroke_update({ c[0] - 12, c[1] - 2 })
         ed_stroke_update(c)
-    case 165: _probe_shot("t2c_brush_stroke")
-    case 166:
+    case 215: _probe_shot("t2c_brush_stroke")
+    case 216:
         ed_stroke_end()
         g_ed_tool = .Erase
-    case 175: _probe_shot("t2d_erase_cursor")
-    case 176:
+    case 225: _probe_shot("t2d_erase_cursor")
+    case 226:
         g_ed_tool = .Select
         console_set_open(true)
         console_log("> help")
         console_log("probe: console line")
         g_light_widget_open = true
         dbg_inspector_toggle()
-    case 200: _probe_shot("t3_tools")
-    case 201:
+    case 250: _probe_shot("t3_tools")
+    case 251:
         console_set_open(false)
         g_light_widget_open = false
         g_dbg_insp_open     = false
         editor_toggle()
         anim_editor_open_sprite("player_sheriff")
-    case 260: _probe_shot("t4_anim_editor")
-    case 261:
+    case 310: _probe_shot("t4_anim_editor")
+    case 311:
         anim_editor_close()
         enter_raid(&g_sim.world, 1)
-    case 290: editor_toggle()
-    case 320:
+    case 340: editor_toggle()
+    case 370:
         g_ed_tool       = .Paint
         g_ed_brush      = .Oil
         g_ed_brush_size = TILE_SIZE * 3
         gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2) })
-    case 350: _probe_shot("t5_raid_brush")
-    case 351: return true
+    case 400: _probe_shot("t5_raid_brush")
+    case 401: return true
     }
     return false
 }
@@ -249,6 +265,7 @@ window_probe_tick :: proc() -> (done: bool) {
     f := g_window_probe_frame
     g_window_probe_frame += 1
     switch f {
+    case 3:   _probe_shot("t00_menu")  // main menu: Clay layout and the arrow glyph
     case 5:   probe_start_singleplayer()
     case 90:  _probe_log("startup");    _probe_shot("1_startup")
     case 91:  platform_set_fullscreen(false)

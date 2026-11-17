@@ -126,7 +126,7 @@ draw_phonograph_panel :: proc() {
             gfx.Color{130, 100, 38, 100})
         ty += uis(8)
 
-        status  := cstring("▶  PLAYING")      if is_playing else cstring("◼  STOPPED")
+        status  := cstring(">  PLAYING")      if is_playing else cstring("-  STOPPED")
         st_col  := gfx.Color{80, 200, 80, 220}  if is_playing else gfx.Color{180, 120, 40, 180}
         gfx.draw_text(g_font_body, status, {tx_x, ty}, uis(9), 0.5, st_col)
         ty += uis(16)

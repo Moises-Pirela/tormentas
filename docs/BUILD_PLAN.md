@@ -448,9 +448,10 @@ Done so far: P0 slice 1 of the package split, the headless server target with it
 1. **Client-side sweep** (P0, above), as its own change with a two-client playtest. The
    entity-leak fix itself is committed (`72325c4`).
 2. **Finish P1a step 1:** a Windows/D3D11 run and an interactive resize/fullscreen check.
-   P1a steps 2-6 are done. **Step 7** is planned in [`BACKEND_SWAP_PLAN.md`](BACKEND_SWAP_PLAN.md);
-   its decisions D1-D9 come first, then stage S0 (preparation on raylib). Audio follows
-   [`AUDIO_PLAN.md`](AUDIO_PLAN.md), starting with decision A0.
+   **P1a is done on macOS/Metal**: the game runs on sokol and links no raylib
+   ([`BACKEND_SWAP_PLAN.md`](BACKEND_SWAP_PLAN.md) §4 has the parity numbers). What remains is a
+   Windows run (stage S8) and the interactive checks. Then **P1b** (top-down 3D) can start. Audio
+   is its own track ([`AUDIO_PLAN.md`](AUDIO_PLAN.md)), now on an interim miniaudio runtime.
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.

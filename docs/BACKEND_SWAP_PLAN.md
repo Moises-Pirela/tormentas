@@ -8,7 +8,8 @@ its own track ([`AUDIO_PLAN.md`](AUDIO_PLAN.md), with the interim question in it
 which is P1b.
 
 **Exit:** the current game, still isometric 2D, runs on sokol (Metal on macOS, D3D11 on Windows),
-and the game binary links no raylib.
+and the game binary links no raylib. **Met on macOS/Metal 2026-11-17** (see §4); the Windows half
+compiles but has not been run.
 
 **Basis:** steps 2–6 already route every raylib use in package main through `src/gfx` (389 lines),
 plus `ui/imgui_raylib/backend.odin`. This plan comes from a full audit of what sits behind those
@@ -284,79 +285,73 @@ raylib.
 
 ---
 
-## 4. Stages
+## 4. Stages — results (2026-11-17)
 
-Each stage ends with a build and a stated check. The game may be broken from S1 to S5 (accepted
-2026-11-17).
+All of S0–S7 landed in two commits: `1de2b37` (S0, still on raylib) and `7c60525` (S1–S7).
+**S8 (Windows) is written and compiles, but has not been run.**
 
-### S0 — Prepare on raylib (M). The game still works; verify with the probe.
-- [ ] Centralize render-target orientation (§3.2): `gfx.target_src`, a shader flip uniform, no
-      negative heights in game code. Resolve the water/floor half-height paths explicitly.
-- [ ] Build fallback entity sprites **eagerly** at init for every referenced stem without a PNG.
-      Add a nesting assert to the raylib backend.
-- [ ] Wall mask built on the CPU and uploaded (§3.8).
-- [ ] Edge-action latch for zero-tick frames (D2). This is a gameplay fix on its own merits.
-- [ ] Fixed dt in probe mode (§3.13).
-- [ ] Fix Clay's spacing mismatch. Make `lore_draw_wrapped` UTF-8-safe.
-- [ ] Remove dead code: `point_lights.fs`, `font_for`, `apply_resolution`, `g_borderless`.
-- **Done when:** the probe matches the pre-S0 reference within noise. Tag this commit as the
-  **raylib reference** for S6.
+| Stage | State | Notes |
+|---|---|---|
+| S0 prepare on raylib | done | gfx owns its own types; orientation, eager sprite builds, CPU wall mask, input latch, Clay spacing, UTF-8 wrap, dead code. Tagged **`raylib-reference`** |
+| S1 sokol shell | done | `gfx.run` + lifecycle, event input, timing, window, icon |
+| S2 batcher and recorder | done | segments, pipelines, shapes, textures, camera, scissor, quads |
+| S3 text | done | fontstash, whole-pixel sizes, world-space rasterized at camera zoom |
+| S4 ImGui | done | `ui/imgui_sokol` draws through gfx's triangle stream |
+| S5 lighting | done | directional, sprite and fog on shdc; clouds and god rays stubbed (D6) |
+| S6 readback and parity | done | Metal readback; parity measured below |
+| S7 remove raylib | done | raylib gone; `test.sh` fails if it returns |
+| S8 Windows | **not run** | builds for `windows_amd64` to objects, including the D3D11 readback; needs a Windows machine |
 
-### S1 — sokol shell (M)
-- [ ] `sapp.run` and the lifecycle (§3.11), including loopback as a state, quit handling and
-      Cmd+Q.
-- [ ] Event-driven input (§3.10), timing (§3.13), window and icon (§3.12).
-- [ ] `gfx` draws are stubs except clear and present.
-- **Done when:** the window opens at the saved size and mode; input reaches the game (verify by
-  logging); the fullscreen toggle works on macOS; quitting saves the config; D1's Windows DPI
-  question is answered.
+### Parity (S6)
 
-### S2 — 2D batcher and recorder (M–L)
-- [ ] The frame recorder (§3.1), pipelines (§3.3), shapes (§3.4), textures and samplers (§3.5),
-      camera (sgl matrices from `Camera2D`), scissor, immediate quads.
-- [ ] Verify raylib's blend factors, sampler defaults and circle segment rule against raylib's
-      source.
-- **Done when:** menu, hub and raid render **unlit and without text**; the pass count per frame is
-  as §3.1 predicts; no validation errors.
+Measured against the `raylib-reference` build at the same window size (1280x720), with clouds and
+god rays disabled on *both* sides so the comparison is like for like:
 
-### S3 — Text (M)
-- [ ] fontstash backend (§3.6) for `draw_text` / `measure_text`, world-space zoom handling, missing
-      glyph policy (D4).
-- **Done when:** every screen is readable, and es/pt text shows its accents; no overflow on the 14
-  UI panels.
+| Frame | Differing pixels | Max channel diff |
+|---|---|---|
+| editor, inspector, gizmo | 0.08% | 117 (a world-space label) |
+| anim editor | 0.03% | 59 |
+| hub (lit gameplay) | 0.41% | 187 (HUD text) |
+| inventory / pause / settings panels | 1.0–2.1% | ~190 (panel text) |
+| brush strokes, raid | 3.6–4.0% | 6–117 (translucent overlays, text) |
+| **ImGui panel region** | **0.0%** | **1** |
 
-### S4 — ImGui (S–M)
-- [ ] The backend rewrite (§3.9).
-- **Done when:** editor, inspector, console, anim editor (including sprite previews), lighting widget
-  and docking all work; copy/paste works; cursors change.
+What is left is text rasterization (fontstash vs raylib bake the same fonts differently) and
+low-amplitude blending in large translucent overlays. Two runs of the sokol build are now
+**identical** (0.00%), because the time-driven effects are the stubbed ones and the probe uses a
+fixed frame duration.
 
-### S5 — Lighting (M)
-- [ ] Port the three shaders, stub the two (§3.7, D6). Typed uniform blocks replace
-      `shader_location` (D7).
-- **Done when:** lit composites, sprite outlines, fog, vision radius and point lights look right in
-  hub and raid; screen-space reconstruction holds after a resize.
+### What the swap turned up
 
-### S6 — Readback and parity (S)
-- [ ] Screenshots on sokol (§3.14).
-- [ ] Probe comparison against the S0 reference tag (`BUILD_PLAN.md` step 6 procedure), plus the
-      manual checklist in §5.
-- **Done when:** the probe is within noise, *or* every difference is explained (text metrics,
-  stubbed clouds/god rays) and accepted.
+1. **Textures ignored their filter override.** `draw_texture_pro` used the texture's original
+   sampler, so everything bilinear was point-sampled. Alone it accounted for ~30% of differing
+   pixels. Found by diffing regions against the reference.
+2. **A view freed mid-frame is still referenced.** Recording defers drawing to frame_end, so the
+   wall-mask rebuild (between the sprite composite and the fog pass) and render targets recreated
+   on resize both destroyed views that recorded draws still pointed at. Resources now die at the
+   start of the next frame.
+3. **fontstash never reported its atlas dirty**, because the update callback only fires inside
+   `Begin/EndState`, which this backend does not use. It asks `ValidateTexture` directly now.
+4. **sokol_gl defaults to an RGB write mask** (known from the spike): every offscreen pipeline sets
+   `write_mask = .RGBA`.
+5. **The lighting passes must sample with point filtering**, as raylib's render targets did, or the
+   sprite outline (derived from neighbouring texels) softens.
 
-### S7 — Remove raylib (S). Blocked by D8.
-- [ ] Delete the raylib backend code and `ui/imgui_raylib`.
-- [ ] Build, test and boundary updates (§3.15), symbol checks, docs, `src/spike` removal, `data/app`
-      cleanup.
-- **Done when:** `./test.sh` passes with the new symbol checks, and the game binary contains no
-  raylib or GLFW symbols.
+### Decisions resolved during the work
 
-### S8 — Windows (S)
-- [ ] Run S1–S7's checks on Windows/D3D11: build through `build.ps1`, readback, the probe, the
-      fullscreen toggle, DPI.
-- **Done when:** the probe runs on Windows and matches macOS within noise, apart from expected
-  backend differences.
+- **D4 (missing glyphs):** `←`, `▶` and `◼` are in neither font. raylib drew them as `?`; fontstash
+  would drop them. Replaced with `<`, `>` and `-` in `loc.csv` and the phonograph label. A symbol
+  fallback font is still the nicer answer if these come back.
+- **D8 (audio):** `src/snd` moved to miniaudio (`AUDIO_PLAN.md` §7's interim port), which unblocked
+  removing raylib. Behaviour is unchanged; `AUDIO_PLAN.md` A1 replaces it.
+- **D9:** the resolution stepper is gone; the settings row now shows the current size, disabled.
 
----
+### Still open
+
+- **Run on Windows** (S8): build with `.\build.ps1`, then the probe and the manual checklist.
+- **Interactive checks** not reachable from a scripted run: live window resize, Cmd+Q, Alt-Tab
+  focus loss, a 120 Hz display, and playing the game by hand.
+- **HighDPI** stays off (D1); turning it on is its own task.
 
 ## 5. Manual checklist (S6, then again in S8)
 
