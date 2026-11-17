@@ -2,7 +2,6 @@ package main
 
 import gfx "gfx"
 import "core:math"
-import "core:c"
 import im "../deps/imgui/imgui"
 
 g_light_widget_open: bool
@@ -203,94 +202,12 @@ lighting_config_apply :: proc(c: LevelLightingConfig) {
     g_fog_scatter                  = c.fog_scatter
 }
 
-@(private = "file") g_cloud_shader: gfx.Shader
-@(private = "file") g_cloud_locs: struct {
-    screen_size:     c.int,
-    camera_target:   c.int,
-    camera_offset:   c.int,
-    camera_zoom:     c.int,
-    time:            c.int,
-    cloud_freq:      c.int,
-    cloud_freq_fine: c.int,
-    cloud_drift:     c.int,
-    cloud_thresh_lo: c.int,
-    cloud_thresh_hi: c.int,
-    cloud_alpha_min: c.int,
-    cloud_alpha_max: c.int,
-    cloud_contrast:  c.int,
-    cloud_tint:      c.int,
-}
-
-init_cloud_shader :: proc() {
-    g_cloud_shader = gfx.load_shader_fs("data/shaders/cloud_shadow.fs")
-    g_cloud_locs.screen_size     = gfx.shader_location(g_cloud_shader, "u_screen_size")
-    g_cloud_locs.camera_target   = gfx.shader_location(g_cloud_shader, "u_camera_target")
-    g_cloud_locs.camera_offset   = gfx.shader_location(g_cloud_shader, "u_camera_offset")
-    g_cloud_locs.camera_zoom     = gfx.shader_location(g_cloud_shader, "u_camera_zoom")
-    g_cloud_locs.time            = gfx.shader_location(g_cloud_shader, "u_time")
-    g_cloud_locs.cloud_freq      = gfx.shader_location(g_cloud_shader, "u_cloud_freq")
-    g_cloud_locs.cloud_freq_fine = gfx.shader_location(g_cloud_shader, "u_cloud_freq_fine")
-    g_cloud_locs.cloud_drift     = gfx.shader_location(g_cloud_shader, "u_cloud_drift")
-    g_cloud_locs.cloud_thresh_lo = gfx.shader_location(g_cloud_shader, "u_cloud_thresh_lo")
-    g_cloud_locs.cloud_thresh_hi = gfx.shader_location(g_cloud_shader, "u_cloud_thresh_hi")
-    g_cloud_locs.cloud_alpha_min = gfx.shader_location(g_cloud_shader, "u_cloud_alpha_min")
-    g_cloud_locs.cloud_alpha_max = gfx.shader_location(g_cloud_shader, "u_cloud_alpha_max")
-    g_cloud_locs.cloud_contrast  = gfx.shader_location(g_cloud_shader, "u_cloud_contrast")
-    g_cloud_locs.cloud_tint      = gfx.shader_location(g_cloud_shader, "u_cloud_tint")
-}
-
-shutdown_cloud_shader :: proc() {
-    gfx.unload_shader(g_cloud_shader)
-}
 
 @(private = "file")
 world_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
     return cam_view_bounds(pad)
 }
 
-@(private = "file") g_godray_shader: gfx.Shader
-@(private = "file") g_godray_locs: struct {
-    screen_size:      c.int,
-    camera_target:    c.int,
-    camera_offset:    c.int,
-    camera_zoom:      c.int,
-    time:             c.int,
-    sun_dir:          c.int,
-    ray_spacing:      c.int,
-    ray_width:        c.int,
-    ray_thresh:       c.int,
-    ray_alpha:        c.int,
-    cloud_freq:       c.int,
-    cloud_freq_fine:  c.int,
-    cloud_drift:      c.int,
-    cloud_thresh_lo:  c.int,
-    cloud_thresh_hi:  c.int,
-    cloud_contrast:   c.int,
-}
-
-init_godray_shader :: proc() {
-    g_godray_shader = gfx.load_shader_fs("data/shaders/god_rays.fs")
-    g_godray_locs.screen_size   = gfx.shader_location(g_godray_shader, "u_screen_size")
-    g_godray_locs.camera_target = gfx.shader_location(g_godray_shader, "u_camera_target")
-    g_godray_locs.camera_offset = gfx.shader_location(g_godray_shader, "u_camera_offset")
-    g_godray_locs.camera_zoom   = gfx.shader_location(g_godray_shader, "u_camera_zoom")
-    g_godray_locs.time          = gfx.shader_location(g_godray_shader, "u_time")
-    g_godray_locs.sun_dir       = gfx.shader_location(g_godray_shader, "u_sun_dir")
-    g_godray_locs.ray_spacing   = gfx.shader_location(g_godray_shader, "u_ray_spacing")
-    g_godray_locs.ray_width     = gfx.shader_location(g_godray_shader, "u_ray_width")
-    g_godray_locs.ray_thresh    = gfx.shader_location(g_godray_shader, "u_ray_thresh")
-    g_godray_locs.ray_alpha     = gfx.shader_location(g_godray_shader, "u_ray_alpha")
-    g_godray_locs.cloud_freq      = gfx.shader_location(g_godray_shader, "u_cloud_freq")
-    g_godray_locs.cloud_freq_fine = gfx.shader_location(g_godray_shader, "u_cloud_freq_fine")
-    g_godray_locs.cloud_drift     = gfx.shader_location(g_godray_shader, "u_cloud_drift")
-    g_godray_locs.cloud_thresh_lo = gfx.shader_location(g_godray_shader, "u_cloud_thresh_lo")
-    g_godray_locs.cloud_thresh_hi = gfx.shader_location(g_godray_shader, "u_cloud_thresh_hi")
-    g_godray_locs.cloud_contrast  = gfx.shader_location(g_godray_shader, "u_cloud_contrast")
-}
-
-shutdown_godray_shader :: proc() {
-    gfx.unload_shader(g_godray_shader)
-}
 
 g_world_rt: gfx.RenderTexture
 g_shadow_rt: gfx.RenderTexture
@@ -298,95 +215,20 @@ g_sprite_rt: gfx.RenderTexture
 @(private = "file") g_light_rt_w: i32
 @(private = "file") g_light_rt_h: i32
 
-g_wall_mask:       gfx.RenderTexture
+g_wall_mask:       gfx.Texture
 g_wall_mask_dirty: bool = true
 @(private = "file") g_wall_mask_origin: [2]f32
 @(private = "file") g_wall_mask_size:   [2]f32
 
-@(private = "file") g_directional_shader: gfx.Shader
-@(private = "file") g_directional_locs: struct {
-    shadow_tex:      c.int,
-    screen_size:     c.int,
-    sun_dir:         c.int,
-    sun_intensity:   c.int,
-    ambient:         c.int,
-    shadow_alpha:    c.int,
-    sun_color:       c.int,
+init_lighting :: proc() {
+    gfx.lighting_init()
 }
 
-@(private = "file") g_spritelight_shader: gfx.Shader
-@(private = "file") g_spritelight_locs: struct {
-    shadow_tex:       c.int,
-    screen_size:      c.int,
-    sun_dir:          c.int,
-    sun_color:        c.int,
-    sun_intensity:    c.int,
-    ambient:          c.int,
-    shadow_alpha:     c.int,
-    min_brightness:   c.int,
-    outline_strength: c.int,
-    diffuse_strength: c.int,
-    rim_strength:     c.int,
-    shadow_response:  c.int,
-    camera_target:    c.int,
-    camera_offset:    c.int,
-    camera_zoom:      c.int,
-    fog_scatter:      c.int,
-    light_count:      c.int,
-    light_pos:        c.int,
-    light_color:      c.int,
-    light_radius:     c.int,
-    light_intensity:  c.int,
-    wall_mask:        c.int,
-    wall_origin:      c.int,
-    wall_size:        c.int,
-    tile_size:        c.int,
-}
-
-init_directional_shader :: proc() {
-    g_directional_shader = gfx.load_shader_fs("data/shaders/directional_light.fs")
-    g_directional_locs.shadow_tex    = gfx.shader_location(g_directional_shader, "u_shadow_tex")
-    g_directional_locs.screen_size   = gfx.shader_location(g_directional_shader, "u_screen_size")
-    g_directional_locs.sun_dir       = gfx.shader_location(g_directional_shader, "u_sun_dir")
-    g_directional_locs.sun_intensity = gfx.shader_location(g_directional_shader, "u_sun_intensity")
-    g_directional_locs.ambient       = gfx.shader_location(g_directional_shader, "u_ambient")
-    g_directional_locs.shadow_alpha  = gfx.shader_location(g_directional_shader, "u_shadow_alpha")
-    g_directional_locs.sun_color     = gfx.shader_location(g_directional_shader, "u_sun_color")
-
-    g_spritelight_shader = gfx.load_shader_fs("data/shaders/sprite_light.fs")
-    g_spritelight_locs.shadow_tex        = gfx.shader_location(g_spritelight_shader, "u_shadow_tex")
-    g_spritelight_locs.screen_size       = gfx.shader_location(g_spritelight_shader, "u_screen_size")
-    g_spritelight_locs.sun_dir           = gfx.shader_location(g_spritelight_shader, "u_sun_dir")
-    g_spritelight_locs.sun_color         = gfx.shader_location(g_spritelight_shader, "u_sun_color")
-    g_spritelight_locs.sun_intensity     = gfx.shader_location(g_spritelight_shader, "u_sun_intensity")
-    g_spritelight_locs.ambient           = gfx.shader_location(g_spritelight_shader, "u_ambient")
-    g_spritelight_locs.shadow_alpha      = gfx.shader_location(g_spritelight_shader, "u_shadow_alpha")
-    g_spritelight_locs.min_brightness    = gfx.shader_location(g_spritelight_shader, "u_min_brightness")
-    g_spritelight_locs.outline_strength  = gfx.shader_location(g_spritelight_shader, "u_outline_strength")
-    g_spritelight_locs.diffuse_strength  = gfx.shader_location(g_spritelight_shader, "u_diffuse_strength")
-    g_spritelight_locs.rim_strength      = gfx.shader_location(g_spritelight_shader, "u_rim_strength")
-    g_spritelight_locs.shadow_response   = gfx.shader_location(g_spritelight_shader, "u_shadow_response")
-    g_spritelight_locs.camera_target     = gfx.shader_location(g_spritelight_shader, "u_camera_target")
-    g_spritelight_locs.camera_offset     = gfx.shader_location(g_spritelight_shader, "u_camera_offset")
-    g_spritelight_locs.camera_zoom       = gfx.shader_location(g_spritelight_shader, "u_camera_zoom")
-    g_spritelight_locs.fog_scatter       = gfx.shader_location(g_spritelight_shader, "u_fog_scatter")
-    g_spritelight_locs.light_count       = gfx.shader_location(g_spritelight_shader, "u_light_count")
-    g_spritelight_locs.light_pos         = gfx.shader_location(g_spritelight_shader, "u_light_pos")
-    g_spritelight_locs.light_color       = gfx.shader_location(g_spritelight_shader, "u_light_color")
-    g_spritelight_locs.light_radius      = gfx.shader_location(g_spritelight_shader, "u_light_radius")
-    g_spritelight_locs.light_intensity   = gfx.shader_location(g_spritelight_shader, "u_light_intensity")
-    g_spritelight_locs.wall_mask         = gfx.shader_location(g_spritelight_shader, "u_wall_mask")
-    g_spritelight_locs.wall_origin       = gfx.shader_location(g_spritelight_shader, "u_wall_origin")
-    g_spritelight_locs.wall_size         = gfx.shader_location(g_spritelight_shader, "u_wall_size")
-    g_spritelight_locs.tile_size         = gfx.shader_location(g_spritelight_shader, "u_tile_size")
-}
-
-shutdown_directional_shader :: proc() {
-    if g_world_rt.id != 0 { gfx.unload_render_texture(g_world_rt) }
+shutdown_lighting :: proc() {
+    if g_world_rt.id != 0  { gfx.unload_render_texture(g_world_rt) }
     if g_shadow_rt.id != 0 { gfx.unload_render_texture(g_shadow_rt) }
     if g_sprite_rt.id != 0 { gfx.unload_render_texture(g_sprite_rt) }
-    gfx.unload_shader(g_directional_shader)
-    gfx.unload_shader(g_spritelight_shader)
+    gfx.lighting_shutdown()
 }
 
 init_wall_mask :: proc() {
@@ -394,56 +236,58 @@ init_wall_mask :: proc() {
 }
 
 shutdown_wall_mask :: proc() {
-    if g_wall_mask.id != 0 { gfx.unload_render_texture(g_wall_mask) }
+    gfx.unload_texture(g_wall_mask)
+    delete(g_wall_mask_pixels)
 }
+
+// One texel per tile, white where a wall stands. Built on the CPU and uploaded: drawing it into a
+// render target would mean a pass in the middle of the frame, and texel-exact plotting
+// (docs/BACKEND_SWAP_PLAN.md §3.8). The texture is upright, so the shaders sample it directly.
+@(private = "file") g_wall_mask_pixels: [dynamic]u8
 
 rebuild_wall_mask :: proc() {
     if !g_wall_mask_dirty { return }
     g_wall_mask_dirty = false
 
-    if len(g_tilemap) == 0 {
-        g_wall_mask_origin = { 0, 0 }
-        g_wall_mask_size   = { 1, 1 }
-        if g_wall_mask.id != 0 { gfx.unload_render_texture(g_wall_mask) }
-        g_wall_mask = gfx.load_render_texture(1, 1)
-        gfx.target_begin(g_wall_mask)
-        gfx.clear(gfx.BLACK)
-        gfx.target_end()
-        return
-    }
-
-    min_tx, min_ty := max(int), max(int)
-    max_tx, max_ty := min(int), min(int)
-    for k in g_tilemap {
-        min_tx = min(min_tx, k[0])
-        min_ty = min(min_ty, k[1])
-        max_tx = max(max_tx, k[0])
-        max_ty = max(max_ty, k[1])
-    }
-
-    tw := max_tx - min_tx + 1
-    th := max_ty - min_ty + 1
-
-    tw = clamp(tw, 1, 1024)
-    th = clamp(th, 1, 1024)
-
-    if g_wall_mask.id == 0 || i32(tw) != g_wall_mask.texture.width || i32(th) != g_wall_mask.texture.height {
-        if g_wall_mask.id != 0 { gfx.unload_render_texture(g_wall_mask) }
-        g_wall_mask = gfx.load_render_texture(i32(tw), i32(th))
+    tw, th     := 1, 1
+    min_tx, min_ty := 0, 0
+    if len(g_tilemap) > 0 {
+        lo_x, lo_y := max(int), max(int)
+        hi_x, hi_y := min(int), min(int)
+        for k in g_tilemap {
+            lo_x = min(lo_x, k[0]); lo_y = min(lo_y, k[1])
+            hi_x = max(hi_x, k[0]); hi_y = max(hi_y, k[1])
+        }
+        min_tx, min_ty = lo_x, lo_y
+        tw = clamp(hi_x - lo_x + 1, 1, 1024)
+        th = clamp(hi_y - lo_y + 1, 1, 1024)
     }
 
     g_wall_mask_origin = { f32(min_tx), f32(min_ty) }
     g_wall_mask_size   = { f32(tw), f32(th) }
 
-    gfx.target_begin(g_wall_mask)
-    gfx.clear(gfx.BLACK)
-    for k, v in g_tilemap {
-        if tile_base(v) != .Wall { continue }
-        px := i32(k[0] - min_tx)
-        py := i32(k[1] - min_ty)
-        gfx.draw_pixel(px, py, gfx.WHITE)
+    resize(&g_wall_mask_pixels, tw * th * 4)
+    for i in 0..<len(g_wall_mask_pixels) { g_wall_mask_pixels[i] = 255 if (i & 3) == 3 else 0 }
+
+    if len(g_tilemap) > 0 {
+        for k, v in g_tilemap {
+            if tile_base(v) != .Wall { continue }
+            px := k[0] - min_tx
+            py := k[1] - min_ty
+            if px < 0 || py < 0 || px >= tw || py >= th { continue }
+            at := (py * tw + px) * 4
+            g_wall_mask_pixels[at + 0] = 255
+            g_wall_mask_pixels[at + 1] = 255
+            g_wall_mask_pixels[at + 2] = 255
+        }
     }
-    gfx.target_end()
+
+    if g_wall_mask.id == 0 || g_wall_mask.width != i32(tw) || g_wall_mask.height != i32(th) {
+        gfx.unload_texture(g_wall_mask)
+        g_wall_mask = gfx.load_texture_pixels(g_wall_mask_pixels[:], i32(tw), i32(th))
+    } else {
+        gfx.update_texture(g_wall_mask, g_wall_mask_pixels[:])
+    }
 }
 
 ensure_lighting_render_targets :: proc() {
@@ -469,57 +313,6 @@ g_fog_color:   [3]f32 = { 8, 10, 14 }
 g_fog_density: f32    = 0.55
 g_fog_scatter: f32    = 1.35
 
-@(private = "file") g_foglight_shader: gfx.Shader
-@(private = "file") g_foglight_locs: struct {
-    screen_size:      c.int,
-    camera_target:    c.int,
-    camera_offset:    c.int,
-    camera_zoom:      c.int,
-    fog_color:        c.int,
-    fog_density:      c.int,
-    fog_scatter:      c.int,
-    player_pos:       c.int,
-    vision_radius:    c.int,
-    vision_fade:      c.int,
-    light_count:      c.int,
-    light_pos:        c.int,
-    light_color:      c.int,
-    light_radius:     c.int,
-    light_intensity:  c.int,
-    wall_mask:        c.int,
-    wall_origin:      c.int,
-    wall_size:        c.int,
-    tile_size:        c.int,
-    pass:             c.int,
-}
-
-init_foglight_shader :: proc() {
-    g_foglight_shader = gfx.load_shader_fs("data/shaders/fog_lights.fs")
-    g_foglight_locs.screen_size     = gfx.shader_location(g_foglight_shader, "u_screen_size")
-    g_foglight_locs.camera_target   = gfx.shader_location(g_foglight_shader, "u_camera_target")
-    g_foglight_locs.camera_offset   = gfx.shader_location(g_foglight_shader, "u_camera_offset")
-    g_foglight_locs.camera_zoom     = gfx.shader_location(g_foglight_shader, "u_camera_zoom")
-    g_foglight_locs.fog_color       = gfx.shader_location(g_foglight_shader, "u_fog_color")
-    g_foglight_locs.fog_density     = gfx.shader_location(g_foglight_shader, "u_fog_density")
-    g_foglight_locs.fog_scatter     = gfx.shader_location(g_foglight_shader, "u_fog_scatter")
-    g_foglight_locs.player_pos      = gfx.shader_location(g_foglight_shader, "u_player_pos")
-    g_foglight_locs.vision_radius   = gfx.shader_location(g_foglight_shader, "u_vision_radius")
-    g_foglight_locs.vision_fade     = gfx.shader_location(g_foglight_shader, "u_vision_fade")
-    g_foglight_locs.light_count     = gfx.shader_location(g_foglight_shader, "u_light_count")
-    g_foglight_locs.light_pos       = gfx.shader_location(g_foglight_shader, "u_light_pos")
-    g_foglight_locs.light_color     = gfx.shader_location(g_foglight_shader, "u_light_color")
-    g_foglight_locs.light_radius    = gfx.shader_location(g_foglight_shader, "u_light_radius")
-    g_foglight_locs.light_intensity = gfx.shader_location(g_foglight_shader, "u_light_intensity")
-    g_foglight_locs.wall_mask       = gfx.shader_location(g_foglight_shader, "u_wall_mask")
-    g_foglight_locs.wall_origin     = gfx.shader_location(g_foglight_shader, "u_wall_origin")
-    g_foglight_locs.wall_size       = gfx.shader_location(g_foglight_shader, "u_wall_size")
-    g_foglight_locs.tile_size       = gfx.shader_location(g_foglight_shader, "u_tile_size")
-    g_foglight_locs.pass            = gfx.shader_location(g_foglight_shader, "u_pass")
-}
-
-shutdown_foglight_shader :: proc() {
-    gfx.unload_shader(g_foglight_shader)
-}
 
 @(private = "file")
 sun_dir :: proc() -> [2]f32 {
@@ -527,36 +320,62 @@ sun_dir :: proc() -> [2]f32 {
     return { g_light_sun_dir_x * inv_len, g_light_sun_dir_y * inv_len }
 }
 
+@(private = "file")
+light_view :: proc() -> gfx.View_Params {
+    return {
+        cam_target = { cam_target().x, cam_target().y },
+        cam_offset = { cam_offset().x, cam_offset().y },
+        cam_zoom   = cam_zoom(),
+    }
+}
+
+@(private = "file")
+cloud_shape :: proc() -> (freq, freq_fine: f32, drift: [2]f32, lo, hi, contrast: f32) {
+    return g_light_cloud_freq, g_light_cloud_freq_fine,
+           { g_light_cloud_drift_x, g_light_cloud_drift_y },
+           g_light_cloud_thresh_lo, g_light_cloud_thresh_hi, g_light_cloud_contrast
+}
+
+@(private = "file")
+sun_color_01 :: proc() -> [3]f32 {
+    return { g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
+}
+
+// Point lights in the world, in the form the lighting passes take.
+@(private = "file")
+collect_lights :: proc(w: ^World) -> gfx.Lights {
+    out: gfx.Lights
+    ids := world_query(w, query_mask(.PointLight, .Transform))
+    defer delete(ids)
+    n := min(len(ids), MAX_POINT_LIGHTS)
+    out.count = i32(n)
+    for i in 0..<n {
+        id := ids[i]
+        t  := comp_get(w, id, .Transform, TransformComp)
+        pl := comp_get(w, id, .PointLight, PointLightComp)
+        out.pos[i]       = { t.position[0], t.position[1] }
+        out.color[i]     = pl.color
+        out.radius[i]    = pl.radius
+        out.intensity[i] = pl.intensity
+    }
+    return out
+}
+
 draw_cloud_shadow_field :: proc() {
-    sw := f32(gfx.screen_width())
-    sh := f32(gfx.screen_height())
-
-    time        := f32(gfx.time())
-    screen_size := [2]f32{ sw, sh }
-    cam_target  := [2]f32{ cam_target().x, cam_target().y }
-    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
-    cam_zoom    := cam_zoom()
-    drift       := [2]f32{ g_light_cloud_drift_x, g_light_cloud_drift_y }
-    tint        := [3]f32{ g_light_cloud_tint_r, g_light_cloud_tint_g, g_light_cloud_tint_b }
-
-    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.screen_size, screen_size)
-    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.camera_target, cam_target)
-    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.camera_offset, cam_offset)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.camera_zoom, cam_zoom)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.time, time)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_freq, g_light_cloud_freq)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_freq_fine, g_light_cloud_freq_fine)
-    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.cloud_drift, drift)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_thresh_lo, g_light_cloud_thresh_lo)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_thresh_hi, g_light_cloud_thresh_hi)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_alpha_min, g_light_cloud_alpha_min)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_alpha_max, g_light_cloud_alpha_max)
-    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_contrast, g_light_cloud_contrast)
-    gfx.shader_set_vec3(g_cloud_shader, g_cloud_locs.cloud_tint, tint)
-
-    gfx.shader_begin(g_cloud_shader)
-    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
-    gfx.shader_end()
+    freq, freq_fine, drift, lo, hi, contrast := cloud_shape()
+    gfx.lighting_clouds({
+        view      = light_view(),
+        time      = f32(gfx.time()),
+        freq      = freq,
+        freq_fine = freq_fine,
+        drift     = drift,
+        thresh_lo = lo,
+        thresh_hi = hi,
+        alpha_min = g_light_cloud_alpha_min,
+        alpha_max = g_light_cloud_alpha_max,
+        contrast  = contrast,
+        tint      = { g_light_cloud_tint_r, g_light_cloud_tint_g, g_light_cloud_tint_b },
+    })
 }
 
 draw_wall_sun_shadows :: proc() {
@@ -702,173 +521,65 @@ draw_directional_world_composite :: proc() {
     ensure_lighting_render_targets()
     if g_world_rt.id == 0 || g_shadow_rt.id == 0 { return }
 
-    screen_size := [2]f32{ f32(gfx.screen_width()), f32(gfx.screen_height()) }
-    sd := sun_dir()
-    sun_color := [3]f32{ g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
-
-    gfx.shader_set_vec2(g_directional_shader, g_directional_locs.screen_size, screen_size)
-    gfx.shader_set_vec2(g_directional_shader, g_directional_locs.sun_dir, sd)
-    gfx.shader_set_f32(g_directional_shader, g_directional_locs.sun_intensity, g_light_sun_intensity)
-    gfx.shader_set_f32(g_directional_shader, g_directional_locs.ambient, g_light_ambient)
-    gfx.shader_set_f32(g_directional_shader, g_directional_locs.shadow_alpha, g_light_shadow_alpha)
-    gfx.shader_set_vec3(g_directional_shader, g_directional_locs.sun_color, sun_color)
-
-    world_src := gfx.Rect{ 0, 0, f32(g_world_rt.texture.width), -f32(g_world_rt.texture.height) }
-    dst       := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
-
-    gfx.shader_begin(g_directional_shader)
-    gfx.shader_set_texture(g_directional_shader, g_directional_locs.shadow_tex, g_shadow_rt.texture)
-    gfx.draw_texture_pro(g_world_rt.texture, world_src, dst, { 0, 0 }, 0, gfx.WHITE)
-    gfx.shader_end()
+    gfx.lighting_directional(g_world_rt.texture, g_shadow_rt.texture, {
+        sun_dir       = sun_dir(),
+        sun_color     = sun_color_01(),
+        sun_intensity = g_light_sun_intensity,
+        ambient       = g_light_ambient,
+        shadow_alpha  = g_light_shadow_alpha,
+    })
 }
 
 draw_directional_sprite_composite :: proc(w: ^World) {
     ensure_lighting_render_targets()
     if g_sprite_rt.id == 0 || g_shadow_rt.id == 0 { return }
 
-    light_ids := world_query(w, query_mask(.PointLight, .Transform))
-    defer delete(light_ids)
-
-    light_count := min(len(light_ids), MAX_POINT_LIGHTS)
-
-    positions:   [MAX_POINT_LIGHTS][2]f32
-    colors:      [MAX_POINT_LIGHTS][3]f32
-    radii:       [MAX_POINT_LIGHTS]f32
-    intensities: [MAX_POINT_LIGHTS]f32
-
-    for i in 0..<light_count {
-        id := light_ids[i]
-        t  := comp_get(w, id, .Transform, TransformComp)
-        pl := comp_get(w, id, .PointLight, PointLightComp)
-        positions[i]   = { t.position[0], t.position[1] }
-        colors[i]      = pl.color
-        radii[i]       = pl.radius
-        intensities[i] = pl.intensity
-    }
-
-    screen_size := [2]f32{ f32(gfx.screen_width()), f32(gfx.screen_height()) }
-    sprite_src  := gfx.Rect{ 0, 0, f32(g_sprite_rt.texture.width), -f32(g_sprite_rt.texture.height) }
-    dst         := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
-    sd          := sun_dir()
-    sun_color   := [3]f32{ g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
-    cam_target  := [2]f32{ cam_target().x, cam_target().y }
-    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
-    cam_zoom    := cam_zoom()
-    lc          := c.int(light_count)
-
-    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.screen_size, screen_size)
-    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.sun_dir, sd)
-    gfx.shader_set_vec3(g_spritelight_shader, g_spritelight_locs.sun_color, sun_color)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.sun_intensity, g_light_sun_intensity)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.ambient, g_light_ambient)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.shadow_alpha, g_light_shadow_alpha)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.min_brightness, g_light_sprite_min_brightness)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.outline_strength, g_light_sprite_outline)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.diffuse_strength, g_light_sprite_diffuse)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.rim_strength, g_light_sprite_rim)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.shadow_response, g_light_sprite_shadow_response)
-
-    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.camera_target, cam_target)
-    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.camera_offset, cam_offset)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.camera_zoom, cam_zoom)
-
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.fog_scatter, g_fog_scatter)
-
-    gfx.shader_set_i32(g_spritelight_shader, g_spritelight_locs.light_count, lc)
-    if light_count > 0 {
-        gfx.shader_set_vec2_array(g_spritelight_shader, g_spritelight_locs.light_pos, positions[:], c.int(light_count))
-        gfx.shader_set_vec3_array(g_spritelight_shader, g_spritelight_locs.light_color, colors[:], c.int(light_count))
-        gfx.shader_set_f32_array(g_spritelight_shader, g_spritelight_locs.light_radius, radii[:], c.int(light_count))
-        gfx.shader_set_f32_array(g_spritelight_shader, g_spritelight_locs.light_intensity, intensities[:], c.int(light_count))
-    }
-
-    tile_size_f := f32(TILE_SIZE)
-    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.wall_origin, g_wall_mask_origin)
-    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.wall_size, g_wall_mask_size)
-    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.tile_size, tile_size_f)
-
-    gfx.shader_begin(g_spritelight_shader)
-    gfx.shader_set_texture(g_spritelight_shader, g_spritelight_locs.shadow_tex, g_shadow_rt.texture)
-    if g_wall_mask.id != 0 {
-        gfx.shader_set_texture(g_spritelight_shader, g_spritelight_locs.wall_mask, g_wall_mask.texture)
-    }
-    gfx.draw_texture_pro(g_sprite_rt.texture, sprite_src, dst, { 0, 0 }, 0, gfx.WHITE)
-    gfx.shader_end()
+    gfx.lighting_sprite(g_sprite_rt.texture, g_shadow_rt.texture, g_wall_mask, {
+        view            = light_view(),
+        sun_dir         = sun_dir(),
+        sun_color       = sun_color_01(),
+        sun_intensity   = g_light_sun_intensity,
+        ambient         = g_light_ambient,
+        shadow_alpha    = g_light_shadow_alpha,
+        min_brightness  = g_light_sprite_min_brightness,
+        outline         = g_light_sprite_outline,
+        diffuse         = g_light_sprite_diffuse,
+        rim             = g_light_sprite_rim,
+        shadow_response = g_light_sprite_shadow_response,
+        fog_scatter     = g_fog_scatter,
+        wall_origin     = g_wall_mask_origin,
+        wall_size       = g_wall_mask_size,
+        tile_size       = f32(TILE_SIZE),
+        lights          = collect_lights(w),
+    })
 }
 
 draw_world_god_rays :: proc() {
-    sw := f32(gfx.screen_width())
-    sh := f32(gfx.screen_height())
-
-    time        := f32(gfx.time())
-    screen_size := [2]f32{ sw, sh }
-    cam_target  := [2]f32{ cam_target().x, cam_target().y }
-    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
-    cam_zoom    := cam_zoom()
-    sd          := sun_dir()
-
-    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.screen_size, screen_size)
-    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.camera_target, cam_target)
-    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.camera_offset, cam_offset)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.camera_zoom, cam_zoom)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.time, time)
-    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.sun_dir, sd)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_spacing, g_light_god_ray_spacing)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_width, g_light_god_ray_width)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_thresh, g_light_god_ray_thresh)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_alpha, g_light_god_ray_alpha)
-
-    drift := [2]f32{ g_light_cloud_drift_x, g_light_cloud_drift_y }
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_freq, g_light_cloud_freq)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_freq_fine, g_light_cloud_freq_fine)
-    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.cloud_drift, drift)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_thresh_lo, g_light_cloud_thresh_lo)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_thresh_hi, g_light_cloud_thresh_hi)
-    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_contrast, g_light_cloud_contrast)
-
-    gfx.blend_begin(.ADDITIVE)
-    gfx.shader_begin(g_godray_shader)
-    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
-    gfx.shader_end()
-    gfx.blend_end()
+    freq, freq_fine, drift, lo, hi, contrast := cloud_shape()
+    gfx.lighting_god_rays({
+        view        = light_view(),
+        time        = f32(gfx.time()),
+        sun_dir     = sun_dir(),
+        ray_spacing = g_light_god_ray_spacing,
+        ray_width   = g_light_god_ray_width,
+        ray_thresh  = g_light_god_ray_thresh,
+        ray_alpha   = g_light_god_ray_alpha,
+        freq        = freq,
+        freq_fine   = freq_fine,
+        drift       = drift,
+        thresh_lo   = lo,
+        thresh_hi   = hi,
+        contrast    = contrast,
+    })
 }
 
 draw_fog_and_lights :: proc(w: ^World) {
-    ids := world_query(w, query_mask(.PointLight, .Transform))
-    defer delete(ids)
-
-    count := min(len(ids), MAX_POINT_LIGHTS)
-
-    positions:   [MAX_POINT_LIGHTS][2]f32
-    colors:      [MAX_POINT_LIGHTS][3]f32
-    radii:       [MAX_POINT_LIGHTS]f32
-    intensities: [MAX_POINT_LIGHTS]f32
-
-    for i in 0..<count {
-        id := ids[i]
-        t  := comp_get(w, id, .Transform, TransformComp)
-        pl := comp_get(w, id, .PointLight, PointLightComp)
-        positions[i]   = { t.position[0], t.position[1] }
-        colors[i]      = pl.color
-        radii[i]       = pl.radius
-        intensities[i] = pl.intensity
-    }
-
-    sw := f32(gfx.screen_width())
-    sh := f32(gfx.screen_height())
-    screen_size := [2]f32{ sw, sh }
-    cam_target  := [2]f32{ cam_target().x, cam_target().y }
-    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
-    cam_zoom    := cam_zoom()
-    light_count := c.int(count)
-
     player_pos    := [2]f32{ 0, 0 }
     vision_radius := f32(0)
     vision_fade   := f32(0)
-    if world_is_valid(w, w.player_id) &&
-       world_has_component(w, w.player_id, .Transform) {
+    if world_is_valid(w, w.player_id) && world_has_component(w, w.player_id, .Transform) {
         pp := comp_get(w, w.player_id, .Transform, TransformComp).position
-        player_pos = { pp[0], pp[1] }
+        player_pos    = { pp[0], pp[1] }
         vision_radius = FOG_VISION_RADIUS
         vision_fade   = FOG_FADE_WIDTH
         if world_has_component(w, w.player_id, .Stats) {
@@ -878,50 +589,19 @@ draw_fog_and_lights :: proc(w: ^World) {
 
     rebuild_wall_mask()
 
-    tile_size_f := f32(TILE_SIZE)
-    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.wall_origin, g_wall_mask_origin)
-    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.wall_size, g_wall_mask_size)
-    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.tile_size, tile_size_f)
-
-    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.screen_size, screen_size)
-    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.camera_target, cam_target)
-    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.camera_offset, cam_offset)
-    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.camera_zoom, cam_zoom)
-    gfx.shader_set_vec3(g_foglight_shader, g_foglight_locs.fog_color, g_fog_color)
-    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.fog_density, g_fog_density)
-    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.fog_scatter, g_fog_scatter)
-    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.player_pos, player_pos)
-    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.vision_radius, vision_radius)
-    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.vision_fade, vision_fade)
-    gfx.shader_set_i32(g_foglight_shader, g_foglight_locs.light_count, light_count)
-    if count > 0 {
-        gfx.shader_set_vec2_array(g_foglight_shader, g_foglight_locs.light_pos, positions[:], c.int(count))
-        gfx.shader_set_vec3_array(g_foglight_shader, g_foglight_locs.light_color, colors[:], c.int(count))
-        gfx.shader_set_f32_array(g_foglight_shader, g_foglight_locs.light_radius, radii[:], c.int(count))
-        gfx.shader_set_f32_array(g_foglight_shader, g_foglight_locs.light_intensity, intensities[:], c.int(count))
-    }
-
-    pass := c.int(0)
-    gfx.shader_set_i32(g_foglight_shader, g_foglight_locs.pass, pass)
-    gfx.shader_begin(g_foglight_shader)
-    if g_wall_mask.id != 0 {
-        gfx.shader_set_texture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
-    }
-    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
-    gfx.shader_end()
-
-    if count > 0 {
-        pass = c.int(1)
-        gfx.shader_set_i32(g_foglight_shader, g_foglight_locs.pass, pass)
-        gfx.blend_begin(.ADDITIVE)
-        gfx.shader_begin(g_foglight_shader)
-        if g_wall_mask.id != 0 {
-            gfx.shader_set_texture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
-        }
-        gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
-        gfx.shader_end()
-        gfx.blend_end()
-    }
+    gfx.lighting_fog(g_wall_mask, {
+        view          = light_view(),
+        fog_color     = g_fog_color,
+        fog_density   = g_fog_density,
+        fog_scatter   = g_fog_scatter,
+        player_pos    = player_pos,
+        vision_radius = vision_radius,
+        vision_fade   = vision_fade,
+        wall_origin   = g_wall_mask_origin,
+        wall_size     = g_wall_mask_size,
+        tile_size     = f32(TILE_SIZE),
+        lights        = collect_lights(w),
+    })
 }
 
 update_lighting_widget :: proc() {

@@ -73,93 +73,43 @@ _wants_fullscreen :: proc() -> bool {
     return platform_default_fullscreen()
 }
 
-@(private = "file")
-_monitor_size :: proc() -> [2]i32 {
-    m := gfx.monitor_current()
-    return { gfx.monitor_width(m), gfx.monitor_height(m) }
-}
-
-@(private = "file")
-_fit_window :: proc(size: [2]i32) -> [2]i32 {
-    mon := _monitor_size()
-    w, h := size[0], size[1]
-    if w <= 0 || h <= 0 { w, h = WINDOW_DEFAULT_W, WINDOW_DEFAULT_H }
-    if mon[0] > 0 && mon[1] > 0 {
-        max_w := i32(f32(mon[0]) * 0.92)
-        max_h := i32(f32(mon[1]) * 0.88)
-        if w > max_w || h > max_h {
-            k := min(f32(max_w) / f32(w), f32(max_h) / f32(h))
-            w  = i32(f32(w) * k)
-            h  = i32(f32(h) * k)
-        }
-    }
-    return { max(w, WINDOW_MIN_W), max(h, WINDOW_MIN_H) }
-}
-
-@(private = "file")
-_center_window :: proc(size: [2]i32) {
-    m   := gfx.monitor_current()
-    pos := gfx.monitor_position(m)
-    mon := _monitor_size()
-    gfx.window_set_position(i32(pos.x) + (mon[0] - size[0]) / 2, i32(pos.y) + (mon[1] - size[1]) / 2)
+// The window to open, from the saved display settings. Read before the window exists, because
+// sokol_app takes size and mode at creation and has no API to change them afterwards.
+platform_window_desc :: proc(title: cstring) -> gfx.Window_Desc {
+    w := g_binds.display.window_w
+    h := g_binds.display.window_h
+    if w < WINDOW_MIN_W || h < WINDOW_MIN_H { w, h = WINDOW_DEFAULT_W, WINDOW_DEFAULT_H }
+    g_windowed_size = { w, h }
+    return { width = w, height = h, title = title, fullscreen = _wants_fullscreen() }
 }
 
 platform_init_window :: proc(title: cstring) {
-    gfx.window_set_flags({ .WINDOW_RESIZABLE, .VSYNC_HINT })
-    gfx.window_init(WINDOW_DEFAULT_W, WINDOW_DEFAULT_H, title)
-    gfx.window_set_min_size(WINDOW_MIN_W, WINDOW_MIN_H)
-
-    g_windowed_size = _fit_window({ g_binds.display.window_w, g_binds.display.window_h })
-    gfx.window_set_size(g_windowed_size[0], g_windowed_size[1])
-    _center_window(g_windowed_size)
-    native_fullscreen_prepare()
-
-    if _wants_fullscreen() { platform_set_fullscreen(true) }
+    gfx.window_init(platform_window_desc(title))
+    g_fullscreen = gfx.window_is_fullscreen()
 }
 
 platform_set_fullscreen :: proc(on: bool) {
-    when ODIN_OS == .Darwin {
-        if on != native_is_fullscreen() {
-            if on { g_windowed_size = { gfx.screen_width(), gfx.screen_height() } }
-            native_toggle_fullscreen()
-        }
-    } else {
-        if on == g_fullscreen { return }
-        if on {
-            if !gfx.window_is_state({ .BORDERLESS_WINDOWED_MODE }) {
-                g_windowed_size = { gfx.screen_width(), gfx.screen_height() }
-            }
-            gfx.window_toggle_fullscreen()
-        } else {
-            if gfx.window_is_state({ .BORDERLESS_WINDOWED_MODE }) { gfx.window_toggle_fullscreen() }
-            g_windowed_size = _fit_window(g_windowed_size)
-            gfx.window_set_size(g_windowed_size[0], g_windowed_size[1])
-            _center_window(g_windowed_size)
-        }
+    if on != gfx.window_is_fullscreen() {
+        if on && !g_fullscreen { g_windowed_size = { gfx.screen_width(), gfx.screen_height() } }
+        gfx.window_toggle_fullscreen()
     }
     g_fullscreen = on
     g_binds.display.mode = WINDOW_MODE_FULL if on else WINDOW_MODE_WINDOW
 }
 
-platform_set_window_size :: proc(w, h: i32) {
-    if g_fullscreen { return }
-    g_windowed_size = _fit_window({ w, h })
-    gfx.window_set_size(g_windowed_size[0], g_windowed_size[1])
-    _center_window(g_windowed_size)
-}
-
-platform_window_fits :: proc(w, h: i32) -> bool {
-    mon := _monitor_size()
-    return mon[0] <= 0 || (w <= mon[0] && h <= mon[1])
-}
-
+// Tracks the window and the fullscreen hotkey. The toggle may also come from the OS (the green
+// button on macOS), so the flag is re-read every frame rather than only written here.
 platform_update_window :: proc() {
-    when ODIN_OS == .Darwin {
-        g_fullscreen = native_is_fullscreen()
-    }
-    if !g_fullscreen && gfx.window_is_resized() {
+    was := g_fullscreen
+    g_fullscreen = gfx.window_is_fullscreen()
+    if !g_fullscreen && gfx.window_resized() {
         g_windowed_size = { gfx.screen_width(), gfx.screen_height() }
     }
+    if was != g_fullscreen {
+        g_binds.display.mode = WINDOW_MODE_FULL if g_fullscreen else WINDOW_MODE_WINDOW
+        save_config()
+    }
+
     toggle := false
     when ODIN_OS == .Darwin {
         cmd  := gfx.key_down(.LEFT_SUPER) || gfx.key_down(.RIGHT_SUPER)
@@ -209,10 +159,9 @@ window_probe_from_args :: proc() {
 
 @(private = "file")
 _probe_log :: proc(tag: string) {
-    fmt.printf("[probe] %-14s fullscreen=%v rl_fullscreen=%v screen=%dx%d render=%dx%d monitor=%dx%d dpi=%.2f resized=%v\n",
+    fmt.printf("[probe] %-14s fullscreen=%v gfx_fullscreen=%v screen=%dx%d render=%dx%d dpi=%.2f resized=%v\n",
         tag, g_fullscreen, gfx.window_is_fullscreen(), gfx.screen_width(), gfx.screen_height(),
-        gfx.render_width(), gfx.render_height(), _monitor_size()[0], _monitor_size()[1],
-        gfx.window_scale_dpi().x, gfx.window_is_resized())
+        gfx.render_width(), gfx.render_height(), gfx.dpi_scale(), gfx.window_resized())
 }
 
 @(private = "file")
@@ -227,8 +176,11 @@ tools_probe_tick :: proc(f: int) -> (done: bool) {
     switch f {
     case 1:
         // Synthetic input for the whole run: no frame depends on the real cursor, clicks or keys.
+        // Windowed too, so shots are the same size on any monitor.
+        platform_set_fullscreen(false)
         gfx.set_synthetic_pointer({ f32(gfx.screen_width() / 2), f32(gfx.screen_height() / 2) })
     case 5:   probe_start_singleplayer()
+    case 35:  _probe_shot("t0_hub")   // lit gameplay: composites, fog, vision radius, wall mask
     case 40:  editor_toggle()
     case 90:  _probe_shot("t1_editor")
     case 91:
@@ -301,12 +253,10 @@ window_probe_tick :: proc() -> (done: bool) {
     case 90:  _probe_log("startup");    _probe_shot("1_startup")
     case 91:  platform_set_fullscreen(false)
     case 180: _probe_log("windowed");   _probe_shot("2_windowed")
-    case 181: platform_set_window_size(1100, 700)
-    case 220: _probe_log("resized");    _probe_shot("3_resized")
-    case 221: platform_set_window_size(4000, 3000)
-    case 260: _probe_log("oversized")
-    case 261: platform_set_fullscreen(true)
-    case 350: _probe_log("fullscreen"); _probe_shot("4_fullscreen")
+    case 181: platform_set_fullscreen(true)
+    case 270: _probe_log("fullscreen"); _probe_shot("3_fullscreen")
+    case 271: platform_set_fullscreen(false)
+    case 350: _probe_log("restored");   _probe_shot("4_restored")
     case 351: return true
     }
     return false

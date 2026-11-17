@@ -289,7 +289,8 @@ render :: proc(b: ^Backend) {
     }
 }
 
-texture_ref :: proc(tex: rl.Texture2D) -> im.TextureRef {
-    return im.TextureRef{ _TexID = im.TextureID(tex.id) }
+// `id` is the backend's texture handle, as gfx.Texture reports it.
+texture_ref :: proc(id: u32) -> im.TextureRef {
+    return im.TextureRef{ _TexID = im.TextureID(id) }
 }
 

@@ -463,7 +463,10 @@ update_playing :: proc(dt: f32) {
     }
 
     sim_paused := g_paused && !p2p.session_is_online(&g_session)
-    if sim_paused { g_accumulator = 0 }
+    if sim_paused || g_playing_state == .DeathScreen {
+        g_accumulator = 0
+        clear_pending_actions()
+    }
     if !sim_paused && g_playing_state != .DeathScreen {
         local_frame := collect_local_input() if playing_collects_input() else p2p.InputFrame{}
         g_accumulator += f64(dt)
@@ -472,6 +475,7 @@ update_playing :: proc(dt: f32) {
             do_sim_tick(local_frame, TICK_DT)
             g_accumulator -= f64(TICK_DT)
             local_frame.actions = {}
+            clear_pending_actions()
             n += 1
             if n >= MAX_CATCHUP_TICKS {
                 g_accumulator = 0
@@ -612,14 +616,11 @@ main :: proc() {
     load_config()
     platform_init_window("Tormentas")
     defer gfx.window_close()
-    app_icon := gfx.load_image("data/app/tormentas_icon.png")
-    if app_icon.data != nil {
+    if app_icon, ok := gfx.load_image("data/app/tormentas_icon.png"); ok {
         gfx.window_set_icon(app_icon)
         gfx.unload_image(app_icon)
     }
-    gfx.window_set_fps(60)
-
-    gfx.window_set_exit_key(.KEY_NULL)
+    gfx.set_target_fps(60)
 
     g_lang = Language(min(g_binds.language, u8(LANG_COUNT - 1)))
 
@@ -647,17 +648,8 @@ main :: proc() {
     init_fog()
     defer shutdown_fog()
 
-    init_cloud_shader()
-    defer shutdown_cloud_shader()
-
-    init_godray_shader()
-    defer shutdown_godray_shader()
-
-    init_directional_shader()
-    defer shutdown_directional_shader()
-
-    init_foglight_shader()
-    defer shutdown_foglight_shader()
+    init_lighting()
+    defer shutdown_lighting()
 
     init_wall_mask()
     defer shutdown_wall_mask()
@@ -689,6 +681,9 @@ main :: proc() {
         g_entity_defs = defs
     }
     defer destroy_entity_defs(g_entity_defs)
+
+    // Needs the entity definitions, and must happen before any frame draws (see the proc).
+    prebuild_entity_sprites()
 
     chars_load_all()
     _mm_init()

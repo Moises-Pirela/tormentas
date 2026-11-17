@@ -51,7 +51,6 @@ float wall_occlusion(vec2 pos, vec2 light_pos) {
         vec2 tile_coord = floor(sample_pos / u_tile_size) - u_wall_origin;
 
         vec2 uv = (tile_coord + 0.5) / u_wall_size;
-        uv.y = 1.0 - uv.y;
 
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
 

@@ -27,18 +27,31 @@ collect_local_input :: proc() -> p2p.InputFrame {
     mp    := cam_screen_to_world(gfx.mouse_position())
     f.aim  = { mp.x, mp.y }
 
-    if gfx.mouse_down(.LEFT) && !devui_wants_mouse() { f.actions += {.Fire}     }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.dodge))   { f.actions += {.Dodge}    }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill1))  { f.actions += {.Skill1}   }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill2))  { f.actions += {.Skill2}   }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill3))  { f.actions += {.Skill3}   }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill4))  { f.actions += {.Skill4}   }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.interact)){ f.actions += {.Interact} }
-    if gfx.key_pressed(gfx.Key(g_binds.gameplay.reload))  { f.actions += {.Reload}   }
-    if gfx.key_pressed(.ONE)                                     { f.actions += {.Flask1}   }
-    if gfx.key_pressed(.TWO)                                     { f.actions += {.Flask2}   }
+    // Edge-triggered actions are latched until a simulation tick consumes them. A frame that runs
+    // no tick (any refresh rate above the tick rate) would otherwise swallow the press entirely:
+    // the frame collects input once, and whatever is not consumed is gone.
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.dodge))   { g_pending_actions += {.Dodge}    }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill1))  { g_pending_actions += {.Skill1}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill2))  { g_pending_actions += {.Skill2}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill3))  { g_pending_actions += {.Skill3}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.skill4))  { g_pending_actions += {.Skill4}   }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.interact)){ g_pending_actions += {.Interact} }
+    if gfx.key_pressed(gfx.Key(g_binds.gameplay.reload))  { g_pending_actions += {.Reload}   }
+    if gfx.key_pressed(.ONE)                              { g_pending_actions += {.Flask1}   }
+    if gfx.key_pressed(.TWO)                              { g_pending_actions += {.Flask2}   }
+    f.actions += g_pending_actions
+
+    // Fire is held, not an edge, so it is read fresh every frame and never latched.
+    if gfx.mouse_down(.LEFT) && !devui_wants_mouse() { f.actions += {.Fire} }
     return f
 }
+
+// Edge-triggered actions waiting for the next simulation tick (see collect_local_input).
+g_pending_actions: bit_set[p2p.InputAction; u16]
+
+// Called when a tick has consumed them, and whenever the simulation is not running so presses
+// cannot leak into a later session.
+clear_pending_actions :: proc() { g_pending_actions = {} }
 
 apply_input_frame :: proc(w: ^World, entity_id: int, f: p2p.InputFrame) {
     comp_set(w, entity_id, .InputState, InputStateComp{

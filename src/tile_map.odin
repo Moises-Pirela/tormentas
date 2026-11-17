@@ -81,6 +81,15 @@ MAX_TILE_VARIANTS :: 4
 g_tile_variants:       [5][MAX_TILE_VARIANTS]TileSpriteEntry
 g_tile_variant_count:  [5]int
 
+// The diamond floor and the water surface use half of a tile's art. PNG tiles put that half at the
+// top. Baked tiles were authored against raylib's flipped render targets, where the same rectangle
+// landed on the bottom half instead; keep that look now that targets sample upright.
+@(private = "file")
+tile_half_src :: proc(e: TileSpriteEntry) -> gfx.Rect {
+    h := e.src.width * 0.5
+    return { 0, h if e.from_rt else 0, e.src.width, h }
+}
+
 @(private = "file")
 _build_tile_sprite :: proc(tt: TileType) -> TileSpriteEntry {
     size := i32(TILE_SIZE)
@@ -126,7 +135,7 @@ _build_tile_sprite :: proc(tt: TileType) -> TileSpriteEntry {
     gfx.target_end()
     return TileSpriteEntry{
         tex     = rt.texture,
-        src     = { 0, 0, f32(size), -f32(size) },
+        src     = { 0, 0, f32(size), f32(size) },
         rt      = rt,
         from_rt = true,
     }
@@ -147,7 +156,7 @@ _load_tile_variants :: proc(ti: int, stem: string, tt: TileType) {
 
         loaded := gfx.load_texture(cstring(&path_buf[0]))
         if loaded.id != 0 {
-            gfx.texture_set_filter(loaded, .BILINEAR)
+            gfx.texture_set_filter(loaded, .Bilinear)
             g_tile_variants[ti][count] = TileSpriteEntry{
                 tex = loaded,
                 src = { 0, 0, f32(loaded.width), f32(loaded.height) },
@@ -299,7 +308,7 @@ draw_tilemap :: proc() {
         }
         #partial switch tile_base(v) {
         case .Floor:
-            floor_src := gfx.Rect{ 0, 0, entry.src.width, entry.src.width * 0.5 }
+            floor_src := tile_half_src(entry)
             gfx.draw_texture_pro(entry.tex, floor_src, dst, {0, 0}, 0, gfx.WHITE)
 
             switch overlay_at(tx, ty) {
@@ -344,7 +353,7 @@ draw_tilemap :: proc() {
             wall_depth := ISO_TILE_W * 0.85
 
             floor_e   := _tile_variant(.Floor, tx, ty)
-            floor_src := gfx.Rect{ 0, 0, floor_e.src.width, floor_e.src.width * 0.5 }
+            floor_src := tile_half_src(floor_e)
             wall_top  := gfx.Rect{
                 center.x - ISO_TILE_W,
                 center.y - ISO_TILE_H - wall_depth,
@@ -392,7 +401,7 @@ draw_tilemap :: proc() {
                 u8(140 + int(wave * 30)),
                 255,
             }
-            water_src := gfx.Rect{ 0, 0, entry.src.width, entry.src.width * 0.5 }
+            water_src := tile_half_src(entry)
             gfx.draw_texture_pro(entry.tex, water_src, dst, {0, 0}, 0, tint)
             gfx.draw_triangle(top, right, center, gfx.Color{ 185, 225, 255, 22 })
             gfx.draw_line_v(top, right, gfx.Color{ 120, 180, 220, 120 })
@@ -403,7 +412,7 @@ draw_tilemap :: proc() {
         case .Pillar:
 
             floor_pe  := _tile_variant(.Floor, tx, ty)
-            floor_src := gfx.Rect{ 0, 0, floor_pe.src.width, floor_pe.src.width * 0.5 }
+            floor_src := tile_half_src(floor_pe)
             gfx.draw_texture_pro(floor_pe.tex, floor_src, dst, {0, 0}, 0,
                 gfx.Color{ 200, 196, 188, 255 })
 

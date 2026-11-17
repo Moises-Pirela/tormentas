@@ -26,8 +26,8 @@ hub_load_bg :: proc() {
     if g_hub_bg_loaded { return }
     tex := gfx.load_texture(HUB_BG_PATH)
     if tex.id > 0 {
-        gfx.texture_set_filter(tex, .BILINEAR)
-        gfx.texture_set_wrap(tex, .CLAMP)
+        gfx.texture_set_filter(tex, .Bilinear)
+        gfx.texture_set_wrap(tex, .Clamp)
         g_hub_bg_tex    = tex
         g_hub_bg_loaded = true
     }

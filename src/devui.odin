@@ -44,7 +44,9 @@ devui_ignore_char :: proc(r: rune) {
     if g_devui_ready { imrl.ignore_char_this_frame(&g_devui, r) }
 }
 
-devui_texture :: imrl.texture_ref
+devui_texture :: proc(t: gfx.Texture) -> im.TextureRef {
+    return imrl.texture_ref(t.id)
+}
 
 devui_apply_style :: proc() {
     im.StyleColorsDark()

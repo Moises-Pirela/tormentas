@@ -227,10 +227,8 @@ ui_draw :: proc(w: ^World) {
             l.dirty = false
         }
 
-        src  := gfx.Rect{ 0, f32(g_ui.rt_h), f32(g_ui.rt_w), -f32(g_ui.rt_h) }
-        dst  := gfx.Rect{ 0, 0, sw, sh }
         tint := gfx.Color{ 255, 255, 255, u8(l.alpha * 255) }
-        gfx.draw_texture_pro(l.rt.texture, src, dst, {0, 0}, 0, tint)
+        gfx.draw_target(l.rt, { 0, 0, sw, sh }, tint)
     }
 }
 

@@ -29,8 +29,6 @@ g_ui_scale: f32 = 1.0
 
 uis :: proc(base: f32) -> f32 { return math.round(base * g_ui_scale) }
 
-font_for :: proc(base_size: f32) -> gfx.Font { return g_font_body if base_size <= 14 else g_font }
-
 FONT_ID_TITLE :: u16(0)
 FONT_ID_BODY  :: u16(1)
 
@@ -319,18 +317,14 @@ draw_entity_inspect_hud :: proc(w: ^World) {
 FONT_SIZE :: i32(512)
 
 init_font :: proc() {
-    if file_exists(FONT_PATH) {
-        g_font = gfx.load_font(FONT_PATH, FONT_SIZE)
-        gfx.texture_gen_mipmaps(&g_font.texture)
-        gfx.texture_set_filter(g_font.texture, .TRILINEAR)
+    if f, ok := gfx.load_font(FONT_PATH, FONT_SIZE); ok {
+        g_font = f
     } else {
         g_font = gfx.font_default()
     }
 
-    if file_exists(FONT_PATH_BODY) {
-        g_font_body = gfx.load_font(FONT_PATH_BODY, FONT_SIZE)
-        gfx.texture_gen_mipmaps(&g_font_body.texture)
-        gfx.texture_set_filter(g_font_body.texture, .TRILINEAR)
+    if f, ok := gfx.load_font(FONT_PATH_BODY, FONT_SIZE); ok {
+        g_font_body = f
     } else {
         g_font_body = g_font
     }
@@ -340,8 +334,8 @@ init_font :: proc() {
 }
 
 shutdown_font :: proc() {
-    if file_exists(FONT_PATH)      { gfx.unload_font(g_font) }
-    if file_exists(FONT_PATH_BODY) { gfx.unload_font(g_font_body) }
+    gfx.unload_font(g_font)
+    if g_font_body.id != g_font.id { gfx.unload_font(g_font_body) }
     if g_hud_orb_frame.id != 0 { gfx.unload_texture(g_hud_orb_frame) }
     if g_hud_hp_icon.id   != 0 { gfx.unload_texture(g_hud_hp_icon) }
 }
@@ -463,7 +457,9 @@ clay_measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElement
     if font_size <= 0 {
         font_size = 12
     }
+    // Must match clay_renderer.odin's default, or measured widths are narrower than what is drawn.
     spacing := f32(config.letterSpacing)
+    if spacing <= 0 { spacing = 0.5 }
     raw_text := string(text.chars[:text.length])
     fnt := clay_font(config.fontId)
     lines := strings.split(raw_text, "\n")
@@ -1097,18 +1093,6 @@ InvLayout :: struct {
 
 g_inv: InvLayout
 
-PauseResolution :: struct { w, h: i32, label: cstring }
-
-PAUSE_RESOLUTIONS := [?]PauseResolution{
-    { 1280,  720, "1280 x 720"  },
-    { 1600,  900, "1600 x 900"  },
-    { 1920, 1080, "1920 x 1080" },
-    { 2560, 1440, "2560 x 1440" },
-}
-
-g_pause_res_idx: int
-g_borderless:    bool
-
 g_pause_quit_requested: bool
 
 @(private = "file")
@@ -1140,37 +1124,13 @@ pause_btn_h      :: proc() -> i32 { return i32(uis(PAUSE_BTN_H_BASE))       }
 
 g_rebind_idx: int = -1
 
-init_pause_menu :: proc() {
-    g_borderless = g_fullscreen
-}
+init_pause_menu :: proc() {}
 
-@(private = "file")
-_current_res_idx :: proc() -> int {
-    sw := gfx.screen_width()
-    sh := gfx.screen_height()
-    for r, i in PAUSE_RESOLUTIONS { if r.w == sw && r.h == sh { return i } }
-    return -1
-}
-
-@(private = "file")
-_step_resolution :: proc(dir: int) {
-    n   := len(PAUSE_RESOLUTIONS)
-    idx := _current_res_idx()
-    if idx < 0 { idx = g_pause_res_idx }
-    for _ in 0..<n {
-        idx = (idx + dir + n) % n
-        if platform_window_fits(PAUSE_RESOLUTIONS[idx].w, PAUSE_RESOLUTIONS[idx].h) { break }
-    }
-    g_pause_res_idx = idx
-    platform_set_window_size(PAUSE_RESOLUTIONS[idx].w, PAUSE_RESOLUTIONS[idx].h)
-    save_config()
-}
-
+// The window size is fixed at creation and follows the OS from there (decision D3), so the only
+// display setting left is the window mode. The current size is shown for reference.
 draw_display_setting_rows :: proc(prefix: string) {
-    g_borderless = g_fullscreen
     res_label := fmt.tprintf("%d x %d", gfx.screen_width(), gfx.screen_height())
-    rd := ui_stepper(fmt.tprintf("%sRes", prefix), string(t(.SETTINGS_RESOLUTION)), res_label, !g_fullscreen)
-    if rd != 0 { _step_resolution(rd) }
+    ui_stepper(fmt.tprintf("%sRes", prefix), string(t(.SETTINGS_RESOLUTION)), res_label, false)
 
     full_key := LocKey.SETTINGS_FULLSCREEN when ODIN_OS == .Darwin else LocKey.SETTINGS_BORDERLESS
     mode_label := t(full_key) if g_fullscreen else t(.SETTINGS_WINDOWED)
@@ -1179,14 +1139,8 @@ draw_display_setting_rows :: proc(prefix: string) {
     }
 }
 
-apply_resolution :: proc(idx: int) {
-    res := PAUSE_RESOLUTIONS[idx]
-    platform_set_window_size(res.w, res.h)
-}
-
 set_window_mode :: proc(fullscreen: bool) {
     platform_set_fullscreen(fullscreen)
-    g_borderless = fullscreen
     save_config()
 }
 
@@ -1549,7 +1503,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.target_end()
         return EntitySpriteEntry{
             tex     = rt.texture,
-            src     = { 0, 0, f32(size), -f32(size) },
+            src     = { 0, 0, f32(size), f32(size) },
             rt      = rt,
             from_rt = true,
         }
@@ -1566,7 +1520,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_rect( 8, 56,  48, 4, gfx.Color{ 48, 28, 10, 255})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     case "env_switch":
 
@@ -1578,7 +1532,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_circle(32, 14, 4, gfx.Color{210, 150, 60, 255})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     case "env_chest":
 
@@ -1591,7 +1545,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_rect(30, 38,  4,  4, gfx.Color{220, 188, 90, 255})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     case "env_crate":
 
@@ -1605,7 +1559,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_rect(30, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     case "env_lore_item":
 
@@ -1619,7 +1573,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_rect(19, 36, 18,  2, gfx.Color{120, 100,  60, 160})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     case "env_phonograph":
 
@@ -1638,7 +1592,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_ellipse(45, 10, 9, 4, gfx.Color{200, 160, 60, 160})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     case "env_key":
 
@@ -1651,7 +1605,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         gfx.draw_rect(36, 27,  4,  4, gfx.Color{200, 162, 48, 255})
         gfx.target_end()
         return EntitySpriteEntry{
-            tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
+            tex = rt.texture, src = {0, 0, f32(size), f32(size)}, rt = rt, from_rt = true,
         }
     }
 
@@ -1675,7 +1629,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
     gfx.target_end()
     return EntitySpriteEntry{
         tex     = rt.texture,
-        src     = { 0, 0, f32(size), -f32(size) },
+        src     = { 0, 0, f32(size), f32(size) },
         rt      = rt,
         from_rt = true,
     }
@@ -1695,7 +1649,7 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
 
     loaded := gfx.load_texture(cstring(&path_buf[0]))
     if loaded.id != 0 {
-        gfx.texture_set_filter(loaded, .BILINEAR)
+        gfx.texture_set_filter(loaded, .Bilinear)
         entry = EntitySpriteEntry{
             tex = loaded,
             src = { 0, 0, f32(loaded.width), f32(loaded.height) },
@@ -1707,6 +1661,28 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
     owned_key := strings.clone(key)
     g_entity_sprite_cache[owned_key] = entry
     return entry, true
+}
+
+// Builds every entity sprite that has no PNG, before the first frame.
+//
+// These fall back to art drawn into a render target. Built on demand, that would open a render
+// target inside another one (the sprite pass, or a camera block), which sokol cannot do: passes do
+// not nest (docs/BACKEND_SWAP_PLAN.md §1). Doing it up front also keeps the first frame that shows
+// a chest or a door from stuttering.
+prebuild_entity_sprites :: proc() {
+    buf: [64]u8
+    prebuild :: proc(buf: ^[64]u8, stem: string) {
+        if len(stem) == 0 || len(stem) >= len(buf) { return }
+        copy(buf[:], stem)
+        buf[len(stem)] = 0
+        get_or_load_entity_sprite(cstring(&buf[0]))
+    }
+    for stem in PLAYER_STEMS { prebuild(&buf, stem) }
+    for &def in g_entity_defs {
+        rc, has_rc := def.render_cfg.?
+        if !has_rc { continue }
+        prebuild(&buf, rc.sprite_name)
+    }
 }
 
 get_entity_sprite_tex :: proc(stem: string) -> (tex: gfx.Texture, src: gfx.Rect, ok: bool) {
@@ -2337,27 +2313,18 @@ sprite_ground_fraction :: proc(stem: string, frame_w, frame_h: int) -> f32 {
     ground := f32(1.0)
 
     path := fmt.tprintf("data/sprites/entities/%s.png", stem)
-    img  := gfx.load_image(strings.clone_to_cstring(path, context.temp_allocator))
-    if img.data != nil {
-        if img.format != .UNCOMPRESSED_R8G8B8A8 {
-            gfx.image_format(&img, .UNCOMPRESSED_R8G8B8A8)
-        }
+    if img, ok := gfx.load_image(strings.clone_to_cstring(path, context.temp_allocator)); ok {
+        defer gfx.unload_image(img)
         fw := min(frame_w, int(img.width))
         fh := min(frame_h, int(img.height))
-        if fw > 0 && fh > 0 && img.data != nil {
-            px     := ([^]u8)(img.data)
-            stride := int(img.width) * 4
-            scan: for y := fh - 1; y >= 0; y -= 1 {
-                row := y * stride
-                for x in 0 ..< fw {
-                    if px[row + x * 4 + 3] >= SPRITE_GROUND_ALPHA {
-                        ground = f32(y + 1) / f32(fh)
-                        break scan
-                    }
+        scan: for y := fh - 1; y >= 0; y -= 1 {
+            for x in 0 ..< fw {
+                if gfx.image_alpha_at(img, i32(x), i32(y)) >= SPRITE_GROUND_ALPHA {
+                    ground = f32(y + 1) / f32(fh)
+                    break scan
                 }
             }
         }
-        gfx.unload_image(img)
     }
 
     g_sprite_ground_cache[strings.clone(stem)] = ground

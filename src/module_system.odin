@@ -59,7 +59,7 @@ module_registry_init :: proc() {
         pcs  := strings.clone_to_cstring(path, context.temp_allocator)
         if file_exists(pcs) {
             def.tex = gfx.load_texture(pcs)
-            gfx.texture_set_filter(def.tex, .BILINEAR)
+            gfx.texture_set_filter(def.tex, .Bilinear)
         } else {
             fmt.eprintfln("[modules] missing image: %s", path)
         }

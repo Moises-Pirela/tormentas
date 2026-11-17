@@ -121,6 +121,10 @@ lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: gfx.C
         if len(s) == 0 { return }
         sb: [256]u8
         n := min(len(s), 255)
+        // Never split a UTF-8 sequence: when truncating, back off to a codepoint boundary.
+        if n < len(s) {
+            for n > 0 && (s[n] & 0xC0) == 0x80 { n -= 1 }
+        }
         copy(sb[:n], s[:n])
         sb[n] = 0
         wsz := gfx.measure_text(g_font_body, cstring(&sb[0]), fs, 0.5)

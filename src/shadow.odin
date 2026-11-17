@@ -45,14 +45,12 @@ draw_projected_sprite_shadow :: proc(
 
     iso_d := cam_world_to_view_xy(dir[0], dir[1])
 
-    tw := f32(tex.width)
-    th := f32(tex.height)
-    if tw <= 0 || th <= 0 { return }
+    if tex.width <= 0 || tex.height <= 0 { return }
 
-    u0 := src.x / tw
-    u1 := (src.x + src.width) / tw
-    v0 := src.y / th
-    v1 := (src.y + src.height) / th
+    uv0 := gfx.texture_uv(tex, src.x, src.y)
+    uv1 := gfx.texture_uv(tex, src.x + src.width, src.y + src.height)
+    u0, v0 := uv0.x, uv0.y
+    u1, v1 := uv1.x, uv1.y
     if flip_x { u0, u1 = u1, u0 }
 
     flip_winding := iso_d.y < 0
