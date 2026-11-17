@@ -19,6 +19,7 @@ package gfx
 import "base:runtime"
 import "core:c"
 import "core:fmt"
+import "core:math"
 import "core:os"
 import "core:strings"
 
@@ -613,7 +614,7 @@ _thick_line :: proc(a, b: Vec2, thick: f32, col: Color) {
     dx, dy := b.x - a.x, b.y - a.y
     len_sq := dx*dx + dy*dy
     if len_sq <= 0 { return }
-    inv := 1.0 / _sqrt(len_sq)
+    inv := 1.0 / math.sqrt(len_sq)
     nx, ny := -dy * inv * thick * 0.5, dx * inv * thick * 0.5
     sgl.begin_quads()
     sgl.v2f_c4b(a.x + nx, a.y + ny, col.r, col.g, col.b, col.a)
@@ -622,16 +623,6 @@ _thick_line :: proc(a, b: Vec2, thick: f32, col: Color) {
     sgl.v2f_c4b(a.x - nx, a.y - ny, col.r, col.g, col.b, col.a)
     sgl.end()
     _mark_drawn()
-}
-
-@(private)
-_sqrt :: proc(v: f32) -> f32 {
-    // core:math is not imported here to keep the backend's dependencies small.
-    x := v
-    if x <= 0 { return 0 }
-    g := x
-    for _ in 0..<12 { g = 0.5 * (g + x / g) }
-    return g
 }
 
 // raylib picked a segment count from the radius; match it so circles look the same.
@@ -690,22 +681,9 @@ _arc_fan :: proc(center: Vec2, radius, a0_deg, a1_deg: f32, segments: int, col: 
 
 @(private)
 _polar :: proc(center: Vec2, radius, deg: f32) -> Vec2 {
-    r := deg * 0.017453292
-    return { center.x + _cos(r) * radius, center.y + _sin(r) * radius }
+    r := math.to_radians(deg)
+    return { center.x + math.cos(r) * radius, center.y + math.sin(r) * radius }
 }
-
-@(private)
-_sin :: proc(x: f32) -> f32 {
-    // Minimal sine for circle tessellation: wrap to [-pi, pi] and use a 7th-order polynomial.
-    TAU :: 6.2831853
-    PI  :: 3.14159265
-    v := x
-    for v >  PI { v -= TAU }
-    for v < -PI { v += TAU }
-    v2 := v * v
-    return v * (1 - v2/6 + v2*v2/120 - v2*v2*v2/5040)
-}
-@(private) _cos :: proc(x: f32) -> f32 { return _sin(x + 1.57079633) }
 
 @(private)
 _b_draw_circle :: proc(x, y: i32, radius: f32, col: Color) {
@@ -736,8 +714,8 @@ _ellipse_fan :: proc(center: Vec2, rh, rv: f32, col: Color, outline: bool) {
     step := 360.0 / f32(n)
     prev := Vec2{ center.x + rh, center.y }
     for i in 1..=n {
-        a := step * f32(i) * 0.017453292
-        p := Vec2{ center.x + _cos(a) * rh, center.y + _sin(a) * rv }
+        a := math.to_radians(step * f32(i))
+        p := Vec2{ center.x + math.cos(a) * rh, center.y + math.sin(a) * rv }
         if outline { _thick_line(prev, p, 1, col) } else { _tri(center, prev, p, col) }
         prev = p
     }
@@ -784,7 +762,7 @@ _b_camera_begin :: proc(cam: Camera2D) {
     sgl.push_matrix()
     sgl.translate(cam.offset.x, cam.offset.y, 0)
     sgl.scale(cam.zoom, cam.zoom, 1)
-    if cam.rotation != 0 { sgl.rotate(cam.rotation * 0.017453292, 0, 0, 1) }
+    if cam.rotation != 0 { sgl.rotate(math.to_radians(cam.rotation), 0, 0, 1) }
     sgl.translate(-cam.target.x, -cam.target.y, 0)
 }
 @(private)
@@ -823,7 +801,7 @@ _b_draw_texture_pro :: proc(t: Texture, src, dst: Rect, origin: Vec2, rotation: 
     sgl.texture(t._h.view, _sampler_for(t))
     sgl.push_matrix()
     sgl.translate(dst.x, dst.y, 0)
-    if rotation != 0 { sgl.rotate(rotation * 0.017453292, 0, 0, 1) }
+    if rotation != 0 { sgl.rotate(math.to_radians(rotation), 0, 0, 1) }
     sgl.translate(-origin.x, -origin.y, 0)
     sgl.begin_quads()
     sgl.v2f_t2f_c4b(0,         0,          uv0.x, uv0.y, tint.r, tint.g, tint.b, tint.a)
