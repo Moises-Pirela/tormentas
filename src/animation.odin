@@ -177,7 +177,7 @@ anim_muzzle_world_position :: proc(w: ^World, id: int, position: [3]f32) -> (muz
     }
 
     px_to_world := vis.world_size / f32(def.frame_width)
-    iso_offset := iso_to_world_xy(dx * px_to_world, dy * px_to_world)
+    iso_offset := cam_view_to_world_xy(dx * px_to_world, dy * px_to_world)
     return {
         position[0] + iso_offset.x,
         position[1] + iso_offset.y,

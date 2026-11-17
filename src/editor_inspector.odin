@@ -53,11 +53,11 @@ ed_insp_draw_selection_highlight :: proc() {
     if g_ed_sel.kind == .None { return }
     tx := int(g_ed_sel.tx)
     ty := int(g_ed_sel.ty)
-    center, top, right, bottom, left := iso_tile_bounds(tx, ty)
+    center, top, right, bottom, left := cam_tile_bounds(tx, ty)
 
     pulse := 0.5 + 0.5 * math.sin_f32(f32(gfx.time()) * 5.0)
     alpha := u8(130 + u8(90.0 * pulse))
-    lw    := 2.2 / g_camera.zoom
+    lw    := 2.2 / cam_zoom()
 
     gfx.draw_triangle(top, right, center,    gfx.Color{60, 160, 240, 20})
     gfx.draw_triangle(right, bottom, center, gfx.Color{60, 160, 240, 20})

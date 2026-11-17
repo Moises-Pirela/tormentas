@@ -6,7 +6,7 @@ GREYBOX_Z :: f32(0.75)
 
 @(private = "file")
 gb_p :: proc(wx, wy, h: f32) -> [2]f32 {
-    iso := world_to_iso_xy(wx, wy)
+    iso := cam_world_to_view_xy(wx, wy)
     return { iso.x, iso.y - h * GREYBOX_Z }
 }
 

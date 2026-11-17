@@ -67,8 +67,8 @@ ed_entity_pick :: proc(screen: gfx.Vec2) -> int {
     best_d2  := ENTITY_PICK_R * ENTITY_PICK_R
 
     for &e, i in g_level_data.entities {
-        iso := world_to_iso_xy(e.position[0], e.position[1])
-        p   := gfx.world_to_screen({iso.x, iso.y}, g_camera^)
+        iso := cam_world_to_view_xy(e.position[0], e.position[1])
+        p   := cam_view_to_screen({iso.x, iso.y})
         dx  := p.x - screen.x
         dy  := p.y - screen.y
         d2  := dx*dx + dy*dy
@@ -119,7 +119,7 @@ ed_entity_respawn_world :: proc() {
 
 @(private = "file")
 gizmo_handle_screen :: proc(origin: gfx.Vec2, axis: [2]f32) -> gfx.Vec2 {
-    iso := world_to_iso_xy(axis[0], axis[1])
+    iso := cam_world_to_view_xy(axis[0], axis[1])
     d   := gfx.Vec2{iso.x, iso.y}
     l   := math.sqrt(d.x*d.x + d.y*d.y)
     if l <= 0.0001 { return origin }
@@ -127,8 +127,8 @@ gizmo_handle_screen :: proc(origin: gfx.Vec2, axis: [2]f32) -> gfx.Vec2 {
 }
 
 ed_gizmo_origin_screen :: proc(e: ^LevelEntity) -> gfx.Vec2 {
-    iso := world_to_iso_xy(e.position[0], e.position[1])
-    return gfx.world_to_screen({iso.x, iso.y}, g_camera^)
+    iso := cam_world_to_view_xy(e.position[0], e.position[1])
+    return cam_view_to_screen({iso.x, iso.y})
 }
 
 @(private = "file")
@@ -167,7 +167,7 @@ ed_gizmo_update :: proc(mouse: gfx.Vec2) {
     if g_gz_axis == .None { g_gz_hover = _gizmo_hit(e, mouse) }
 
     if gfx.mouse_pressed(.LEFT) && g_gz_hover != .None {
-        world := screen_to_world_cartesian(mouse)
+        world := cam_screen_to_world(mouse)
         g_gz_grab  = { e.position[0] - world.x, e.position[1] - world.y }
         g_gz_start = e.position
         g_gz_axis  = g_gz_hover
@@ -183,7 +183,7 @@ ed_gizmo_update :: proc(mouse: gfx.Vec2) {
 
     if g_gz_axis == .None || !gfx.mouse_down(.LEFT) { return }
 
-    world := screen_to_world_cartesian(mouse)
+    world := cam_screen_to_world(mouse)
     want  := [2]f32{ world.x + g_gz_grab[0], world.y + g_gz_grab[1] }
 
     if ed_gizmo_snap_active() {

@@ -236,7 +236,7 @@ draw_stash_world :: proc(w: ^World) {
     fs := f32(10)
     sz := gfx.measure_text(g_font_body, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(gfx.time() * 4.0)) * 45))
-    p := world_to_iso_xy(pos[0], pos[1])
+    p := cam_world_to_view_xy(pos[0], pos[1])
     gfx.draw_text(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
         fs, 0.5, gfx.Color{ 230, 190, 120, pulse })

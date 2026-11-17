@@ -22,9 +22,9 @@ collect_local_input :: proc() -> p2p.InputFrame {
         screen_dir[0] /= mag
         screen_dir[1] /= mag
     }
-    f.move = screen_dir_to_world_dir(screen_dir)
+    f.move = cam_dir_to_world(screen_dir)
 
-    mp    := screen_to_world_cartesian(gfx.mouse_position())
+    mp    := cam_screen_to_world(gfx.mouse_position())
     f.aim  = { mp.x, mp.y }
 
     if gfx.mouse_down(.LEFT) && !devui_wants_mouse() { f.actions += {.Fire}     }
@@ -200,5 +200,5 @@ camera_follow_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if !world_is_valid(w, w.player_id) { return }
 
     pos := comp_get(w, w.player_id, .Transform, TransformComp).position
-    camera_set_target_world(pos[0], pos[1])
+    cam_set_target_world(pos[0], pos[1])
 }

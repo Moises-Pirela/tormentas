@@ -50,7 +50,7 @@ draw_quest_board_world :: proc(w: ^World) {
         dx      := nt.position[0] - player_pos[0]
         dy      := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
-        pos     := world_to_iso_xy(nt.position[0], nt.position[1])
+        pos     := cam_world_to_view_xy(nt.position[0], nt.position[1])
 
         nfs := f32(10)
         lbl := t(.QUEST_BOARD_NPC_NAME)

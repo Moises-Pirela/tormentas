@@ -768,7 +768,7 @@ tick_footsteps :: proc(w: ^World, dt: f32) {
         }
 
         p := comp_get(w, pid, .Transform, TransformComp).position
-        iso := world_to_iso_xy(p[0], p[1])
+        iso := cam_world_to_view_xy(p[0], p[1])
         cur := [2]f32{ iso.x, iso.y }
 
         if !g_step_primed[slot] {

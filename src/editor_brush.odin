@@ -49,7 +49,7 @@ ed_brush_unit :: proc() -> int {
 }
 
 ed_mouse_cell :: proc() -> [2]int {
-    wp := screen_to_world_cartesian(gfx.mouse_position())
+    wp := cam_screen_to_world(gfx.mouse_position())
     u  := f32(ed_brush_unit())
     return { int(math.floor(wp.x / u)), int(math.floor(wp.y / u)) }
 }
@@ -145,7 +145,7 @@ ed_brush_label_full :: proc() -> (name: string, col: gfx.Color) {
 
 @(private = "file")
 _iso_quad :: proc(x0, y0, x1, y1: f32) -> [4]gfx.Vec2 {
-    return { world_to_iso_xy(x0, y0), world_to_iso_xy(x1, y0), world_to_iso_xy(x1, y1), world_to_iso_xy(x0, y1) }
+    return { cam_world_to_view_xy(x0, y0), cam_world_to_view_xy(x1, y0), cam_world_to_view_xy(x1, y1), cam_world_to_view_xy(x0, y1) }
 }
 
 @(private = "file")
@@ -166,7 +166,7 @@ ed_brush_cursor_visible :: proc() -> bool {
 
 draw_editor_brush_world :: proc() {
     if !ed_brush_cursor_visible() { return }
-    lw   := 1.0 / g_camera.zoom
+    lw   := 1.0 / cam_zoom()
     unit := ed_brush_unit()
     u    := f32(unit)
     cell := ed_mouse_cell()
@@ -186,14 +186,14 @@ draw_editor_brush_world :: proc() {
     q := _iso_quad(f32(fx) * u, f32(fy) * u, f32(fx + n) * u, f32(fy + n) * u)
     _fill_quad(q, gfx.Color{ col.r, col.g, col.b, fill_a })
 
-    if n > 1 && f32(unit) * g_camera.zoom >= 6 {
+    if n > 1 && f32(unit) * cam_zoom() >= 6 {
         inner := gfx.Color{ 0, 0, 0, 90 }
         for i in 1..<n {
-            a := world_to_iso_xy(f32(fx + i) * u, f32(fy) * u)
-            b := world_to_iso_xy(f32(fx + i) * u, f32(fy + n) * u)
+            a := cam_world_to_view_xy(f32(fx + i) * u, f32(fy) * u)
+            b := cam_world_to_view_xy(f32(fx + i) * u, f32(fy + n) * u)
             gfx.draw_line_ex(a, b, lw, inner)
-            c := world_to_iso_xy(f32(fx) * u, f32(fy + i) * u)
-            d := world_to_iso_xy(f32(fx + n) * u, f32(fy + i) * u)
+            c := cam_world_to_view_xy(f32(fx) * u, f32(fy + i) * u)
+            d := cam_world_to_view_xy(f32(fx + n) * u, f32(fy + i) * u)
             gfx.draw_line_ex(c, d, lw, inner)
         }
     }
@@ -226,7 +226,7 @@ ed_screen_label :: proc(dl: ^im.DrawList, pos: im.Vec2, text: cstring, col: gfx.
 }
 
 ed_world_to_screen :: proc(wx, wy: f32) -> im.Vec2 {
-    p := gfx.world_to_screen(world_to_iso_xy(wx, wy), g_camera^)
+    p := cam_world_to_screen_xy(wx, wy)
     return { p.x, p.y }
 }
 
@@ -275,7 +275,7 @@ draw_editor_overlay_screen :: proc() {
 }
 
 ed_place_preview :: proc(dl: ^im.DrawList) {
-    wp  := screen_to_world_cartesian(gfx.mouse_position())
+    wp  := cam_screen_to_world(gfx.mouse_position())
     pos := [2]f32{ wp.x, wp.y }
     if g_ed_snap {
         pos[0] = math.round(wp.x / f32(TILE_SIZE)) * f32(TILE_SIZE)

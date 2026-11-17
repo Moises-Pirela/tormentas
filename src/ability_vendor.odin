@@ -108,7 +108,7 @@ draw_ability_vendor_world :: proc(w: ^World) {
         dy   := nt.position[1] - player_pos[1]
         dist_sq := dx*dx + dy*dy
 
-        pos  := world_to_iso_xy(nt.position[0], nt.position[1])
+        pos  := cam_world_to_view_xy(nt.position[0], nt.position[1])
         rc   := comp_get(w, nid, .RenderConfig, RenderConfigComp)
         name := loc_lookup(render_config_name_cstr(rc))
         nfs  := f32(10)

@@ -20,7 +20,6 @@ TICK_DT   :: f32(1.0 / TICK_RATE)
 
 MAX_CATCHUP_TICKS :: 5
 
-g_camera:            ^gfx.Camera2D
 
 g_session:    p2p.Session
 
@@ -292,13 +291,13 @@ update_playing :: proc(dt: f32) {
         sh       := f32(gfx.screen_height())
         inv_open := ui_has(.Inventory) || ui_has(.Shop) || ui_has(.Stash)
         if inv_open {
-            g_camera.offset = { (sw - f32(g_inv.panel_w)) * 0.5, sh * 0.5 }
+            cam_set_offset({ (sw - f32(g_inv.panel_w)) * 0.5, sh * 0.5 })
         } else {
-            g_camera.offset = { sw * 0.5, sh * 0.5 }
+            cam_set_offset({ sw * 0.5, sh * 0.5 })
         }
     }
     if !g_editor_mode {
-        g_camera.zoom = f32(gfx.screen_height()) / 1080.0
+        cam_set_zoom(f32(gfx.screen_height()) / 1080.0)
     }
 
     if !g_sim_alive { return }
@@ -513,7 +512,7 @@ draw_playing :: proc() {
 
     gfx.target_begin(g_world_rt)
     gfx.clear(gfx.BLANK)
-    gfx.camera_begin(g_camera^)
+    cam_begin()
     if g_hub_active {
         draw_hub_background()
     } else if len(g_level_data.modules) > 0 {
@@ -526,21 +525,21 @@ draw_playing :: proc() {
     }
     draw_entities(w, .WorldFX)
     draw_shop_world(w)
-    gfx.camera_end()
+    cam_end()
     gfx.target_end()
 
     draw_directional_world_composite()
 
-    gfx.camera_begin(g_camera^)
+    cam_begin()
     draw_entity_sprite_shadows(w)
     draw_player_projected_shadow(w)
-    gfx.camera_end()
+    cam_end()
 
     gfx.target_begin(g_sprite_rt)
     gfx.clear(gfx.BLANK)
-    gfx.camera_begin(g_camera^)
+    cam_begin()
     draw_entities(w, .Sprite)
-    gfx.camera_end()
+    cam_end()
     gfx.target_end()
 
     draw_directional_sprite_composite(w)
@@ -549,7 +548,7 @@ draw_playing :: proc() {
     draw_world_god_rays()
     if !g_editor_mode { draw_fog_and_lights(w) }
 
-    gfx.camera_begin(g_camera^)
+    cam_begin()
     draw_editor_cell_overlay()
     draw_editor_world()
     draw_editor_brush_world()
@@ -571,7 +570,7 @@ draw_playing :: proc() {
     draw_traps(w)
     update_draw_dmg_numbers(gfx.frame_time())
     if !g_editor_mode { draw_stealth_indicators(w) }
-    gfx.camera_end()
+    cam_end()
 
     if !g_editor_mode {
         update_entity_hover(w)
@@ -665,13 +664,7 @@ main :: proc() {
 
     init_pause_menu()
 
-    camera := gfx.Camera2D{
-        offset   = { SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0 },
-        target   = { 0, 0 },
-        rotation = 0,
-        zoom     = CAMERA_ZOOM,
-    }
-    g_camera = &camera
+    cam_init()
 
     tilemap_init()
     defer tilemap_destroy()

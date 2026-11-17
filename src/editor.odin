@@ -134,7 +134,7 @@ update_editor :: proc(dt: f32) {
     if !g_ed_inited {
         g_ed_inited   = true
         g_ed_zoom     = 1.0
-        g_camera.zoom = ed_base_zoom() * g_ed_zoom
+        cam_set_zoom(ed_base_zoom() * g_ed_zoom)
         if !g_ed_meta_loaded {
             ed_meta_load()
             g_ed_meta_loaded = true
@@ -166,7 +166,7 @@ update_editor :: proc(dt: f32) {
         if !ed_gizmo_dragging() && gfx.mouse_pressed(.LEFT) && !over_ui {
             switch g_ed_tool {
             case .Place:
-                ed_entity_place(screen_to_world_cartesian(mp))
+                ed_entity_place(cam_screen_to_world(mp))
             case .Select:
                 ed_entity_capture()
                 g_ed_sel_entity = ed_entity_pick(mp)
@@ -224,7 +224,7 @@ update_editor :: proc(dt: f32) {
     if wheel != 0 && !over_ui {
         g_ed_zoom = clamp(g_ed_zoom * (1.0 + wheel * 0.12), 0.10, 6.0)
     }
-    g_camera.zoom = ed_base_zoom() * g_ed_zoom
+    cam_set_zoom(ed_base_zoom() * g_ed_zoom)
 
     PAN :: f32(400)
     pan_screen: [2]f32
@@ -241,17 +241,15 @@ update_editor :: proc(dt: f32) {
     }
     pan_mult := f32(1.8) if gfx.key_down(.LEFT_SHIFT) || gfx.key_down(.RIGHT_SHIFT) else f32(1.0)
     spd := PAN / g_ed_zoom * pan_mult
-    g_camera.target.x += pan_screen[0] * spd * dt
-    g_camera.target.y += pan_screen[1] * spd * dt
+    cam_pan_view({ pan_screen[0] * spd * dt, pan_screen[1] * spd * dt })
 
     if gfx.mouse_down(.MIDDLE) && !over_ui {
         d := gfx.mouse_delta()
-        g_camera.target.x -= d.x / g_camera.zoom
-        g_camera.target.y -= d.y / g_camera.zoom
+        cam_pan_view({ -d.x / cam_zoom(), -d.y / cam_zoom() })
     }
 
     if !over_ui && (g_ed_tool == .Paint || g_ed_tool == .Erase) {
-        world_mp := screen_to_world_cartesian(mp)
+        world_mp := cam_screen_to_world(mp)
         tx, ty   := world_to_tile(world_mp.x, world_mp.y)
 
         if g_ed_brush == .Module && g_ed_tool == .Paint && !g_hub_active {
@@ -353,10 +351,10 @@ ed_visible_world_aabb :: proc() -> (x0, y0, x1, y1: f32) {
     sw := f32(gfx.screen_width())
     sh := f32(gfx.screen_height())
     c  := [4]gfx.Vec2{
-        screen_to_world_cartesian({ 0,  0}),
-        screen_to_world_cartesian({sw,  0}),
-        screen_to_world_cartesian({sw, sh}),
-        screen_to_world_cartesian({ 0, sh}),
+        cam_screen_to_world({ 0,  0}),
+        cam_screen_to_world({sw,  0}),
+        cam_screen_to_world({sw, sh}),
+        cam_screen_to_world({ 0, sh}),
     }
     x0, y0, x1, y1 = c[0].x, c[0].y, c[0].x, c[0].y
     for i in 1..<4 {
@@ -720,10 +718,10 @@ draw_editor_world :: proc() {
 
     sw := f32(gfx.screen_width())
     sh := f32(gfx.screen_height())
-    lw := 1.0 / g_camera.zoom
+    lw := 1.0 / cam_zoom()
 
-    tl := screen_to_world_cartesian({0, 0})
-    br := screen_to_world_cartesian({sw, sh})
+    tl := cam_screen_to_world({0, 0})
+    br := cam_screen_to_world({sw, sh})
 
     tx0 := int(math.floor(tl.x / f32(TILE_SIZE))) - 1
     ty0 := int(math.floor(tl.y / f32(TILE_SIZE))) - 1
@@ -737,7 +735,7 @@ draw_editor_world :: proc() {
         half_ch := f32(g_ed_grid_rows) * f32(TILE_SIZE) * 0.5
         num_x   := max(1, int(f32(g_ed_grid_cols) * f32(TILE_SIZE) / cs))
         num_y   := max(1, int(f32(g_ed_grid_rows) * f32(TILE_SIZE) / cs))
-        px       := cs * g_camera.zoom
+        px       := cs * cam_zoom()
         fade     := clamp((px - 4) / 14, 0, 1)
         cell_col := gfx.Color{0, 230, 205, u8(18 + 52 * fade)}
         tile_col := gfx.Color{0, 255, 220, 120}
@@ -752,7 +750,7 @@ draw_editor_world :: proc() {
             for gx in gx0..=gx1 {
                 wx := -half_cw + f32(gx) * cs
                 major := tile_step > 1 && gx % tile_step == 0
-                gfx.draw_line_ex(world_to_iso_xy(wx, wy_a), world_to_iso_xy(wx, wy_b), lw * (1.6 if major else 1), tile_col if major else cell_col)
+                gfx.draw_line_ex(cam_world_to_view_xy(wx, wy_a), cam_world_to_view_xy(wx, wy_b), lw * (1.6 if major else 1), tile_col if major else cell_col)
             }
 
             wx_a := -half_cw + f32(gx0) * cs
@@ -760,13 +758,13 @@ draw_editor_world :: proc() {
             for gy in gy0..=gy1 {
                 wy := -half_ch + f32(gy) * cs
                 major := tile_step > 1 && gy % tile_step == 0
-                gfx.draw_line_ex(world_to_iso_xy(wx_a, wy), world_to_iso_xy(wx_b, wy), lw * (1.6 if major else 1), tile_col if major else cell_col)
+                gfx.draw_line_ex(cam_world_to_view_xy(wx_a, wy), cam_world_to_view_xy(wx_b, wy), lw * (1.6 if major else 1), tile_col if major else cell_col)
             }
         }
         if g_ed_grid_visible {
             corners := [4]gfx.Vec2{
-                world_to_iso_xy(-half_cw, -half_ch), world_to_iso_xy(half_cw, -half_ch),
-                world_to_iso_xy( half_cw,  half_ch), world_to_iso_xy(-half_cw,  half_ch),
+                cam_world_to_view_xy(-half_cw, -half_ch), cam_world_to_view_xy(half_cw, -half_ch),
+                cam_world_to_view_xy( half_cw,  half_ch), cam_world_to_view_xy(-half_cw,  half_ch),
             }
             for i in 0..<4 {
                 gfx.draw_line_ex(corners[i], corners[(i+1)%4], lw * 2, bnd_col)
@@ -775,7 +773,7 @@ draw_editor_world :: proc() {
 
     } else {
         if g_ed_grid_visible {
-            grid_col := gfx.Color{150, 140, 100, u8(40 + 50 * clamp((f32(TILE_SIZE) * g_camera.zoom - 6) / 20, 0, 1))}
+            grid_col := gfx.Color{150, 140, 100, u8(40 + 50 * clamp((f32(TILE_SIZE) * cam_zoom() - 6) / 20, 0, 1))}
             ts       := f32(TILE_SIZE)
 
             for gy in ty0..=ty1 {
@@ -786,8 +784,8 @@ draw_editor_world :: proc() {
                     for run + 1 <= tx1 && tile_exists(run + 1, gy) { run += 1 }
                     ax := f32(gx) * ts;        bx := f32(run + 1) * ts
                     ay := f32(gy) * ts;        by := f32(gy + 1) * ts
-                    gfx.draw_line_ex(world_to_iso_xy(ax, ay), world_to_iso_xy(bx, ay), lw, grid_col)
-                    gfx.draw_line_ex(world_to_iso_xy(ax, by), world_to_iso_xy(bx, by), lw, grid_col)
+                    gfx.draw_line_ex(cam_world_to_view_xy(ax, ay), cam_world_to_view_xy(bx, ay), lw, grid_col)
+                    gfx.draw_line_ex(cam_world_to_view_xy(ax, by), cam_world_to_view_xy(bx, by), lw, grid_col)
                     gx = run + 1
                 }
             }
@@ -800,8 +798,8 @@ draw_editor_world :: proc() {
                     for run + 1 <= ty1 && tile_exists(gx, run + 1) { run += 1 }
                     ax := f32(gx) * ts;        bx := f32(gx + 1) * ts
                     ay := f32(gy) * ts;        by := f32(run + 1) * ts
-                    gfx.draw_line_ex(world_to_iso_xy(ax, ay), world_to_iso_xy(ax, by), lw, grid_col)
-                    gfx.draw_line_ex(world_to_iso_xy(bx, ay), world_to_iso_xy(bx, by), lw, grid_col)
+                    gfx.draw_line_ex(cam_world_to_view_xy(ax, ay), cam_world_to_view_xy(ax, by), lw, grid_col)
+                    gfx.draw_line_ex(cam_world_to_view_xy(bx, ay), cam_world_to_view_xy(bx, by), lw, grid_col)
                     gy = run + 1
                 }
             }
@@ -842,7 +840,7 @@ draw_editor_world :: proc() {
         anchor_ids := world_query(&g_sim.world, query_mask(.SpawnAnchor, .Transform))
         for id in anchor_ids {
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
-            ip := world_to_iso_xy(p[0], p[1])
+            ip := cam_world_to_view_xy(p[0], p[1])
             gfx.draw_circle_v(ip, cr, gfx.Color{190, 60, 60, 220})
             gfx.draw_circle_v(ip, cr * 0.65, gfx.Color{0, 0, 0, 100})
             lsz := gfx.measure_text(g_font, "Sp", fs, 0.5)
@@ -857,8 +855,8 @@ draw_editor_world :: proc() {
             le := comp_get(&g_sim.world, id, .LevelExit, LevelExitComp)
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             etx, ety := world_to_tile(p[0], p[1])
-            center, top, right, bottom, left := iso_tile_bounds(etx, ety)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{30, 140, 60, 80})
+            center, top, right, bottom, left := cam_tile_bounds(etx, ety)
+            cam_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{30, 140, 60, 80})
             gfx.draw_line_ex(top, right, lw * 2.5, EXIT_COL)
             gfx.draw_line_ex(right, bottom, lw * 2.5, EXIT_COL)
             gfx.draw_line_ex(bottom, left, lw * 2.5, EXIT_COL)
@@ -877,7 +875,7 @@ draw_editor_world :: proc() {
     for npc in g_level_data.npcs {
         wx := f32(int(npc.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(npc.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
         col := gfx.Color{212, 190, 92, 220}
         label := cstring("S")
         if npc.npc_type == .MutationWorkbench {
@@ -898,7 +896,7 @@ draw_editor_world :: proc() {
         for id in light_ids {
             pl := comp_get(&g_sim.world, id, .PointLight, PointLightComp)
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
-            ip := world_to_iso_xy(p[0], p[1])
+            ip := cam_world_to_view_xy(p[0], p[1])
 
             gfx.draw_circle_v(ip, cr * 1.2, gfx.Color{u8(pl.color[0]), u8(pl.color[1]), u8(pl.color[2]), 60})
             gfx.draw_circle_v(ip, cr * 0.7, LIGHT_COL)
@@ -914,7 +912,7 @@ draw_editor_world :: proc() {
     for b in g_level_data.barrels {
         wx := f32(int(b.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
         is_fire := b.btype == 0
         body_col  := gfx.Color{200,  72,  18, 220} if is_fire else gfx.Color{ 28, 100, 210, 220}
         ring_col  := gfx.Color{240, 120,  30, 200} if is_fire else gfx.Color{ 70, 160, 255, 200}
@@ -949,7 +947,7 @@ draw_editor_world :: proc() {
     for s in g_level_data.switches {
         wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
 
         gfx.draw_rect_rec({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
             gfx.Color{LEVER_COL.r, LEVER_COL.g, LEVER_COL.b, 60})
@@ -973,7 +971,7 @@ draw_editor_world :: proc() {
     for c in g_level_data.containers {
         wx := f32(int(c.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(c.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
         col: gfx.Color
         lbl: cstring
         switch c.kind {
@@ -1002,7 +1000,7 @@ draw_editor_world :: proc() {
     for li in g_level_data.lore_items {
         wx := f32(int(li.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(li.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
 
         pw := ts * 0.22
         ph := ts * 0.28
@@ -1034,7 +1032,7 @@ draw_editor_world :: proc() {
     for ph in g_level_data.phonographs {
         wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
 
         gfx.draw_ellipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, gfx.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
         gfx.draw_ellipse_lines(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, PHONO_COL)
@@ -1060,7 +1058,7 @@ draw_editor_world :: proc() {
     for kp in g_level_data.key_pickups {
         wx := f32(int(kp.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
-        ip := world_to_iso_xy(wx, wy)
+        ip := cam_world_to_view_xy(wx, wy)
 
         gfx.draw_circle_v({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10,
             gfx.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 50})
@@ -1093,8 +1091,8 @@ draw_editor_world :: proc() {
         for id in ps_ids {
             p := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             ptx, pty := world_to_tile(p[0], p[1])
-            center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{200, 160, 30, 70})
+            center, top, right, bottom, left := cam_tile_bounds(ptx, pty)
+            cam_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{200, 160, 30, 70})
             gfx.draw_line_ex(top, right, lw * 2.5, gfx.Color{255, 200, 50, 220})
             gfx.draw_line_ex(right, bottom, lw * 2.5, gfx.Color{255, 200, 50, 220})
             gfx.draw_line_ex(bottom, left, lw * 2.5, gfx.Color{255, 200, 50, 220})
@@ -1176,7 +1174,7 @@ draw_editor_cell_overlay :: proc() {
         gx0, gy0, gx1, gy1 := ed_grid_visible_range(half_cw, half_ch, cs, num_x, num_y)
 
         step := 1
-        if px := cs * g_camera.zoom; px > 0 {
+        if px := cs * cam_zoom(); px > 0 {
             step = max(1, int(math.ceil(4.0 / px)))
         }
 
@@ -1195,8 +1193,8 @@ draw_editor_cell_overlay :: proc() {
                 wy0 := -half_ch + f32(gy)             * cs
                 wy1 := -half_ch + f32(min(gy+step, gy1)) * cs
                 cell_fill(
-                    world_to_iso_xy(wx0, wy0), world_to_iso_xy(wx1, wy0),
-                    world_to_iso_xy(wx1, wy1), world_to_iso_xy(wx0, wy1), col,
+                    cam_world_to_view_xy(wx0, wy0), cam_world_to_view_xy(wx1, wy0),
+                    cam_world_to_view_xy(wx1, wy1), cam_world_to_view_xy(wx0, wy1), col,
                 )
                 gx = run
             }
@@ -1212,10 +1210,10 @@ draw_editor_cell_overlay :: proc() {
             else                                     { continue }
             wx := f32(k[0]) * cs
             wy := f32(k[1]) * cs
-            top    := world_to_iso_xy(wx,      wy)
-            right  := world_to_iso_xy(wx + cs, wy)
-            bottom := world_to_iso_xy(wx + cs, wy + cs)
-            left   := world_to_iso_xy(wx,      wy + cs)
+            top    := cam_world_to_view_xy(wx,      wy)
+            right  := cam_world_to_view_xy(wx + cs, wy)
+            bottom := cam_world_to_view_xy(wx + cs, wy + cs)
+            left   := cam_world_to_view_xy(wx,      wy + cs)
             cell_fill(top, right, bottom, left, col)
         }
     }

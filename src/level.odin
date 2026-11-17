@@ -1066,7 +1066,7 @@ spawn_players :: proc(w: ^World) {
     netcode_predictor_init()
 
     if ps[0] != 0 || ps[1] != 0 {
-        g_camera.target = { ps[0], ps[1] }
+        cam_set_target_view({ ps[0], ps[1] })
     }
 }
 

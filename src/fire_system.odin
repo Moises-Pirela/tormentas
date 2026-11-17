@@ -516,7 +516,7 @@ draw_barrels :: proc() {
         if !world_has_component(w, id, .Transform)     { continue }
 
         tr  := comp_get(w, id, .Transform, TransformComp)
-        iso := world_to_iso_xy(tr.position[0], tr.position[1])
+        iso := cam_world_to_view_xy(tr.position[0], tr.position[1])
         ix  := i32(iso.x)
         iy  := i32(iso.y)
 

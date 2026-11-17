@@ -21,8 +21,7 @@ tick_camera_shake :: proc(dt: f32) {
     noise_x := math.sin(t * 71.3) * math.cos(t * 33.7)
     noise_y := math.sin(t * 53.1) * math.cos(t * 47.9)
 
-    g_camera.offset.x += noise_x * shake * SHAKE_MAX_OFFSET
-    g_camera.offset.y += noise_y * shake * SHAKE_MAX_OFFSET
+    cam_nudge_offset({ noise_x * shake * SHAKE_MAX_OFFSET, noise_y * shake * SHAKE_MAX_OFFSET })
 
     g_cam_trauma = max(g_cam_trauma - SHAKE_TRAUMA_DECAY * dt, 0)
 }

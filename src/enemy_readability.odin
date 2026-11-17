@@ -93,12 +93,12 @@ _tri :: proc(a, b, c: gfx.Vec2, col: gfx.Color) {
 
 draw_world_sector :: proc(center: gfx.Vec2, radius, angle, half_spread: f32, col: gfx.Color) {
     SEG :: 14
-    c := world_to_iso_v(center)
-    prev := world_to_iso_v({ center.x + math.cos(angle - half_spread) * radius,
+    c := cam_world_to_view(center)
+    prev := cam_world_to_view({ center.x + math.cos(angle - half_spread) * radius,
                              center.y + math.sin(angle - half_spread) * radius })
     for i in 1..=SEG {
         a  := angle - half_spread + 2 * half_spread * f32(i) / SEG
-        nx := world_to_iso_v({ center.x + math.cos(a) * radius, center.y + math.sin(a) * radius })
+        nx := cam_world_to_view({ center.x + math.cos(a) * radius, center.y + math.sin(a) * radius })
         _tri(c, prev, nx, col)
         prev = nx
     }
@@ -106,14 +106,14 @@ draw_world_sector :: proc(center: gfx.Vec2, radius, angle, half_spread: f32, col
 
 draw_world_sector_outline :: proc(center: gfx.Vec2, radius, angle, half_spread, thick: f32, col: gfx.Color) {
     SEG :: 14
-    c := world_to_iso_v(center)
-    first := world_to_iso_v({ center.x + math.cos(angle - half_spread) * radius,
+    c := cam_world_to_view(center)
+    first := cam_world_to_view({ center.x + math.cos(angle - half_spread) * radius,
                               center.y + math.sin(angle - half_spread) * radius })
     gfx.draw_line_ex(c, first, thick, col)
     prev := first
     for i in 1..=SEG {
         a  := angle - half_spread + 2 * half_spread * f32(i) / SEG
-        nx := world_to_iso_v({ center.x + math.cos(a) * radius, center.y + math.sin(a) * radius })
+        nx := cam_world_to_view({ center.x + math.cos(a) * radius, center.y + math.sin(a) * radius })
         gfx.draw_line_ex(prev, nx, thick, col)
         prev = nx
     }
@@ -159,8 +159,8 @@ draw_enemy_telegraphs :: proc(w: ^World) {
 
 @(private = "file")
 _hovered :: proc(o: EnemyOverlayAnchor, bar_w: f32) -> bool {
-    m   := gfx.screen_to_world(gfx.mouse_position(), g_camera^)
-    iso := world_to_iso_v(o.pos)
+    m   := cam_screen_to_view(gfx.mouse_position())
+    iso := cam_world_to_view(o.pos)
     hw  := max(bar_w, o.base_size * 0.5) * 0.5 + 6
     return m.x >= iso.x - hw && m.x <= iso.x + hw && m.y >= iso.y - o.top - 10 && m.y <= iso.y + 8
 }
@@ -199,7 +199,7 @@ draw_enemy_health_bars :: proc(w: ^World, dt: f32) {
             }
         }
 
-        iso := world_to_iso_v(o.pos)
+        iso := cam_world_to_view(o.pos)
         bx  := iso.x - bar_w * 0.5
         by  := iso.y - o.top - 8
         gfx.draw_rect_rec({ bx - 1.5, by - 1.5, bar_w + 3, HPBAR_H + 3 }, _fade(border, alpha))

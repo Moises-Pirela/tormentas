@@ -180,7 +180,7 @@ draw_stealth_indicators :: proc(w: ^World) {
         if ai.state == AI_STATE_IDLE || ai.state == AI_STATE_ATTACK { continue }
 
         t   := comp_get(w, id, .Transform, TransformComp)
-        iso := world_to_iso_xy(t.position[0], t.position[1])
+        iso := cam_world_to_view_xy(t.position[0], t.position[1])
 
         bx  := iso.x - BAR_W * 0.5
         by  := iso.y - LIFT

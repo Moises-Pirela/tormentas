@@ -205,7 +205,7 @@ draw_hub_world :: proc(w: ^World) {
     py := HUB_PORTAL_POS[1]
     tt := f32(gfx.time())
     center := gfx.Vec2{ px, py }
-    iso := world_to_iso_v(center)
+    iso := cam_world_to_view(center)
 
     pulse      := 0.7 + 0.3 * math.sin(tt * 2.0)
     fill_alpha := u8(50  * pulse)

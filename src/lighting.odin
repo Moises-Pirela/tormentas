@@ -245,7 +245,7 @@ shutdown_cloud_shader :: proc() {
 
 @(private = "file")
 world_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
-    return cartesian_view_bounds(pad)
+    return cam_view_bounds(pad)
 }
 
 @(private = "file") g_godray_shader: gfx.Shader
@@ -533,9 +533,9 @@ draw_cloud_shadow_field :: proc() {
 
     time        := f32(gfx.time())
     screen_size := [2]f32{ sw, sh }
-    cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
-    cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
-    cam_zoom    := g_camera.zoom
+    cam_target  := [2]f32{ cam_target().x, cam_target().y }
+    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
+    cam_zoom    := cam_zoom()
     drift       := [2]f32{ g_light_cloud_drift_x, g_light_cloud_drift_y }
     tint        := [3]f32{ g_light_cloud_tint_r, g_light_cloud_tint_g, g_light_cloud_tint_b }
 
@@ -576,8 +576,8 @@ draw_wall_sun_shadows :: proc() {
             t := f32(i) / 5.0
             off := shadow_len * t
             a   := u8(clamp(72 * (1.0 - t), 0, 255))
-            center := world_to_iso_xy(x + f32(TILE_SIZE) * 0.5 + dir[0] * off, y + f32(TILE_SIZE) * 0.5 + dir[1] * off)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * 2 * (1.0 + t * 0.08), ISO_TILE_H * 2 * (1.0 + t * 0.04), gfx.Color{ 10, 10, 10, a })
+            center := cam_world_to_view_xy(x + f32(TILE_SIZE) * 0.5 + dir[0] * off, y + f32(TILE_SIZE) * 0.5 + dir[1] * off)
+            cam_draw_shadow_diamond(center, ISO_TILE_W * 2 * (1.0 + t * 0.08), ISO_TILE_H * 2 * (1.0 + t * 0.04), gfx.Color{ 10, 10, 10, a })
         }
     }
 }
@@ -594,7 +594,7 @@ draw_player_projected_shadow :: proc(w: ^World) {
     if !ok { return }
 
     tr   := comp_get(w, pid, .Transform, TransformComp)
-    feet := world_to_iso_v({ tr.position[0], tr.position[1] })
+    feet := cam_world_to_view({ tr.position[0], tr.position[1] })
 
     near_a := u8(clamp(f32(SHADOW_NEAR_ALPHA) * g_light_shadow_alpha, 0, 255))
     far_a  := u8(clamp(f32(SHADOW_FAR_ALPHA)  * g_light_shadow_alpha, 0, 255))
@@ -646,7 +646,7 @@ draw_entity_sprite_shadows :: proc(w: ^World) {
             }
             r := radius * (0.9 - t_frac * 0.18)
             a := u8(clamp(180 * (1.0 - t_frac * 0.42), 0, 255))
-            icp := world_to_iso_v(cp)
+            icp := cam_world_to_view(cp)
             gfx.draw_ellipse(i32(icp.x), i32(icp.y), r * 1.08, max(r * 0.42, 1), gfx.Color{ 6, 6, 4, a })
         }
 
@@ -692,9 +692,9 @@ draw_directional_shadow_mask :: proc(w: ^World) {
 
     gfx.target_begin(g_shadow_rt)
     gfx.clear(gfx.BLANK)
-    gfx.camera_begin(g_camera^)
+    cam_begin()
     draw_wall_sun_shadows()
-    gfx.camera_end()
+    cam_end()
     gfx.target_end()
 }
 
@@ -751,9 +751,9 @@ draw_directional_sprite_composite :: proc(w: ^World) {
     dst         := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
     sd          := sun_dir()
     sun_color   := [3]f32{ g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
-    cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
-    cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
-    cam_zoom    := g_camera.zoom
+    cam_target  := [2]f32{ cam_target().x, cam_target().y }
+    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
+    cam_zoom    := cam_zoom()
     lc          := c.int(light_count)
 
     gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.screen_size, screen_size)
@@ -802,9 +802,9 @@ draw_world_god_rays :: proc() {
 
     time        := f32(gfx.time())
     screen_size := [2]f32{ sw, sh }
-    cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
-    cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
-    cam_zoom    := g_camera.zoom
+    cam_target  := [2]f32{ cam_target().x, cam_target().y }
+    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
+    cam_zoom    := cam_zoom()
     sd          := sun_dir()
 
     gfx.shader_set_vec2(g_godray_shader, g_godray_locs.screen_size, screen_size)
@@ -857,9 +857,9 @@ draw_fog_and_lights :: proc(w: ^World) {
     sw := f32(gfx.screen_width())
     sh := f32(gfx.screen_height())
     screen_size := [2]f32{ sw, sh }
-    cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
-    cam_offset  := [2]f32{ g_camera.offset.x, g_camera.offset.y }
-    cam_zoom    := g_camera.zoom
+    cam_target  := [2]f32{ cam_target().x, cam_target().y }
+    cam_offset  := [2]f32{ cam_offset().x, cam_offset().y }
+    cam_zoom    := cam_zoom()
     light_count := c.int(count)
 
     player_pos    := [2]f32{ 0, 0 }

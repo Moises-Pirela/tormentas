@@ -112,7 +112,7 @@ module_draw_ghost :: proc(def_idx, tx, ty: int) {
     if def_idx < 0 || def_idx >= len(g_modules) { return }
     def := g_modules[def_idx]
     if def.tex.id == 0 { return }
-    iso := world_to_iso_xy(f32(tx * TILE_SIZE), f32(ty * TILE_SIZE))
+    iso := cam_world_to_view_xy(f32(tx * TILE_SIZE), f32(ty * TILE_SIZE))
     gfx.draw_texture_ex(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.Color{ 255, 255, 255, 130 })
 }
 
@@ -138,7 +138,7 @@ draw_level_modules :: proc() {
         if m.def_idx < 0 || m.def_idx >= len(g_modules) { continue }
         def := g_modules[m.def_idx]
         if def.tex.id == 0 { continue }
-        iso := world_to_iso_xy(f32(int(m.tx) * TILE_SIZE), f32(int(m.ty) * TILE_SIZE))
+        iso := cam_world_to_view_xy(f32(int(m.tx) * TILE_SIZE), f32(int(m.ty) * TILE_SIZE))
         gfx.draw_texture_ex(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.WHITE)
     }
 }

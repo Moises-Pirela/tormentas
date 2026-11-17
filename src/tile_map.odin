@@ -269,7 +269,7 @@ TileSortEntry :: struct { tx, ty: int, v: TileType }
 draw_tilemap :: proc() {
     t_anim := f32(gfx.time())
 
-    min_x, min_y, max_x, max_y := cartesian_view_bounds(f32(TILE_SIZE))
+    min_x, min_y, max_x, max_y := cam_view_bounds(f32(TILE_SIZE))
 
     sorted := make([]TileSortEntry, len(g_tilemap), context.temp_allocator)
     n := 0
@@ -288,7 +288,7 @@ draw_tilemap :: proc() {
     for tile in sorted {
         tx, ty := tile.tx, tile.ty
         v      := tile.v
-        center, top, right, bottom, left := iso_tile_bounds(tx, ty)
+        center, top, right, bottom, left := cam_tile_bounds(tx, ty)
         entry := _tile_variant(v, tx, ty)
 
         dst := gfx.Rect{

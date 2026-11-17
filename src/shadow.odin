@@ -43,7 +43,7 @@ draw_projected_sprite_shadow :: proc(
     k := math.cos(elev) / sin_e
     if above > 0 { k = min(k, (quad_w * SHADOW_MAX_LEN) / above) }
 
-    iso_d := world_to_iso_xy(dir[0], dir[1])
+    iso_d := cam_world_to_view_xy(dir[0], dir[1])
 
     tw := f32(tex.width)
     th := f32(tex.height)

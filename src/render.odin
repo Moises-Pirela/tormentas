@@ -61,7 +61,7 @@ push_dmg_number :: proc(x, y, value: f32, is_enemy: bool, is_crit: bool = false)
         if g_dmgnums[i].lifetime <= 0 { best = i; break }
         if g_dmgnums[i].lifetime < g_dmgnums[best].lifetime { best = i }
     }
-    iso := world_to_iso_xy(x, y)
+    iso := cam_world_to_view_xy(x, y)
     g_dmgnums[best] = DmgNum{
         x        = iso.x,
         y        = iso.y,
@@ -186,7 +186,7 @@ update_entity_hover :: proc(w: ^World) {
         return
     }
 
-    mp         := screen_to_world_cartesian(gfx.mouse_position())
+    mp         := cam_screen_to_world(gfx.mouse_position())
     best_dist2 := f32(1e30)
     g_inspected_entity = INVALID_ENTITY
 
@@ -511,17 +511,17 @@ entity_hit_radius :: proc(w: ^World, id: int) -> f32 {
 }
 
 draw_world_circle :: proc(pos: gfx.Vec2, radius: f32, color: gfx.Color) {
-    ip := world_to_iso_v(pos)
+    ip := cam_world_to_view(pos)
     gfx.draw_ellipse(i32(ip.x), i32(ip.y), radius, max(radius * 0.55, 1), color)
 }
 
 draw_world_circle_lines :: proc(pos: gfx.Vec2, radius: f32, color: gfx.Color) {
-    ip := world_to_iso_v(pos)
+    ip := cam_world_to_view(pos)
     gfx.draw_ellipse_lines(i32(ip.x), i32(ip.y), max(radius, 1), max(radius * 0.55, 1), color)
 }
 
 draw_world_line :: proc(a, b: gfx.Vec2, thick: f32, color: gfx.Color) {
-    gfx.draw_line_ex(world_to_iso_v(a), world_to_iso_v(b), thick, color)
+    gfx.draw_line_ex(cam_world_to_view(a), cam_world_to_view(b), thick, color)
 }
 
 draw_tracer :: proc(pos: gfx.Vec2, dir: [3]f32, speed: f32, core, glow: gfx.Color, fade: f32) {
@@ -730,7 +730,7 @@ draw_ground_item_labels :: proc(w: ^World) {
 
         tr  := comp_get(w, id, .Transform, TransformComp)
         pos := gfx.Vec2{ tr.position[0], tr.position[1] }
-        iso := world_to_iso_v(pos)
+        iso := cam_world_to_view(pos)
 
         rcc  := comp_get(w, id, .RenderConfig, RenderConfigComp)
         name := loc_lookup(render_config_name_cstr(rcc))
@@ -779,7 +779,7 @@ draw_player_aim_line :: proc(w: ^World) {
     tp  := comp_get(w, id, .Transform, TransformComp).position
     pos := gfx.Vec2{ tp[0], tp[1] }
 
-    mouse := screen_to_world_cartesian(gfx.mouse_position())
+    mouse := cam_screen_to_world(gfx.mouse_position())
     dx    := mouse.x - pos.x
     dy    := mouse.y - pos.y
     dist  := math.sqrt(dx*dx + dy*dy)
@@ -842,7 +842,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
     if !is_player && world_has_component(w, id, .MutationContainer) {
         mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
         if mc.entity_count > 0 {
-            iso   := world_to_iso_v(pos)
+            iso   := cam_world_to_view(pos)
             bar_w := base_size * 0.65
 
             label_fs := f32(9)
@@ -883,7 +883,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
             placeholder: [4]u8 = {'P', u8('1' + slot), 0, 0}
             name_str = cstring(&placeholder[0])
         }
-        iso      := world_to_iso_v(pos)
+        iso      := cam_world_to_view(pos)
         name_fs  := f32(11)
         name_sz  := gfx.measure_text(g_font_body, name_str, name_fs, 0.5)
         line_col := PLAYER_SLOT_COLORS[slot][2]
@@ -917,7 +917,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
                                comp_get(w, hc.heart_id, .Health, HealthComp).current > 0
                 if heart_alive {
                     hh     := comp_get(w, hc.heart_id, .Health, HealthComp)
-                    hiso   := world_to_iso_v(hworld)
+                    hiso   := cam_world_to_view(hworld)
                     hp_pct := hh.current / hh.max
                     pulse  := f32(0.8) + f32(0.2) * math.sin(t_now * 5.0)
                     alpha  := u8(160 + int(95.0 * pulse))
@@ -1013,7 +1013,7 @@ draw_entities :: proc(w: ^World, pass: RenderLayer) {
         temp := make([]SpriteSort, len(ids), context.temp_allocator)
         for i in 0..<len(ids) {
             t := comp_get(w, ids[i], .Transform, TransformComp).position
-            temp[i] = SpriteSort{ ids[i], iso_depth_sort_y(t[0], t[1]) }
+            temp[i] = SpriteSort{ ids[i], cam_depth_sort_y(t[0], t[1]) }
         }
         slice.sort_by(temp, proc(a, b: SpriteSort) -> bool { return a.depth < b.depth })
         for i in 0..<len(ids) { ids[i] = temp[i].id }
@@ -1723,16 +1723,16 @@ get_entity_sprite_tex :: proc(stem: string) -> (tex: gfx.Texture, src: gfx.Rect,
 ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W
 
 draw_entity_sprite_quad_ex :: proc(tex: gfx.Texture, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, rotation_rad: f32, tint: gfx.Color, y_scale: f32 = ISO_SPRITE_Y, anchor: [2]f32 = {0.5, 1.0}) {
-    iso     := world_to_iso_v(pos)
+    iso     := cam_world_to_view(pos)
     iso_h   := world_size * y_scale
     dst     := gfx.Rect{ iso.x, iso.y, world_size, iso_h }
     origin  := gfx.Vec2{ world_size * anchor[0], iso_h * anchor[1] }
-    iso_rot := world_rot_to_iso(rotation_rad)
+    iso_rot := cam_world_rot_to_view(rotation_rad)
     gfx.draw_texture_pro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
 }
 
 draw_player_sprite :: proc(tex: gfx.Texture, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, tint: gfx.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
-    iso    := world_to_iso_v(pos)
+    iso    := cam_world_to_view(pos)
     aspect := src.height / src.width
     iso_h  := world_size * aspect
     dst    := gfx.Rect{ iso.x, iso.y, world_size, iso_h }
