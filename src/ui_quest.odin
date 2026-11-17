@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import fmt  "core:fmt"
 import clay "../clay"
 
@@ -57,7 +58,7 @@ draw_quest_board_world :: proc(w: ^World) {
         nsz := rl.MeasureTextEx(g_font_body, lbl, nfs, 0.5)
         rl.DrawTextEx(g_font_body, lbl,
             {pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2},
-            nfs, 0.5, rl.Color{240, 215, 120, 220})
+            nfs, 0.5, gfx.Color{240, 215, 120, 220})
 
         if dist_sq <= npc.interact_radius * npc.interact_radius {
             prompt := interact_prompt(.QUEST_BOARD_INTERACT)
@@ -67,7 +68,7 @@ draw_quest_board_world :: proc(w: ^World) {
             pulse  := u8(180 + 60 * (t_now - f32(int(t_now))))
             rl.DrawTextEx(g_font_body, prompt,
                 {pos.x - psz.x*0.5, pos.y + 18},
-                pfs, 0.5, rl.Color{255, 230, 100, pulse})
+                pfs, 0.5, gfx.Color{255, 230, 100, pulse})
         }
         break
     }
@@ -89,17 +90,17 @@ draw_quest_board_panel :: proc(w: ^World) {
             done := quest_is_done(qi)
             cur, tgt := quest_progress(qi, w)
 
-            card_bg  := rl.Color{15, 22, 15, 255} if done else rl.Color{22, 17, 12, 255}
-            card_bdr := rl.Color{70, 150, 70, 140} if done else COL_RULE
+            card_bg  := gfx.Color{15, 22, 15, 255} if done else gfx.Color{22, 17, 12, 255}
+            card_bdr := gfx.Color{70, 150, 70, 140} if done else COL_RULE
             ui_card_begin(fmt.tprintf("QBCard%d", idx), card_bg, card_bdr, u16(uis(5)))
             {
                 ui_hstack_begin(fmt.tprintf("QBTitleRow%d", idx), 0, 0, .Center)
                 ui_label(fmt.tprintf("QBTitle%d", idx), string(t(def.title_key)), uis(12),
-                    rl.Color{120, 200, 120, 255} if done else COL_PARCH)
+                    gfx.Color{120, 200, 120, 255} if done else COL_PARCH)
                 if done {
                     ui_grow(fmt.tprintf("QBTitleSpc%d", idx))
                     ui_label(fmt.tprintf("QBDone%d", idx), "COMPLETED", uis(9),
-                        rl.Color{80, 200, 80, 220})
+                        gfx.Color{80, 200, 80, 220})
                 }
                 ui_hstack_end()
 
@@ -108,14 +109,14 @@ draw_quest_board_panel :: proc(w: ^World) {
                 ui_hstack_begin(fmt.tprintf("QBProg%d", idx), u16(uis(6)), 0, .Center)
                 ratio := f32(min(cur, tgt)) / f32(tgt) if tgt > 0 else 0
                 ui_hbar(fmt.tprintf("QBBar%d", idx), ratio,
-                    rl.Color{80, 200, 80, 210} if done else rl.Color{180, 140, 60, 210},
-                    rl.Color{35, 28, 20, 255}, uis(5))
+                    gfx.Color{80, 200, 80, 210} if done else gfx.Color{180, 140, 60, 210},
+                    gfx.Color{35, 28, 20, 255}, uis(5))
                 ui_label(fmt.tprintf("QBCount%d", idx),
                     fmt.tprintf("%d / %d", min(cur, tgt), tgt), uis(9), COL_MUTED)
                 ui_hstack_end()
 
                 ui_label(fmt.tprintf("QBRew%d", idx), string(_quest_reward_cstr(def)), uis(9),
-                    rl.Color{200, 170, 80, 200})
+                    gfx.Color{200, 170, 80, 200})
             }
             ui_card_end()
         }
@@ -168,10 +169,10 @@ draw_quest_flash :: proc() {
 
     rl.DrawTextEx(g_font_body, hdr,
         {cx - hsz.x*0.5, by - uis(20)}, hfs, 1,
-        rl.Color{140, 220, 100, u8(f32(a) * 0.72)})
+        gfx.Color{140, 220, 100, u8(f32(a) * 0.72)})
     rl.DrawTextEx(g_font, ttl,
         {cx - tsz.x*0.5, by}, tfs, 1,
-        rl.Color{220, 196, 58, a})
+        gfx.Color{220, 196, 58, a})
 }
 
 draw_quest_hud :: proc(w: ^World) {
@@ -198,6 +199,6 @@ draw_quest_hud :: proc(w: ^World) {
         cur, tgt := quest_progress(qi, w)
         cy      := py + f32(i) * row_h
         lbl     := fmt.ctprintf("%s  %d/%d", t(QUEST_DEFS[int(qi)].title_key), min(cur, tgt), tgt)
-        rl.DrawTextEx(g_font_body, lbl, {px, cy}, uis(9), 0.5, rl.Color{200, 180, 100, 180})
+        rl.DrawTextEx(g_font_body, lbl, {px, cy}, uis(9), 0.5, gfx.Color{200, 180, 100, 180})
     }
 }

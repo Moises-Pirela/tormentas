@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import clay "../clay"
 import      "core:fmt"
 
@@ -105,8 +106,8 @@ draw_stats_screen :: proc(w: ^World) {
         }
 
         ui_hbar("CharXP", xp_ratio,
-            rl.Color{ 180, 148, 36, 255 },
-            rl.Color{  30,  24, 10, 255 },
+            gfx.Color{ 180, 148, 36, 255 },
+            gfx.Color{  30,  24, 10, 255 },
             uis(10))
 
         if clay.UI(clay.ID("CharXPText"))({
@@ -138,7 +139,7 @@ draw_stats_screen :: proc(w: ^World) {
 
             if btn_active {
                 ui_label("CharStatsAvail", string(pts_s), uis(13),
-                    rl.Color{ 200, 175, 60, 230 })
+                    gfx.Color{ 200, 175, 60, 230 })
             }
         }
 
@@ -146,9 +147,9 @@ draw_stats_screen :: proc(w: ^World) {
             row_id := fmt.tprintf("CharStatRow%d",  i)
             btn_id := fmt.tprintf("CharStatBtn%d",  i)
 
-            btn_bg  := rl.Color{ 55, 44, 18, 220 } if btn_active else rl.Color{ 24, 20, 12, 140 }
-            btn_brd := ui_clay_color(COL_BRASS)     if btn_active else ui_clay_color(rl.Color{ 55, 48, 32,  80 })
-            btn_col := ui_clay_color(COL_PARCH)     if btn_active else ui_clay_color(rl.Color{ 80, 70, 45, 100 })
+            btn_bg  := gfx.Color{ 55, 44, 18, 220 } if btn_active else gfx.Color{ 24, 20, 12, 140 }
+            btn_brd := ui_clay_color(COL_BRASS)     if btn_active else ui_clay_color(gfx.Color{ 55, 48, 32,  80 })
+            btn_col := ui_clay_color(COL_PARCH)     if btn_active else ui_clay_color(gfx.Color{ 80, 70, 45, 100 })
 
             if clay.UI(clay.ID(row_id))({
                 layout = {

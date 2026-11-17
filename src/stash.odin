@@ -3,11 +3,12 @@ package main
 import "core:math"
 import "core:fmt"
 import rl "vendor:raylib"
+import gfx "gfx"
 
 STASH_INTERACT_PROMPT_DIST :: f32(85)
 
 g_stash_npc_id: int = INVALID_ENTITY
-g_stash_grid_bb: rl.Rectangle
+g_stash_grid_bb: gfx.Rect
 
 stash_has_room :: proc() -> bool {
     return local_stash().item_count < STASH_MAX_ITEMS
@@ -239,10 +240,10 @@ draw_stash_world :: proc(w: ^World) {
     p := world_to_iso_xy(pos[0], pos[1])
     rl.DrawTextEx(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
-        fs, 0.5, rl.Color{ 230, 190, 120, pulse })
+        fs, 0.5, gfx.Color{ 230, 190, 120, pulse })
 }
 
-stash_draw_grid :: proc(w: ^World, grid_r: rl.Rectangle) {
+stash_draw_grid :: proc(w: ^World, grid_r: gfx.Rect) {
     cs := i32(g_inv.cell_sz)
     gx := i32(grid_r.x)
     gy := i32(grid_r.y)
@@ -251,8 +252,8 @@ stash_draw_grid :: proc(w: ^World, grid_r: rl.Rectangle) {
         for c in 0..<STASH_COLS {
             cx := gx + i32(c) * cs
             cy := gy + i32(r) * cs
-            rl.DrawRectangle(cx, cy, cs, cs, rl.Color{ 8, 6, 4, 255 })
-            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, rl.Color{ 18, 14, 10, 255 })
+            rl.DrawRectangle(cx, cy, cs, cs, gfx.Color{ 8, 6, 4, 255 })
+            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, gfx.Color{ 18, 14, 10, 255 })
         }
     }
     for c in 0..=STASH_COLS {
@@ -270,7 +271,7 @@ stash_draw_grid :: proc(w: ^World, grid_r: rl.Rectangle) {
         col, row, hit := stash_mouse_to_cell(mp.x, mp.y)
         if hit {
             can := stash_can_place(drag_item, col, row)
-            hi_col := rl.Color{ 60, 180, 60, 80 } if can else rl.Color{ 180, 40, 40, 80 }
+            hi_col := gfx.Color{ 60, 180, 60, 80 } if can else gfx.Color{ 180, 40, 40, 80 }
             for dy in 0..<drag_item.grid_h {
                 for dx in 0..<drag_item.grid_w {
                     if col+dx < STASH_COLS && row+dy < STASH_ROWS {
@@ -294,15 +295,15 @@ stash_draw_grid :: proc(w: ^World, grid_r: rl.Rectangle) {
             iy := gy + i32(row) * cs + 2
             iw := i32(item.grid_w) * cs - 4
             ih := i32(item.grid_h) * cs - 4
-            rl.DrawRectangle(ix, iy, iw, ih, rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
-            rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1, rl.Color{ rc.r, rc.g, rc.b, 220 })
+            rl.DrawRectangle(ix, iy, iw, ih, gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
+            rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1, gfx.Color{ rc.r, rc.g, rc.b, 220 })
 
             icon_sz := min(iw, ih) - 6
             draw_item_glyph(item.slot, ix + (iw - icon_sz) / 2, iy + 3, icon_sz, rc)
             if world_has_component(w, cell_id, .RenderConfig) {
                 name := loc_lookup(render_config_name_cstr(comp_get(w, cell_id, .RenderConfig, RenderConfigComp)))
                 rl.DrawTextEx(g_font_body, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
-                    uis(10), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
+                    uis(10), 0.4, gfx.Color{ rc.r, rc.g, rc.b, 200 })
             }
         }
     }
@@ -350,7 +351,7 @@ draw_stash_hud :: proc(w: ^World) {
     py := i32((f32(rl.GetScreenHeight()) - f32(PH)) * 0.5)
     cs := g_inv.cell_sz
 
-    rl.DrawRectangle(px, py, PW, PH, rl.Color{ 8, 6, 4, 252 })
+    rl.DrawRectangle(px, py, PW, PH, gfx.Color{ 8, 6, 4, 252 })
     rl.DrawRectangle(px, py, PW, i32(uis(3)), COL_BRASS)
     rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
 
@@ -369,7 +370,7 @@ draw_stash_hud :: proc(w: ^World) {
 
     grid_w := STASH_COLS * cs
     grid_h := STASH_ROWS * cs
-    g_stash_grid_bb = rl.Rectangle{
+    g_stash_grid_bb = gfx.Rect{
         f32(px) + (f32(PW) - f32(grid_w)) * 0.5,
         f32(py) + uis(76),
         f32(grid_w),
@@ -380,9 +381,9 @@ draw_stash_hud :: proc(w: ^World) {
     stash_draw_grid(w, g_stash_grid_bb)
 
     mp := rl.GetMousePosition()
-    btn_r := rl.Rectangle{ f32(px) + uis(16), f32(py + PH) - uis(54), f32(PW) - uis(32), uis(34) }
+    btn_r := gfx.Rect{ f32(px) + uis(16), f32(py + PH) - uis(54), f32(PW) - uis(32), uis(34) }
     hot := rl.CheckCollisionPointRec(mp, btn_r)
-    rl.DrawRectangleRec(btn_r, rl.Color{ 74, 54, 18, 245 } if hot else rl.Color{ 42, 31, 14, 235 })
+    rl.DrawRectangleRec(btn_r, gfx.Color{ 74, 54, 18, 245 } if hot else gfx.Color{ 42, 31, 14, 235 })
     rl.DrawRectangleLinesEx(btn_r, 1, COL_BRASS if hot else COL_RULE)
     btn_lbl := t(.STASH_DEPOSIT_ALL)
     btn_fs := uis(11)

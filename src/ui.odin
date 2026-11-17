@@ -1,18 +1,19 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import clay "../clay"
 import      "core:fmt"
 
-COL_PARCH   :: rl.Color{ 222, 207, 162, 245 }
-COL_CRIMSON :: rl.Color{ 178,  40,  36, 255 }
-COL_BRASS   :: rl.Color{ 188, 150,  55, 235 }
-COL_MUTED   :: rl.Color{ 128, 118,  88, 195 }
-COL_PANEL   :: rl.Color{  10,   7,   5, 210 }
-COL_RULE    :: rl.Color{ 130, 100,  38, 150 }
-COL_SHIELD  :: rl.Color{  80, 180, 255, 220 }
-COL_STAT    :: rl.Color{ 140, 195, 235, 230 }
-COL_AFFIX   :: rl.Color{ 195, 168,  72, 235 }
+COL_PARCH   :: gfx.Color{ 222, 207, 162, 245 }
+COL_CRIMSON :: gfx.Color{ 178,  40,  36, 255 }
+COL_BRASS   :: gfx.Color{ 188, 150,  55, 235 }
+COL_MUTED   :: gfx.Color{ 128, 118,  88, 195 }
+COL_PANEL   :: gfx.Color{  10,   7,   5, 210 }
+COL_RULE    :: gfx.Color{ 130, 100,  38, 150 }
+COL_SHIELD  :: gfx.Color{  80, 180, 255, 220 }
+COL_STAT    :: gfx.Color{ 140, 195, 235, 230 }
+COL_AFFIX   :: gfx.Color{ 195, 168,  72, 235 }
 
 UICustomKind :: enum u8 {
     None,
@@ -28,8 +29,8 @@ UICustomKind :: enum u8 {
 UICustomOrb :: struct {
     fill_ratio:   f32,
     shield_ratio: f32,
-    fill_col:     rl.Color,
-    bg_col:       rl.Color,
+    fill_col:     gfx.Color,
+    bg_col:       gfx.Color,
     value_text:   [8]u8,
 
     portrait_idx: u8,
@@ -78,8 +79,8 @@ UICustomInvAbility :: struct {
     name:        [24]u8,
     has_item:    bool,
     is_target:   bool,
-    rarity_col:  rl.Color,
-    trait_col:   rl.Color,
+    rarity_col:  gfx.Color,
+    trait_col:   gfx.Color,
     level:       u8,
 }
 
@@ -111,11 +112,11 @@ ui_push_custom :: proc(d: UICustomData) -> rawptr {
     return p
 }
 
-ui_clay_color :: #force_inline proc(c: rl.Color) -> clay.Color {
+ui_clay_color :: #force_inline proc(c: gfx.Color) -> clay.Color {
     return { f32(c.r), f32(c.g), f32(c.b), f32(c.a) }
 }
 
-ui_hbar :: proc(id_base: string, ratio: f32, fill_col, bg_col: rl.Color, h: f32) {
+ui_hbar :: proc(id_base: string, ratio: f32, fill_col, bg_col: gfx.Color, h: f32) {
     r := clamp(ratio, 0, 1)
     if clay.UI(clay.ID(id_base))({
         layout          = { sizing = { clay.SizingGrow(), clay.SizingFixed(h) } },
@@ -139,7 +140,7 @@ ui_grow :: proc(id: string) {
     }) {}
 }
 
-ui_dot :: proc(id: string, col: rl.Color, d: f32) {
+ui_dot :: proc(id: string, col: gfx.Color, d: f32) {
     if clay.UI(clay.ID(id))({
         layout          = { sizing = { clay.SizingFixed(d), clay.SizingFixed(d) } },
         backgroundColor = ui_clay_color(col),
@@ -147,7 +148,7 @@ ui_dot :: proc(id: string, col: rl.Color, d: f32) {
     }) {}
 }
 
-ui_box :: proc(id: string, w, h: f32, col: rl.Color, radius: f32 = 0) {
+ui_box :: proc(id: string, w, h: f32, col: gfx.Color, radius: f32 = 0) {
     if clay.UI(clay.ID(id))({
         layout          = { sizing = { clay.SizingFixed(w), clay.SizingFixed(h) } },
         backgroundColor = ui_clay_color(col),
@@ -162,7 +163,7 @@ ui_divider :: proc(id: string) {
     }) {}
 }
 
-ui_label :: proc(id, text: string, fs: f32, col: rl.Color, spacing: f32 = 0.5) {
+ui_label :: proc(id, text: string, fs: f32, col: gfx.Color, spacing: f32 = 0.5) {
     if clay.UI(clay.ID(id))({
         layout = { sizing = { clay.SizingFit(), clay.SizingFit() } },
     }) {
@@ -199,18 +200,18 @@ ui_button :: proc(id, label: string, w, h: f32, variant := UIButtonVariant.Defau
     hovered := clay.PointerOver(btn_id)
     clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
 
-    bg_col, bdr_col, lbl_col: rl.Color
+    bg_col, bdr_col, lbl_col: gfx.Color
     switch variant {
     case .Default:
-        bg_col  = rl.Color{  28, 20, 10, 255 } if hovered else rl.Color{  12,  9,  6, 230 }
+        bg_col  = gfx.Color{  28, 20, 10, 255 } if hovered else gfx.Color{  12,  9,  6, 230 }
         bdr_col = COL_BRASS
         lbl_col = COL_PARCH if hovered else COL_MUTED
     case .Primary:
-        bg_col  = rl.Color{ 210, 168, 65, 255 } if hovered else COL_BRASS
-        bdr_col = rl.Color{ 240, 210, 100, 255 }
-        lbl_col = rl.Color{ 10, 6, 2, 255 }
+        bg_col  = gfx.Color{ 210, 168, 65, 255 } if hovered else COL_BRASS
+        bdr_col = gfx.Color{ 240, 210, 100, 255 }
+        lbl_col = gfx.Color{ 10, 6, 2, 255 }
     case .Danger:
-        bg_col  = COL_CRIMSON if hovered else rl.Color{ 90, 18, 14, 220 }
+        bg_col  = COL_CRIMSON if hovered else gfx.Color{ 90, 18, 14, 220 }
         bdr_col = COL_CRIMSON
         lbl_col = COL_PARCH
     }
@@ -238,7 +239,7 @@ ui_selectable :: proc(id, label: string, w, h: f32, selected: bool) -> bool {
     hovered := clay.PointerOver(btn_id)
     clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
 
-    bg_col  := rl.Color{ 45, 34, 16, 255 } if selected else (rl.Color{ 28, 20, 10, 240 } if hovered else rl.Color{ 12, 9, 6, 220 })
+    bg_col  := gfx.Color{ 45, 34, 16, 255 } if selected else (gfx.Color{ 28, 20, 10, 240 } if hovered else gfx.Color{ 12, 9, 6, 220 })
     bdr_col := COL_BRASS if (selected || hovered) else COL_RULE
     lbl_col := COL_PARCH if (selected || hovered) else COL_MUTED
 
@@ -291,7 +292,7 @@ ui_text_row :: proc(base_id, label, value: string, fs: f32 = 0) {
     }
 }
 
-ui_badge :: proc(id, text: string, bg_col: rl.Color) {
+ui_badge :: proc(id, text: string, bg_col: gfx.Color) {
     pad := u16(uis(4))
     h   := uis(18)
     if clay.UI(clay.ID(id))({
@@ -374,14 +375,14 @@ ui_scroll_begin :: proc(id: string, w: f32 = 0, h: f32 = 0) {
 }
 ui_scroll_end :: proc() { clay._CloseElement() }
 
-ui_tab :: proc(id, label: string, w, h: f32, active: bool, accent := COL_BRASS, active_bg := rl.Color{}) -> bool {
+ui_tab :: proc(id, label: string, w, h: f32, active: bool, accent := COL_BRASS, active_bg := gfx.Color{}) -> bool {
     tid     := clay.ID(id)
     hovered := clay.PointerOver(tid)
     clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
 
     abg := active_bg
-    if abg.a == 0 { abg = rl.Color{ 50, 38, 14, 245 } }
-    bg := abg if active else (rl.Color{ 28, 20, 10, 230 } if hovered else rl.Color{ 16, 12, 8, 210 })
+    if abg.a == 0 { abg = gfx.Color{ 50, 38, 14, 245 } }
+    bg := abg if active else (gfx.Color{ 28, 20, 10, 230 } if hovered else gfx.Color{ 16, 12, 8, 210 })
     bd := accent if (active || hovered) else COL_RULE
     tcol := COL_PARCH if (active || hovered) else COL_MUTED
 
@@ -404,14 +405,14 @@ ui_tab :: proc(id, label: string, w, h: f32, active: bool, accent := COL_BRASS, 
 }
 
 ui_scrim :: proc(a: u8) {
-    rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), rl.Color{ 0, 0, 0, a })
+    rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), gfx.Color{ 0, 0, 0, a })
 }
 
 UIPanelStyle :: struct {
-    bg_col:     rl.Color,
-    border_col: rl.Color,
-    accent_col: rl.Color,
-    title_col:  rl.Color,
+    bg_col:     gfx.Color,
+    border_col: gfx.Color,
+    accent_col: gfx.Color,
+    title_col:  gfx.Color,
     title_fs:   f32,
     anchor:     clay.FloatingAttachPointType,
     offset:     clay.Vector2,
@@ -482,7 +483,7 @@ ui_panel_end :: proc() {
 ui_clickable_begin :: proc(id: string, h: f32, accent := COL_BRASS, active := false) -> (hovered: bool) {
     rid := clay.ID(id)
     hovered = clay.PointerOver(rid)
-    bg  := rl.Color{ 50, 38, 14, 235 } if active else (rl.Color{ 30, 24, 14, 235 } if hovered else rl.Color{ 13, 10, 7, 210 })
+    bg  := gfx.Color{ 50, 38, 14, 235 } if active else (gfx.Color{ 30, 24, 14, 235 } if hovered else gfx.Color{ 13, 10, 7, 210 })
     bdr := accent if (active || hovered) else COL_RULE
     clay._OpenElementWithId(rid)
     clay.ConfigureOpenElement({
@@ -501,7 +502,7 @@ ui_clickable_begin :: proc(id: string, h: f32, accent := COL_BRASS, active := fa
 }
 ui_clickable_end :: proc() { clay._CloseElement() }
 
-ui_card_begin :: proc(id: string, bg, border_col: rl.Color, gap: u16 = 0) {
+ui_card_begin :: proc(id: string, bg, border_col: gfx.Color, gap: u16 = 0) {
     clay._OpenElementWithId(clay.ID(id))
     clay.ConfigureOpenElement({
         layout = {
@@ -517,7 +518,7 @@ ui_card_begin :: proc(id: string, bg, border_col: rl.Color, gap: u16 = 0) {
 }
 ui_card_end :: proc() { clay._CloseElement() }
 
-ui_label_w :: proc(id, text: string, w, fs: f32, col: rl.Color) {
+ui_label_w :: proc(id, text: string, w, fs: f32, col: gfx.Color) {
     if clay.UI(clay.ID(id))({
         layout = { sizing = { clay.SizingFixed(w), clay.SizingFit() } },
     }) {
@@ -553,16 +554,16 @@ ui_stepper :: proc(id, header, value: string, enabled := true) -> (delta: int) {
         if enabled {
             if ui_button(fmt.tprintf("%sL", id), "<", arrow, arrow) { delta = -1 }
         } else {
-            ui_box(fmt.tprintf("%sLd", id), arrow, arrow, rl.Color{ 16, 13, 10, 200 }, 3)
+            ui_box(fmt.tprintf("%sLd", id), arrow, arrow, gfx.Color{ 16, 13, 10, 200 }, 3)
         }
         ui_grow(fmt.tprintf("%sVL", id))
         ui_label(fmt.tprintf("%sVal", id), value, uis(18),
-            COL_PARCH if enabled else rl.Color{ 80, 72, 55, 140 })
+            COL_PARCH if enabled else gfx.Color{ 80, 72, 55, 140 })
         ui_grow(fmt.tprintf("%sVR", id))
         if enabled {
             if ui_button(fmt.tprintf("%sR", id), ">", arrow, arrow) { delta = 1 }
         } else {
-            ui_box(fmt.tprintf("%sRd", id), arrow, arrow, rl.Color{ 16, 13, 10, 200 }, 3)
+            ui_box(fmt.tprintf("%sRd", id), arrow, arrow, gfx.Color{ 16, 13, 10, 200 }, 3)
         }
         ui_hstack_end()
     }
@@ -593,7 +594,7 @@ ui_slider :: proc(id, label: string, value: f32, label_w: f32 = 0) -> (new_value
         clay._OpenElementWithId(track_id)
         clay.ConfigureOpenElement({
             layout          = { sizing = { clay.SizingGrow(), clay.SizingFixed(bar_h) } },
-            backgroundColor = ui_clay_color(rl.Color{ 18, 14, 10, 255 }),
+            backgroundColor = ui_clay_color(gfx.Color{ 18, 14, 10, 255 }),
             border          = { color = ui_clay_color(COL_RULE), width = { 1, 1, 1, 1, 0 } },
         })
         clay._OpenElementWithId(clay.ID(fmt.tprintf("%sFill", id)))
@@ -617,7 +618,7 @@ ui_item_row :: proc(id, name, value: string, h: f32 = 0) -> bool {
     hovered := clay.PointerOver(row_id)
     clicked := hovered && rl.IsMouseButtonReleased(.LEFT)
 
-    bg       := rl.Color{ 28, 20, 10, 235 } if hovered else rl.Color{ 14, 10, 7, 220 }
+    bg       := gfx.Color{ 28, 20, 10, 235 } if hovered else gfx.Color{ 14, 10, 7, 220 }
     bdr      := COL_BRASS if hovered else COL_RULE
     name_col := COL_PARCH if hovered else COL_MUTED
 
@@ -637,7 +638,7 @@ ui_item_row :: proc(id, name, value: string, h: f32 = 0) -> bool {
         icon_sz := row_h - uis(10)
         if clay.UI(clay.ID(fmt.tprintf("%sIcon", id)))({
             layout          = { sizing = { clay.SizingFixed(icon_sz), clay.SizingFixed(icon_sz) } },
-            backgroundColor = ui_clay_color(rl.Color{ 8, 6, 4, 255 }),
+            backgroundColor = ui_clay_color(gfx.Color{ 8, 6, 4, 255 }),
             cornerRadius    = clay.CornerRadiusAll(2),
         }) {}
         if clay.UI(clay.ID(fmt.tprintf("%sName", id)))({ layout = { sizing = { clay.SizingFit(), clay.SizingFit() } } }) {

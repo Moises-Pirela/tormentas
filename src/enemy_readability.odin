@@ -2,6 +2,7 @@ package main
 
 import    "core:math"
 import rl "vendor:raylib"
+import gfx "gfx"
 
 HPBAR_HOLD      :: f32(2.5)
 HPBAR_FADE      :: f32(0.6)
@@ -10,14 +11,14 @@ HPBAR_CHIP_RATE :: f32(1.4)
 HPBAR_MIN_W     :: f32(34)
 HPBAR_H         :: f32(4)
 
-TELEGRAPH_TINT  :: rl.Color{ 255, 110, 60, 255 }
-TELEGRAPH_MELEE :: rl.Color{ 255, 80, 40, 255 }
-TELEGRAPH_AIM   :: rl.Color{ 255, 205, 70, 255 }
-TELEGRAPH_LOCK  :: rl.Color{ 255, 55, 45, 255 }
+TELEGRAPH_TINT  :: gfx.Color{ 255, 110, 60, 255 }
+TELEGRAPH_MELEE :: gfx.Color{ 255, 80, 40, 255 }
+TELEGRAPH_AIM   :: gfx.Color{ 255, 205, 70, 255 }
+TELEGRAPH_LOCK  :: gfx.Color{ 255, 55, 45, 255 }
 
 EnemyOverlayAnchor :: struct {
     id:        int,
-    pos:       rl.Vector2,
+    pos:       gfx.Vec2,
     base_size: f32,
     top:       f32,
 }
@@ -35,7 +36,7 @@ g_hpbar_state:    map[int]HpBarState
 
 g_enemy_overlay_frame: f64
 
-enemy_overlay_queue :: proc(id: int, pos: rl.Vector2, base_size, top: f32) {
+enemy_overlay_queue :: proc(id: int, pos: gfx.Vec2, base_size, top: f32) {
     now := rl.GetTime()
     if now != g_enemy_overlay_frame {
         clear(&g_enemy_overlays)
@@ -81,17 +82,17 @@ hpbar_step :: proc(st: ^HpBarState, frac, dt: f32) {
 }
 
 @(private = "file")
-_fade :: proc(c: rl.Color, a: f32) -> rl.Color {
+_fade :: proc(c: gfx.Color, a: f32) -> gfx.Color {
     return { c.r, c.g, c.b, u8(f32(c.a) * clamp(a, 0, 1)) }
 }
 
 @(private = "file")
-_tri :: proc(a, b, c: rl.Vector2, col: rl.Color) {
+_tri :: proc(a, b, c: gfx.Vec2, col: gfx.Color) {
     cross := (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
     if cross >= 0 { rl.DrawTriangle(a, b, c, col) } else { rl.DrawTriangle(a, c, b, col) }
 }
 
-draw_world_sector :: proc(center: rl.Vector2, radius, angle, half_spread: f32, col: rl.Color) {
+draw_world_sector :: proc(center: gfx.Vec2, radius, angle, half_spread: f32, col: gfx.Color) {
     SEG :: 14
     c := world_to_iso_v(center)
     prev := world_to_iso_v({ center.x + math.cos(angle - half_spread) * radius,
@@ -104,7 +105,7 @@ draw_world_sector :: proc(center: rl.Vector2, radius, angle, half_spread: f32, c
     }
 }
 
-draw_world_sector_outline :: proc(center: rl.Vector2, radius, angle, half_spread, thick: f32, col: rl.Color) {
+draw_world_sector_outline :: proc(center: gfx.Vec2, radius, angle, half_spread, thick: f32, col: gfx.Color) {
     SEG :: 14
     c := world_to_iso_v(center)
     first := world_to_iso_v({ center.x + math.cos(angle - half_spread) * radius,
@@ -132,7 +133,7 @@ draw_enemy_telegraphs :: proc(w: ^World) {
             reach := ai.attack_range + PLAYER_RADIUS
             draw_world_sector(o.pos, reach, ai.windup_angle, ARC_SPREAD, _fade(TELEGRAPH_MELEE, 0.16 + 0.12 * p))
             draw_world_sector(o.pos, reach * p, ai.windup_angle, ARC_SPREAD, _fade(TELEGRAPH_MELEE, 0.30 + 0.30 * p))
-            edge := TELEGRAPH_MELEE if p < 0.85 else rl.Color{ 255, 235, 210, 255 }
+            edge := TELEGRAPH_MELEE if p < 0.85 else gfx.Color{ 255, 235, 210, 255 }
             draw_world_sector_outline(o.pos, reach, ai.windup_angle, ARC_SPREAD, 1.5 + p, _fade(edge, 0.55 + 0.45 * p))
 
         case .Ranged:
@@ -146,11 +147,11 @@ draw_enemy_telegraphs :: proc(w: ^World) {
                 off := f32(0)
                 if count > 1 { off = spread * (f32(i) / f32(count - 1) - 0.5) }
                 a   := ai.windup_angle + off
-                end := rl.Vector2{ o.pos.x + math.cos(a) * length, o.pos.y + math.sin(a) * length }
+                end := gfx.Vec2{ o.pos.x + math.cos(a) * length, o.pos.y + math.sin(a) * length }
                 if t := raycast_walls_t(o.pos.x, o.pos.y, end.x, end.y); t < 1 {
                     end = { o.pos.x + (end.x - o.pos.x) * t, o.pos.y + (end.y - o.pos.y) * t }
                 }
-                draw_world_line(o.pos, end, thick + 2, _fade(rl.Color{ 10, 6, 6, 255 }, 0.25 + 0.35 * p))
+                draw_world_line(o.pos, end, thick + 2, _fade(gfx.Color{ 10, 6, 6, 255 }, 0.25 + 0.35 * p))
                 draw_world_line(o.pos, end, thick, _fade(col, 0.35 + 0.6 * p))
             }
         }
@@ -191,11 +192,11 @@ draw_enemy_health_bars :: proc(w: ^World, dt: f32) {
         alpha := hpbar_alpha(st.since_hit, hovered, pinned)
         if alpha <= 0.01 { continue }
 
-        border := rl.Color{ 10, 8, 8, 220 }
+        border := gfx.Color{ 10, 8, 8, 220 }
         if world_has_component(w, o.id, .AIAgent) {
             #partial switch comp_get(w, o.id, .AIAgent, AIAgentComp).tier {
-            case .Rare:      border = rl.Color{ 110, 160, 255, 235 }
-            case .Legendary: border = rl.Color{ 240, 195,  50, 235 }
+            case .Rare:      border = gfx.Color{ 110, 160, 255, 235 }
+            case .Legendary: border = gfx.Color{ 240, 195,  50, 235 }
             }
         }
 
@@ -203,16 +204,16 @@ draw_enemy_health_bars :: proc(w: ^World, dt: f32) {
         bx  := iso.x - bar_w * 0.5
         by  := iso.y - o.top - 8
         rl.DrawRectangleRec({ bx - 1.5, by - 1.5, bar_w + 3, HPBAR_H + 3 }, _fade(border, alpha))
-        rl.DrawRectangleRec({ bx, by, bar_w, HPBAR_H }, _fade(rl.Color{ 34, 14, 14, 235 }, alpha))
-        rl.DrawRectangleRec({ bx, by, bar_w * st.chip_frac, HPBAR_H }, _fade(rl.Color{ 245, 225, 190, 230 }, alpha))
-        fill := rl.Color{ 215, 45, 40, 255 }
-        if frac <= 0.25 { fill = _mix(fill, rl.Color{ 255, 140, 60, 255 }, 0.5 + 0.5 * math.sin(f32(rl.GetTime()) * 10)) }
+        rl.DrawRectangleRec({ bx, by, bar_w, HPBAR_H }, _fade(gfx.Color{ 34, 14, 14, 235 }, alpha))
+        rl.DrawRectangleRec({ bx, by, bar_w * st.chip_frac, HPBAR_H }, _fade(gfx.Color{ 245, 225, 190, 230 }, alpha))
+        fill := gfx.Color{ 215, 45, 40, 255 }
+        if frac <= 0.25 { fill = _mix(fill, gfx.Color{ 255, 140, 60, 255 }, 0.5 + 0.5 * math.sin(f32(rl.GetTime()) * 10)) }
         rl.DrawRectangleRec({ bx, by, bar_w * frac, HPBAR_H }, _fade(fill, alpha))
     }
 }
 
 @(private = "file")
-_mix :: proc(a, b: rl.Color, k: f32) -> rl.Color {
+_mix :: proc(a, b: gfx.Color, k: f32) -> gfx.Color {
     t := clamp(k, 0, 1)
     return {
         u8(f32(a.r) + (f32(b.r) - f32(a.r)) * t), u8(f32(a.g) + (f32(b.g) - f32(a.g)) * t),

@@ -2,6 +2,7 @@ package main
 
 import im  "../deps/imgui/imgui"
 import rl  "vendor:raylib"
+import gfx "gfx"
 import     "core:math"
 import p2p "p2p"
 
@@ -59,12 +60,12 @@ ed_insp_draw_selection_highlight :: proc() {
     alpha := u8(130 + u8(90.0 * pulse))
     lw    := 2.2 / g_camera.zoom
 
-    rl.DrawTriangle(top, right, center,    rl.Color{60, 160, 240, 20})
-    rl.DrawTriangle(right, bottom, center, rl.Color{60, 160, 240, 20})
-    rl.DrawTriangle(bottom, left, center,  rl.Color{60, 160, 240, 20})
-    rl.DrawTriangle(left, top, center,     rl.Color{60, 160, 240, 20})
+    rl.DrawTriangle(top, right, center,    gfx.Color{60, 160, 240, 20})
+    rl.DrawTriangle(right, bottom, center, gfx.Color{60, 160, 240, 20})
+    rl.DrawTriangle(bottom, left, center,  gfx.Color{60, 160, 240, 20})
+    rl.DrawTriangle(left, top, center,     gfx.Color{60, 160, 240, 20})
 
-    col := rl.Color{80, 200, 255, alpha}
+    col := gfx.Color{80, 200, 255, alpha}
     rl.DrawLineEx(top,    right,  lw * 2.5, col)
     rl.DrawLineEx(right,  bottom, lw * 2.5, col)
     rl.DrawLineEx(bottom, left,   lw * 2.5, col)

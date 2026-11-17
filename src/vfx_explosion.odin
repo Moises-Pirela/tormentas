@@ -1,6 +1,6 @@
 package main
 
-import rl "vendor:raylib"
+import gfx "gfx"
 import    "core:math"
 
 MAX_EXPLOSIONS     :: 16
@@ -8,7 +8,7 @@ VFX_EXPLOSION_LIFE :: f32(0.55)
 
 @(private="file")
 ExplosionVfx :: struct {
-    pos:     rl.Vector2,
+    pos:     gfx.Vec2,
     radius:  f32,
     timer:   f32,
     r, g, b: u8,
@@ -45,23 +45,23 @@ draw_explosions :: proc() {
             ft      := t / 0.35
             inv     := 1.0 - ft
             flash_a := u8(clamp(220.0 * inv * inv, 0, 255))
-            draw_world_circle(p, r * 0.32 * ft,       rl.Color{255, 230, 140, flash_a})
-            draw_world_circle(p, r * 0.18 * ft,       rl.Color{255, 255, 210, u8(clamp(f32(flash_a) * 1.15, 0, 255))})
+            draw_world_circle(p, r * 0.32 * ft,       gfx.Color{255, 230, 140, flash_a})
+            draw_world_circle(p, r * 0.18 * ft,       gfx.Color{255, 255, 210, u8(clamp(f32(flash_a) * 1.15, 0, 255))})
         }
 
         rr    := r * math.sqrt(t)
         inv_t := 1.0 - t
         ring_a := u8(clamp(210.0 * inv_t * inv_t, 0, 255))
-        draw_world_circle_lines(p, rr,           rl.Color{e.r, e.g, e.b, ring_a})
+        draw_world_circle_lines(p, rr,           gfx.Color{e.r, e.g, e.b, ring_a})
         if rr > 6 {
-            draw_world_circle_lines(p, rr - 5,   rl.Color{e.r, e.g, e.b, ring_a / 3})
+            draw_world_circle_lines(p, rr - 5,   gfx.Color{e.r, e.g, e.b, ring_a / 3})
         }
 
         if t < 0.65 {
             it      := t / 0.65
             inner_r := r * 0.52 * math.sqrt(it)
             inner_a := u8(clamp(160.0 * (1.0 - it), 0, 255))
-            draw_world_circle_lines(p, inner_r, rl.Color{255, 200, 80, inner_a})
+            draw_world_circle_lines(p, inner_r, gfx.Color{255, 200, 80, inner_a})
         }
 
         NSPARKS :: 8
@@ -71,13 +71,13 @@ draw_explosions :: proc() {
             sa     := math.sin(angle)
             dist   := r * 0.42 * t
             half   := r * 0.11
-            p0 := rl.Vector2{ p[0] + ca*(dist - half), p[1] + sa*(dist - half) }
-            p1 := rl.Vector2{ p[0] + ca*(dist + half), p[1] + sa*(dist + half) }
+            p0 := gfx.Vec2{ p[0] + ca*(dist - half), p[1] + sa*(dist - half) }
+            p1 := gfx.Vec2{ p[0] + ca*(dist + half), p[1] + sa*(dist + half) }
             spark_a := u8(clamp(200.0 * (1.0 - t * 1.7), 0, 255))
-            draw_world_line(p0, p1, 2.5, rl.Color{255, 200, 80, spark_a})
+            draw_world_line(p0, p1, 2.5, gfx.Color{255, 200, 80, spark_a})
         }
 
         scorch_a := u8(clamp(80.0 * math.sqrt(t) * (1.0 - t * 0.8), 0, 255))
-        draw_world_circle(p, r * 0.38, rl.Color{20, 10, 5, scorch_a})
+        draw_world_circle(p, r * 0.38, gfx.Color{20, 10, 5, scorch_a})
     }
 }

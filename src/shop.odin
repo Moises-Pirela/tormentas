@@ -3,6 +3,7 @@ package main
 import "core:math/rand"
 import "core:fmt"
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import clay "../clay"
 
 MAX_SHOP_STOCK   :: 6
@@ -208,7 +209,7 @@ draw_shop_world :: proc(w: ^World) {
         nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.5)
         rl.DrawTextEx(g_font_body, name,
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
-            nfs, 0.5, rl.Color{ 240, 215, 120, 220 })
+            nfs, 0.5, gfx.Color{ 240, 215, 120, 220 })
 
         if !ui_has(.Shop) && dist_sq <= SHOP_INTERACT_PROMPT_DIST * SHOP_INTERACT_PROMPT_DIST {
             prompt    := interact_prompt(.SHOP_INTERACT)
@@ -218,7 +219,7 @@ draw_shop_world :: proc(w: ^World) {
             pulse     := u8(180 + 60 * (t_now - f32(int(t_now))))
             rl.DrawTextEx(g_font_body, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
-                pfs, 0.5, rl.Color{ 255, 230, 100, pulse })
+                pfs, 0.5, gfx.Color{ 255, 230, 100, pulse })
         }
     }
 }
@@ -249,7 +250,7 @@ draw_shop_hud :: proc(w: ^World) {
     ui_panel_begin("ShopPanel", string(npc_name), uis(480), uis(520), {
         anchor     = .CenterCenter,
         offset     = { -f32(g_inv.panel_w) * 0.5, 0 },
-        bg_col     = rl.Color{ 8, 6, 4, 252 },
+        bg_col     = gfx.Color{ 8, 6, 4, 252 },
         border_col = COL_RULE,
         accent_col = COL_BRASS,
         title_col  = COL_PARCH,
@@ -260,7 +261,7 @@ draw_shop_hud :: proc(w: ^World) {
         ui_label("ShopSub", string(t(.SHOP_TITLE)), uis(10), COL_MUTED)
         ui_grow("ShopHeaderSpc")
         ui_label("ShopGold", string(tf(.SHOP_GOLD, wallet_gold)), uis(13),
-            rl.Color{ 255, 215, 50, 255 })
+            gfx.Color{ 255, 215, 50, 255 })
         ui_hstack_end()
 
         ui_vstack_begin("ShopList", u16(uis(8)))
@@ -283,7 +284,7 @@ draw_shop_hud :: proc(w: ^World) {
 
             hovered := ui_clickable_begin(fmt.tprintf("ShopRow%d", i), item_h, rc_col)
             {
-                ui_box(fmt.tprintf("ShopIcon%d", i), uis(36), uis(36), rl.Color{ 40, 34, 22, 255 }, 2)
+                ui_box(fmt.tprintf("ShopIcon%d", i), uis(36), uis(36), gfx.Color{ 40, 34, 22, 255 }, 2)
                 ui_vstack_begin(fmt.tprintf("ShopInfo%d", i), u16(uis(3)))
                 ui_label(fmt.tprintf("ShopName%d", i),
                     string(loc_lookup(render_config_name_cstr(irc))), uis(12), rc_col)
@@ -291,7 +292,7 @@ draw_shop_hud :: proc(w: ^World) {
                     string(loc_lookup(render_config_desc_cstr(irc))), uis(9), COL_MUTED)
                 ui_vstack_end()
                 ui_grow(fmt.tprintf("ShopRowSpc%d", i))
-                price_col := rl.Color{255, 215, 50, 255} if can_afford else rl.Color{180, 80, 60, 255}
+                price_col := gfx.Color{255, 215, 50, 255} if can_afford else gfx.Color{180, 80, 60, 255}
                 ui_label(fmt.tprintf("ShopPrice%d", i),
                     fmt.tprintf("%d g", ss.price), uis(13), price_col)
             }

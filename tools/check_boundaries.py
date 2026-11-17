@@ -18,6 +18,8 @@ RULES = {
     # package dir     allowed import prefixes / exact relative paths
     "src/sim":    ["core:", "base:", "cw:"],
     "src/server": ["core:", "base:", "cw:", "../sim"],
+    # The rendering API. Its backend is raylib until P1a step 7 swaps in sokol.
+    "src/gfx":    ["core:", "base:", "vendor:raylib"],
 }
 
 IMPORT = re.compile(r'^\s*import\s+(?:[A-Za-z_]\w*\s+)?"([^"]+)"', re.M)

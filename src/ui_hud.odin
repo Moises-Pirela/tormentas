@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import clay "../clay"
 import      "core:fmt"
 import      "core:strings"
@@ -11,7 +12,7 @@ STATUS_EFFECT_LABELS := [len(StatusEffectType)]string{
 }
 
 @(private = "file")
-STATUS_EFFECT_COLORS := [len(StatusEffectType)]rl.Color{
+STATUS_EFFECT_COLORS := [len(StatusEffectType)]gfx.Color{
     {  80, 160, 220, 255 },
     {  80, 205,  80, 255 },
     { 240, 120,  30, 255 },
@@ -49,8 +50,8 @@ draw_hud :: proc(w: ^World) {
         hp_orb := UICustomData{ kind = .Orb, orb = UICustomOrb{
             fill_ratio   = hp_ratio,
             shield_ratio = shield_ratio,
-            fill_col     = rl.Color{ 158, 32, 32, 255 },
-            bg_col       = rl.Color{  24,  7,  7, 255 },
+            fill_col     = gfx.Color{ 158, 32, 32, 255 },
+            bg_col       = gfx.Color{  24,  7,  7, 255 },
             portrait_idx = 1,
         }}
         copy(hp_orb.orb.value_text[:], hp_val_buf[:])
@@ -61,8 +62,8 @@ draw_hud :: proc(w: ^World) {
 
         en_orb := UICustomData{ kind = .Orb, orb = UICustomOrb{
             fill_ratio = en_ratio,
-            fill_col   = rl.Color{  36, 72, 165, 255 },
-            bg_col     = rl.Color{   7, 12,  32, 255 },
+            fill_col   = gfx.Color{  36, 72, 165, 255 },
+            bg_col     = gfx.Color{   7, 12,  32, 255 },
         }}
         copy(en_orb.orb.value_text[:], en_val_buf[:])
 
@@ -72,7 +73,7 @@ draw_hud :: proc(w: ^World) {
         chip_data: [ABILITY_SLOT_COUNT]UICustomData
         _hud_fill_ability_chips(w, &chip_data)
 
-        HUDStatusInfo :: struct { label: string, color: rl.Color, duration: f32 }
+        HUDStatusInfo :: struct { label: string, color: gfx.Color, duration: f32 }
         se_buf: [len(StatusEffectType)]HUDStatusInfo
         se_n   := 0
         if world_has_component(w, w.player_id, .StatusEffect) {
@@ -151,7 +152,7 @@ draw_hud :: proc(w: ^World) {
                     }) {
                         for i in 0..<se_n {
                             se     := &se_buf[i]
-                            dark   := rl.Color{
+                            dark   := gfx.Color{
                                 se.color.r / 5, se.color.g / 5,
                                 se.color.b / 5, 220 }
                             dur_s  := fmt.tprintf("%.1fs", se.duration)
@@ -180,7 +181,7 @@ draw_hud :: proc(w: ^World) {
                                 clay.TextDynamic(dur_s, clay.TextConfig({
                                     fontSize  = u16(uis(10)),
                                     textColor = ui_clay_color(
-                                        rl.Color{ 175, 165, 145, 190 }),
+                                        gfx.Color{ 175, 165, 145, 190 }),
                                 }))
                             }
                         }
@@ -213,8 +214,8 @@ draw_hud :: proc(w: ^World) {
                 }
 
                 ui_hbar("HUDXP", xp_ratio,
-                    rl.Color{ 180, 148, 36, 255 },
-                    rl.Color{  28,  22, 10, 255 },
+                    gfx.Color{ 180, 148, 36, 255 },
+                    gfx.Color{  28,  22, 10, 255 },
                     XP_H)
             }
 
@@ -251,10 +252,10 @@ draw_hud :: proc(w: ^World) {
         rail_y   := sh - VPAD - uis(80)*0.5 - rail_h*0.5 - 4
         rl.DrawRectangle(i32(rail_x), i32(rail_y),
             i32(center_w + HPAD * 2), i32(rail_h),
-            rl.Color{ 55, 42, 22, 200 })
+            gfx.Color{ 55, 42, 22, 200 })
         rl.DrawRectangle(i32(rail_x), i32(rail_y),
             i32(center_w + HPAD * 2), 1,
-            rl.Color{ 140, 100, 40, 180 })
+            gfx.Color{ 140, 100, 40, 180 })
     }
 
     clay_raylib_render(&cmds)
@@ -283,10 +284,10 @@ draw_interact_prompt :: proc(w: ^World) {
     py := sh * 0.60 - psz.y
 
     rl.DrawTextEx(g_font_body, prompt_cs, {px + uis(1.5), py + uis(1.5)},
-        prompt_fs, 1, rl.Color{0, 0, 0, 180})
+        prompt_fs, 1, gfx.Color{0, 0, 0, 180})
 
     rl.DrawTextEx(g_font_body, prompt_cs, {px, py},
-        prompt_fs, 1, rl.Color{255, 235, 160, 240})
+        prompt_fs, 1, gfx.Color{255, 235, 160, 240})
 
     key_cs  := strings.clone_to_cstring(fmt.tprintf("[%s]", bound_key_label(g_binds.gameplay.interact)), context.temp_allocator)
     key_fs  := uis(13)
@@ -294,9 +295,9 @@ draw_interact_prompt :: proc(w: ^World) {
     kx      := sw * 0.5 - ksz.x * 0.5
     ky      := py + psz.y + uis(3)
     rl.DrawTextEx(g_font_body, key_cs, {kx + uis(1), ky + uis(1)}, key_fs, 0.5,
-        rl.Color{0, 0, 0, 150})
+        gfx.Color{0, 0, 0, 150})
     rl.DrawTextEx(g_font_body, key_cs, {kx, ky}, key_fs, 0.5,
-        rl.Color{190, 190, 190, 210})
+        gfx.Color{190, 190, 190, 210})
 }
 
 @(private = "file")
@@ -403,16 +404,16 @@ _draw_flask_charges :: proc(w: ^World) {
     _draw_flask_pip_row(w, inv, .Flask1, pid,
         hud_left + HPAD, pip_y,
         pip_r, pip_gap, ORB_SZ,
-        rl.Color{ 180, 40,  40,  255 },
-        rl.Color{ 100, 20,  20,  160 },
+        gfx.Color{ 180, 40,  40,  255 },
+        gfx.Color{ 100, 20,  20,  160 },
         "[1]")
 
     en_orb_left := hud_left + HPAD + ORB_SZ + CHIP_GAP + center_w + CHIP_GAP
     _draw_flask_pip_row(w, inv, .Flask2, pid,
         en_orb_left, pip_y,
         pip_r, pip_gap, ORB_SZ,
-        rl.Color{ 50,  90,  210, 255 },
-        rl.Color{ 15,  25,  80,  160 },
+        gfx.Color{ 50,  90,  210, 255 },
+        gfx.Color{ 15,  25,  80,  160 },
         "[2]")
 }
 
@@ -421,18 +422,18 @@ _draw_flask_pip_row :: proc(
     w: ^World, inv: ^InventoryComp,
     slot: EquipSlot, pid: int,
     px, py, pip_r, pip_gap, orb_w: f32,
-    col_filled, col_empty: rl.Color,
+    col_filled, col_empty: gfx.Color,
     key_label: cstring,
 ) {
     fid := inv.equipped[int(slot)]
 
     key_fs  := uis(11)
     rl.DrawTextEx(g_font_body, key_label, { px, py }, key_fs, 0.5,
-        rl.Color{ 160, 150, 130, 180 })
+        gfx.Color{ 160, 150, 130, 180 })
 
     if !world_is_valid(w, fid) || !world_has_component(w, fid, .Flask) {
         rl.DrawTextEx(g_font_body, "empty", { px + uis(20), py }, key_fs, 0.5,
-            rl.Color{ 80, 70, 60, 120 })
+            gfx.Color{ 80, 70, 60, 120 })
         return
     }
 
@@ -454,6 +455,6 @@ _draw_flask_pip_row :: proc(
         }
         rl.DrawCircleV({ cx, py + pip_r + uis(1) }, pip_r, c)
         rl.DrawCircleLines(i32(cx), i32(py + pip_r + uis(1)), pip_r,
-            rl.Color{ c.r, c.g, c.b, 200 })
+            gfx.Color{ c.r, c.g, c.b, 200 })
     }
 }

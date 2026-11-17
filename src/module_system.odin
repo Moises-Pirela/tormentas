@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import      "core:strings"
 import json "core:encoding/json"
 import      "core:fmt"
@@ -113,7 +114,7 @@ module_draw_ghost :: proc(def_idx, tx, ty: int) {
     def := g_modules[def_idx]
     if def.tex.id == 0 { return }
     iso := world_to_iso_xy(f32(tx * TILE_SIZE), f32(ty * TILE_SIZE))
-    rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, rl.Color{ 255, 255, 255, 130 })
+    rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.Color{ 255, 255, 255, 130 })
 }
 
 draw_level_modules :: proc() {
@@ -139,7 +140,7 @@ draw_level_modules :: proc() {
         def := g_modules[m.def_idx]
         if def.tex.id == 0 { continue }
         iso := world_to_iso_xy(f32(int(m.tx) * TILE_SIZE), f32(int(m.ty) * TILE_SIZE))
-        rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, rl.WHITE)
+        rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.WHITE)
     }
 }
 

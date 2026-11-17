@@ -1,6 +1,7 @@
 package main
 
 import rl "vendor:raylib"
+import gfx "gfx"
 
 UIPanel :: enum {
     Inventory,
@@ -37,7 +38,7 @@ UIManager :: struct {
     count:          int,
     rt_w:           i32,
     rt_h:           i32,
-    last_mouse_pos: rl.Vector2,
+    last_mouse_pos: gfx.Vec2,
 }
 
 UI_FADE_SPEED :: f32(8.0)
@@ -221,15 +222,15 @@ ui_draw :: proc(w: ^World) {
 
         if l.dirty {
             rl.BeginTextureMode(l.rt)
-            rl.ClearBackground(rl.BLANK)
+            rl.ClearBackground(gfx.BLANK)
             _ui_draw_panel(l.panel, w)
             rl.EndTextureMode()
             l.dirty = false
         }
 
-        src  := rl.Rectangle{ 0, f32(g_ui.rt_h), f32(g_ui.rt_w), -f32(g_ui.rt_h) }
-        dst  := rl.Rectangle{ 0, 0, sw, sh }
-        tint := rl.Color{ 255, 255, 255, u8(l.alpha * 255) }
+        src  := gfx.Rect{ 0, f32(g_ui.rt_h), f32(g_ui.rt_w), -f32(g_ui.rt_h) }
+        dst  := gfx.Rect{ 0, 0, sw, sh }
+        tint := gfx.Color{ 255, 255, 255, u8(l.alpha * 255) }
         rl.DrawTexturePro(l.rt.texture, src, dst, {0, 0}, 0, tint)
     }
 }

@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import p2p  "p2p"
 import clay "../clay"
 import      "core:fmt"
@@ -28,7 +29,7 @@ draw_social_panel :: proc() {
     pw := uis(310)
 
     status_msg: string
-    status_col: rl.Color
+    status_col: gfx.Color
     switch {
     case online:
         if p2p.is_host(&g_session) {
@@ -38,7 +39,7 @@ draw_social_panel :: proc() {
         } else {
             status_msg = "Connected"
         }
-        status_col = rl.Color{100, 220, 100, 255}
+        status_col = gfx.Color{100, 220, 100, 255}
     case hosting:
         status_msg = "Waiting for friend..."
         status_col = COL_BRASS
@@ -69,7 +70,7 @@ draw_social_panel :: proc() {
         for i in 0..<nf {
             f := friends[i]
             ui_hstack_begin(fmt.tprintf("SocRow%d", i), u16(uis(8)), 0, .Center)
-            ui_dot(fmt.tprintf("SocDot%d", i), rl.Color{100, 220, 100, 220}, uis(8))
+            ui_dot(fmt.tprintf("SocDot%d", i), gfx.Color{100, 220, 100, 220}, uis(8))
             ui_label(fmt.tprintf("SocName%d", i), string(cstring(raw_data(f.name))),
                 uis(11), COL_PARCH)
             ui_grow(fmt.tprintf("SocRowSpc%d", i))
@@ -77,7 +78,7 @@ draw_social_panel :: proc() {
                 sent := g_invite_timer > 0 && g_invite_sent_id == f.steam_id
                 if sent {
                     ui_label(fmt.tprintf("SocSent%d", i), "Sent!", uis(10),
-                        rl.Color{120, 240, 120, 255})
+                        gfx.Color{120, 240, 120, 255})
                 } else if ui_button(fmt.tprintf("SocInv%d", i), "Invite", uis(52), uis(22)) {
                     steam_lobby_invite(f.steam_id)
                     g_invite_sent_id = f.steam_id

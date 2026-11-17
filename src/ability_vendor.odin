@@ -3,6 +3,7 @@ package main
 import "core:math/rand"
 import "core:fmt"
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import clay "../clay"
 
 MAX_ABILITY_VENDOR_STOCK  :: 4
@@ -115,7 +116,7 @@ draw_ability_vendor_world :: proc(w: ^World) {
         nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.5)
         rl.DrawTextEx(g_font_body, name,
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
-            nfs, 0.5, rl.Color{ 180, 220, 255, 220 })
+            nfs, 0.5, gfx.Color{ 180, 220, 255, 220 })
 
         if !ui_has(.AbilityVendor) &&
            dist_sq <= ABILITY_VENDOR_PROMPT_DIST * ABILITY_VENDOR_PROMPT_DIST {
@@ -126,7 +127,7 @@ draw_ability_vendor_world :: proc(w: ^World) {
             pulse   := u8(180 + 60 * (t_now - f32(int(t_now))))
             rl.DrawTextEx(g_font_body, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
-                pfs, 0.5, rl.Color{ 180, 220, 255, pulse })
+                pfs, 0.5, gfx.Color{ 180, 220, 255, pulse })
         }
     }
 }
@@ -139,7 +140,7 @@ draw_ability_vendor_hud :: proc(w: ^World) {
     }
 
     pid := w.player_id
-    blue := rl.Color{ 100, 160, 220, 255 }
+    blue := gfx.Color{ 100, 160, 220, 255 }
 
     rc       := comp_get(w, g_ability_vendor_npc_id, .RenderConfig, RenderConfigComp)
     npc_name := loc_lookup(render_config_name_cstr(rc))
@@ -157,7 +158,7 @@ draw_ability_vendor_hud :: proc(w: ^World) {
     clay.BeginLayout()
     ui_panel_begin("AbilityVendorPanel", string(npc_name), uis(480), uis(520), {
         anchor     = .CenterCenter,
-        bg_col     = rl.Color{ 4, 6, 12, 252 },
+        bg_col     = gfx.Color{ 4, 6, 12, 252 },
         border_col = COL_RULE,
         accent_col = blue,
         title_col  = COL_PARCH,
@@ -168,7 +169,7 @@ draw_ability_vendor_hud :: proc(w: ^World) {
         ui_label("AVSub", string(t(.ABILITY_VENDOR_SUBTITLE)), uis(10), COL_MUTED)
         ui_grow("AVHeaderSpc")
         ui_label("AVSerums", fmt.tprintf("%d serums", player_serums), uis(13),
-            rl.Color{ 120, 200, 120, 255 })
+            gfx.Color{ 120, 200, 120, 255 })
         ui_hstack_end()
 
         ui_vstack_begin("AVList", u16(uis(8)))
@@ -188,7 +189,7 @@ draw_ability_vendor_hud :: proc(w: ^World) {
 
             hovered := ui_clickable_begin(fmt.tprintf("AVRow%d", i), item_h, blue)
             {
-                ui_box(fmt.tprintf("AVIcon%d", i), uis(40), uis(40), rl.Color{ 20, 30, 50, 255 }, 2)
+                ui_box(fmt.tprintf("AVIcon%d", i), uis(40), uis(40), gfx.Color{ 20, 30, 50, 255 }, 2)
                 ui_vstack_begin(fmt.tprintf("AVInfo%d", i), u16(uis(3)))
                 ui_label(fmt.tprintf("AVName%d", i),
                     string(loc_lookup(render_config_name_cstr(irc))), uis(13), blue)
@@ -197,7 +198,7 @@ draw_ability_vendor_hud :: proc(w: ^World) {
                 ui_label(fmt.tprintf("AVRar%d", i), "Epic", uis(9), rarity_color(.Epic))
                 ui_vstack_end()
                 ui_grow(fmt.tprintf("AVRowSpc%d", i))
-                price_col := rl.Color{ 120, 200, 120, 255 } if can_afford else rl.Color{ 180, 80, 60, 255 }
+                price_col := gfx.Color{ 120, 200, 120, 255 } if can_afford else gfx.Color{ 180, 80, 60, 255 }
                 ui_label(fmt.tprintf("AVPrice%d", i),
                     fmt.tprintf("%d serums", ABILITY_VENDOR_SERUM_COST), uis(13), price_col)
             }

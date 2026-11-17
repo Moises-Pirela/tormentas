@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:math"
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import clay "../clay"
 
 g_drag_item_id:      int          = -1
@@ -154,11 +155,11 @@ _inv_mouse_to_cell :: proc(grid_bb: clay.BoundingBox, mx, my: f32) -> (col, row:
     return c, r, true
 }
 
-draw_item_glyph :: proc(slot: EquipSlot, x, y, sz: i32, tint: rl.Color) {
+draw_item_glyph :: proc(slot: EquipSlot, x, y, sz: i32, tint: gfx.Color) {
     cx  := f32(x) + f32(sz) * 0.5
     cy  := f32(y) + f32(sz) * 0.5
-    col := rl.Color{ tint.r, tint.g, tint.b, 200 }
-    dim := rl.Color{ tint.r / 2, tint.g / 2, tint.b / 2, 180 }
+    col := gfx.Color{ tint.r, tint.g, tint.b, 200 }
+    dim := gfx.Color{ tint.r / 2, tint.g / 2, tint.b / 2, 180 }
     r   := f32(sz) * 0.5
 
     switch slot {
@@ -246,12 +247,12 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
         for c in 0..<i32(BACKPACK_COLS) {
             cx := gx + c * cs
             cy := gy + r * cs
-            rl.DrawRectangle(cx, cy, cs, cs, rl.Color{ 8, 6, 4, 255 })
-            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, rl.Color{ 18, 14, 10, 255 })
+            rl.DrawRectangle(cx, cy, cs, cs, gfx.Color{ 8, 6, 4, 255 })
+            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, gfx.Color{ 18, 14, 10, 255 })
             rl.DrawLineEx({ f32(cx + 1), f32(cy + 1) }, { f32(cx + cs - 1), f32(cy + 1) },
-                1, rl.Color{ 0, 0, 0, 80 })
+                1, gfx.Color{ 0, 0, 0, 80 })
             rl.DrawLineEx({ f32(cx + 1), f32(cy + 1) }, { f32(cx + 1), f32(cy + cs - 1) },
-                1, rl.Color{ 0, 0, 0, 80 })
+                1, gfx.Color{ 0, 0, 0, 80 })
         }
     }
 
@@ -274,7 +275,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
         col, row, hit := _inv_mouse_to_cell(grid_bb, mp.x, mp.y)
         if hit {
             can    := backpack_can_place(inv, drag_item, col, row)
-            hi_col := rl.Color{ 60, 180, 60, 80 } if can else rl.Color{ 180, 40, 40, 80 }
+            hi_col := gfx.Color{ 60, 180, 60, 80 } if can else gfx.Color{ 180, 40, 40, 80 }
             for dy in 0..<drag_item.grid_h {
                 for dx in 0..<drag_item.grid_w {
                     if col+dx < BACKPACK_COLS && row+dy < BACKPACK_ROWS {
@@ -305,12 +306,12 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
             ih := i32(item.grid_h) * cs - 4
 
             rl.DrawRectangle(ix, iy, iw, ih,
-                rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
+                gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
             rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1,
-                rl.Color{ rc.r, rc.g, rc.b, 220 })
+                gfx.Color{ rc.r, rc.g, rc.b, 220 })
             if class_locked {
-                rl.DrawRectangle(ix, iy, iw, ih, rl.Color{ 80, 10, 10, 150 })
-                rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(ix) + uis(3), f32(iy) + uis(3)}, uis(9), 0.4, rl.Color{255, 100, 100, 240})
+                rl.DrawRectangle(ix, iy, iw, ih, gfx.Color{ 80, 10, 10, 150 })
+                rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(ix) + uis(3), f32(iy) + uis(3)}, uis(9), 0.4, gfx.Color{255, 100, 100, 240})
             }
 
             icon_margin :: i32(3)
@@ -324,11 +325,11 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
                     if ok {
                         iicon_x := ix + (iw - icon_sz) / 2
                         iicon_y := iy + icon_margin
-                        src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
-                        dst := rl.Rectangle{ f32(iicon_x), f32(iicon_y),
+                        src := gfx.Rect{ 0, 0, f32(tex.width), f32(tex.height) }
+                        dst := gfx.Rect{ f32(iicon_x), f32(iicon_y),
                                              f32(icon_sz), f32(icon_sz) }
                         rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
-                            rl.Color{ rc.r, rc.g, rc.b, 210 })
+                            gfx.Color{ rc.r, rc.g, rc.b, 210 })
                         icon_drawn = true
                     }
                 }
@@ -343,7 +344,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
                 name := loc_lookup(render_config_name_cstr(rcc))
                 rl.DrawTextEx(g_font_body, name,
                     { f32(ix) + uis(3), f32(iy + icon_margin + icon_sz + 2) },
-                    uis(11), 0.4, rl.Color{ rc.r, rc.g, rc.b, 200 })
+                    uis(11), 0.4, gfx.Color{ rc.r, rc.g, rc.b, 200 })
             }
         }
     }
@@ -363,12 +364,12 @@ _draw_drag_item :: proc(w: ^World) {
     rc := rarity_color(item.rarity)
     class_locked := item.slot == .WeaponPrimary && item.weapon_archetype != player_class_archetype()
     rl.DrawRectangle(fx, fy, iw, ih,
-        rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
+        gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
     rl.DrawRectangleLinesEx({ f32(fx), f32(fy), f32(iw), f32(ih) }, 1,
-        rl.Color{ rc.r, rc.g, rc.b, 240 })
+        gfx.Color{ rc.r, rc.g, rc.b, 240 })
     if class_locked {
-        rl.DrawRectangle(fx, fy, iw, ih, rl.Color{ 80, 10, 10, 150 })
-        rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(fx) + uis(3), f32(fy) + uis(3)}, uis(9), 0.4, rl.Color{255, 100, 100, 240})
+        rl.DrawRectangle(fx, fy, iw, ih, gfx.Color{ 80, 10, 10, 150 })
+        rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(fx) + uis(3), f32(fy) + uis(3)}, uis(9), 0.4, gfx.Color{255, 100, 100, 240})
     }
 
     drag_icon_sz    := min(iw, ih) - 6
@@ -381,12 +382,12 @@ _draw_drag_item :: proc(w: ^World) {
         if rcc.icon_len > 0 {
             tex, ok := get_or_load_icon(render_config_icon_cstr(rcc))
             if ok {
-                src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
-                dst := rl.Rectangle{
+                src := gfx.Rect{ 0, 0, f32(tex.width), f32(tex.height) }
+                dst := gfx.Rect{
                     f32(drag_icon_x), f32(drag_icon_y),
                     f32(drag_icon_sz), f32(drag_icon_sz) }
                 rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
-                    rl.Color{ rc.r, rc.g, rc.b, 210 })
+                    gfx.Color{ rc.r, rc.g, rc.b, 210 })
                 drag_icon_drawn = true
             }
         }

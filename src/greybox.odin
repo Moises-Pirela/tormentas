@@ -1,6 +1,7 @@
 package main
 
 import rl "vendor:raylib"
+import gfx "gfx"
 import "vendor:raylib/rlgl"
 
 GREYBOX_Z :: f32(0.75)
@@ -12,7 +13,7 @@ gb_p :: proc(wx, wy, h: f32) -> [2]f32 {
 }
 
 @(private = "file")
-gb_quad :: proc(a, b, c, d: [2]f32, col: rl.Color) {
+gb_quad :: proc(a, b, c, d: [2]f32, col: gfx.Color) {
     rlgl.Color4ub(col.r, col.g, col.b, col.a)
     rlgl.Vertex2f(a[0], a[1])
     rlgl.Vertex2f(b[0], b[1])
@@ -21,8 +22,8 @@ gb_quad :: proc(a, b, c, d: [2]f32, col: rl.Color) {
 }
 
 @(private = "file")
-gb_shade :: proc(r, g, b: u8, f: f32, a: u8) -> rl.Color {
-    return rl.Color{
+gb_shade :: proc(r, g, b: u8, f: f32, a: u8) -> gfx.Color {
+    return gfx.Color{
         u8(clamp(f32(r) * f, 0, 255)),
         u8(clamp(f32(g) * f, 0, 255)),
         u8(clamp(f32(b) * f, 0, 255)),
@@ -96,7 +97,7 @@ draw_greybox_volume :: proc(w: ^World, id: int) {
     fs := gb_p(t.position[0] + fhx, t.position[1] + fhy, 0)
     fv := gb_p(t.position[0] - fhx, t.position[1] + fhy, 0)
 
-    oc := rl.Color{18, 20, 24, 170}
+    oc := gfx.Color{18, 20, 24, 170}
     rl.DrawLineEx({fn[0], fn[1]}, {fe[0], fe[1]}, 1.5, oc)
     rl.DrawLineEx({fe[0], fe[1]}, {fs[0], fs[1]}, 1.5, oc)
     rl.DrawLineEx({fs[0], fs[1]}, {fv[0], fv[1]}, 1.5, oc)

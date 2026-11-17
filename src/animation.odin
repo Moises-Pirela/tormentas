@@ -3,7 +3,7 @@ package main
 import "core:encoding/json"
 import "core:math"
 import "core:strings"
-import rl  "vendor:raylib"
+import gfx "gfx"
 
 @(private = "file")
 json_f32 :: proc(v: json.Value) -> f32 {
@@ -317,7 +317,7 @@ get_entity_sprite_stem :: proc(w: ^World, id: int) -> string {
     return ENEMY_STEM
 }
 
-anim_source_rect :: proc(w: ^World, id: int, full_src: rl.Rectangle, sprite_stem: string) -> rl.Rectangle {
+anim_source_rect :: proc(w: ^World, id: int, full_src: gfx.Rect, sprite_stem: string) -> gfx.Rect {
     if !world_has_component(w, id, .AnimState) {
         return full_src
     }
@@ -338,7 +338,7 @@ anim_source_rect :: proc(w: ^World, id: int, full_src: rl.Rectangle, sprite_stem
     col := abs_frame %% adef.columns
     row := abs_frame /  adef.columns
 
-    return rl.Rectangle{
+    return gfx.Rect{
         f32(col * adef.frame_width),
         f32(row * adef.frame_height),
         f32(adef.frame_width),

@@ -1,7 +1,7 @@
 package main
 
 import "core:math"
-import rl "vendor:raylib"
+import gfx "gfx"
 
 trap_system :: proc(w: ^World, event: SystemEvent, dt: f32) {
     if event != .Update { return }
@@ -56,7 +56,7 @@ draw_traps :: proc(w: ^World) {
 
     for tid in trap_ids {
         trap := comp_get(w, tid, .ProximityTrigger, ProximityTriggerComp)
-        pos  := rl.Vector2{
+        pos  := gfx.Vec2{
             comp_get(w, tid, .Transform, TransformComp).position[0],
             comp_get(w, tid, .Transform, TransformComp).position[1],
         }
@@ -74,11 +74,11 @@ draw_traps :: proc(w: ^World) {
         }
 
         draw_world_circle_lines(pos, trap.radius,
-            rl.Color{ trap.er, trap.eg, trap.eb, edge_a })
+            gfx.Color{ trap.er, trap.eg, trap.eb, edge_a })
 
-        core_color := rl.Color{ trap.er, trap.eg, trap.eb, u8(armed ? 200 : 80) }
+        core_color := gfx.Color{ trap.er, trap.eg, trap.eb, u8(armed ? 200 : 80) }
         draw_world_circle(pos, 6, core_color)
 
-        draw_world_circle(pos, trap.radius, rl.Color{ trap.er, trap.eg, trap.eb, fill_a })
+        draw_world_circle(pos, trap.radius, gfx.Color{ trap.er, trap.eg, trap.eb, fill_a })
     }
 }

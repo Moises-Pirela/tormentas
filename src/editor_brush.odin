@@ -4,6 +4,7 @@ import      "core:fmt"
 import      "core:math"
 import im   "../deps/imgui/imgui"
 import rl   "vendor:raylib"
+import gfx  "gfx"
 
 EdStrokeKind :: enum u8 { None, Paint, Erase, EraseObjects }
 
@@ -121,7 +122,7 @@ ed_stroke_update :: proc(cell: [2]int) {
     s.last_cell = cell
 }
 
-ed_brush_display_color :: proc(c: rl.Color) -> rl.Color {
+ed_brush_display_color :: proc(c: gfx.Color) -> gfx.Color {
     lum := 0.3 * f32(c.r) + 0.59 * f32(c.g) + 0.11 * f32(c.b)
     if lum >= 150 { return c }
     k := clamp((170 - lum) / 170, 0, 1) * 0.85
@@ -131,9 +132,9 @@ ed_brush_display_color :: proc(c: rl.Color) -> rl.Color {
     }
 }
 
-ed_brush_label_full :: proc() -> (name: string, col: rl.Color) {
-    if g_ed_stroke.kind == .EraseObjects { return "Erase objects", rl.Color{ 235, 85, 75, 255 } }
-    if g_ed_tool == .Erase || g_ed_stroke.kind == .Erase { return "Erase", rl.Color{ 235, 85, 75, 255 } }
+ed_brush_label_full :: proc() -> (name: string, col: gfx.Color) {
+    if g_ed_stroke.kind == .EraseObjects { return "Erase objects", gfx.Color{ 235, 85, 75, 255 } }
+    if g_ed_tool == .Erase || g_ed_stroke.kind == .Erase { return "Erase", gfx.Color{ 235, 85, 75, 255 } }
     _, raw := ed_brush_colors(g_ed_brush)
     brd := ed_brush_display_color(raw)
     if g_ed_brush == .Module {
@@ -144,18 +145,18 @@ ed_brush_label_full :: proc() -> (name: string, col: rl.Color) {
 }
 
 @(private = "file")
-_iso_quad :: proc(x0, y0, x1, y1: f32) -> [4]rl.Vector2 {
+_iso_quad :: proc(x0, y0, x1, y1: f32) -> [4]gfx.Vec2 {
     return { world_to_iso_xy(x0, y0), world_to_iso_xy(x1, y0), world_to_iso_xy(x1, y1), world_to_iso_xy(x0, y1) }
 }
 
 @(private = "file")
-_fill_quad :: proc(q: [4]rl.Vector2, col: rl.Color) {
+_fill_quad :: proc(q: [4]gfx.Vec2, col: gfx.Color) {
     rl.DrawTriangle(q[0], q[2], q[1], col)
     rl.DrawTriangle(q[0], q[3], q[2], col)
 }
 
 @(private = "file")
-_outline_quad :: proc(q: [4]rl.Vector2, thick: f32, col: rl.Color) {
+_outline_quad :: proc(q: [4]gfx.Vec2, thick: f32, col: gfx.Color) {
     for i in 0..<4 { rl.DrawLineEx(q[i], q[(i + 1) % 4], thick, col) }
 }
 
@@ -174,7 +175,7 @@ draw_editor_brush_world :: proc() {
     if g_ed_brush == .Module && g_ed_tool == .Paint && !g_hub_active {
         if module_count() > 0 { module_draw_ghost(g_ed_module_idx, cell[0], cell[1]) }
         q := _iso_quad(f32(cell[0]) * u, f32(cell[1]) * u, f32(cell[0] + 1) * u, f32(cell[1] + 1) * u)
-        _outline_quad(q, lw * 2, rl.Color{ 90, 150, 230, 230 })
+        _outline_quad(q, lw * 2, gfx.Color{ 90, 150, 230, 230 })
         return
     }
 
@@ -184,10 +185,10 @@ draw_editor_brush_world :: proc() {
     pulse  := 0.5 + 0.5 * math.sin(f32(rl.GetTime()) * 6)
     fill_a := u8(70 + 50 * pulse) if !active else u8(140)
     q := _iso_quad(f32(fx) * u, f32(fy) * u, f32(fx + n) * u, f32(fy + n) * u)
-    _fill_quad(q, rl.Color{ col.r, col.g, col.b, fill_a })
+    _fill_quad(q, gfx.Color{ col.r, col.g, col.b, fill_a })
 
     if n > 1 && f32(unit) * g_camera.zoom >= 6 {
-        inner := rl.Color{ 0, 0, 0, 90 }
+        inner := gfx.Color{ 0, 0, 0, 90 }
         for i in 1..<n {
             a := world_to_iso_xy(f32(fx + i) * u, f32(fy) * u)
             b := world_to_iso_xy(f32(fx + i) * u, f32(fy + n) * u)
@@ -198,16 +199,16 @@ draw_editor_brush_world :: proc() {
         }
     }
     halo := _iso_quad(f32(fx) * u - 1.5 * lw, f32(fy) * u - 1.5 * lw, f32(fx + n) * u + 1.5 * lw, f32(fy + n) * u + 1.5 * lw)
-    _outline_quad(halo, lw * 4.5, rl.Color{ 0, 0, 0, 140 })
-    _outline_quad(q, lw * (3.0 if active else 2.2), rl.Color{ col.r, col.g, col.b, 255 })
+    _outline_quad(halo, lw * 4.5, gfx.Color{ 0, 0, 0, 140 })
+    _outline_quad(q, lw * (3.0 if active else 2.2), gfx.Color{ col.r, col.g, col.b, 255 })
 }
 
 @(private = "file")
-_u32 :: proc(c: rl.Color) -> u32 {
+_u32 :: proc(c: gfx.Color) -> u32 {
     return u32(c.r) | u32(c.g) << 8 | u32(c.b) << 16 | u32(c.a) << 24
 }
 
-ed_screen_label :: proc(dl: ^im.DrawList, pos: im.Vec2, text: cstring, col: rl.Color, swatch := false) {
+ed_screen_label :: proc(dl: ^im.DrawList, pos: im.Vec2, text: cstring, col: gfx.Color, swatch := false) {
     ts  := im.CalcTextSize(text)
     pad := im.Vec2{ 6, 3 }
     sw  := f32(10) if swatch else 0
@@ -259,7 +260,7 @@ draw_editor_overlay_screen :: proc() {
         if len(g_entity_defs) > 0 {
             idx := clamp(g_ed_def_idx, 0, len(g_entity_defs) - 1)
             ed_place_preview(dl)
-            ed_screen_label(dl, at, fmt.ctprintf("Place  %s%s", g_entity_defs[idx].name, "  snap" if g_ed_snap else ""), rl.Color{ 120, 200, 255, 255 })
+            ed_screen_label(dl, at, fmt.ctprintf("Place  %s%s", g_entity_defs[idx].name, "  snap" if g_ed_snap else ""), gfx.Color{ 120, 200, 255, 255 })
         }
     case .Select:
         if !ed_gizmo_dragging() && ed_gizmo_hover() == .None {
@@ -267,7 +268,7 @@ draw_editor_overlay_screen :: proc() {
                 e  := &g_level_data.entities[hi]
                 sp := ed_world_to_screen(e.position[0], e.position[1])
                 im.DrawList_AddCircle(dl, sp, ENTITY_PICK_R, 0xc0_ff_d8_80, 32, 2)
-                ed_screen_label(dl, { sp.x + 16, sp.y - 34 }, fmt.ctprintf("%s", e.def), rl.Color{ 255, 216, 128, 255 })
+                ed_screen_label(dl, { sp.x + 16, sp.y - 34 }, fmt.ctprintf("%s", e.def), gfx.Color{ 255, 216, 128, 255 })
                 im.SetMouseCursor(.Hand)
             }
         }

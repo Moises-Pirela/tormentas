@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import      "core:fmt"
 import      "core:math"
 import clay "../clay"
@@ -9,14 +10,14 @@ MUT_PANEL_W  :: f32(680)
 MUT_PANEL_H  :: f32(560)
 MUT_CARD_GAP :: f32(8)
 
-@(private="file") MUT_BG       :: rl.Color{  10,  8, 16, 252 }
-@(private="file") MUT_BORDER   :: rl.Color{ 140, 60,200, 220 }
-@(private="file") MUT_HEADER   :: rl.Color{ 210,160,255, 255 }
-@(private="file") MUT_MUTED    :: rl.Color{ 128,110,150, 195 }
-@(private="file") MUT_OWNED    :: rl.Color{  80,200,100, 220 }
-@(private="file") MUT_CONFLICT :: rl.Color{ 220, 60, 60, 220 }
-@(private="file") MUT_CANGET   :: rl.Color{ 180, 80,255, 220 }
-@(private="file") MUT_LOCKED   :: rl.Color{  70, 50, 90, 160 }
+@(private="file") MUT_BG       :: gfx.Color{  10,  8, 16, 252 }
+@(private="file") MUT_BORDER   :: gfx.Color{ 140, 60,200, 220 }
+@(private="file") MUT_HEADER   :: gfx.Color{ 210,160,255, 255 }
+@(private="file") MUT_MUTED    :: gfx.Color{ 128,110,150, 195 }
+@(private="file") MUT_OWNED    :: gfx.Color{  80,200,100, 220 }
+@(private="file") MUT_CONFLICT :: gfx.Color{ 220, 60, 60, 220 }
+@(private="file") MUT_CANGET   :: gfx.Color{ 180, 80,255, 220 }
+@(private="file") MUT_LOCKED   :: gfx.Color{  70, 50, 90, 160 }
 
 @(private="file") g_mut_tab: MutationBranch = .Corpus
 
@@ -78,7 +79,7 @@ draw_mutation_workbench_world :: proc(w: ^World) {
     p := world_to_iso_xy(pos[0], pos[1])
     rl.DrawTextEx(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
-        fs, 0.5, rl.Color{ 220, 170, 255, pulse })
+        fs, 0.5, gfx.Color{ 220, 170, 255, pulse })
 }
 
 update_mutation_tree :: proc(w: ^World) {
@@ -102,7 +103,7 @@ draw_mutation_tree :: proc(w: ^World) {
     ph      := uis(MUT_PANEL_H)
     inner_w := pw - uis(28)
     tab_w   := (inner_w - uis(8)) / 3
-    purple_active := rl.Color{ 50, 20, 80, 245 }
+    purple_active := gfx.Color{ 50, 20, 80, 245 }
 
     clay.BeginLayout()
     ui_panel_begin("MutPanel", string(t(.MUT_TITLE)), pw, ph, {
@@ -143,21 +144,21 @@ draw_mutation_tree :: proc(w: ^World) {
             can      := mutation_can_unlock(w, w.player_id, mt)
             conflict := !owned && mutation_conflicts(w, w.player_id, mt)
 
-            bg     := rl.Color{ 16, 14, 28, 240 }
+            bg     := gfx.Color{ 16, 14, 28, 240 }
             border := MUT_LOCKED
             name_c := MUT_HEADER
             status := string(tf(.MUT_COST, def.serum_cost))
-            stat_c := rl.Color{ 180, 60, 60, 200 }
+            stat_c := gfx.Color{ 180, 60, 60, 200 }
             if owned {
-                bg = rl.Color{ 20, 40, 24, 240 }; border = MUT_OWNED; name_c = MUT_OWNED
+                bg = gfx.Color{ 20, 40, 24, 240 }; border = MUT_OWNED; name_c = MUT_OWNED
                 status = string(t(.MUT_ACQUIRED)); stat_c = MUT_OWNED
             } else if conflict {
-                bg = rl.Color{ 40, 14, 14, 240 }; border = MUT_CONFLICT; name_c = MUT_CONFLICT
+                bg = gfx.Color{ 40, 14, 14, 240 }; border = MUT_CONFLICT; name_c = MUT_CONFLICT
                 status = string(t(.MUT_CONFLICT)); stat_c = MUT_CONFLICT
             } else if can {
-                bg = rl.Color{ 28, 14, 50, 240 }
-                border = rl.Color{ 220, 120, 255, 255 } if hovered else MUT_CANGET
-                stat_c = rl.Color{ 100, 210, 120, 210 }
+                bg = gfx.Color{ 28, 14, 50, 240 }
+                border = gfx.Color{ 220, 120, 255, 255 } if hovered else MUT_CANGET
+                stat_c = gfx.Color{ 100, 210, 120, 210 }
             }
 
             ui_card_begin(cardid, bg, border, u16(uis(3)))
@@ -180,7 +181,7 @@ draw_mutation_tree :: proc(w: ^World) {
         ui_scroll_end()
 
         ui_hstack_begin("MutFooter", u16(uis(8)), 0, .Center)
-        ui_label("MutHint", string(t(.MUT_FOOTER)), uis(8), rl.Color{ 90, 70, 110, 180 })
+        ui_label("MutHint", string(t(.MUT_FOOTER)), uis(8), gfx.Color{ 90, 70, 110, 180 })
         ui_grow("MutFooterSpc")
         can_clear := mc.entity_count > 0 && mc.serums >= MUT_CLEAR_COST
         if ui_button("MutReset", string(tf(.MUT_RESET, MUT_CLEAR_COST)), uis(130), uis(22), .Danger) && can_clear {

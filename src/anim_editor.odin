@@ -5,6 +5,7 @@ import      "core:path/filepath"
 import      "core:strings"
 import im   "../deps/imgui/imgui"
 import rl   "vendor:raylib"
+import gfx  "gfx"
 
 ANIM_ED_KEY_CAP :: 64
 
@@ -28,7 +29,7 @@ AnimEditorState :: struct {
     sheet:           AnimSheetDef,
     dirty:           bool,
 
-    view_offset:     rl.Vector2,
+    view_offset:     gfx.Vec2,
     view_zoom:       f32,
     hover_frame:     int,
 

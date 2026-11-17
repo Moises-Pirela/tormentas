@@ -2,6 +2,7 @@ package main
 
 import "core:math"
 import rl "vendor:raylib"
+import gfx "gfx"
 
 AI_STATE_IDLE       :: u8(0)
 AI_STATE_SUSPICIOUS :: u8(1)
@@ -189,29 +190,29 @@ draw_stealth_indicators :: proc(w: ^World) {
         case AI_STATE_SUSPICIOUS:
 
             rl.DrawRectangleRec({ bx, by, BAR_W, BAR_H },
-                rl.Color{ 30, 25, 10, 160 })
+                gfx.Color{ 30, 25, 10, 160 })
             rl.DrawRectangleRec({ bx, by, BAR_W * ai.suspicion, BAR_H },
-                rl.Color{ 220, 185, 40, 220 })
+                gfx.Color{ 220, 185, 40, 220 })
             rl.DrawRectangleLinesEx({ bx, by, BAR_W, BAR_H }, 0.8,
-                rl.Color{ 120, 100, 30, 140 })
+                gfx.Color{ 120, 100, 30, 140 })
 
             isz := rl.MeasureTextEx(g_font_body, "?", ICON_FS, 0.5)
             rl.DrawTextEx(g_font_body, "?",
                 { iso.x - isz.x * 0.5, by - ICON_FS - 2 },
                 ICON_FS, 0.5,
-                rl.Color{ u8(180 + u32(ai.suspicion * 40)), 185, 40, 230 })
+                gfx.Color{ u8(180 + u32(ai.suspicion * 40)), 185, 40, 230 })
 
         case AI_STATE_SEARCHING:
             isz := rl.MeasureTextEx(g_font_body, "!", ICON_FS, 0.5)
             rl.DrawTextEx(g_font_body, "!",
                 { iso.x - isz.x * 0.5, by - ICON_FS - 2 },
-                ICON_FS, 0.5, rl.Color{ 255, 140, 20, 240 })
+                ICON_FS, 0.5, gfx.Color{ 255, 140, 20, 240 })
 
         case AI_STATE_CHASE:
             isz := rl.MeasureTextEx(g_font_body, "!", ICON_FS, 0.5)
             rl.DrawTextEx(g_font_body, "!",
                 { iso.x - isz.x * 0.5, by - ICON_FS - 2 },
-                ICON_FS, 0.5, rl.Color{ 255, 50, 30, 255 })
+                ICON_FS, 0.5, gfx.Color{ 255, 50, 30, 255 })
         }
     }
 }

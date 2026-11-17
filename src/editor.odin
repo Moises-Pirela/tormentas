@@ -1,6 +1,7 @@
 package main
 
 import rl  "vendor:raylib"
+import gfx "gfx"
 import     "core:fmt"
 import     "core:math"
 import     "core:os"
@@ -352,7 +353,7 @@ ed_fill_walkable :: proc(cols, rows: int) {
 ed_visible_world_aabb :: proc() -> (x0, y0, x1, y1: f32) {
     sw := f32(rl.GetScreenWidth())
     sh := f32(rl.GetScreenHeight())
-    c  := [4]rl.Vector2{
+    c  := [4]gfx.Vec2{
         screen_to_world_cartesian({ 0,  0}),
         screen_to_world_cartesian({sw,  0}),
         screen_to_world_cartesian({sw, sh}),
@@ -739,9 +740,9 @@ draw_editor_world :: proc() {
         num_y   := max(1, int(f32(g_ed_grid_rows) * f32(TILE_SIZE) / cs))
         px       := cs * g_camera.zoom
         fade     := clamp((px - 4) / 14, 0, 1)
-        cell_col := rl.Color{0, 230, 205, u8(18 + 52 * fade)}
-        tile_col := rl.Color{0, 255, 220, 120}
-        bnd_col  := rl.Color{0, 255, 220, 255}
+        cell_col := gfx.Color{0, 230, 205, u8(18 + 52 * fade)}
+        tile_col := gfx.Color{0, 255, 220, 120}
+        bnd_col  := gfx.Color{0, 255, 220, 255}
         tile_step := max(1, TILE_SIZE / max(g_ed_cell_size, 1))
 
         if g_ed_grid_visible && px >= 3 {
@@ -764,7 +765,7 @@ draw_editor_world :: proc() {
             }
         }
         if g_ed_grid_visible {
-            corners := [4]rl.Vector2{
+            corners := [4]gfx.Vec2{
                 world_to_iso_xy(-half_cw, -half_ch), world_to_iso_xy(half_cw, -half_ch),
                 world_to_iso_xy( half_cw,  half_ch), world_to_iso_xy(-half_cw,  half_ch),
             }
@@ -775,7 +776,7 @@ draw_editor_world :: proc() {
 
     } else {
         if g_ed_grid_visible {
-            grid_col := rl.Color{150, 140, 100, u8(40 + 50 * clamp((f32(TILE_SIZE) * g_camera.zoom - 6) / 20, 0, 1))}
+            grid_col := gfx.Color{150, 140, 100, u8(40 + 50 * clamp((f32(TILE_SIZE) * g_camera.zoom - 6) / 20, 0, 1))}
             ts       := f32(TILE_SIZE)
 
             for gy in ty0..=ty1 {
@@ -809,7 +810,7 @@ draw_editor_world :: proc() {
     }
 
     {
-        CAM_BOUNDS_COL      :: rl.Color{90, 170, 255, 220}
+        CAM_BOUNDS_COL      :: gfx.Color{90, 170, 255, 220}
         CAM_BOUNDS_FALLBACK :: f32(8192)
         lims  := g_level_data.cam_lims
         has_x := lims[1] > lims[0]
@@ -819,10 +820,10 @@ draw_editor_world :: proc() {
             maxx := lims[1] if has_x else  CAM_BOUNDS_FALLBACK
             miny := lims[2] if has_y else -CAM_BOUNDS_FALLBACK
             maxy := lims[3] if has_y else  CAM_BOUNDS_FALLBACK
-            ctl := rl.Vector2{minx, miny}
-            ctr := rl.Vector2{maxx, miny}
-            cbr := rl.Vector2{maxx, maxy}
-            cbl := rl.Vector2{minx, maxy}
+            ctl := gfx.Vec2{minx, miny}
+            ctr := gfx.Vec2{maxx, miny}
+            cbr := gfx.Vec2{maxx, maxy}
+            cbl := gfx.Vec2{minx, maxy}
             if has_y {
                 rl.DrawLineEx(ctl, ctr, lw * 2, CAM_BOUNDS_COL)
                 rl.DrawLineEx(cbl, cbr, lw * 2, CAM_BOUNDS_COL)
@@ -843,22 +844,22 @@ draw_editor_world :: proc() {
         for id in anchor_ids {
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             ip := world_to_iso_xy(p[0], p[1])
-            rl.DrawCircleV(ip, cr, rl.Color{190, 60, 60, 220})
-            rl.DrawCircleV(ip, cr * 0.65, rl.Color{0, 0, 0, 100})
+            rl.DrawCircleV(ip, cr, gfx.Color{190, 60, 60, 220})
+            rl.DrawCircleV(ip, cr * 0.65, gfx.Color{0, 0, 0, 100})
             lsz := rl.MeasureTextEx(g_font, "Sp", fs, 0.5)
             rl.DrawTextEx(g_font, "Sp", {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5}, fs, 0.5,
-                rl.Color{255, 240, 200, 230})
+                gfx.Color{255, 240, 200, 230})
         }
         delete(anchor_ids)
 
-        EXIT_COL :: rl.Color{50, 200, 90, 180}
+        EXIT_COL :: gfx.Color{50, 200, 90, 180}
         exit_ids := world_query(&g_sim.world, query_mask(.LevelExit, .Transform))
         for id in exit_ids {
             le := comp_get(&g_sim.world, id, .LevelExit, LevelExitComp)
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             etx, ety := world_to_tile(p[0], p[1])
             center, top, right, bottom, left := iso_tile_bounds(etx, ety)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{30, 140, 60, 80})
+            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{30, 140, 60, 80})
             rl.DrawLineEx(top, right, lw * 2.5, EXIT_COL)
             rl.DrawLineEx(right, bottom, lw * 2.5, EXIT_COL)
             rl.DrawLineEx(bottom, left, lw * 2.5, EXIT_COL)
@@ -869,7 +870,7 @@ draw_editor_world :: proc() {
             lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs, 0.5)
             rl.DrawTextEx(g_font, cstring(&buf[0]),
                 {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
-                fs, 0.5, rl.Color{140, 255, 160, 230})
+                fs, 0.5, gfx.Color{140, 255, 160, 230})
         }
         delete(exit_ids)
     }
@@ -878,13 +879,13 @@ draw_editor_world :: proc() {
         wx := f32(int(npc.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(npc.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        col := rl.Color{212, 190, 92, 220}
+        col := gfx.Color{212, 190, 92, 220}
         label := cstring("S")
         if npc.npc_type == .MutationWorkbench {
-            col = rl.Color{180, 90, 220, 220}
+            col = gfx.Color{180, 90, 220, 220}
             label = cstring("M")
         }
-        rl.DrawRectangleV({ip.x - ts * 0.18, ip.y - ts * 0.30}, {ts * 0.36, ts * 0.36}, rl.Color{col.r, col.g, col.b, 70})
+        rl.DrawRectangleV({ip.x - ts * 0.18, ip.y - ts * 0.30}, {ts * 0.36, ts * 0.36}, gfx.Color{col.r, col.g, col.b, 70})
         rl.DrawRectangleLinesEx({ip.x - ts * 0.18, ip.y - ts * 0.30, ts * 0.36, ts * 0.36}, lw * 2.0, col)
         lsz := rl.MeasureTextEx(g_font, label, fs * 1.1, 0.5)
         rl.DrawTextEx(g_font, label,
@@ -892,7 +893,7 @@ draw_editor_world :: proc() {
             fs * 1.1, 0.5, col)
     }
 
-    LIGHT_COL :: rl.Color{255, 210, 80, 200}
+    LIGHT_COL :: gfx.Color{255, 210, 80, 200}
     if g_sim_alive {
         light_ids := world_query(&g_sim.world, query_mask(.PointLight, .Transform))
         for id in light_ids {
@@ -900,13 +901,13 @@ draw_editor_world :: proc() {
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             ip := world_to_iso_xy(p[0], p[1])
 
-            rl.DrawCircleV(ip, cr * 1.2, rl.Color{u8(pl.color[0]), u8(pl.color[1]), u8(pl.color[2]), 60})
+            rl.DrawCircleV(ip, cr * 1.2, gfx.Color{u8(pl.color[0]), u8(pl.color[1]), u8(pl.color[2]), 60})
             rl.DrawCircleV(ip, cr * 0.7, LIGHT_COL)
-            rl.DrawCircleLinesV(ip, cr * 1.2, rl.Color{255, 220, 100, 160})
+            rl.DrawCircleLinesV(ip, cr * 1.2, gfx.Color{255, 220, 100, 160})
             lsz := rl.MeasureTextEx(g_font, "L", fs * 1.1, 0.5)
             rl.DrawTextEx(g_font, "L",
                 {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5},
-                fs * 1.1, 0.5, rl.Color{40, 30, 0, 240})
+                fs * 1.1, 0.5, gfx.Color{40, 30, 0, 240})
         }
         delete(light_ids)
     }
@@ -916,8 +917,8 @@ draw_editor_world :: proc() {
         wy := f32(int(b.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
         is_fire := b.btype == 0
-        body_col  := rl.Color{200,  72,  18, 220} if is_fire else rl.Color{ 28, 100, 210, 220}
-        ring_col  := rl.Color{240, 120,  30, 200} if is_fire else rl.Color{ 70, 160, 255, 200}
+        body_col  := gfx.Color{200,  72,  18, 220} if is_fire else gfx.Color{ 28, 100, 210, 220}
+        ring_col  := gfx.Color{240, 120,  30, 200} if is_fire else gfx.Color{ 70, 160, 255, 200}
         label_cs  := cstring("FB")           if is_fire else cstring("WB")
 
         body_h := ts * 0.24
@@ -926,13 +927,13 @@ draw_editor_world :: proc() {
         rl.DrawRectangle(
             i32(ip.x - body_w * 0.5), i32(ip.y - body_h * 0.75),
             i32(body_w), i32(body_h),
-            rl.Color{body_col.r, body_col.g, body_col.b, 60})
+            gfx.Color{body_col.r, body_col.g, body_col.b, 60})
         rl.DrawRectangleLinesEx(
             {ip.x - body_w * 0.5, ip.y - body_h * 0.75, body_w, body_h},
             lw * 2.0, body_col)
 
         rl.DrawEllipse(i32(ip.x), i32(ip.y - body_h * 0.75),
-            body_w * 0.5, body_h * 0.22, rl.Color{ring_col.r, ring_col.g, ring_col.b, 90})
+            body_w * 0.5, body_h * 0.22, gfx.Color{ring_col.r, ring_col.g, ring_col.b, 90})
         rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.75),
             body_w * 0.5, body_h * 0.22, ring_col)
 
@@ -942,17 +943,17 @@ draw_editor_world :: proc() {
         lsz := rl.MeasureTextEx(g_font, label_cs, fs * 0.85, 0.5)
         rl.DrawTextEx(g_font, label_cs,
             {ip.x - lsz.x * 0.5, ip.y - body_h * 0.45 - lsz.y * 0.5},
-            fs * 0.85, 0.5, rl.Color{255, 240, 220, 240})
+            fs * 0.85, 0.5, gfx.Color{255, 240, 220, 240})
     }
 
-    LEVER_COL :: rl.Color{60, 180, 60, 220}
+    LEVER_COL :: gfx.Color{60, 180, 60, 220}
     for s in g_level_data.switches {
         wx := f32(int(s.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
 
         rl.DrawRectangleRec({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
-            rl.Color{LEVER_COL.r, LEVER_COL.g, LEVER_COL.b, 60})
+            gfx.Color{LEVER_COL.r, LEVER_COL.g, LEVER_COL.b, 60})
         rl.DrawRectangleLinesEx({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
             lw * 2, LEVER_COL)
 
@@ -966,7 +967,7 @@ draw_editor_world :: proc() {
             lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
             rl.DrawTextEx(g_font, cstring(&buf[0]),
                 {ip.x - lsz.x*0.5, ip.y - ts*0.30},
-                fs * 0.8, 0.5, rl.Color{120, 240, 120, 220})
+                fs * 0.8, 0.5, gfx.Color{120, 240, 120, 220})
         }
     }
 
@@ -974,31 +975,31 @@ draw_editor_world :: proc() {
         wx := f32(int(c.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(c.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
-        col: rl.Color
+        col: gfx.Color
         lbl: cstring
         switch c.kind {
-        case .Chest:   col = rl.Color{210, 175, 40, 220}; lbl = "CH"
-        case .Crate:   col = rl.Color{150, 110, 55, 220}; lbl = "CR"
-        case .Locker:  col = rl.Color{100, 140, 180, 220}; lbl = "LK"
-        case .Cabinet: col = rl.Color{140, 100, 160, 220}; lbl = "CB"
+        case .Chest:   col = gfx.Color{210, 175, 40, 220}; lbl = "CH"
+        case .Crate:   col = gfx.Color{150, 110, 55, 220}; lbl = "CR"
+        case .Locker:  col = gfx.Color{100, 140, 180, 220}; lbl = "LK"
+        case .Cabinet: col = gfx.Color{140, 100, 160, 220}; lbl = "CB"
         }
         box_w := ts * 0.32
         box_h := ts * 0.28
         rl.DrawRectangleRec({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
-            rl.Color{col.r, col.g, col.b, 45})
+            gfx.Color{col.r, col.g, col.b, 45})
         rl.DrawRectangleLinesEx({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
             lw * 2.5, col)
 
         rl.DrawLineEx({ip.x - box_w*0.5, ip.y - box_h*0.22},
                       {ip.x + box_w*0.5, ip.y - box_h*0.22},
-                      lw * 1.5, rl.Color{col.r, col.g, col.b, 160})
+                      lw * 1.5, gfx.Color{col.r, col.g, col.b, 160})
         lsz := rl.MeasureTextEx(g_font, lbl, fs * 0.85, 0.5)
         rl.DrawTextEx(g_font, lbl,
             {ip.x - lsz.x*0.5, ip.y - box_h*0.1 - lsz.y*0.5},
             fs * 0.85, 0.5, col)
     }
 
-    LORE_COL :: rl.Color{80, 160, 220, 220}
+    LORE_COL :: gfx.Color{80, 160, 220, 220}
     for li in g_level_data.lore_items {
         wx := f32(int(li.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(li.ty) * TILE_SIZE + TILE_SIZE / 2)
@@ -1007,7 +1008,7 @@ draw_editor_world :: proc() {
         pw := ts * 0.22
         ph := ts * 0.28
         rl.DrawRectangleRec({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
-            rl.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 40})
+            gfx.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 40})
         rl.DrawRectangleLinesEx({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
             lw * 2, LORE_COL)
 
@@ -1019,7 +1020,7 @@ draw_editor_world :: proc() {
             lx0 := ip.x - pw*0.35
             lx1 := ip.x + pw*0.35 * (0.7 if row == 2 else 1.0)
             ly  := ip.y - ph*0.55 + f32(row) * ph * 0.22
-            rl.DrawLineEx({lx0, ly}, {lx1, ly}, lw, rl.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 130})
+            rl.DrawLineEx({lx0, ly}, {lx1, ly}, lw, gfx.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 130})
         }
         buf: [6]u8
         s := fmt.bprintf(buf[:5], "#%d", li.lore_id)
@@ -1027,23 +1028,23 @@ draw_editor_world :: proc() {
         lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
         rl.DrawTextEx(g_font, cstring(&buf[0]),
             {ip.x - lsz.x*0.5, ip.y - ph*0.7 - lsz.y - uis(2)},
-            fs * 0.75, 0.5, rl.Color{120, 200, 255, 220})
+            fs * 0.75, 0.5, gfx.Color{120, 200, 255, 220})
     }
 
-    PHONO_COL :: rl.Color{180, 80, 200, 220}
+    PHONO_COL :: gfx.Color{180, 80, 200, 220}
     for ph in g_level_data.phonographs {
         wx := f32(int(ph.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
 
-        rl.DrawEllipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, rl.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
+        rl.DrawEllipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, gfx.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
         rl.DrawEllipseLines(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, PHONO_COL)
 
         rl.DrawTriangle(
             {ip.x + ts*0.22, ip.y - ts*0.26},
             {ip.x + ts*0.10, ip.y - ts*0.02},
             {ip.x + ts*0.10, ip.y + ts*0.04},
-            rl.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 60})
+            gfx.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 60})
         rl.DrawLineEx({ip.x + ts*0.10, ip.y - ts*0.02},
                       {ip.x + ts*0.22, ip.y - ts*0.26},
                       lw * 2, PHONO_COL)
@@ -1053,21 +1054,21 @@ draw_editor_world :: proc() {
         lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
         rl.DrawTextEx(g_font, cstring(&buf[0]),
             {ip.x - lsz.x*0.5, ip.y - ts*0.38},
-            fs * 0.75, 0.5, rl.Color{220, 120, 240, 220})
+            fs * 0.75, 0.5, gfx.Color{220, 120, 240, 220})
     }
 
-    KEY_COL :: rl.Color{245, 210, 30, 230}
+    KEY_COL :: gfx.Color{245, 210, 30, 230}
     for kp in g_level_data.key_pickups {
         wx := f32(int(kp.tx) * TILE_SIZE + TILE_SIZE / 2)
         wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
 
         rl.DrawCircleV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10,
-            rl.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 50})
+            gfx.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 50})
         rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10, KEY_COL)
 
         rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.04,
-            rl.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 180})
+            gfx.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 180})
 
         rl.DrawLineEx({ip.x - ts*0.06 + ts*0.10, ip.y - ts*0.10},
                       {ip.x + ts*0.20, ip.y - ts*0.10},
@@ -1085,7 +1086,7 @@ draw_editor_world :: proc() {
         lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
         rl.DrawTextEx(g_font, cstring(&buf[0]),
             {ip.x - lsz.x*0.5, ip.y + ts*0.12},
-            fs * 0.8, 0.5, rl.Color{255, 230, 60, 230})
+            fs * 0.8, 0.5, gfx.Color{255, 230, 60, 230})
     }
 
     if g_sim_alive {
@@ -1094,15 +1095,15 @@ draw_editor_world :: proc() {
             p := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             ptx, pty := world_to_tile(p[0], p[1])
             center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, rl.Color{200, 160, 30, 70})
-            rl.DrawLineEx(top, right, lw * 2.5, rl.Color{255, 200, 50, 220})
-            rl.DrawLineEx(right, bottom, lw * 2.5, rl.Color{255, 200, 50, 220})
-            rl.DrawLineEx(bottom, left, lw * 2.5, rl.Color{255, 200, 50, 220})
-            rl.DrawLineEx(left, top, lw * 2.5, rl.Color{255, 200, 50, 220})
+            iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{200, 160, 30, 70})
+            rl.DrawLineEx(top, right, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            rl.DrawLineEx(right, bottom, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            rl.DrawLineEx(bottom, left, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            rl.DrawLineEx(left, top, lw * 2.5, gfx.Color{255, 200, 50, 220})
             lsz := rl.MeasureTextEx(g_font, "P", fs*1.2, 0.5)
             rl.DrawTextEx(g_font, "P",
                 {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
-                fs*1.2, 0.5, rl.Color{255, 230, 100, 240})
+                fs*1.2, 0.5, gfx.Color{255, 230, 100, 240})
         }
         delete(ps_ids)
     }
@@ -1111,7 +1112,7 @@ draw_editor_world :: proc() {
 
 }
 
-ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
+ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: gfx.Color) {
     switch b {
     case .Floor:       return {110,  95,  65,  85}, {200, 170,  90, 200}
     case .Wall:        return { 70, 105, 140,  85}, { 90, 150, 210, 200}
@@ -1149,7 +1150,7 @@ ed_brush_colors :: proc(b: EditorBrush) -> (fill, brd: rl.Color) {
 draw_editor_cell_overlay :: proc() {
     if !g_editor_mode { return }
 
-    cell_fill :: proc(top, right, bottom, left: rl.Vector2, col: rl.Color) {
+    cell_fill :: proc(top, right, bottom, left: gfx.Vec2, col: gfx.Color) {
         rl.DrawTriangle(top, bottom, right, col)
         rl.DrawTriangle(top, left,   bottom, col)
     }
@@ -1164,13 +1165,13 @@ draw_editor_cell_overlay :: proc() {
         num_y   := max(1, int(f32(g_ed_grid_rows) * f32(TILE_SIZE) / cs))
         scale   := max(1, g_ed_cell_size / HUB_CELL_RES)
 
-        cell_col :: proc(bcx, bcy, gx, gy, scale: int) -> rl.Color {
+        cell_col :: proc(bcx, bcy, gx, gy, scale: int) -> gfx.Color {
             #partial switch tile_base(hub_cell_at((bcx + gx) * scale, (bcy + gy) * scale)) {
-            case .Wall, .Pillar: return rl.Color{220,  40,  40, 120}
-            case .Floor:         return rl.Color{ 40, 200,  60, 120}
-            case .Water:         return rl.Color{ 40, 100, 220, 120}
+            case .Wall, .Pillar: return gfx.Color{220,  40,  40, 120}
+            case .Floor:         return gfx.Color{ 40, 200,  60, 120}
+            case .Water:         return gfx.Color{ 40, 100, 220, 120}
             }
-            return rl.Color{60, 180, 80, 60}
+            return gfx.Color{60, 180, 80, 60}
         }
 
         gx0, gy0, gx1, gy1 := ed_grid_visible_range(half_cw, half_ch, cs, num_x, num_y)
@@ -1205,10 +1206,10 @@ draw_editor_cell_overlay :: proc() {
         cs := f32(TILE_SIZE)
         for k, tt in g_tilemap {
             base := tile_base(tt)
-            col: rl.Color
-            if      base == .Wall || base == .Pillar { col = rl.Color{220,  40,  40, 90} }
-            else if base == .Floor                   { col = rl.Color{ 40, 200,  60, 90} }
-            else if base == .Water                   { col = rl.Color{ 40, 100, 220, 90} }
+            col: gfx.Color
+            if      base == .Wall || base == .Pillar { col = gfx.Color{220,  40,  40, 90} }
+            else if base == .Floor                   { col = gfx.Color{ 40, 200,  60, 90} }
+            else if base == .Water                   { col = gfx.Color{ 40, 100, 220, 90} }
             else                                     { continue }
             wx := f32(k[0]) * cs
             wy := f32(k[1]) * cs

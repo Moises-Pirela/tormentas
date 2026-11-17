@@ -1,6 +1,7 @@
 package main
 
 import rl       "vendor:raylib"
+import gfx      "gfx"
 import          "core:math"
 import          "core:c"
 import          "core:fmt"
@@ -83,17 +84,17 @@ update_draw_dmg_numbers :: proc(dt: f32) {
         frac  := clamp(n.lifetime / DMGNUM_LIFE, 0, 1)
         alpha := u8(frac * 255)
 
-        col: rl.Color
+        col: gfx.Color
         fs:  f32
         if n.is_crit {
             fs = 22
             white := clamp(frac * 3.0 - 1.5, 0, 1)
-            col = rl.Color{255, u8(160 + white * 95), u8(white * 200), alpha}
+            col = gfx.Color{255, u8(160 + white * 95), u8(white * 200), alpha}
         } else if n.is_enemy {
-            col = rl.Color{255, 220, 60, alpha}
+            col = gfx.Color{255, 220, 60, alpha}
             fs  = 15
         } else {
-            col = rl.Color{255, 70, 70, alpha}
+            col = gfx.Color{255, 70, 70, alpha}
             fs  = 15
         }
 
@@ -130,14 +131,14 @@ draw_loot_filter_hud :: proc() {
     bx        := i32(uis(12))
     by        := i32(uis(12))
 
-    rl.DrawRectangle(bx, by, i32(total_w), i32(total_h), rl.Color{ 8, 6, 4, 210 })
+    rl.DrawRectangle(bx, by, i32(total_w), i32(total_h), gfx.Color{ 8, 6, 4, 210 })
     rl.DrawRectangleLinesEx({ f32(bx), f32(by), total_w, total_h }, 1, COL_RULE)
     rl.DrawTextEx(g_font_body, prefix,
         { f32(bx) + uis(8), f32(by) + uis(5) }, fs, 0.5, COL_MUTED)
     rc := rarity_color(g_loot_filter_rarity)
     rl.DrawTextEx(g_font_body, lbl,
         { f32(bx) + uis(8) + psz.x, f32(by) + uis(5) }, fs, 0.5,
-        rl.Color{ rc.r, rc.g, rc.b, 230 })
+        gfx.Color{ rc.r, rc.g, rc.b, 230 })
 }
 
 draw_boss_warning :: proc() {
@@ -150,7 +151,7 @@ draw_boss_warning :: proc() {
     sh    := f32(rl.GetScreenHeight())
 
     overlay_alpha := u8(35 + i32(pulse * 35))
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{ 180, 0, 0, overlay_alpha })
+    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.Color{ 180, 0, 0, overlay_alpha })
 
     warn_fs := uis(22)
     warn1   := t(.HUD_WARNING)
@@ -162,10 +163,10 @@ draw_boss_warning :: proc() {
     text_alpha := u8(160 + i32(pulse * 95))
     rl.DrawTextEx(g_font, warn1,
         { sw * 0.5 - w1sz.x * 0.5, cy },
-        warn_fs, 1, rl.Color{ 255, 60, 60, text_alpha })
+        warn_fs, 1, gfx.Color{ 255, 60, 60, text_alpha })
     rl.DrawTextEx(g_font, warn2,
         { sw * 0.5 - w2sz.x * 0.5, cy + warn_fs + uis(4) },
-        warn_fs * 0.65, 1, rl.Color{ 220, 100, 100, text_alpha })
+        warn_fs * 0.65, 1, gfx.Color{ 220, 100, 100, text_alpha })
 
     secs_left := int(g_boss_warning_timer) + 1
     buf: [16]u8
@@ -175,7 +176,7 @@ draw_boss_warning :: proc() {
     cd_sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), cd_fs, 0.5)
     rl.DrawTextEx(g_font_body, cstring(&buf[0]),
         { sw * 0.5 - cd_sz.x * 0.5, cy + warn_fs + uis(4) + warn_fs * 0.65 + uis(6) },
-        cd_fs, 0.5, rl.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
+        cd_fs, 0.5, gfx.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
 }
 
 g_inspected_entity: int = INVALID_ENTITY
@@ -234,28 +235,28 @@ draw_entity_inspect_hud :: proc(w: ^World) {
     bx := sw * 0.5 - bw * 0.5
     by := uis(16)
 
-    rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, rl.Color{  8,  4,  4, 220 })
-    rl.DrawRectangleRec({ bx, by, bw, bh },                  rl.Color{ 45, 12, 12, 200 })
+    rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, gfx.Color{  8,  4,  4, 220 })
+    rl.DrawRectangleRec({ bx, by, bw, bh },                  gfx.Color{ 45, 12, 12, 200 })
     if frac > 0 {
-        fill_col: rl.Color
+        fill_col: gfx.Color
         if frac > 0.5 {
-            fill_col = rl.Color{ 200, 40, 40, 230 }
+            fill_col = gfx.Color{ 200, 40, 40, 230 }
         } else if frac > 0.25 {
-            fill_col = rl.Color{ 220, 90, 30, 230 }
+            fill_col = gfx.Color{ 220, 90, 30, 230 }
         } else {
             t        := f32(0.5) + f32(0.5) * math.sin(f32(rl.GetTime()) * 8.0)
-            fill_col = rl.Color{ 255, u8(30 + i32(t * 40)), 20, 255 }
+            fill_col = gfx.Color{ 255, u8(30 + i32(t * 40)), 20, 255 }
         }
         rl.DrawRectangleRec({ bx, by, bw * frac, bh }, fill_col)
     }
-    rl.DrawRectangleLinesEx({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, rl.Color{ 140, 40, 40, 200 })
+    rl.DrawRectangleLinesEx({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, gfx.Color{ 140, 40, 40, 200 })
 
     hp_str := rl.TextFormat("%d / %d", i32(h.current), i32(h.max))
     hp_fs  := uis(11)
     hp_sz  := rl.MeasureTextEx(g_font_body, hp_str, hp_fs, 0.4)
     rl.DrawTextEx(g_font_body, hp_str,
         { bx + bw - hp_sz.x - uis(3), by + (bh - hp_fs) * 0.5 },
-        hp_fs, 0.4, rl.Color{ 220, 200, 200, 130 })
+        hp_fs, 0.4, gfx.Color{ 220, 200, 200, 130 })
 
     name_lbl := cstring("ENEMY")
     if world_has_component(w, show_id, .RenderConfig) {
@@ -268,7 +269,7 @@ draw_entity_inspect_hud :: proc(w: ^World) {
     name_y  := by + bh + uis(3)
     rl.DrawTextEx(g_font_body, name_lbl,
         { sw * 0.5 - name_sz.x * 0.5, name_y },
-        name_fs, 0.5, rl.Color{ 200, 120, 120, 200 })
+        name_fs, 0.5, gfx.Color{ 200, 120, 120, 200 })
 
     if world_has_component(w, show_id, .MutationContainer) {
         mc := comp_get(w, show_id, .MutationContainer, MutationContainerComp)
@@ -278,7 +279,7 @@ draw_entity_inspect_hud :: proc(w: ^World) {
         gap       := uis(14)
         b_mt      : [MAX_MUTATION_SLOTS]MutationType
         b_name    : [MAX_MUTATION_SLOTS]cstring
-        b_sz      : [MAX_MUTATION_SLOTS]rl.Vector2
+        b_sz      : [MAX_MUTATION_SLOTS]gfx.Vec2
         n_b       := 0
         total_w   := f32(0)
 
@@ -305,10 +306,10 @@ draw_entity_inspect_hud :: proc(w: ^World) {
                 col := mutation_visual_color(b_mt[i])
                 rl.DrawCircleV(
                     { x + dot_r, badge_y + badge_fs * 0.5 },
-                    dot_r, rl.Color{ col.r, col.g, col.b, 230 })
+                    dot_r, gfx.Color{ col.r, col.g, col.b, 230 })
                 rl.DrawTextEx(g_font_body, b_name[i],
                     { x + dot_r * 2 + uis(5), badge_y },
-                    badge_fs, 0.4, rl.Color{ col.r, col.g, col.b, 195 })
+                    badge_fs, 0.4, gfx.Color{ col.r, col.g, col.b, 195 })
                 item_w := dot_r * 2 + uis(5) + b_sz[i].x
                 x += item_w + gap
             }
@@ -481,7 +482,7 @@ clay_measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElement
 }
 
 @(private = "file")
-PLAYER_SLOT_COLORS := [MAX_PLAYERS][3]rl.Color{
+PLAYER_SLOT_COLORS := [MAX_PLAYERS][3]gfx.Color{
     { {  55,  55,  70, 255 }, { 100, 100, 120, 255 }, {255,  60,  60, 255} },
     { {  28,  80,  28, 255 }, {  55, 145,  55, 255 }, { 80, 230,  80, 255} },
     { {  28,  55, 100, 255 }, {  55, 100, 180, 255 }, { 80, 170, 255, 255} },
@@ -510,27 +511,27 @@ entity_hit_radius :: proc(w: ^World, id: int) -> f32 {
     return comp_get(w, id, .Collider, ColliderComp).radius
 }
 
-draw_world_circle :: proc(pos: rl.Vector2, radius: f32, color: rl.Color) {
+draw_world_circle :: proc(pos: gfx.Vec2, radius: f32, color: gfx.Color) {
     ip := world_to_iso_v(pos)
     rl.DrawEllipse(i32(ip.x), i32(ip.y), radius, max(radius * 0.55, 1), color)
 }
 
-draw_world_circle_lines :: proc(pos: rl.Vector2, radius: f32, color: rl.Color) {
+draw_world_circle_lines :: proc(pos: gfx.Vec2, radius: f32, color: gfx.Color) {
     ip := world_to_iso_v(pos)
     rl.DrawEllipseLines(i32(ip.x), i32(ip.y), max(radius, 1), max(radius * 0.55, 1), color)
 }
 
-draw_world_line :: proc(a, b: rl.Vector2, thick: f32, color: rl.Color) {
+draw_world_line :: proc(a, b: gfx.Vec2, thick: f32, color: gfx.Color) {
     rl.DrawLineEx(world_to_iso_v(a), world_to_iso_v(b), thick, color)
 }
 
-draw_tracer :: proc(pos: rl.Vector2, dir: [3]f32, speed: f32, core, glow: rl.Color, fade: f32) {
+draw_tracer :: proc(pos: gfx.Vec2, dir: [3]f32, speed: f32, core, glow: gfx.Color, fade: f32) {
     length := clamp(speed * TICK_DT * 1.5, 12, 46)
-    tail   := rl.Vector2{ pos.x - dir[0] * length,        pos.y - dir[1] * length }
-    mid    := rl.Vector2{ pos.x - dir[0] * length * 0.42, pos.y - dir[1] * length * 0.42 }
+    tail   := gfx.Vec2{ pos.x - dir[0] * length,        pos.y - dir[1] * length }
+    mid    := gfx.Vec2{ pos.x - dir[0] * length * 0.42, pos.y - dir[1] * length * 0.42 }
 
-    a :: proc(c: rl.Color, f, scale: f32) -> rl.Color {
-        return rl.Color{ c.r, c.g, c.b, u8(clamp(f32(c.a) * f * scale, 0, 255)) }
+    a :: proc(c: gfx.Color, f, scale: f32) -> gfx.Color {
+        return gfx.Color{ c.r, c.g, c.b, u8(clamp(f32(c.a) * f * scale, 0, 255)) }
     }
 
     draw_world_line(tail, mid, 2.0, a(glow, fade, 0.30))
@@ -654,13 +655,13 @@ entity_blindfire_hidden :: proc(w: ^World, id: int) -> bool {
     return dx*dx + dy*dy > radius*radius
 }
 
-draw_iso_arc :: proc(center: rl.Vector2, radius, angle, spread: f32, width: f32, color: rl.Color) {
+draw_iso_arc :: proc(center: gfx.Vec2, radius, angle, spread: f32, width: f32, color: gfx.Color) {
     STEPS :: 20
     for i in 0..<STEPS {
         t0 := angle - spread + (f32(i) / STEPS) * (spread * 2)
         t1 := angle - spread + (f32(i + 1) / STEPS) * (spread * 2)
-        p0 := rl.Vector2{ center.x + math.cos(t0) * radius, center.y + math.sin(t0) * radius }
-        p1 := rl.Vector2{ center.x + math.cos(t1) * radius, center.y + math.sin(t1) * radius }
+        p0 := gfx.Vec2{ center.x + math.cos(t0) * radius, center.y + math.sin(t0) * radius }
+        p1 := gfx.Vec2{ center.x + math.cos(t1) * radius, center.y + math.sin(t1) * radius }
         draw_world_line(p0, p1, width, color)
     }
 }
@@ -668,7 +669,7 @@ draw_iso_arc :: proc(center: rl.Vector2, radius, angle, spread: f32, width: f32,
 draw_entity_world_fx :: proc(w: ^World, id: int) {
     if !world_has_component(w, id, .Transform) || is_fog_hidden(w, id) { return }
     tr := comp_get(w, id, .Transform, TransformComp)
-    pos := rl.Vector2{ tr.position[0], tr.position[1] }
+    pos := gfx.Vec2{ tr.position[0], tr.position[1] }
 
     if world_has_component(w, id, .GroundItem) && world_has_component(w, id, .Item) {
         item := comp_get(w, id, .Item, ItemComp)
@@ -678,9 +679,9 @@ draw_entity_world_fx :: proc(w: ^World, id: int) {
         t     := f32(rl.GetTime())
         pulse := (math.sin(t * 3.2) + 1) * 0.5
         rc    := rarity_color(item.rarity)
-        draw_world_circle(pos, 12, rl.Color{ rc.r, rc.g, rc.b, u8(70 + pulse * 90) })
-        draw_world_circle(pos, 6,  rl.Color{ rc.r, rc.g, rc.b, u8(170 + pulse * 85) })
-        draw_world_circle(pos, 2,  rl.Color{ 255, 255, 255, 200 })
+        draw_world_circle(pos, 12, gfx.Color{ rc.r, rc.g, rc.b, u8(70 + pulse * 90) })
+        draw_world_circle(pos, 6,  gfx.Color{ rc.r, rc.g, rc.b, u8(170 + pulse * 85) })
+        draw_world_circle(pos, 2,  gfx.Color{ 255, 255, 255, 200 })
         return
     }
 
@@ -689,14 +690,14 @@ draw_entity_world_fx :: proc(w: ^World, id: int) {
         switch p.visual {
         case .Standard:
             draw_tracer(pos, p.direction, p.speed,
-                rl.Color{ 255, 246, 190, 255 },
-                rl.Color{ 255, 190,  45, 225 }, 1.0)
+                gfx.Color{ 255, 246, 190, 255 },
+                gfx.Color{ 255, 190,  45, 225 }, 1.0)
         case .Smoke:
             fade := f32(1)
             if p.max_lifetime > 0 { fade = clamp(p.lifetime / p.max_lifetime, 0, 1) }
             draw_tracer(pos, p.direction, p.speed,
-                rl.Color{ 226, 218, 212, 235 },
-                rl.Color{ 150, 140, 134, 170 }, fade)
+                gfx.Color{ 226, 218, 212, 235 },
+                gfx.Color{ 150, 140, 134, 170 }, fade)
         }
         return
     }
@@ -707,8 +708,8 @@ draw_entity_world_fx :: proc(w: ^World, id: int) {
         if world_has_component(w, id, .SelfDestruct) && arc.lifetime > 0 {
             fade = comp_get(w, id, .SelfDestruct, SelfDestructComp).timer / arc.lifetime
         }
-        draw_iso_arc(pos, arc.radius - 2, arc.angle, arc.arc_spread, 5, rl.Color{ 215, 90, 20, u8(clamp(fade, 0, 1) * 210) })
-        draw_iso_arc(pos, arc.radius, arc.angle, arc.arc_spread, 2, rl.Color{ 255, 165, 60, u8(clamp(fade, 0, 1) * 255) })
+        draw_iso_arc(pos, arc.radius - 2, arc.angle, arc.arc_spread, 5, gfx.Color{ 215, 90, 20, u8(clamp(fade, 0, 1) * 210) })
+        draw_iso_arc(pos, arc.radius, arc.angle, arc.arc_spread, 2, gfx.Color{ 255, 165, 60, u8(clamp(fade, 0, 1) * 255) })
         return
     }
 }
@@ -729,7 +730,7 @@ draw_ground_item_labels :: proc(w: ^World) {
         if !alt_held && item.rarity < g_loot_filter_rarity { continue }
 
         tr  := comp_get(w, id, .Transform, TransformComp)
-        pos := rl.Vector2{ tr.position[0], tr.position[1] }
+        pos := gfx.Vec2{ tr.position[0], tr.position[1] }
         iso := world_to_iso_v(pos)
 
         rcc  := comp_get(w, id, .RenderConfig, RenderConfigComp)
@@ -744,7 +745,7 @@ draw_ground_item_labels :: proc(w: ^World) {
         name_a := u8(160 + pulse * 95)
         rl.DrawTextEx(g_font_body, name,
             { iso.x - nsz.x * 0.5, iso.y - uis(20) - nsz.y },
-            nfs, 0.4, rl.Color{ rc.r, rc.g, rc.b, name_a })
+            nfs, 0.4, gfx.Color{ rc.r, rc.g, rc.b, name_a })
 
         if item.ability_type != .None {
             tag := t(.HUD_ITEM_ACTIVE)
@@ -752,7 +753,7 @@ draw_ground_item_labels :: proc(w: ^World) {
             tsz := rl.MeasureTextEx(g_font_body, tag, tfs, 0.4)
             rl.DrawTextEx(g_font_body, tag,
                 { iso.x - tsz.x * 0.5, iso.y - uis(20) - nsz.y - tfs - uis(1) },
-                tfs, 0.4, rl.Color{ 200, 170, 100, u8(130 + pulse * 60) })
+                tfs, 0.4, gfx.Color{ 200, 170, 100, u8(130 + pulse * 60) })
         }
     }
 }
@@ -777,7 +778,7 @@ draw_player_aim_line :: proc(w: ^World) {
     col := PLAYER_SLOT_COLORS[slot][2]
 
     tp  := comp_get(w, id, .Transform, TransformComp).position
-    pos := rl.Vector2{ tp[0], tp[1] }
+    pos := gfx.Vec2{ tp[0], tp[1] }
 
     mouse := screen_to_world_cartesian(rl.GetMousePosition())
     dx    := mouse.x - pos.x
@@ -786,20 +787,20 @@ draw_player_aim_line :: proc(w: ^World) {
     if dist < MUZZLE_OFFSET + 1 { return }
 
     ux, uy := dx / dist, dy / dist
-    muzzle := rl.Vector2{ pos.x + ux * MUZZLE_OFFSET, pos.y + uy * MUZZLE_OFFSET }
+    muzzle := gfx.Vec2{ pos.x + ux * MUZZLE_OFFSET, pos.y + uy * MUZZLE_OFFSET }
 
     end := mouse
     if t := raycast_walls_t(muzzle.x, muzzle.y, end.x, end.y); t < 1 {
         end = { muzzle.x + (end.x - muzzle.x) * t, muzzle.y + (end.y - muzzle.y) * t }
     }
 
-    draw_world_line(muzzle, end, 3.0, rl.Color{ 10, 8, 8, 90 })
-    draw_world_line(muzzle, end, 1.5, rl.Color{ col.r, col.g, col.b, 150 })
-    draw_world_circle(end, 4.0, rl.Color{ 10, 8, 8, 110 })
-    draw_world_circle(end, 2.5, rl.Color{ col.r, col.g, col.b, 220 })
+    draw_world_line(muzzle, end, 3.0, gfx.Color{ 10, 8, 8, 90 })
+    draw_world_line(muzzle, end, 1.5, gfx.Color{ col.r, col.g, col.b, 150 })
+    draw_world_circle(end, 4.0, gfx.Color{ 10, 8, 8, 110 })
+    draw_world_circle(end, 2.5, gfx.Color{ col.r, col.g, col.b, 220 })
 }
 
-draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_size: f32, rot: f32, sprite_iso_h: f32) {
+draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size: f32, rot: f32, sprite_iso_h: f32) {
     slot := player_slot_for_id(w, id)
     is_player := slot >= 0
     show_hp := false
@@ -816,15 +817,15 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
     }
 
     if show_tip {
-        line_col := rl.Color{ 200, 55, 55, 200 }
+        line_col := gfx.Color{ 200, 55, 55, 200 }
         if is_player {
             line_col = PLAYER_SLOT_COLORS[slot][2]
         } else if world_has_component(w, id, .AIAgent) && comp_get(w, id, .AIAgent, AIAgentComp).ai_type == .Ranged {
-            line_col = rl.Color{ 80, 128, 205, 200 }
+            line_col = gfx.Color{ 80, 128, 205, 200 }
         }
 
         if id != w.player_id || !player_has_ranged_equipped(w, id) {
-            tip := rl.Vector2{
+            tip := gfx.Vec2{
                 pos.x + math.cos(rot) * (base_size * 0.22 + 8),
                 pos.y + math.sin(rot) * (base_size * 0.22 + 8),
             }
@@ -856,7 +857,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
                 lsz  := rl.MeasureTextEx(g_font_body, name, label_fs, 0.4)
                 rl.DrawTextEx(g_font_body, name,
                     { iso.x - lsz.x * 0.5, iso.y - sprite_top - 14 },
-                    label_fs, 0.4, rl.Color{ col.r, col.g, col.b, 175 })
+                    label_fs, 0.4, gfx.Color{ col.r, col.g, col.b, 175 })
                 break
             }
 
@@ -889,7 +890,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
         line_col := PLAYER_SLOT_COLORS[slot][2]
         rl.DrawTextEx(g_font_body, name_str,
             { iso.x - name_sz.x * 0.5, iso.y - sprite_top - name_fs - 3 },
-            name_fs, 0.5, rl.Color{ line_col.r, line_col.g, line_col.b, 210 })
+            name_fs, 0.5, gfx.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
         if world_has_component(w, id, .MutationContainer) {
             mc_hc := comp_get(w, id, .MutationContainer, MutationContainerComp)
@@ -901,7 +902,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
                 t_now := f32(rl.GetTime())
                 hrad  := f32(12.0)
 
-                hworld: rl.Vector2
+                hworld: gfx.Vec2
                 if world_is_valid(w, hc.heart_id) &&
                    world_has_component(w, hc.heart_id, .Transform) {
                     ht    := comp_get(w, hc.heart_id, .Transform, TransformComp)
@@ -922,17 +923,17 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: rl.Vector2, base_si
                     pulse  := f32(0.8) + f32(0.2) * math.sin(t_now * 5.0)
                     alpha  := u8(160 + int(95.0 * pulse))
 
-                    draw_world_circle(hworld, hrad + 8, rl.Color{200, 40, 60, 25})
-                    draw_world_circle(hworld, hrad + 4, rl.Color{200, 40, 60, 55})
-                    draw_world_circle(hworld, hrad,     rl.Color{220, 55, 70, alpha})
-                    draw_world_circle_lines(hworld, hrad, rl.Color{255, 130, 150, 220})
+                    draw_world_circle(hworld, hrad + 8, gfx.Color{200, 40, 60, 25})
+                    draw_world_circle(hworld, hrad + 4, gfx.Color{200, 40, 60, 55})
+                    draw_world_circle(hworld, hrad,     gfx.Color{220, 55, 70, alpha})
+                    draw_world_circle_lines(hworld, hrad, gfx.Color{255, 130, 150, 220})
 
                     bw  := f32(30);  bh := f32(4)
                     bx  := hiso.x - bw * 0.5
                     by  := hiso.y - hrad * 0.55 - 8
-                    rl.DrawRectangleRec({bx - 1, by - 1, bw + 2, bh + 2}, rl.Color{20, 8, 10, 200})
-                    rl.DrawRectangleRec({bx, by, bw, bh},                  rl.Color{50, 14, 18, 180})
-                    fill_c := rl.Color{ u8(80 + int((1-hp_pct)*140)), u8(int(hp_pct*180)), 30, 240 }
+                    rl.DrawRectangleRec({bx - 1, by - 1, bw + 2, bh + 2}, gfx.Color{20, 8, 10, 200})
+                    rl.DrawRectangleRec({bx, by, bw, bh},                  gfx.Color{50, 14, 18, 180})
+                    fill_c := gfx.Color{ u8(80 + int((1-hp_pct)*140)), u8(int(hp_pct*180)), 30, 240 }
                     rl.DrawRectangleRec({bx, by, bw * hp_pct, bh}, fill_c)
                 }
                 break
@@ -946,7 +947,7 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
 
     if world_has_component(w, id, .Openable) && comp_get(w, id, .Openable, OpenableComp).is_open { return }
     tr := comp_get(w, id, .Transform, TransformComp)
-    pos := rl.Vector2{ tr.position[0], tr.position[1] }
+    pos := gfx.Vec2{ tr.position[0], tr.position[1] }
     rot := tr.rotation
 
     if world_has_component(w, id, .Respawn) {
@@ -959,16 +960,16 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
     vis := draw_entity_visual_info(w, id)
     if !vis.ok { return }
 
-    tint := rl.WHITE
+    tint := gfx.WHITE
     if is_player_entity(w, id) && world_has_component(w, id, .DodgeState) && comp_get(w, id, .DodgeState, DodgeComp).active {
-        tint = rl.Color{ 180, 220, 255, 255 }
+        tint = gfx.Color{ 180, 220, 255, 255 }
     } else if world_has_component(w, id, .AIAgent) {
         #partial switch comp_get(w, id, .AIAgent, AIAgentComp).tier {
-        case .Rare:      tint = rl.Color{ 160, 200, 255, 255 }
-        case .Legendary: tint = rl.Color{ 255, 215,  50, 255 }
+        case .Rare:      tint = gfx.Color{ 160, 200, 255, 255 }
+        case .Legendary: tint = gfx.Color{ 255, 215,  50, 255 }
         }
     } else if world_has_component(w, id, .NPC) && comp_get(w, id, .NPC, NPCComp).npc_type == .MutationWorkbench {
-        tint = rl.Color{ 250, 242, 255, 255 }
+        tint = gfx.Color{ 250, 242, 255, 255 }
     }
     if world_has_component(w, id, .AIAgent) {
         ai := comp_get(w, id, .AIAgent, AIAgentComp)
@@ -976,7 +977,7 @@ draw_entity_sprite_visual :: proc(w: ^World, id: int) {
             tint = color_mix(tint, TELEGRAPH_TINT, enemy_windup_progress(ai^) * 0.6)
         }
     }
-    tint = color_mix(tint, rl.WHITE, get_hit_flash_intensity(id) * 0.75)
+    tint = color_mix(tint, gfx.WHITE, get_hit_flash_intensity(id) * 0.75)
 
     anchor := [2]f32{ 0.5, 1.0 }
     if def, aok := get_or_load_anim_def(string(vis.sprite_key)); aok &&
@@ -1034,35 +1035,35 @@ draw_entities :: proc(w: ^World, pass: RenderLayer) {
     }
 }
 
-ability_trait_color :: proc(trait: AbilityTrait) -> rl.Color {
+ability_trait_color :: proc(trait: AbilityTrait) -> gfx.Color {
     switch trait {
-    case .Strength:  return rl.Color{ 220,  80,  60, 255 }
-    case .Dexterity: return rl.Color{  90, 200,  90, 255 }
-    case .Science:   return rl.Color{  80, 160, 230, 255 }
+    case .Strength:  return gfx.Color{ 220,  80,  60, 255 }
+    case .Dexterity: return gfx.Color{  90, 200,  90, 255 }
+    case .Science:   return gfx.Color{  80, 160, 230, 255 }
     case .None:
     }
-    return rl.Color{ 140, 134, 120, 255 }
+    return gfx.Color{ 140, 134, 120, 255 }
 }
 
-rarity_color :: proc(rarity: ItemRarity) -> rl.Color {
+rarity_color :: proc(rarity: ItemRarity) -> gfx.Color {
     switch rarity {
-    case .Normal:    return rl.Color{ 160, 155, 148, 255 }
-    case .Rare:      return rl.Color{  75, 135, 210, 255 }
-    case .Epic:      return rl.Color{ 148,  55, 198, 255 }
-    case .Legendary: return rl.Color{ 205,  90,  18, 255 }
-    case .Unique:    return rl.Color{ 215, 175,  28, 255 }
+    case .Normal:    return gfx.Color{ 160, 155, 148, 255 }
+    case .Rare:      return gfx.Color{  75, 135, 210, 255 }
+    case .Epic:      return gfx.Color{ 148,  55, 198, 255 }
+    case .Legendary: return gfx.Color{ 205,  90,  18, 255 }
+    case .Unique:    return gfx.Color{ 215, 175,  28, 255 }
     }
-    return rl.Color{ 160, 155, 148, 255 }
+    return gfx.Color{ 160, 155, 148, 255 }
 }
 
-mutation_visual_color :: proc(mt: MutationType) -> rl.Color {
+mutation_visual_color :: proc(mt: MutationType) -> gfx.Color {
     #partial switch mt {
-    case .LivingBomb:  return rl.Color{ 255, 120,  30, 255 }
-    case .ToxicFlesh:  return rl.Color{  80, 200,  60, 255 }
-    case .ThornPact:   return rl.Color{ 180, 160, 255, 255 }
-    case .BlackLung:   return rl.Color{  80, 160, 130, 255 }
+    case .LivingBomb:  return gfx.Color{ 255, 120,  30, 255 }
+    case .ToxicFlesh:  return gfx.Color{  80, 200,  60, 255 }
+    case .ThornPact:   return gfx.Color{ 180, 160, 255, 255 }
+    case .BlackLung:   return gfx.Color{  80, 160, 130, 255 }
     }
-    return rl.Color{ 180, 180, 180, 255 }
+    return gfx.Color{ 180, 180, 180, 255 }
 }
 
 @(private = "file")
@@ -1300,7 +1301,7 @@ _kb_draw_row :: proc(i: int, rows: ^[TOTAL_BIND_COUNT]BindRow, listening: bool) 
             key_str = fmt.tprintf("%s", key_name(rl.KeyboardKey(rows[i].ptr^), name_buf[:]))
         }
         ui_label(fmt.tprintf("KBKey%d", i), key_str, uis(13),
-            COL_BRASS if active else rl.Color{ 180, 160, 90, 220 })
+            COL_BRASS if active else gfx.Color{ 180, 160, 90, 220 })
     }
     ui_clickable_end()
     if hovered && rl.IsMouseButtonReleased(.LEFT) && !listening {
@@ -1427,7 +1428,7 @@ g_icon_cache: map[string]rl.Texture2D
 @(private = "file")
 EntitySpriteEntry :: struct {
     tex:     rl.Texture2D,
-    src:     rl.Rectangle,
+    src:     gfx.Rect,
     rt:      rl.RenderTexture2D,
     from_rt: bool,
 }
@@ -1476,9 +1477,9 @@ get_or_load_icon :: proc(stem: cstring) -> (tex: rl.Texture2D, ok: bool) {
 }
 
 @(private = "file")
-color_mix :: proc(a, b: rl.Color, t: f32) -> rl.Color {
+color_mix :: proc(a, b: gfx.Color, t: f32) -> gfx.Color {
     tt := clamp(t, 0, 1)
-    return rl.Color{
+    return gfx.Color{
         u8(math.lerp(f32(a.r), f32(b.r), tt)),
         u8(math.lerp(f32(a.g), f32(b.g), tt)),
         u8(math.lerp(f32(a.b), f32(b.b), tt)),
@@ -1491,61 +1492,61 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
     size :: 64
     rt := rl.LoadRenderTexture(size, size)
     rl.BeginTextureMode(rt)
-    rl.ClearBackground(rl.BLANK)
+    rl.ClearBackground(gfx.BLANK)
 
-    base  := rl.Color{ 116, 38, 34, 255 }
-    shade := rl.Color{ 68, 18, 16, 255 }
-    glow  := rl.Color{ 220, 160, 100, 220 }
-    eye   := rl.Color{ 236, 240, 214, 255 }
+    base  := gfx.Color{ 116, 38, 34, 255 }
+    shade := gfx.Color{ 68, 18, 16, 255 }
+    glow  := gfx.Color{ 220, 160, 100, 220 }
+    eye   := gfx.Color{ 236, 240, 214, 255 }
 
     switch key {
     case "player_nurse":
-        base  = rl.Color{ 210, 210, 210, 255 }
-        shade = rl.Color{ 140, 148, 160, 255 }
-        glow  = rl.Color{ 200, 80, 80, 220 }
+        base  = gfx.Color{ 210, 210, 210, 255 }
+        shade = gfx.Color{ 140, 148, 160, 255 }
+        glow  = gfx.Color{ 200, 80, 80, 220 }
     case "player_pr1s":
-        base  = rl.Color{ 40, 50, 40, 255 }
-        shade = rl.Color{ 20, 28, 20, 255 }
-        glow  = rl.Color{ 80, 220, 80, 220 }
+        base  = gfx.Color{ 40, 50, 40, 255 }
+        shade = gfx.Color{ 20, 28, 20, 255 }
+        glow  = gfx.Color{ 80, 220, 80, 220 }
     case "player_sheriff":
-        base  = rl.Color{ 120, 100, 60, 255 }
-        shade = rl.Color{ 64, 50, 28, 255 }
-        glow  = rl.Color{ 230, 200, 80, 220 }
+        base  = gfx.Color{ 120, 100, 60, 255 }
+        shade = gfx.Color{ 64, 50, 28, 255 }
+        glow  = gfx.Color{ 230, 200, 80, 220 }
     case "player_srbrain":
-        base  = rl.Color{ 60, 40, 80, 255 }
-        shade = rl.Color{ 30, 18, 46, 255 }
-        glow  = rl.Color{ 160, 80, 240, 220 }
+        base  = gfx.Color{ 60, 40, 80, 255 }
+        shade = gfx.Color{ 30, 18, 46, 255 }
+        glow  = gfx.Color{ 160, 80, 240, 220 }
     case "enemy_spider":
-        base  = rl.Color{ 20, 50, 18, 255 }
-        shade = rl.Color{ 10, 24, 8, 255 }
-        glow  = rl.Color{ 80, 220, 60, 220 }
-        eye   = rl.Color{ 220, 240, 80, 255 }
+        base  = gfx.Color{ 20, 50, 18, 255 }
+        shade = gfx.Color{ 10, 24, 8, 255 }
+        glow  = gfx.Color{ 80, 220, 60, 220 }
+        eye   = gfx.Color{ 220, 240, 80, 255 }
     case "enemy_brute":
-        base  = rl.Color{ 90, 40, 26, 255 }
-        shade = rl.Color{ 48, 18, 14, 255 }
-        glow  = rl.Color{ 210, 130, 46, 220 }
+        base  = gfx.Color{ 90, 40, 26, 255 }
+        shade = gfx.Color{ 48, 18, 14, 255 }
+        glow  = gfx.Color{ 210, 130, 46, 220 }
     case "enemy_hunter":
-        base  = rl.Color{ 46, 88, 68, 255 }
-        shade = rl.Color{ 20, 42, 32, 255 }
-        glow  = rl.Color{ 120, 220, 148, 210 }
+        base  = gfx.Color{ 46, 88, 68, 255 }
+        shade = gfx.Color{ 20, 42, 32, 255 }
+        glow  = gfx.Color{ 120, 220, 148, 210 }
     case "enemy_ranged", "enemy_sniper":
-        base  = rl.Color{ 44, 74, 112, 255 }
-        shade = rl.Color{ 18, 30, 56, 255 }
-        glow  = rl.Color{ 120, 180, 235, 220 }
+        base  = gfx.Color{ 44, 74, 112, 255 }
+        shade = gfx.Color{ 18, 30, 56, 255 }
+        glow  = gfx.Color{ 120, 180, 235, 220 }
     case "npc_shopkeeper":
-        base  = rl.Color{ 108, 84, 54, 255 }
-        shade = rl.Color{ 52, 36, 22, 255 }
-        glow  = rl.Color{ 212, 190, 92, 220 }
+        base  = gfx.Color{ 108, 84, 54, 255 }
+        shade = gfx.Color{ 52, 36, 22, 255 }
+        glow  = gfx.Color{ 212, 190, 92, 220 }
     case "mutation_workbench":
-        rl.DrawRectangle(14, 20, 36, 28, rl.Color{ 50, 26, 58, 255 })
-        rl.DrawRectangle(18, 24, 28, 20, rl.Color{ 84, 44, 94, 255 })
-        rl.DrawRectangle(10, 16, 44, 8, rl.Color{ 122, 76, 50, 255 })
-        rl.DrawRectangle(16, 10, 32, 8, rl.Color{ 90, 52, 112, 255 })
-        rl.DrawRectangle(22, 6, 20, 6, rl.Color{ 208, 108, 255, 220 })
-        rl.DrawRectangle(24, 2, 16, 6, rl.Color{ 255, 210, 120, 220 })
-        rl.DrawRectangle(8, 48, 10, 10, rl.Color{ 66, 38, 24, 255 })
-        rl.DrawRectangle(46, 48, 10, 10, rl.Color{ 66, 38, 24, 255 })
-        rl.DrawRectangle(20, 44, 24, 6, rl.Color{ 40, 18, 46, 255 })
+        rl.DrawRectangle(14, 20, 36, 28, gfx.Color{ 50, 26, 58, 255 })
+        rl.DrawRectangle(18, 24, 28, 20, gfx.Color{ 84, 44, 94, 255 })
+        rl.DrawRectangle(10, 16, 44, 8, gfx.Color{ 122, 76, 50, 255 })
+        rl.DrawRectangle(16, 10, 32, 8, gfx.Color{ 90, 52, 112, 255 })
+        rl.DrawRectangle(22, 6, 20, 6, gfx.Color{ 208, 108, 255, 220 })
+        rl.DrawRectangle(24, 2, 16, 6, gfx.Color{ 255, 210, 120, 220 })
+        rl.DrawRectangle(8, 48, 10, 10, gfx.Color{ 66, 38, 24, 255 })
+        rl.DrawRectangle(46, 48, 10, 10, gfx.Color{ 66, 38, 24, 255 })
+        rl.DrawRectangle(20, 44, 24, 6, gfx.Color{ 40, 18, 46, 255 })
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex     = rt.texture,
@@ -1555,100 +1556,100 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         }
     case "env_door":
 
-        rl.DrawRectangle(10,  6, 44, 52, rl.Color{ 60, 36, 14, 255})
-        rl.DrawRectangle(12,  8, 40, 48, rl.Color{ 96, 58, 22, 255})
-        rl.DrawRectangle(14, 10, 16, 20, rl.Color{ 80, 48, 18, 255})
-        rl.DrawRectangle(34, 10, 16, 20, rl.Color{ 80, 48, 18, 255})
-        rl.DrawRectangle(14, 34, 16, 18, rl.Color{ 80, 48, 18, 255})
-        rl.DrawRectangle(34, 34, 16, 18, rl.Color{ 80, 48, 18, 255})
-        rl.DrawCircle(37, 28, 3, rl.Color{200, 158, 50, 255})
-        rl.DrawCircle(37, 28, 2, rl.Color{220, 180, 80, 255})
-        rl.DrawRectangle( 8, 56,  48, 4, rl.Color{ 48, 28, 10, 255})
+        rl.DrawRectangle(10,  6, 44, 52, gfx.Color{ 60, 36, 14, 255})
+        rl.DrawRectangle(12,  8, 40, 48, gfx.Color{ 96, 58, 22, 255})
+        rl.DrawRectangle(14, 10, 16, 20, gfx.Color{ 80, 48, 18, 255})
+        rl.DrawRectangle(34, 10, 16, 20, gfx.Color{ 80, 48, 18, 255})
+        rl.DrawRectangle(14, 34, 16, 18, gfx.Color{ 80, 48, 18, 255})
+        rl.DrawRectangle(34, 34, 16, 18, gfx.Color{ 80, 48, 18, 255})
+        rl.DrawCircle(37, 28, 3, gfx.Color{200, 158, 50, 255})
+        rl.DrawCircle(37, 28, 2, gfx.Color{220, 180, 80, 255})
+        rl.DrawRectangle( 8, 56,  48, 4, gfx.Color{ 48, 28, 10, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_switch":
 
-        rl.DrawRectangle(18, 36, 28, 22, rl.Color{ 50, 50, 60, 255})
-        rl.DrawRectangle(20, 38, 24, 18, rl.Color{ 68, 68, 80, 255})
-        rl.DrawRectangle(22, 40,  8,  4, rl.Color{ 80,180, 70, 255})
-        rl.DrawRectangle(30, 14,  4, 30, rl.Color{130, 80, 26, 255})
-        rl.DrawCircle(32, 14, 6, rl.Color{180, 116, 40, 255})
-        rl.DrawCircle(32, 14, 4, rl.Color{210, 150, 60, 255})
+        rl.DrawRectangle(18, 36, 28, 22, gfx.Color{ 50, 50, 60, 255})
+        rl.DrawRectangle(20, 38, 24, 18, gfx.Color{ 68, 68, 80, 255})
+        rl.DrawRectangle(22, 40,  8,  4, gfx.Color{ 80,180, 70, 255})
+        rl.DrawRectangle(30, 14,  4, 30, gfx.Color{130, 80, 26, 255})
+        rl.DrawCircle(32, 14, 6, gfx.Color{180, 116, 40, 255})
+        rl.DrawCircle(32, 14, 4, gfx.Color{210, 150, 60, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_chest":
 
-        rl.DrawRectangle( 8, 34, 48, 26, rl.Color{ 88, 54, 20, 255})
-        rl.DrawRectangle(10, 36, 44, 22, rl.Color{108, 68, 26, 255})
-        rl.DrawRectangle( 8, 22, 48, 14, rl.Color{ 72, 44, 16, 255})
-        rl.DrawRectangle(10, 24, 44, 11, rl.Color{ 90, 56, 20, 255})
-        rl.DrawRectangle( 8, 44, 48,  4, rl.Color{168, 130, 50, 255})
-        rl.DrawRectangle(28, 36,  8,  8, rl.Color{180, 148, 52, 255})
-        rl.DrawRectangle(30, 38,  4,  4, rl.Color{220, 188, 90, 255})
+        rl.DrawRectangle( 8, 34, 48, 26, gfx.Color{ 88, 54, 20, 255})
+        rl.DrawRectangle(10, 36, 44, 22, gfx.Color{108, 68, 26, 255})
+        rl.DrawRectangle( 8, 22, 48, 14, gfx.Color{ 72, 44, 16, 255})
+        rl.DrawRectangle(10, 24, 44, 11, gfx.Color{ 90, 56, 20, 255})
+        rl.DrawRectangle( 8, 44, 48,  4, gfx.Color{168, 130, 50, 255})
+        rl.DrawRectangle(28, 36,  8,  8, gfx.Color{180, 148, 52, 255})
+        rl.DrawRectangle(30, 38,  4,  4, gfx.Color{220, 188, 90, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_crate":
 
-        rl.DrawRectangle( 8, 10, 48, 48, rl.Color{ 90, 58, 24, 255})
-        rl.DrawRectangle(10, 12, 44, 44, rl.Color{112, 72, 28, 255})
-        rl.DrawRectangle( 8, 10, 48,  4, rl.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle( 8, 54, 48,  4, rl.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle( 8, 10,  4, 48, rl.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle(52, 10,  4, 48, rl.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle( 8, 30, 48,  4, rl.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle(30, 10,  4, 48, rl.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 10, 48, 48, gfx.Color{ 90, 58, 24, 255})
+        rl.DrawRectangle(10, 12, 44, 44, gfx.Color{112, 72, 28, 255})
+        rl.DrawRectangle( 8, 10, 48,  4, gfx.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 54, 48,  4, gfx.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle(52, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle( 8, 30, 48,  4, gfx.Color{ 70, 42, 16, 255})
+        rl.DrawRectangle(30, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_lore_item":
 
-        rl.DrawRectangle(14,  6, 36, 48, rl.Color{198, 176, 126, 255})
-        rl.DrawRectangle(16,  8, 32, 44, rl.Color{210, 192, 146, 255})
-        rl.DrawRectangle(14,  6, 12, 12, rl.Color{180, 158, 108, 255})
-        rl.DrawRectangle(16,  8,  4,  8, rl.Color{198, 176, 126, 255})
-        rl.DrawRectangle(19, 18, 26,  2, rl.Color{120, 100,  60, 160})
-        rl.DrawRectangle(19, 24, 26,  2, rl.Color{120, 100,  60, 160})
-        rl.DrawRectangle(19, 30, 26,  2, rl.Color{120, 100,  60, 160})
-        rl.DrawRectangle(19, 36, 18,  2, rl.Color{120, 100,  60, 160})
+        rl.DrawRectangle(14,  6, 36, 48, gfx.Color{198, 176, 126, 255})
+        rl.DrawRectangle(16,  8, 32, 44, gfx.Color{210, 192, 146, 255})
+        rl.DrawRectangle(14,  6, 12, 12, gfx.Color{180, 158, 108, 255})
+        rl.DrawRectangle(16,  8,  4,  8, gfx.Color{198, 176, 126, 255})
+        rl.DrawRectangle(19, 18, 26,  2, gfx.Color{120, 100,  60, 160})
+        rl.DrawRectangle(19, 24, 26,  2, gfx.Color{120, 100,  60, 160})
+        rl.DrawRectangle(19, 30, 26,  2, gfx.Color{120, 100,  60, 160})
+        rl.DrawRectangle(19, 36, 18,  2, gfx.Color{120, 100,  60, 160})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_phonograph":
 
-        rl.DrawRectangle( 8, 36, 28, 16, rl.Color{ 72, 44, 18, 255})
-        rl.DrawRectangle(10, 38, 24, 12, rl.Color{ 92, 56, 22, 255})
-        rl.DrawRectangle(10, 40, 24,  8, rl.Color{ 78, 48, 20, 255})
-        rl.DrawEllipse(22, 44, 10, 4, rl.Color{ 40, 40, 40, 220})
-        rl.DrawEllipseLines(22, 44, 10, 4, rl.Color{100, 100,110,255})
+        rl.DrawRectangle( 8, 36, 28, 16, gfx.Color{ 72, 44, 18, 255})
+        rl.DrawRectangle(10, 38, 24, 12, gfx.Color{ 92, 56, 22, 255})
+        rl.DrawRectangle(10, 40, 24,  8, gfx.Color{ 78, 48, 20, 255})
+        rl.DrawEllipse(22, 44, 10, 4, gfx.Color{ 40, 40, 40, 220})
+        rl.DrawEllipseLines(22, 44, 10, 4, gfx.Color{100, 100,110,255})
 
         rl.DrawTriangle(
             {36, 52}, {54, 10}, {54, 52},
-            rl.Color{180, 130, 50, 200})
+            gfx.Color{180, 130, 50, 200})
         rl.DrawTriangleLines(
             {36, 52}, {54, 10}, {54, 52},
-            rl.Color{220, 170, 70, 220})
-        rl.DrawEllipse(45, 10, 9, 4, rl.Color{200, 160, 60, 160})
+            gfx.Color{220, 170, 70, 220})
+        rl.DrawEllipse(45, 10, 9, 4, gfx.Color{200, 160, 60, 160})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_key":
 
-        rl.DrawCircle(20, 24, 14, rl.Color{180, 148, 40, 255})
-        rl.DrawCircle(20, 24, 10, rl.Color{130,  96, 22, 255})
-        rl.DrawCircle(20, 24,  5, rl.Color{180, 148, 40, 255})
-        rl.DrawRectangle(30, 21, 26,  6, rl.Color{200, 162, 48, 255})
-        rl.DrawRectangle(48, 27,  4,  8, rl.Color{200, 162, 48, 255})
-        rl.DrawRectangle(42, 27,  4,  6, rl.Color{200, 162, 48, 255})
-        rl.DrawRectangle(36, 27,  4,  4, rl.Color{200, 162, 48, 255})
+        rl.DrawCircle(20, 24, 14, gfx.Color{180, 148, 40, 255})
+        rl.DrawCircle(20, 24, 10, gfx.Color{130,  96, 22, 255})
+        rl.DrawCircle(20, 24,  5, gfx.Color{180, 148, 40, 255})
+        rl.DrawRectangle(30, 21, 26,  6, gfx.Color{200, 162, 48, 255})
+        rl.DrawRectangle(48, 27,  4,  8, gfx.Color{200, 162, 48, 255})
+        rl.DrawRectangle(42, 27,  4,  6, gfx.Color{200, 162, 48, 255})
+        rl.DrawRectangle(36, 27,  4,  4, gfx.Color{200, 162, 48, 255})
         rl.EndTextureMode()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
@@ -1670,7 +1671,7 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
     rl.DrawRectangle(46, 28, 4, 8, base)
     rl.DrawRectangle(24, 18, 4, 4, eye)
     rl.DrawRectangle(36, 18, 4, 4, eye)
-    rl.DrawRectangle(28, 22, 8, 3, rl.Color{ 26, 18, 16, 180 })
+    rl.DrawRectangle(28, 22, 8, 3, gfx.Color{ 26, 18, 16, 180 })
 
     rl.EndTextureMode()
     return EntitySpriteEntry{
@@ -1709,7 +1710,7 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
     return entry, true
 }
 
-get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: rl.Rectangle, ok: bool) {
+get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: gfx.Rect, ok: bool) {
     if len(stem) == 0 { return }
     buf: [64]u8
     n   := min(len(stem), len(buf)-1)
@@ -1722,21 +1723,21 @@ get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: rl.Recta
 
 ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W
 
-draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, rotation_rad: f32, tint: rl.Color, y_scale: f32 = ISO_SPRITE_Y, anchor: [2]f32 = {0.5, 1.0}) {
+draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, rotation_rad: f32, tint: gfx.Color, y_scale: f32 = ISO_SPRITE_Y, anchor: [2]f32 = {0.5, 1.0}) {
     iso     := world_to_iso_v(pos)
     iso_h   := world_size * y_scale
-    dst     := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
-    origin  := rl.Vector2{ world_size * anchor[0], iso_h * anchor[1] }
+    dst     := gfx.Rect{ iso.x, iso.y, world_size, iso_h }
+    origin  := gfx.Vec2{ world_size * anchor[0], iso_h * anchor[1] }
     iso_rot := world_rot_to_iso(rotation_rad)
     rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
 }
 
-draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2, world_size: f32, tint: rl.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
+draw_player_sprite :: proc(tex: rl.Texture2D, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, tint: gfx.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
     iso    := world_to_iso_v(pos)
     aspect := src.height / src.width
     iso_h  := world_size * aspect
-    dst    := rl.Rectangle{ iso.x, iso.y, world_size, iso_h }
-    origin := rl.Vector2{ world_size * anchor[0], iso_h * anchor[1] }
+    dst    := gfx.Rect{ iso.x, iso.y, world_size, iso_h }
+    origin := gfx.Vec2{ world_size * anchor[0], iso_h * anchor[1] }
     s      := src
     if flip_x { s.width = -s.width }
     rl.DrawTexturePro(tex, s, dst, origin, 0.0, tint)
@@ -1746,7 +1747,7 @@ draw_player_sprite :: proc(tex: rl.Texture2D, src: rl.Rectangle, pos: rl.Vector2
 draw_text_wrapped :: proc(
     font: rl.Font, text: cstring,
     x, y, fs, max_w, spacing: f32,
-    color: rl.Color,
+    color: gfx.Color,
 ) -> f32 {
     str        := string(text)
     line_h     := fs + uis(3)
@@ -1830,19 +1831,19 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
     if ty < 4                          { ty = 4 }
     if ty + TH  > rl.GetScreenHeight() { ty = rl.GetScreenHeight() - TH - 4 }
 
-    rl.DrawRectangle(tx, ty, TW, TH, rl.Color{ 6, 4, 3, 252 })
-    rl.DrawRectangle(tx, ty, TW, 3,  rl.Color{ rc.r, rc.g, rc.b, 230 })
+    rl.DrawRectangle(tx, ty, TW, TH, gfx.Color{ 6, 4, 3, 252 })
+    rl.DrawRectangle(tx, ty, TW, 3,  gfx.Color{ rc.r, rc.g, rc.b, 230 })
     rl.DrawRectangleLinesEx({ f32(tx), f32(ty), f32(TW), f32(TH) }, 1,
-        rl.Color{ rc.r, rc.g, rc.b, 160 })
+        gfx.Color{ rc.r, rc.g, rc.b, 160 })
 
     icon_x := tx + i32(uis(10))
     icon_y := ty + i32(uis(10))
 
     rl.DrawRectangle(icon_x - 2, icon_y - 2, IS + 4, IS + 4,
-        rl.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 200 })
+        gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 200 })
     rl.DrawRectangleLinesEx(
         { f32(icon_x - 2), f32(icon_y - 2), f32(IS + 4), f32(IS + 4) }, 1,
-        rl.Color{ rc.r, rc.g, rc.b, 100 })
+        gfx.Color{ rc.r, rc.g, rc.b, 100 })
 
     icon_drawn := false
     if world_has_component(w, item_id, .RenderConfig) {
@@ -1850,10 +1851,10 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         if rcc.icon_len > 0 {
             tex, ok := get_or_load_icon(render_config_icon_cstr(rcc))
             if ok {
-                src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
-                dst := rl.Rectangle{ f32(icon_x), f32(icon_y), f32(IS), f32(IS) }
+                src := gfx.Rect{ 0, 0, f32(tex.width), f32(tex.height) }
+                dst := gfx.Rect{ f32(icon_x), f32(icon_y), f32(IS), f32(IS) }
                 rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
-                    rl.Color{ rc.r, rc.g, rc.b, 220 })
+                    gfx.Color{ rc.r, rc.g, rc.b, 220 })
                 icon_drawn = true
             }
         }
@@ -1866,7 +1867,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
     rl.DrawLineEx(
         { f32(div_x), f32(ty) + uis(8) },
         { f32(div_x), f32(ty + TH) - uis(8) },
-        1, rl.Color{ rc.r, rc.g, rc.b, 80 })
+        1, gfx.Color{ rc.r, rc.g, rc.b, 80 })
 
     tx2  := f32(div_x) + uis(10)
     ty2  := f32(ty) + uis(12)
@@ -1878,7 +1879,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         rcc  := comp_get(w, item_id, .RenderConfig, RenderConfigComp)
         name := loc_lookup(render_config_name_cstr(rcc))
         rl.DrawTextEx(g_font_body, name, { tx2, ty2 }, fs15, 0.5,
-            rl.Color{ rc.r, rc.g, rc.b, 245 })
+            gfx.Color{ rc.r, rc.g, rc.b, 245 })
     }
 
     rarity_labels := [ItemRarity]cstring{
@@ -1889,12 +1890,12 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         .Unique    = "Unique",
     }
     rl.DrawTextEx(g_font_body, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
-        rl.Color{ rc.r, rc.g, rc.b, 195 })
+        gfx.Color{ rc.r, rc.g, rc.b, 195 })
 
     if item.ability_type != .None && int(item.ability_type) < len(ABILITY_DEFS) {
         def := ABILITY_DEFS[item.ability_type]
         rl.DrawTextEx(g_font_body, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
-            rl.Color{ 200, 170, 100, 210 })
+            gfx.Color{ 200, 170, 100, 210 })
         cd_buf: [32]u8
         cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
         cd_buf[len(cd_s)] = 0
@@ -1910,7 +1911,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
                 size_names[fc.size], kind_names[fc.kind])
             name_buf[len(ns)] = 0
             rl.DrawTextEx(g_font_body, cstring(&name_buf[0]), { tx2, ty2 }, fs15, 0.5,
-                rl.Color{ rc.r, rc.g, rc.b, 245 })
+                gfx.Color{ rc.r, rc.g, rc.b, 245 })
         }
         slot_label: cstring = "Health Flask [1]" if item.slot == .Flask1 else "Energy Flask [2]"
         rl.DrawTextEx(g_font_body, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
@@ -2030,8 +2031,8 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             player_dex  = st.dexterity
             player_sci  = st.science
         }
-        COL_REQ_MET   :: rl.Color{ 100, 210, 100, 220 }
-        COL_REQ_UNMET :: rl.Color{ 220,  60,  60, 240 }
+        COL_REQ_MET   :: gfx.Color{ 100, 210, 100, 220 }
+        COL_REQ_UNMET :: gfx.Color{ 220,  60,  60, 240 }
         req_row: int
         req_y_base := stat_y
         if item.req_str > 0 {
@@ -2121,11 +2122,11 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         rl.DrawLineEx(
             { f32(tx) + uis(10), f32(ty + TH) - uis(36) },
             { f32(tx + TW) - uis(10), f32(ty + TH) - uis(36) },
-            1, rl.Color{ rc.r, rc.g, rc.b, 50 })
+            1, gfx.Color{ rc.r, rc.g, rc.b, 50 })
         draw_text_wrapped(g_font_body, desc_str,
             f32(tx) + uis(10), f32(ty + TH) - uis(30),
             fs13, text_w + (tx2 - f32(tx) - uis(10)), 0.5,
-            rl.Color{ 200, 190, 160, 200 })
+            gfx.Color{ 200, 190, 160, 200 })
     }
 }
 
@@ -2213,7 +2214,7 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
         if is_fog_hidden(w, id)    { continue }
 
         tr  := comp_get(w, id, .Transform, TransformComp)
-        pos := rl.Vector2{ tr.position[0], tr.position[1] }
+        pos := gfx.Vec2{ tr.position[0], tr.position[1] }
 
         mc := comp_get(w, id, .MutationContainer, MutationContainerComp)
         for i in 0..<mc.entity_count {
@@ -2224,8 +2225,8 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
                 pulse := f32(0.87) + f32(0.13) * math.sin(t * 1.4 * math.PI * 2)
                 r     := f32(38) * pulse
                 col   := mutation_visual_color(.LivingBomb)
-                draw_world_circle_lines(pos, r,         rl.Color{ col.r, col.g, col.b, 130 })
-                draw_world_circle_lines(pos, r * 0.58,  rl.Color{ col.r, col.g, col.b,  60 })
+                draw_world_circle_lines(pos, r,         gfx.Color{ col.r, col.g, col.b, 130 })
+                draw_world_circle_lines(pos, r * 0.58,  gfx.Color{ col.r, col.g, col.b,  60 })
             }
 
             if world_has_component(w, meid, .MutProximityDamage) {
@@ -2233,13 +2234,13 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
                 pulse := f32(0.45) + f32(0.45) * math.sin(t * math.PI * 0.7)
                 alpha := u8(clamp(pulse * 120, 0, 255))
                 col   := mutation_visual_color(.ToxicFlesh)
-                draw_world_circle_lines(pos, pd.radius, rl.Color{ col.r, col.g, col.b, alpha })
+                draw_world_circle_lines(pos, pd.radius, gfx.Color{ col.r, col.g, col.b, alpha })
             }
 
             if world_has_component(w, meid, .MutThornPact) {
                 col := mutation_visual_color(.ThornPact)
-                draw_world_circle_lines(pos, 40, rl.Color{ col.r, col.g, col.b, 115 })
-                draw_world_circle_lines(pos, 47, rl.Color{ col.r, col.g, col.b,  42 })
+                draw_world_circle_lines(pos, 40, gfx.Color{ col.r, col.g, col.b, 115 })
+                draw_world_circle_lines(pos, 47, gfx.Color{ col.r, col.g, col.b,  42 })
             }
 
             if world_has_component(w, meid, .MutBlackLung) {
@@ -2249,8 +2250,8 @@ draw_enemy_mutation_auras :: proc(w: ^World) {
                     r     := bl.radius * frac
                     alpha := u8(clamp(frac * 155, 0, 155))
                     col   := mutation_visual_color(.BlackLung)
-                    draw_world_circle_lines(pos, r,        rl.Color{ col.r, col.g, col.b, alpha })
-                    draw_world_circle_lines(pos, r * 0.65, rl.Color{ col.r, col.g, col.b, alpha / 2 })
+                    draw_world_circle_lines(pos, r,        gfx.Color{ col.r, col.g, col.b, alpha })
+                    draw_world_circle_lines(pos, r * 0.65, gfx.Color{ col.r, col.g, col.b, alpha / 2 })
                 }
             }
         }
@@ -2275,7 +2276,7 @@ sprite_facing_flip :: proc(w: ^World, id: int, rot: f32) -> bool {
 
 SpriteFrame :: struct {
     tex:        rl.Texture2D,
-    src:        rl.Rectangle,
+    src:        gfx.Rect,
     anchor:     [2]f32,
     ground:     f32,
     world_size: f32,

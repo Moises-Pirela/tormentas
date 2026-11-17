@@ -1,11 +1,12 @@
 package main
 
 import rl  "vendor:raylib"
+import gfx "gfx"
 import     "core:math"
 import     "core:fmt"
 
 @(private = "file")
-CLASS_GLOW_COLORS := [4]rl.Color{
+CLASS_GLOW_COLORS := [4]gfx.Color{
     { 200,  80,  80, 255 },
     {  80, 220,  80, 255 },
     { 230, 200,  80, 255 },
@@ -92,7 +93,7 @@ _mm_update_class_select :: proc() {
     g_mm.cs_hovered = -1
     for i in 0..<n {
         cx := cards_x + f32(i) * (card_w + card_gap)
-        r  := rl.Rectangle{cx, cards_y, card_w, card_h}
+        r  := gfx.Rect{cx, cards_y, card_w, card_h}
         if rl.CheckCollisionPointRec(mp, r) {
             g_mm.cs_hovered = i
         }
@@ -104,8 +105,8 @@ _mm_update_class_select :: proc() {
     btn_w   := sw * 0.14
     btn_h   := uis(42)
     btn_y   := sh * 0.86
-    back_r  := rl.Rectangle{sw * 0.30 - btn_w * 0.5, btn_y, btn_w, btn_h}
-    begin_r := rl.Rectangle{sw * 0.70 - btn_w * 0.5, btn_y, btn_w, btn_h}
+    back_r  := gfx.Rect{sw * 0.30 - btn_w * 0.5, btn_y, btn_w, btn_h}
+    begin_r := gfx.Rect{sw * 0.70 - btn_w * 0.5, btn_y, btn_w, btn_h}
 
     if _mm_btn_hit(back_r) || rl.IsKeyPressed(.ESCAPE) {
         char_slot_delete(g_mm.cs_pending_slot)
@@ -150,23 +151,23 @@ _mm_draw_class_select :: proc() {
     cards_x := sw * 0.5 - total_w * 0.5
     cards_y := sh * 0.26
 
-    rl.DrawRectangleRec({0, 0, sw, sh}, rl.Color{6, 4, 3, 235})
+    rl.DrawRectangleRec({0, 0, sw, sh}, gfx.Color{6, 4, 3, 235})
 
     lbl := t(.CLASS_SELECT_TITLE)
     lfs := uis(14)
     lsz := rl.MeasureTextEx(g_font_body, lbl, lfs, 0.5)
     rl.DrawTextEx(g_font_body, lbl,
         {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(18)},
-        lfs, 0.5, rl.Color{130, 118, 82, 200})
+        lfs, 0.5, gfx.Color{130, 118, 82, 200})
 
     for i in 0..<n {
         cx := cards_x + f32(i) * (card_w + card_gap)
-        r  := rl.Rectangle{cx, cards_y, card_w, card_h}
+        r  := gfx.Rect{cx, cards_y, card_w, card_h}
         _cs_draw_class_card(i, r, g_mm.cs_hovered == i, g_mm.new_char == i)
     }
 
     display_idx := g_mm.cs_hovered if g_mm.cs_hovered >= 0 else g_mm.new_char
-    panel_r := rl.Rectangle{
+    panel_r := gfx.Rect{
         cards_x + total_w + uis(28),
         cards_y,
         uis(210),
@@ -185,8 +186,8 @@ _mm_draw_class_select :: proc() {
     btn_w   := sw * 0.14
     btn_h   := uis(42)
     btn_y   := sh * 0.86
-    back_r  := rl.Rectangle{sw * 0.30 - btn_w * 0.5, btn_y, btn_w, btn_h}
-    begin_r := rl.Rectangle{sw * 0.70 - btn_w * 0.5, btn_y, btn_w, btn_h}
+    back_r  := gfx.Rect{sw * 0.30 - btn_w * 0.5, btn_y, btn_w, btn_h}
+    begin_r := gfx.Rect{sw * 0.70 - btn_w * 0.5, btn_y, btn_w, btn_h}
     _mm_btn_draw(back_r,  t(.MENU_BTN_BACK),     false)
     _mm_btn_draw(begin_r, t(.CLASS_SELECT_BEGIN), true)
 
@@ -195,32 +196,32 @@ _mm_draw_class_select :: proc() {
     hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
     rl.DrawTextEx(g_font_body, hint,
         {sw * 0.5 - hsz.x * 0.5, sh * 0.94},
-        hint_fs, 0.5, rl.Color{80, 72, 52, 160})
+        hint_fs, 0.5, gfx.Color{80, 72, 52, 160})
 }
 
 @(private = "file")
-_cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: bool) {
+_cs_draw_class_card :: proc(ci: int, r: gfx.Rect, hovered: bool, selected: bool) {
     glow := CLASS_GLOW_COLORS[ci]
     hot  := hovered || selected
 
-    bg := rl.Color{52, 46, 34, 255} if hot else rl.Color{18, 16, 12, 255}
+    bg := gfx.Color{52, 46, 34, 255} if hot else gfx.Color{18, 16, 12, 255}
     rl.DrawRectangleRec(r, bg)
 
     if selected {
-        rl.DrawRectangleRec(r, rl.Color{glow.r, glow.g, glow.b, 28})
+        rl.DrawRectangleRec(r, gfx.Color{glow.r, glow.g, glow.b, 28})
     }
 
-    border := COL_BRASS if selected else (rl.Color{100, 88, 58, 200} if hovered else COL_RULE)
+    border := COL_BRASS if selected else (gfx.Color{100, 88, 58, 200} if hovered else COL_RULE)
     rl.DrawRectangleLinesEx(r, 1.5, border)
 
     sprite_h := r.height * 0.62
-    sprite_area := rl.Rectangle{
+    sprite_area := gfx.Rect{
         r.x + uis(6),
         r.y + uis(6),
         r.width - uis(12),
         sprite_h - uis(6),
     }
-    tint  := rl.WHITE if hot else rl.Color{180, 180, 180, 200}
+    tint  := gfx.WHITE if hot else gfx.Color{180, 180, 180, 200}
     stems := PLAYER_STEMS
     _cs_draw_sprite_frame(stems[ci], sprite_area, g_mm.cs_anim_t, tint)
 
@@ -229,7 +230,7 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
         rl.DrawEllipse(
             i32(r.x + r.width * 0.5), i32(glow_y),
             r.width * 0.38, uis(5),
-            rl.Color{glow.r, glow.g, glow.b, 55},
+            gfx.Color{glow.r, glow.g, glow.b, 55},
         )
     }
 
@@ -247,16 +248,16 @@ _cs_draw_class_card :: proc(ci: int, r: rl.Rectangle, hovered: bool, selected: b
     rl.DrawTextEx(g_font_body, stat_lbl,
         {r.x + (r.width - ssz.x) * 0.5, name_y + name_fs + uis(4)},
         stat_fs, 0.5,
-        rl.Color{glow.r, glow.g, glow.b, 200} if hot else COL_RULE)
+        gfx.Color{glow.r, glow.g, glow.b, 200} if hot else COL_RULE)
 
     if selected {
-        bar_r := rl.Rectangle{r.x + uis(12), r.y + r.height - uis(6), r.width - uis(24), uis(3)}
-        rl.DrawRectangleRec(bar_r, rl.Color{glow.r, glow.g, glow.b, 220})
+        bar_r := gfx.Rect{r.x + uis(12), r.y + r.height - uis(6), r.width - uis(24), uis(3)}
+        rl.DrawRectangleRec(bar_r, gfx.Color{glow.r, glow.g, glow.b, 220})
     }
 }
 
 @(private = "file")
-_cs_draw_sprite_frame :: proc(stem: string, dest_r: rl.Rectangle, anim_t: f32, tint: rl.Color) {
+_cs_draw_sprite_frame :: proc(stem: string, dest_r: gfx.Rect, anim_t: f32, tint: gfx.Color) {
     buf: [64]u8
     n := min(len(stem), len(buf)-1)
     copy(buf[:], stem[:n])
@@ -279,7 +280,7 @@ _cs_draw_sprite_frame :: proc(stem: string, dest_r: rl.Rectangle, anim_t: f32, t
         ncols     := max(adef.columns, 1)
         col       := abs_frame % ncols
         row       := abs_frame / ncols
-        src = rl.Rectangle{
+        src = gfx.Rect{
             f32(col * adef.frame_width),
             f32(row * adef.frame_height),
             f32(adef.frame_width),
@@ -294,7 +295,7 @@ _cs_draw_sprite_frame :: proc(stem: string, dest_r: rl.Rectangle, anim_t: f32, t
     scale  := min(dest_r.width / fw, dest_r.height / fh)
     dw     := fw * scale
     dh     := fh * scale
-    draw_r := rl.Rectangle{
+    draw_r := gfx.Rect{
         dest_r.x + (dest_r.width - dw) * 0.5,
         dest_r.y + dest_r.height - dh,
         dw, dh,
@@ -303,8 +304,8 @@ _cs_draw_sprite_frame :: proc(stem: string, dest_r: rl.Rectangle, anim_t: f32, t
 }
 
 @(private = "file")
-_cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
-    rl.DrawRectangleRec(r, rl.Color{12, 10, 8, 220})
+_cs_draw_stats_panel :: proc(ci: int, r: gfx.Rect) {
+    rl.DrawRectangleRec(r, gfx.Color{12, 10, 8, 220})
     rl.DrawRectangleLinesEx(r, 1, COL_RULE)
 
     px  := r.x + uis(12)
@@ -330,17 +331,17 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
 
     hp_s := fmt.bprintf(num_buf[:], "HP:      %d", int(CLASS_BASE_HP[ci]))
     num_buf[len(hp_s)] = 0
-    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, gfx.Color{170, 160, 118, 210})
     py += val_fs + uis(4)
 
     en_s := fmt.bprintf(num_buf[:], "Energy:  %d", int(CLASS_BASE_ENERGY[ci]))
     num_buf[len(en_s)] = 0
-    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, gfx.Color{170, 160, 118, 210})
     py += val_fs + uis(4)
 
     sp_s := fmt.bprintf(num_buf[:], "Speed:   %d", int(CLASS_BASE_SPEED[ci]))
     num_buf[len(sp_s)] = 0
-    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, rl.Color{170, 160, 118, 210})
+    rl.DrawTextEx(g_font_body, cstring(&num_buf[0]), {px, py}, val_fs, 0.5, gfx.Color{170, 160, 118, 210})
     py += val_fs + uis(10)
 
     rl.DrawLineV({r.x + uis(6), py}, {r.x + r.width - uis(6), py}, COL_RULE)
@@ -366,7 +367,7 @@ _cs_draw_stats_panel :: proc(ci: int, r: rl.Rectangle) {
 }
 
 @(private = "file")
-_cs_draw_stat_dots :: proc(label: cstring, value: int, glow: rl.Color, x, y: f32) {
+_cs_draw_stat_dots :: proc(label: cstring, value: int, glow: gfx.Color, x, y: f32) {
     fs  := uis(11)
     lsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
     rl.DrawTextEx(g_font_body, label, {x, y}, fs, 0.5, COL_MUTED)
@@ -378,7 +379,7 @@ _cs_draw_stat_dots :: proc(label: cstring, value: int, glow: rl.Color, x, y: f32
         cx := dot_x + f32(i) * (dot_r * 2 + dot_gap) + dot_r
         cy := y + fs * 0.5
         if i < value {
-            rl.DrawCircle(i32(cx), i32(cy), dot_r, rl.Color{glow.r, glow.g, glow.b, 220})
+            rl.DrawCircle(i32(cx), i32(cy), dot_r, gfx.Color{glow.r, glow.g, glow.b, 220})
         } else {
             rl.DrawCircleLines(i32(cx), i32(cy), dot_r, COL_RULE)
         }

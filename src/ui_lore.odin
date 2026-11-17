@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 
 g_lore_panel_id: u8 = 0
 
@@ -18,7 +19,7 @@ draw_lore_panel :: proc() {
         return
     }
 
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.Color{0, 0, 0, 160})
+    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.Color{0, 0, 0, 160})
 
     page, ok := lore_get_page(g_lore_panel_id)
 
@@ -28,28 +29,28 @@ draw_lore_panel :: proc() {
     py  := (sh - PH) * 0.5
 
     rl.DrawRectangleRec({px + uis(6), py + uis(6), PW, PH},
-        rl.Color{0, 0, 0, 100})
+        gfx.Color{0, 0, 0, 100})
 
     rl.DrawRectangleRec({px, py, PW, PH},
-        rl.Color{198, 178, 128, 252})
+        gfx.Color{198, 178, 128, 252})
     rl.DrawRectangleRec({px, py, PW, uis(4)},
-        rl.Color{160, 138, 90, 200})
+        gfx.Color{160, 138, 90, 200})
     rl.DrawRectangleRec({px, py + PH - uis(4), PW, uis(4)},
-        rl.Color{148, 126, 82, 200})
+        gfx.Color{148, 126, 82, 200})
 
     for i in 0..<6 {
         fi := f32(i)
         a  := u8(28 - i * 4)
         rl.DrawRectangleRec({px + fi * uis(3), py, uis(3), PH},
-            rl.Color{60, 40, 18, a})
+            gfx.Color{60, 40, 18, a})
         rl.DrawRectangleRec({px + PW - fi * uis(3) - uis(3), py, uis(3), PH},
-            rl.Color{60, 40, 18, a})
+            gfx.Color{60, 40, 18, a})
     }
 
     rl.DrawRectangleLinesEx({px, py, PW, PH}, uis(2),
-        rl.Color{110, 82, 36, 200})
+        gfx.Color{110, 82, 36, 200})
     rl.DrawRectangleLinesEx({px + uis(8), py + uis(8), PW - uis(16), PH - uis(16)},
-        uis(1), rl.Color{140, 110, 55, 100})
+        uis(1), gfx.Color{140, 110, 55, 100})
 
     CORN := uis(14)
     corners := [4][2]f32{
@@ -60,9 +61,9 @@ draw_lore_panel :: proc() {
     }
     for c in corners {
         rl.DrawLineEx({c[0] + CORN*0.5, c[1]}, {c[0] + CORN*0.5, c[1] + CORN},
-            uis(1.5), rl.Color{100, 72, 28, 160})
+            uis(1.5), gfx.Color{100, 72, 28, 160})
         rl.DrawLineEx({c[0], c[1] + CORN*0.5}, {c[0] + CORN, c[1] + CORN*0.5},
-            uis(1.5), rl.Color{100, 72, 28, 160})
+            uis(1.5), gfx.Color{100, 72, 28, 160})
     }
 
     if !ok {
@@ -70,25 +71,25 @@ draw_lore_panel :: proc() {
         msz := rl.MeasureTextEx(g_font_body, msg, uis(12), 1)
         rl.DrawTextEx(g_font_body, msg,
             {px + PW*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
-            uis(12), 1, rl.Color{100, 80, 50, 180})
+            uis(12), 1, gfx.Color{100, 80, 50, 180})
     } else {
         title := loc_lookup(cstring(&page.title[0]))
         title_fs := uis(16)
         tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
         rl.DrawTextEx(g_font, title,
             {px + PW*0.5 - tsz.x*0.5, py + uis(28)},
-            title_fs, 1, rl.Color{80, 52, 18, 230})
+            title_fs, 1, gfx.Color{80, 52, 18, 230})
 
         rl.DrawLineEx(
             {px + uis(32), py + uis(28) + title_fs + uis(4)},
             {px + PW - uis(32), py + uis(28) + title_fs + uis(4)},
-            uis(1), rl.Color{110, 80, 32, 140})
+            uis(1), gfx.Color{110, 80, 32, 140})
 
         body_x   := px + uis(36)
         body_y   := py + uis(28) + title_fs + uis(18)
         body_w   := PW - uis(72)
         body_fs  := uis(12)
-        body_col := rl.Color{50, 34, 14, 220}
+        body_col := gfx.Color{50, 34, 14, 220}
         line_h   := body_fs * 1.55
 
         body_str := string(loc_lookup(cstring(&page.body[0])))
@@ -100,7 +101,7 @@ draw_lore_panel :: proc() {
     hsz  := rl.MeasureTextEx(g_font_body, hint, uis(9), 0.5)
     rl.DrawTextEx(g_font_body, hint,
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(22)},
-        uis(9), 0.5, rl.Color{90, 68, 32, 160})
+        uis(9), 0.5, gfx.Color{90, 68, 32, 160})
 
     mp := rl.GetMousePosition()
     if rl.IsMouseButtonPressed(.LEFT) &&
@@ -109,7 +110,7 @@ draw_lore_panel :: proc() {
     }
 }
 
-lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: rl.Color) {
+lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: gfx.Color) {
     if len(text) == 0 { return }
 
     cur_x  := x
@@ -117,7 +118,7 @@ lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: rl.Co
     start  := 0
     i      := 0
 
-    flush_word :: proc(s: string, cx, cy: ^f32, lh: f32, x0, max_w, fs: f32, col: rl.Color) {
+    flush_word :: proc(s: string, cx, cy: ^f32, lh: f32, x0, max_w, fs: f32, col: gfx.Color) {
         if len(s) == 0 { return }
         sb: [256]u8
         n := min(len(s), 255)

@@ -1,6 +1,7 @@
 package main
 
 import rl  "vendor:raylib"
+import gfx "gfx"
 import     "core:math"
 
 BarrelType :: enum { Fire, Water }
@@ -409,23 +410,23 @@ draw_fire_patches :: proc() {
         life  := fp.lifetime / max_l
         ab    := u8(clamp(200 * life, 40, 200))
         pulse := f32(math.sin(f64(tt)*4.0 + f64(fp.pos[0])*0.1 + f64(fp.pos[1])*0.07)*0.5 + 0.5)
-        p     := rl.Vector2{fp.pos[0], fp.pos[1]}
+        p     := gfx.Vec2{fp.pos[0], fp.pos[1]}
 
         draw_world_circle(p, fp.radius * 1.22,
-            rl.Color{175, 45, 8, u8(f32(ab) * 0.40)})
+            gfx.Color{175, 45, 8, u8(f32(ab) * 0.40)})
 
         draw_world_circle(p, fp.radius,
-            rl.Color{255, u8(85 + 75*pulse), 12, u8(f32(ab) * (0.68 + 0.32*pulse))})
+            gfx.Color{255, u8(85 + 75*pulse), 12, u8(f32(ab) * (0.68 + 0.32*pulse))})
 
         draw_world_circle(p, fp.radius * 0.38,
-            rl.Color{255, 222, 80, u8(f32(ab) * 0.72 * pulse)})
+            gfx.Color{255, 222, 80, u8(f32(ab) * 0.72 * pulse)})
 
         for fi in 0..<5 {
             a := f32(fi)*(math.PI*2/5) + math.sin(tt*3 + f32(fi))*0.42
             d := fp.radius * (0.46 + math.sin(tt*5 + f32(fi)*1.35) * 0.20)
-            p0 := rl.Vector2{fp.pos[0], fp.pos[1]}
-            p1 := rl.Vector2{fp.pos[0] + math.cos(a)*d, fp.pos[1] + math.sin(a)*d}
-            draw_world_line(p0, p1, 2.0, rl.Color{255, 145, 25, u8(f32(ab) * 0.52 * pulse)})
+            p0 := gfx.Vec2{fp.pos[0], fp.pos[1]}
+            p1 := gfx.Vec2{fp.pos[0] + math.cos(a)*d, fp.pos[1] + math.sin(a)*d}
+            draw_world_line(p0, p1, 2.0, gfx.Color{255, 145, 25, u8(f32(ab) * 0.52 * pulse)})
         }
     }
 }
@@ -437,14 +438,14 @@ draw_water_puddles :: proc() {
         t     := wp.lifetime / WATER_PUDDLE_LIFE
         alpha := u8(clamp(150 * t * t, 15, 150))
         wave  := f32(math.sin(f64(tt)*2.5 + f64(wp.pos[0])*0.08 + f64(wp.pos[1])*0.06)*0.5 + 0.5)
-        p     := rl.Vector2{wp.pos[0], wp.pos[1]}
+        p     := gfx.Vec2{wp.pos[0], wp.pos[1]}
 
         draw_world_circle(p, wp.radius,
-            rl.Color{48, 108, 182, alpha})
+            gfx.Color{48, 108, 182, alpha})
         draw_world_circle(p, wp.radius * 0.55,
-            rl.Color{128, 192, 238, u8(f32(alpha) * 0.58 * wave)})
+            gfx.Color{128, 192, 238, u8(f32(alpha) * 0.58 * wave)})
         draw_world_circle_lines(p, wp.radius * (0.36 + wave*0.30),
-            rl.Color{172, 218, 255, u8(f32(alpha) * 0.42)})
+            gfx.Color{172, 218, 255, u8(f32(alpha) * 0.42)})
     }
 }
 
@@ -457,7 +458,7 @@ draw_status_effects :: proc(w: ^World) {
 
         sec := comp_get(w, id, .StatusEffect, StatusEffectComp)
         tr  := comp_get(w, id, .Transform, TransformComp)
-        p   := rl.Vector2{ tr.position[0], tr.position[1] }
+        p   := gfx.Vec2{ tr.position[0], tr.position[1] }
         r   := f32(PLAYER_RADIUS)
         if world_has_component(w, id, .Collider) {
             r = comp_get(w, id, .Collider, ColliderComp).radius
@@ -471,10 +472,10 @@ draw_status_effects :: proc(w: ^World) {
             ab  := u8(clamp(170 * frac, 30, 170))
 
             draw_world_circle_lines(p, r + 2 + 2*pulse,
-                rl.Color{ 255, u8(60 + 80*pulse), 15, u8(f32(ab)*(0.55 + 0.45*pulse)) })
+                gfx.Color{ 255, u8(60 + 80*pulse), 15, u8(f32(ab)*(0.55 + 0.45*pulse)) })
 
             draw_world_circle(p, r * 0.32 * pulse,
-                rl.Color{ 255, 150, 25, u8(f32(ab) * 0.42 * pulse) })
+                gfx.Color{ 255, 150, 25, u8(f32(ab) * 0.42 * pulse) })
         }
 
         if status_effect_is_active(sec, .Wet) {
@@ -484,10 +485,10 @@ draw_status_effects :: proc(w: ^World) {
             wave := f32(math.sin(f64(tt)*3.5 + f64(tr.position[0])*0.05)*0.5 + 0.5)
 
             draw_world_circle_lines(p, r + 3 + 2*wave,
-                rl.Color{ 80, 180, 255, u8(f32(ab)*(0.45 + 0.55*wave)) })
+                gfx.Color{ 80, 180, 255, u8(f32(ab)*(0.45 + 0.55*wave)) })
 
             draw_world_circle(p, r * 1.08,
-                rl.Color{ 40, 115, 200, u8(f32(ab) * 0.18) })
+                gfx.Color{ 40, 115, 200, u8(f32(ab) * 0.18) })
         }
 
         if status_effect_is_active(sec, .Oiled) {
@@ -497,14 +498,14 @@ draw_status_effects :: proc(w: ^World) {
             sheen := f32(math.sin(f64(tt)*2.2 + f64(tr.position[0])*0.07)*0.5 + 0.5)
 
             draw_world_circle_lines(p, r + 2,
-                rl.Color{
+                gfx.Color{
                     u8(25 + u8(sheen * 45)),
                     u8(18 + u8(sheen * 28)),
                     u8(45 + u8(sheen * 65)),
                     u8(f32(ab)*(0.45 + 0.55*sheen)),
                 })
             draw_world_circle(p, r * 1.04,
-                rl.Color{ 14, 8, 34, u8(f32(ab) * 0.15) })
+                gfx.Color{ 14, 8, 34, u8(f32(ab) * 0.15) })
         }
     }
 }
@@ -520,27 +521,27 @@ draw_barrels :: proc() {
         ix  := i32(iso.x)
         iy  := i32(iso.y)
 
-        rl.DrawEllipse(ix, iy + 5, 15, 6, rl.Color{0, 0, 0, 65})
+        rl.DrawEllipse(ix, iy + 5, 15, 6, gfx.Color{0, 0, 0, 65})
 
-        rl.DrawEllipse(ix, iy + 7, 13, 5, rl.Color{55, 38, 24, 245})
+        rl.DrawEllipse(ix, iy + 7, 13, 5, gfx.Color{55, 38, 24, 245})
 
-        rl.DrawRectangle(ix - 13, iy - 12, 26, 19, rl.Color{70, 48, 28, 245})
+        rl.DrawRectangle(ix - 13, iy - 12, 26, 19, gfx.Color{70, 48, 28, 245})
 
-        rl.DrawRectangle(ix - 13, iy - 5,  26, 3,  rl.Color{95, 70, 44, 245})
-        rl.DrawRectangle(ix - 13, iy + 3,  26, 3,  rl.Color{95, 70, 44, 245})
+        rl.DrawRectangle(ix - 13, iy - 5,  26, 3,  gfx.Color{95, 70, 44, 245})
+        rl.DrawRectangle(ix - 13, iy + 3,  26, 3,  gfx.Color{95, 70, 44, 245})
 
-        top_col: rl.Color
+        top_col: gfx.Color
         switch btype {
-        case .Fire:  top_col = rl.Color{210, 72, 16, 245}
-        case .Water: top_col = rl.Color{38,  112, 195, 245}
+        case .Fire:  top_col = gfx.Color{210, 72, 16, 245}
+        case .Water: top_col = gfx.Color{38,  112, 195, 245}
         }
         rl.DrawEllipse(ix, iy - 12, 13, 5, top_col)
-        rl.DrawEllipseLines(ix, iy - 12, 13, 5, rl.Color{0, 0, 0, 160})
+        rl.DrawEllipseLines(ix, iy - 12, 13, 5, gfx.Color{0, 0, 0, 160})
 
-        dot_col: rl.Color
+        dot_col: gfx.Color
         switch btype {
-        case .Fire:  dot_col = rl.Color{255, 200, 60, 230}
-        case .Water: dot_col = rl.Color{180, 230, 255, 230}
+        case .Fire:  dot_col = gfx.Color{255, 200, 60, 230}
+        case .Water: dot_col = gfx.Color{180, 230, 255, 230}
         }
         rl.DrawCircle(ix, iy - 12, 3, dot_col)
 
@@ -550,8 +551,8 @@ draw_barrels :: proc() {
             bar_w  := i32(30)
             bar_x  := ix - bar_w / 2
             bar_y  := iy - 28
-            rl.DrawRectangle(bar_x, bar_y, bar_w, 4, rl.Color{15, 15, 15, 180})
-            hp_col := rl.Color{220, 55, 18, 220} if pct > 0.5 else rl.Color{200, 175, 18, 220}
+            rl.DrawRectangle(bar_x, bar_y, bar_w, 4, gfx.Color{15, 15, 15, 180})
+            hp_col := gfx.Color{220, 55, 18, 220} if pct > 0.5 else gfx.Color{200, 175, 18, 220}
             rl.DrawRectangle(bar_x, bar_y, i32(f32(bar_w) * pct), 4, hp_col)
         }
     }

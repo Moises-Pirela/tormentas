@@ -4,6 +4,7 @@ import    "core:fmt"
 import    "core:math"
 import im "../deps/imgui/imgui"
 import rl "vendor:raylib"
+import gfx "gfx"
 
 EditorTool :: enum u8 {
     Select,
@@ -62,7 +63,7 @@ ed_entity_validate :: proc() {
     if g_ed_sel_entity >= len(g_level_data.entities) { ed_entity_deselect() }
 }
 
-ed_entity_pick :: proc(screen: rl.Vector2) -> int {
+ed_entity_pick :: proc(screen: gfx.Vec2) -> int {
     best     := -1
     best_d2  := ENTITY_PICK_R * ENTITY_PICK_R
 
@@ -80,7 +81,7 @@ ed_entity_pick :: proc(screen: rl.Vector2) -> int {
     return best
 }
 
-ed_entity_place :: proc(world: rl.Vector2) {
+ed_entity_place :: proc(world: gfx.Vec2) {
     if len(g_entity_defs) == 0 { return }
     ed_entity_capture()
     idx := clamp(g_ed_def_idx, 0, len(g_entity_defs) - 1)
@@ -118,22 +119,22 @@ ed_entity_respawn_world :: proc() {
 }
 
 @(private = "file")
-gizmo_handle_screen :: proc(origin: rl.Vector2, axis: [2]f32) -> rl.Vector2 {
+gizmo_handle_screen :: proc(origin: gfx.Vec2, axis: [2]f32) -> gfx.Vec2 {
     iso := world_to_iso_xy(axis[0], axis[1])
-    d   := rl.Vector2{iso.x, iso.y}
+    d   := gfx.Vec2{iso.x, iso.y}
     l   := math.sqrt(d.x*d.x + d.y*d.y)
     if l <= 0.0001 { return origin }
     return { origin.x + d.x / l * GIZMO_HANDLE_LEN, origin.y + d.y / l * GIZMO_HANDLE_LEN }
 }
 
-ed_gizmo_origin_screen :: proc(e: ^LevelEntity) -> rl.Vector2 {
+ed_gizmo_origin_screen :: proc(e: ^LevelEntity) -> gfx.Vec2 {
     iso := world_to_iso_xy(e.position[0], e.position[1])
     return rl.GetWorldToScreen2D({iso.x, iso.y}, g_camera^)
 }
 
 @(private = "file")
-_seg_dist :: proc(p, a, b: rl.Vector2) -> f32 {
-    ab := rl.Vector2{ b.x - a.x, b.y - a.y }
+_seg_dist :: proc(p, a, b: gfx.Vec2) -> f32 {
+    ab := gfx.Vec2{ b.x - a.x, b.y - a.y }
     l2 := ab.x*ab.x + ab.y*ab.y
     t  := f32(0)
     if l2 > 0 { t = clamp(((p.x - a.x)*ab.x + (p.y - a.y)*ab.y) / l2, 0, 1) }
@@ -143,7 +144,7 @@ _seg_dist :: proc(p, a, b: rl.Vector2) -> f32 {
 }
 
 @(private = "file")
-_gizmo_hit :: proc(e: ^LevelEntity, mouse: rl.Vector2) -> GizmoAxis {
+_gizmo_hit :: proc(e: ^LevelEntity, mouse: gfx.Vec2) -> GizmoAxis {
     origin := ed_gizmo_origin_screen(e)
     if _near(mouse, origin, GIZMO_GRAB_R) { return .Free }
     hx := gizmo_handle_screen(origin, {1, 0})
@@ -160,7 +161,7 @@ ed_gizmo_snap_active :: proc() -> bool {
 
 ed_gizmo_hover :: proc() -> GizmoAxis { return g_gz_hover }
 
-ed_gizmo_update :: proc(mouse: rl.Vector2) {
+ed_gizmo_update :: proc(mouse: gfx.Vec2) {
     e := ed_entity_selected()
     if e == nil { g_gz_axis = .None; g_gz_hover = .None; return }
 
@@ -221,31 +222,31 @@ ed_gizmo_dragging :: proc() -> bool {
 }
 
 @(private = "file")
-_near :: proc(a, b: rl.Vector2, r: f32) -> bool {
+_near :: proc(a, b: gfx.Vec2, r: f32) -> bool {
     dx := a.x - b.x
     dy := a.y - b.y
     return dx*dx + dy*dy <= r*r
 }
 
 @(private = "file")
-_v :: proc(p: rl.Vector2) -> im.Vec2 { return { p.x, p.y } }
+_v :: proc(p: gfx.Vec2) -> im.Vec2 { return { p.x, p.y } }
 
 @(private = "file")
-_gizmo_axis :: proc(dl: ^im.DrawList, origin, tip: rl.Vector2, col: u32, hot: bool, label: cstring) {
+_gizmo_axis :: proc(dl: ^im.DrawList, origin, tip: gfx.Vec2, col: u32, hot: bool, label: cstring) {
     thick := f32(4.5) if hot else f32(3)
-    dir   := rl.Vector2{ tip.x - origin.x, tip.y - origin.y }
+    dir   := gfx.Vec2{ tip.x - origin.x, tip.y - origin.y }
     l     := math.sqrt(dir.x*dir.x + dir.y*dir.y)
     if l < 0.001 { return }
     dir    = { dir.x / l, dir.y / l }
-    perp  := rl.Vector2{ -dir.y, dir.x }
-    start := rl.Vector2{ origin.x + dir.x * 10, origin.y + dir.y * 10 }
+    perp  := gfx.Vec2{ -dir.y, dir.x }
+    start := gfx.Vec2{ origin.x + dir.x * 10, origin.y + dir.y * 10 }
     head  := f32(13) if hot else f32(11)
-    base  := rl.Vector2{ tip.x - dir.x * head, tip.y - dir.y * head }
+    base  := gfx.Vec2{ tip.x - dir.x * head, tip.y - dir.y * head }
     im.DrawList_AddLine(dl, _v(start), _v(base), 0xa0_00_00_00, thick + 2.5)
     im.DrawList_AddLine(dl, _v(start), _v(base), col, thick)
     w := head * 0.55
-    a := rl.Vector2{ base.x + perp.x * w, base.y + perp.y * w }
-    b := rl.Vector2{ base.x - perp.x * w, base.y - perp.y * w }
+    a := gfx.Vec2{ base.x + perp.x * w, base.y + perp.y * w }
+    b := gfx.Vec2{ base.x - perp.x * w, base.y - perp.y * w }
     im.DrawList_AddTriangleFilled(dl, _v(tip), _v(a), _v(b), col)
     im.DrawList_AddText(dl, { tip.x + dir.x * 6 - 4, tip.y + dir.y * 6 - 8 }, col, label)
 }
@@ -281,13 +282,13 @@ ed_gizmo_draw :: proc(dl: ^im.DrawList) {
 
     if g_gz_axis == .None {
         ed_screen_label(dl, { origin.x + 16, origin.y - 40 },
-            fmt.ctprintf("%s   %.0f, %.0f", e.def, e.position[0], e.position[1]), rl.Color{ 235, 235, 210, 255 })
+            fmt.ctprintf("%s   %.0f, %.0f", e.def, e.position[0], e.position[1]), gfx.Color{ 235, 235, 210, 255 })
     } else {
         dx := e.position[0] - g_gz_start[0]
         dy := e.position[1] - g_gz_start[1]
         snap := fmt.ctprintf("snap %d", TILE_SIZE) if ed_gizmo_snap_active() else cstring("free")
         ed_screen_label(dl, { origin.x + 16, origin.y - 40 },
-            fmt.ctprintf("%+.0f, %+.0f   %s   Esc cancels", dx, dy, snap), rl.Color{ 255, 220, 120, 255 })
+            fmt.ctprintf("%+.0f, %+.0f   %s   Esc cancels", dx, dy, snap), gfx.Color{ 255, 220, 120, 255 })
     }
 }
 
@@ -301,7 +302,7 @@ ed_gizmo_probe_drag :: proc(dx, dy: f32) {
     _gizmo_sync_live(e)
 }
 
-ed_gizmo_probe_handle :: proc() -> rl.Vector2 {
+ed_gizmo_probe_handle :: proc() -> gfx.Vec2 {
     e := ed_entity_selected()
     if e == nil { return {} }
     origin := ed_gizmo_origin_screen(e)

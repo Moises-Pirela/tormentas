@@ -2,11 +2,12 @@ package main
 
 import clay "../clay"
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import      "core:math"
 import      "core:strings"
 import      "core:fmt"
 
-clay_color :: #force_inline proc(c: clay.Color) -> rl.Color {
+clay_color :: #force_inline proc(c: clay.Color) -> gfx.Color {
     return { u8(c[0]), u8(c[1]), u8(c[2]), u8(c[3]) }
 }
 
@@ -110,9 +111,9 @@ _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
     if orb.portrait_idx == 1 { tex = g_hud_hp_icon }
     if tex.id != 0 {
         rl.BeginScissorMode(bx, by, bw, bh)
-        dst := rl.Rectangle{ bb.x, bb.y, bb.width, bb.height }
-        src := rl.Rectangle{ 0, 0, f32(tex.width), f32(tex.height) }
-        rl.DrawTexturePro(tex, src, dst, {0, 0}, 0, rl.Color{ 255, 255, 255, 200 })
+        dst := gfx.Rect{ bb.x, bb.y, bb.width, bb.height }
+        src := gfx.Rect{ 0, 0, f32(tex.width), f32(tex.height) }
+        rl.DrawTexturePro(tex, src, dst, {0, 0}, 0, gfx.Color{ 255, 255, 255, 200 })
         rl.EndScissorMode()
     }
 
@@ -144,16 +145,16 @@ _draw_orb :: proc(bb: clay.BoundingBox, orb: ^UICustomOrb) {
 
     if g_hud_orb_frame.id != 0 {
         frame_sz := bb.width * 1.1
-        fdst     := rl.Rectangle{
+        fdst     := gfx.Rect{
             f32(cx) - frame_sz * 0.5,
             f32(cy) - frame_sz * 0.5,
             frame_sz, frame_sz,
         }
-        fsrc := rl.Rectangle{ 0, 0, f32(g_hud_orb_frame.width), f32(g_hud_orb_frame.height) }
-        rl.DrawTexturePro(g_hud_orb_frame, fsrc, fdst, {0, 0}, 0, rl.WHITE)
+        fsrc := gfx.Rect{ 0, 0, f32(g_hud_orb_frame.width), f32(g_hud_orb_frame.height) }
+        rl.DrawTexturePro(g_hud_orb_frame, fsrc, fdst, {0, 0}, 0, gfx.WHITE)
     } else {
-        rl.DrawCircleLines(cx, cy, radius,     rl.Color{ 60,  46, 28, 180 })
-        rl.DrawCircleLines(cx, cy, radius - 1, rl.Color{ 40,  30, 16, 120 })
+        rl.DrawCircleLines(cx, cy, radius,     gfx.Color{ 60,  46, 28, 180 })
+        rl.DrawCircleLines(cx, cy, radius - 1, gfx.Color{ 40,  30, 16, 120 })
     }
 
     if orb.value_text[0] != 0 {
@@ -172,7 +173,7 @@ _draw_ability_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAbility) {
     cy     := i32(math.round(bb.y + bb.height * 0.5))
     radius := bb.width * 0.5 - 1
 
-    bg_col := rl.Color{ 10, 7, 5, 220 } if chip.has_ability else rl.Color{ 6, 5, 3, 160 }
+    bg_col := gfx.Color{ 10, 7, 5, 220 } if chip.has_ability else gfx.Color{ 6, 5, 3, 160 }
     rl.DrawCircle(cx, cy, radius, bg_col)
 
     if chip.has_ability && chip.cd_ratio > 0 {
@@ -181,27 +182,27 @@ _draw_ability_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAbility) {
             rl.BeginScissorMode(
                 i32(math.round(bb.x)), i32(math.round(bb.y)),
                 i32(math.ceil(bb.width)), cd_h)
-            rl.DrawCircle(cx, cy, radius, rl.Color{ 0, 0, 0, 165 })
+            rl.DrawCircle(cx, cy, radius, gfx.Color{ 0, 0, 0, 165 })
             rl.EndScissorMode()
         }
     }
 
-    if chip.charge_glow { rl.DrawCircle(cx, cy, radius, rl.Color{ 200,  40,  20, 70 }) }
-    if chip.dance_glow  { rl.DrawCircle(cx, cy, radius, rl.Color{  20, 200, 200, 65 }) }
+    if chip.charge_glow { rl.DrawCircle(cx, cy, radius, gfx.Color{ 200,  40,  20, 70 }) }
+    if chip.dance_glow  { rl.DrawCircle(cx, cy, radius, gfx.Color{  20, 200, 200, 65 }) }
 
     ready   := chip.has_ability && chip.cd_ratio <= 0
     glow    := chip.charge_glow || chip.dance_glow
     bdr_col := COL_BRASS if (ready || glow) else COL_RULE
 
     rl.DrawCircleLines(cx, cy, radius,     bdr_col)
-    rl.DrawCircleLines(cx, cy, radius - 1, rl.Color{ 30, 22, 10, 100 })
+    rl.DrawCircleLines(cx, cy, radius - 1, gfx.Color{ 30, 22, 10, 100 })
 
-    key_col: rl.Color
+    key_col: gfx.Color
     switch {
     case glow:             key_col = COL_PARCH
     case ready:            key_col = COL_PARCH
     case chip.has_ability: key_col = COL_MUTED
-    case:                  key_col = rl.Color{ 55, 50, 40, 140 }
+    case:                  key_col = gfx.Color{ 55, 50, 40, 140 }
     }
 
     if chip.key_label[0] != 0 {
@@ -228,7 +229,7 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
     bx := i32(bb.x); by := i32(bb.y)
     bw := i32(bb.width); bh := i32(bb.height)
 
-    rl.DrawRectangle(bx, by, bw, bh, rl.Color{ 10, 7, 5, 230 })
+    rl.DrawRectangle(bx, by, bw, bh, gfx.Color{ 10, 7, 5, 230 })
 
     strip_h := max(i32(uis(4)), 2)
 
@@ -241,11 +242,11 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
             val_fs, 0.5, COL_MUTED)
     } else {
         strip_y := by + bh - strip_h
-        rl.DrawRectangle(bx, strip_y, bw, strip_h, rl.Color{ 40, 34, 24, 255 })
+        rl.DrawRectangle(bx, strip_y, bw, strip_h, gfx.Color{ 40, 34, 24, 255 })
         if chip.is_reloading {
-            rl.DrawRectangle(bx, strip_y, i32(f32(bw) * chip.reload_ratio), strip_h, rl.Color{ 150, 170, 190, 255 })
+            rl.DrawRectangle(bx, strip_y, i32(f32(bw) * chip.reload_ratio), strip_h, gfx.Color{ 150, 170, 190, 255 })
         } else if chip.ammo_ratio > 0 {
-            ammo_col := COL_CRIMSON if chip.ammo_ratio <= 0.334 else rl.Color{ 192, 152, 44, 255 }
+            ammo_col := COL_CRIMSON if chip.ammo_ratio <= 0.334 else gfx.Color{ 192, 152, 44, 255 }
             rl.DrawRectangle(bx, strip_y, i32(f32(bw) * chip.ammo_ratio), strip_h, ammo_col)
         }
 
@@ -264,10 +265,10 @@ _draw_ammo_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomAmmo) {
                 sx := bb.x + f32(s) * slot_w
 
                 rl.DrawRectangle(i32(sx) + 1, by, i32(slot_w) - 1, roller_h,
-                    rl.Color{ 6, 4, 2, 255 })
+                    gfx.Color{ 6, 4, 2, 255 })
 
-                rl.DrawRectangle(i32(sx), by,              i32(slot_w), 1, rl.Color{ 90, 68, 28, 180 })
-                rl.DrawRectangle(i32(sx), by + roller_h - 1, i32(slot_w), 1, rl.Color{ 90, 68, 28, 180 })
+                rl.DrawRectangle(i32(sx), by,              i32(slot_w), 1, gfx.Color{ 90, 68, 28, 180 })
+                rl.DrawRectangle(i32(sx), by + roller_h - 1, i32(slot_w), 1, gfx.Color{ 90, 68, 28, 180 })
 
                 char_idx := s - (n_slots - n_chars)
                 dig_buf: [2]u8
@@ -304,14 +305,14 @@ _draw_gold_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomGold) {
     bx := i32(bb.x); by := i32(bb.y)
     bw := i32(bb.width); bh := i32(bb.height)
 
-    rl.DrawRectangle(bx, by, bw, bh, rl.Color{ 12, 9, 4, 230 })
+    rl.DrawRectangle(bx, by, bw, bh, gfx.Color{ 12, 9, 4, 230 })
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1.5, COL_BRASS)
 
     coin_r := f32(uis(4))
     coin_y := bb.y + uis(7)
     cx     := bb.x + bb.width * 0.5
-    rl.DrawCircle(i32(cx), i32(coin_y), coin_r,     rl.Color{ 200, 160, 50, 220 })
-    rl.DrawCircleLines(i32(cx), i32(coin_y), coin_r, rl.Color{ 240, 210, 100, 200 })
+    rl.DrawCircle(i32(cx), i32(coin_y), coin_r,     gfx.Color{ 200, 160, 50, 220 })
+    rl.DrawCircleLines(i32(cx), i32(coin_y), coin_r, gfx.Color{ 240, 210, 100, 200 })
 
     val_cs := fmt.ctprintf("%d", chip.gold_val)
     val_fs := uis(16)
@@ -324,7 +325,7 @@ _draw_gold_chip :: proc(bb: clay.BoundingBox, chip: ^UICustomGold) {
 @(private = "file")
 _draw_inv_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomInvSlot) {
     rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height),
-        rl.Color{ 20, 16, 12, 240 })
+        gfx.Color{ 20, 16, 12, 240 })
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, COL_RULE)
 
     fs      := uis(18)
@@ -339,23 +340,23 @@ _draw_inv_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomInvSlot) {
     rl.DrawLineEx({ div_x, bb.y + uis(8) }, { div_x, bb.y + bb.height - uis(8) }, 1, COL_RULE)
 
     if slot.item_name[0] != 0 {
-        item_col := COL_PARCH if slot.has_item else rl.Color{ 95, 88, 68, 155 }
+        item_col := COL_PARCH if slot.has_item else gfx.Color{ 95, 88, 68, 155 }
         rl.DrawTextEx(g_font, cstring(&slot.item_name[0]),
             { div_x + uis(14), label_y }, fs, 1, item_col)
     }
 
     if slot.is_target {
-        glow := rl.Color{ 215, 175, 28, 200 } if !slot.has_item \
-                else rl.Color{ 235, 120, 20, 200 }
+        glow := gfx.Color{ 215, 175, 28, 200 } if !slot.has_item \
+                else gfx.Color{ 235, 120, 20, 200 }
         rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2, glow)
     }
 }
 
 @(private = "file")
 _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
-    bg_col  := rl.Color{ 20, 16, 12, 240 } if !slot.is_blocked && !slot.class_locked else rl.Color{ 14,  8,  8, 245 }
-    bdr_col := COL_RULE                    if !slot.is_blocked && !slot.class_locked else rl.Color{ 70, 28, 28, 200 }
-    lbl_col := COL_BRASS                   if !slot.is_blocked && !slot.class_locked else rl.Color{ 72, 52, 38, 180 }
+    bg_col  := gfx.Color{ 20, 16, 12, 240 } if !slot.is_blocked && !slot.class_locked else gfx.Color{ 14,  8,  8, 245 }
+    bdr_col := COL_RULE                    if !slot.is_blocked && !slot.class_locked else gfx.Color{ 70, 28, 28, 200 }
+    lbl_col := COL_BRASS                   if !slot.is_blocked && !slot.class_locked else gfx.Color{ 72, 52, 38, 180 }
 
     rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height), bg_col)
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, bdr_col)
@@ -373,14 +374,14 @@ _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
     name_fs := uis(18)
     if slot.is_blocked || slot.class_locked {
         rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height),
-            rl.Color{ 60, 0, 0, 55 })
+            gfx.Color{ 60, 0, 0, 55 })
         lock_lbl := cstring("— CLASS —") if slot.class_locked else cstring("— 2H —")
         lksz := rl.MeasureTextEx(g_font, lock_lbl, name_fs, 1)
         rl.DrawTextEx(g_font, lock_lbl,
             { bb.x + bb.width * 0.5 - lksz.x * 0.5, bb.y + uis(34) },
-            name_fs, 1, rl.Color{ 150, 50, 50, 210 })
+            name_fs, 1, gfx.Color{ 150, 50, 50, 210 })
     } else if slot.item_name[0] != 0 {
-        item_col := COL_PARCH if slot.has_item else rl.Color{ 95, 88, 68, 155 }
+        item_col := COL_PARCH if slot.has_item else gfx.Color{ 95, 88, 68, 155 }
         nsz := rl.MeasureTextEx(g_font, cstring(&slot.item_name[0]), name_fs, 1)
         rl.DrawTextEx(g_font, cstring(&slot.item_name[0]),
             { bb.x + bb.width * 0.5 - nsz.x * 0.5, bb.y + uis(34) },
@@ -388,8 +389,8 @@ _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
     }
 
     if slot.is_target {
-        glow := rl.Color{ 215, 175, 28, 200 } if !slot.has_item \
-                else rl.Color{ 235, 120, 20, 200 }
+        glow := gfx.Color{ 215, 175, 28, 200 } if !slot.has_item \
+                else gfx.Color{ 235, 120, 20, 200 }
         rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2, glow)
     }
 }
@@ -397,9 +398,9 @@ _draw_weapon_slot :: proc(bb: clay.BoundingBox, slot: ^UICustomWeaponSlot) {
 @(private = "file")
 _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
     rc     := slot.rarity_col
-    bg_col  := rl.Color{ rc.r / 8, rc.g / 8, rc.b / 8, 240 } if slot.has_item \
-               else rl.Color{ 20, 16, 12, 240 }
-    bdr_col := rl.Color{ rc.r, rc.g, rc.b, 160 } if slot.has_item else COL_RULE
+    bg_col  := gfx.Color{ rc.r / 8, rc.g / 8, rc.b / 8, 240 } if slot.has_item \
+               else gfx.Color{ 20, 16, 12, 240 }
+    bdr_col := gfx.Color{ rc.r, rc.g, rc.b, 160 } if slot.has_item else COL_RULE
 
     rl.DrawRectangle(i32(bb.x), i32(bb.y), i32(bb.width), i32(bb.height), bg_col)
     rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 1, bdr_col)
@@ -409,7 +410,7 @@ _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
             { bb.x + uis(5), bb.y + uis(4) }, uis(13), 1, COL_BRASS)
     }
 
-    name_col := COL_PARCH if slot.has_item else rl.Color{ 80, 74, 58, 130 }
+    name_col := COL_PARCH if slot.has_item else gfx.Color{ 80, 74, 58, 130 }
     if slot.name[0] != 0 {
         rl.DrawTextEx(g_font, cstring(&slot.name[0]),
             { bb.x + uis(5), bb.y + uis(22) }, uis(11), 0.5, name_col)
@@ -429,7 +430,7 @@ _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
             lsz  := rl.MeasureTextEx(g_font, cstring(&lv_buf[0]), lfs, 0.5)
             rl.DrawTextEx(g_font, cstring(&lv_buf[0]),
                 { right_x - lsz.x, bb.y + bb.height - lsz.y - uis(4) },
-                lfs, 0.5, rl.Color{ 200, 175, 60, 200 })
+                lfs, 0.5, gfx.Color{ 200, 175, 60, 200 })
             right_x -= lsz.x + uis(4)
         }
 
@@ -442,8 +443,8 @@ _draw_inv_ability :: proc(bb: clay.BoundingBox, slot: ^UICustomInvAbility) {
     }
 
     if slot.is_target {
-        glow := rl.Color{ 215, 175, 28, 200 } if !slot.has_item \
-                else rl.Color{ 235, 120, 20, 200 }
+        glow := gfx.Color{ 215, 175, 28, 200 } if !slot.has_item \
+                else gfx.Color{ 235, 120, 20, 200 }
         rl.DrawRectangleLinesEx({ bb.x, bb.y, bb.width, bb.height }, 2, glow)
     }
 }

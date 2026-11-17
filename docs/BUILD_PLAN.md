@@ -226,6 +226,16 @@ been run (no PowerShell here).
 `bin\tormentas_spike.exe --shot out.png`), and an interactive check of resize and the fullscreen
 toggle on both platforms.
 
+**Step 2 results (2026-11-17): done.** `src/gfx/types.odin` defines `gfx.Vec2`, `gfx.Color`,
+`gfx.Rect` and `gfx.WHITE/BLACK/BLANK`; every `rl.Color` (763), `rl.Rectangle` (80), `rl.Vector2` (95)
+and colour constant in package main now uses them (38 files, by script). For now `Color` and `Rect`
+are **aliases** of raylib's types, so the raylib calls that step 4 rewrites need no casts; step 7
+makes them the only definitions. `check_boundaries.py` has a `src/gfx` rule.
+Verified behaviour-neutral: tests pass, and the tools probe matches a pre-rename build within
+run-to-run noise (max channel diff 9–18 both ways). The first comparison flagged a mismatch that
+turned out to be the probe itself: it moves the real OS cursor, and in one run the cursor didn't
+land on the gizmo (`hover=None`). Step 3's synthetic mouse input removes that flakiness.
+
 **Exit:** the current game, still isometric 2D, runs on sokol with raylib gone.
 **Verify:** reference-set comparison · input latency unchanged · all dev tools work (editor,
 inspector, console, anim editor, lighting widget).
@@ -375,7 +385,7 @@ Done so far: P0 slice 1 of the package split, the headless server target with it
 1. **Client-side sweep** (P0, above), as its own change with a two-client playtest. The
    entity-leak fix itself is committed (`72325c4`).
 2. **Finish P1a step 1:** a Windows/D3D11 run and an interactive resize/fullscreen check.
-   **P1a step 2** (`src/gfx` types) is underway in parallel.
+   P1a step 2 is done; **step 3** (platform + input layer) is next.
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.

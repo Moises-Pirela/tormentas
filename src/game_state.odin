@@ -1,6 +1,7 @@
 package main
 
 import rl  "vendor:raylib"
+import gfx "gfx"
 
 AppState :: enum {
     MainMenu,
@@ -158,5 +159,5 @@ draw_fade :: proc() {
     if g_fade_alpha <= 0 { return }
     a := u8(g_fade_alpha * 255)
     rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(),
-        rl.Color{0, 0, 0, a})
+        gfx.Color{0, 0, 0, a})
 }

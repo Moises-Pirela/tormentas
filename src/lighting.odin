@@ -1,6 +1,7 @@
 package main
 
 import rl "vendor:raylib"
+import gfx "gfx"
 import "core:math"
 import "core:c"
 import im "../deps/imgui/imgui"
@@ -407,7 +408,7 @@ rebuild_wall_mask :: proc() {
         if g_wall_mask.id != 0 { rl.UnloadRenderTexture(g_wall_mask) }
         g_wall_mask = rl.LoadRenderTexture(1, 1)
         rl.BeginTextureMode(g_wall_mask)
-        rl.ClearBackground(rl.BLACK)
+        rl.ClearBackground(gfx.BLACK)
         rl.EndTextureMode()
         return
     }
@@ -436,12 +437,12 @@ rebuild_wall_mask :: proc() {
     g_wall_mask_size   = { f32(tw), f32(th) }
 
     rl.BeginTextureMode(g_wall_mask)
-    rl.ClearBackground(rl.BLACK)
+    rl.ClearBackground(gfx.BLACK)
     for k, v in g_tilemap {
         if tile_base(v) != .Wall { continue }
         px := i32(k[0] - min_tx)
         py := i32(k[1] - min_ty)
-        rl.DrawPixel(px, py, rl.WHITE)
+        rl.DrawPixel(px, py, gfx.WHITE)
     }
     rl.EndTextureMode()
 }
@@ -555,7 +556,7 @@ draw_cloud_shadow_field :: proc() {
     rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_tint,      &tint,                      .VEC3)
 
     rl.BeginShaderMode(g_cloud_shader)
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
+    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
     rl.EndShaderMode()
 }
 
@@ -577,7 +578,7 @@ draw_wall_sun_shadows :: proc() {
             off := shadow_len * t
             a   := u8(clamp(72 * (1.0 - t), 0, 255))
             center := world_to_iso_xy(x + f32(TILE_SIZE) * 0.5 + dir[0] * off, y + f32(TILE_SIZE) * 0.5 + dir[1] * off)
-            iso_draw_shadow_diamond(center, ISO_TILE_W * 2 * (1.0 + t * 0.08), ISO_TILE_H * 2 * (1.0 + t * 0.04), rl.Color{ 10, 10, 10, a })
+            iso_draw_shadow_diamond(center, ISO_TILE_W * 2 * (1.0 + t * 0.08), ISO_TILE_H * 2 * (1.0 + t * 0.04), gfx.Color{ 10, 10, 10, a })
         }
     }
 }
@@ -603,7 +604,7 @@ draw_player_projected_shadow :: proc(w: ^World) {
         frame.tex, frame.src, feet,
         frame.world_size, frame.aspect, frame.anchor, frame.ground, frame.flip_x,
         sun_dir(), g_light_sun_elevation,
-        near_a, far_a, rl.Color{ 6, 7, 5, 255 },
+        near_a, far_a, gfx.Color{ 6, 7, 5, 255 },
     )
 }
 
@@ -620,7 +621,7 @@ draw_entity_sprite_shadows :: proc(w: ^World) {
         if is_fog_hidden(w, id)                           { continue }
 
         tr := comp_get(w, id, .Transform, TransformComp)
-        pos := rl.Vector2{ tr.position[0], tr.position[1] }
+        pos := gfx.Vec2{ tr.position[0], tr.position[1] }
         rot := tr.rotation
 
         vis := draw_entity_visual_info(w, id)
@@ -640,14 +641,14 @@ draw_entity_sprite_shadows :: proc(w: ^World) {
         for ci in 0..<4 {
             t_frac := f32(ci) / 3.0
             off := contact_offset + radius * t_frac * 0.9
-            cp := rl.Vector2{
+            cp := gfx.Vec2{
                 pos.x + dir[0] * off,
                 pos.y + dir[1] * off,
             }
             r := radius * (0.9 - t_frac * 0.18)
             a := u8(clamp(180 * (1.0 - t_frac * 0.42), 0, 255))
             icp := world_to_iso_v(cp)
-            rl.DrawEllipse(i32(icp.x), i32(icp.y), r * 1.08, max(r * 0.42, 1), rl.Color{ 6, 6, 4, a })
+            rl.DrawEllipse(i32(icp.x), i32(icp.y), r * 1.08, max(r * 0.42, 1), gfx.Color{ 6, 6, 4, a })
         }
 
         entry, sprite_ok := get_or_load_entity_sprite(vis.sprite_key)
@@ -673,14 +674,14 @@ draw_entity_sprite_shadows :: proc(w: ^World) {
             offset := radius * (0.45 + t_frac * 0.95)
             a      := u8(clamp(155 * (1.0 - t_frac * 0.48), 0, 255))
 
-            shadow_pos := rl.Vector2{
+            shadow_pos := gfx.Vec2{
                 pos.x + dir[0] * offset,
                 pos.y + dir[1] * offset,
             }
             if top_down {
-                draw_player_sprite(entry.tex, src, shadow_pos, world_size, rl.Color{ 8, 10, 6, a }, anchor)
+                draw_player_sprite(entry.tex, src, shadow_pos, world_size, gfx.Color{ 8, 10, 6, a }, anchor)
             } else {
-                draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, rl.Color{ 8, 10, 6, a }, ISO_SPRITE_Y, anchor)
+                draw_entity_sprite_quad_ex(entry.tex, src, shadow_pos, world_size, rot, gfx.Color{ 8, 10, 6, a }, ISO_SPRITE_Y, anchor)
             }
         }
     }
@@ -691,7 +692,7 @@ draw_directional_shadow_mask :: proc(w: ^World) {
     if g_shadow_rt.id == 0 { return }
 
     rl.BeginTextureMode(g_shadow_rt)
-    rl.ClearBackground(rl.BLANK)
+    rl.ClearBackground(gfx.BLANK)
     rl.BeginMode2D(g_camera^)
     draw_wall_sun_shadows()
     rl.EndMode2D()
@@ -713,12 +714,12 @@ draw_directional_world_composite :: proc() {
     rl.SetShaderValue(g_directional_shader, g_directional_locs.shadow_alpha,  &g_light_shadow_alpha,   .FLOAT)
     rl.SetShaderValue(g_directional_shader, g_directional_locs.sun_color,     &sun_color,              .VEC3)
 
-    world_src := rl.Rectangle{ 0, 0, f32(g_world_rt.texture.width), -f32(g_world_rt.texture.height) }
-    dst       := rl.Rectangle{ 0, 0, screen_size[0], screen_size[1] }
+    world_src := gfx.Rect{ 0, 0, f32(g_world_rt.texture.width), -f32(g_world_rt.texture.height) }
+    dst       := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
 
     rl.BeginShaderMode(g_directional_shader)
     rl.SetShaderValueTexture(g_directional_shader, g_directional_locs.shadow_tex, g_shadow_rt.texture)
-    rl.DrawTexturePro(g_world_rt.texture, world_src, dst, { 0, 0 }, 0, rl.WHITE)
+    rl.DrawTexturePro(g_world_rt.texture, world_src, dst, { 0, 0 }, 0, gfx.WHITE)
     rl.EndShaderMode()
 }
 
@@ -747,8 +748,8 @@ draw_directional_sprite_composite :: proc(w: ^World) {
     }
 
     screen_size := [2]f32{ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight()) }
-    sprite_src  := rl.Rectangle{ 0, 0, f32(g_sprite_rt.texture.width), -f32(g_sprite_rt.texture.height) }
-    dst         := rl.Rectangle{ 0, 0, screen_size[0], screen_size[1] }
+    sprite_src  := gfx.Rect{ 0, 0, f32(g_sprite_rt.texture.width), -f32(g_sprite_rt.texture.height) }
+    dst         := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
     sd          := sun_dir()
     sun_color   := [3]f32{ g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
     cam_target  := [2]f32{ g_camera.target.x, g_camera.target.y }
@@ -792,7 +793,7 @@ draw_directional_sprite_composite :: proc(w: ^World) {
     if g_wall_mask.id != 0 {
         rl.SetShaderValueTexture(g_spritelight_shader, g_spritelight_locs.wall_mask, g_wall_mask.texture)
     }
-    rl.DrawTexturePro(g_sprite_rt.texture, sprite_src, dst, { 0, 0 }, 0, rl.WHITE)
+    rl.DrawTexturePro(g_sprite_rt.texture, sprite_src, dst, { 0, 0 }, 0, gfx.WHITE)
     rl.EndShaderMode()
 }
 
@@ -828,7 +829,7 @@ draw_world_god_rays :: proc() {
 
     rl.BeginBlendMode(.ADDITIVE)
     rl.BeginShaderMode(g_godray_shader)
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
+    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
     rl.EndShaderMode()
     rl.EndBlendMode()
 }
@@ -907,7 +908,7 @@ draw_fog_and_lights :: proc(w: ^World) {
     if g_wall_mask.id != 0 {
         rl.SetShaderValueTexture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
     }
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
+    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
     rl.EndShaderMode()
 
     if count > 0 {
@@ -918,7 +919,7 @@ draw_fog_and_lights :: proc(w: ^World) {
         if g_wall_mask.id != 0 {
             rl.SetShaderValueTexture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
         }
-        rl.DrawRectangle(0, 0, i32(sw), i32(sh), rl.WHITE)
+        rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
         rl.EndShaderMode()
         rl.EndBlendMode()
     }

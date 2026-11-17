@@ -2,29 +2,30 @@ package main
 
 import "core:math"
 import rl "vendor:raylib"
+import gfx "gfx"
 
 ISO_TILE_W :: f32(TILE_SIZE)
 ISO_TILE_H :: f32(TILE_SIZE) * 0.5
 
-world_to_iso_xy :: proc(wx, wy: f32) -> rl.Vector2 {
+world_to_iso_xy :: proc(wx, wy: f32) -> gfx.Vec2 {
     return {
         (wx - wy),
         (wx + wy) * 0.5,
     }
 }
 
-world_to_iso_v :: proc(pos: rl.Vector2) -> rl.Vector2 {
+world_to_iso_v :: proc(pos: gfx.Vec2) -> gfx.Vec2 {
     return world_to_iso_xy(pos.x, pos.y)
 }
 
-iso_to_world_xy :: proc(ix, iy: f32) -> rl.Vector2 {
+iso_to_world_xy :: proc(ix, iy: f32) -> gfx.Vec2 {
     return {
         iy + ix * 0.5,
         iy - ix * 0.5,
     }
 }
 
-screen_to_world_cartesian :: proc(screen: rl.Vector2) -> rl.Vector2 {
+screen_to_world_cartesian :: proc(screen: gfx.Vec2) -> gfx.Vec2 {
     iso := rl.GetScreenToWorld2D(screen, g_camera^)
     return iso_to_world_xy(iso.x, iso.y)
 }
@@ -64,7 +65,7 @@ iso_depth_sort_y :: proc(wx, wy: f32) -> f32 {
     return wx + wy
 }
 
-iso_tile_bounds :: proc(tx, ty: int) -> (center: rl.Vector2, top: rl.Vector2, right: rl.Vector2, bottom: rl.Vector2, left: rl.Vector2) {
+iso_tile_bounds :: proc(tx, ty: int) -> (center: gfx.Vec2, top: gfx.Vec2, right: gfx.Vec2, bottom: gfx.Vec2, left: gfx.Vec2) {
     wx := f32(tx * TILE_SIZE)
     wy := f32(ty * TILE_SIZE)
     center = world_to_iso_xy(wx + f32(TILE_SIZE) * 0.5, wy + f32(TILE_SIZE) * 0.5)
@@ -93,7 +94,7 @@ cartesian_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32)
     return
 }
 
-iso_draw_shadow_diamond :: proc(center: rl.Vector2, width, height: f32, color: rl.Color) {
+iso_draw_shadow_diamond :: proc(center: gfx.Vec2, width, height: f32, color: gfx.Color) {
     hw := width * 0.5
     hh := height * 0.5
     rl.DrawTriangle(

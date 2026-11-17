@@ -1,6 +1,7 @@
 package main
 
 import rl     "vendor:raylib"
+import gfx    "gfx"
 import        "core:fmt"
 import        "core:mem"
 import p2p    "p2p"
@@ -112,14 +113,14 @@ draw_main_menu :: proc() {
     tsz      := rl.MeasureTextEx(g_font, title, title_fs, 0.8)
     rl.DrawTextEx(g_font, title,
         {cx - tsz.x * 0.5, sh * 0.12},
-        title_fs, 0.8, rl.Color{200, 178, 108, 255})
+        title_fs, 0.8, gfx.Color{200, 178, 108, 255})
 
     sub    := t(.MENU_SUBTITLE)
     sub_fs := uis(16)
     ssz    := rl.MeasureTextEx(g_font, sub, sub_fs, 0.5)
     rl.DrawTextEx(g_font, sub,
         {cx - ssz.x * 0.5, sh * 0.12 + title_fs + uis(6)},
-        sub_fs, 0.5, rl.Color{120, 108, 72, 160})
+        sub_fs, 0.5, gfx.Color{120, 108, 72, 160})
 
     if g_disconnect_msg_timer > 0 {
         frac := clamp(g_disconnect_msg_timer / DISCONNECT_MSG_DURATION, 0, 1)
@@ -129,7 +130,7 @@ draw_main_menu :: proc() {
         msz  := rl.MeasureTextEx(g_font_body, msg, mfs, 0.5)
         rl.DrawTextEx(g_font_body, msg,
             {cx - msz.x * 0.5, sh * 0.33},
-            mfs, 0.5, rl.Color{220, 80, 60, a})
+            mfs, 0.5, gfx.Color{220, 80, 60, a})
     }
 
     switch g_mm.phase {
@@ -144,13 +145,13 @@ draw_main_menu :: proc() {
     set_lbl := t(.MENU_BTN_SETTINGS)
     set_sz  := rl.MeasureTextEx(g_font_body, set_lbl, btn_fs, 0.5)
     set_bw  := set_sz.x + uis(22)
-    set_r   := rl.Rectangle{
+    set_r   := gfx.Rect{
         sw - set_bw - uis(12),
         sh - btn_bh - uis(12),
         set_bw, btn_bh,
     }
     set_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), set_r)
-    rl.DrawRectangleRec(set_r, rl.Color{24, 20, 14, 240} if set_hot else rl.Color{14, 11, 8, 200})
+    rl.DrawRectangleRec(set_r, gfx.Color{24, 20, 14, 240} if set_hot else gfx.Color{14, 11, 8, 200})
     rl.DrawRectangleLinesEx(set_r, 1, COL_BRASS if set_hot else COL_RULE)
     rl.DrawTextEx(g_font_body, set_lbl,
         {set_r.x + (set_bw - set_sz.x) * 0.5, set_r.y + (btn_bh - btn_fs) * 0.5},
@@ -162,17 +163,17 @@ draw_main_menu :: proc() {
     exit_lbl := t(.MENU_BTN_EXIT)
     exit_sz  := rl.MeasureTextEx(g_font_body, exit_lbl, btn_fs, 0.5)
     exit_bw  := exit_sz.x + uis(22)
-    exit_r   := rl.Rectangle{
+    exit_r   := gfx.Rect{
         uis(12),
         sh - btn_bh - uis(12),
         exit_bw, btn_bh,
     }
     exit_hot := rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_r)
-    rl.DrawRectangleRec(exit_r, rl.Color{24, 14, 14, 240} if exit_hot else rl.Color{14, 11, 8, 200})
-    rl.DrawRectangleLinesEx(exit_r, 1, rl.Color{200, 80, 60, 220} if exit_hot else COL_RULE)
+    rl.DrawRectangleRec(exit_r, gfx.Color{24, 14, 14, 240} if exit_hot else gfx.Color{14, 11, 8, 200})
+    rl.DrawRectangleLinesEx(exit_r, 1, gfx.Color{200, 80, 60, 220} if exit_hot else COL_RULE)
     rl.DrawTextEx(g_font_body, exit_lbl,
         {exit_r.x + (exit_bw - exit_sz.x) * 0.5, exit_r.y + (btn_bh - btn_fs) * 0.5},
-        btn_fs, 0.5, rl.Color{220, 100, 80, 255} if exit_hot else COL_MUTED)
+        btn_fs, 0.5, gfx.Color{220, 100, 80, 255} if exit_hot else COL_MUTED)
     if exit_hot && rl.IsMouseButtonReleased(.LEFT) {
         g_should_exit = true
     }
@@ -196,7 +197,7 @@ _mm_update_char_select :: proc() {
 
     for i in 0..<MAX_CHAR_SLOTS {
         cx := cards_x + f32(i) * (card_w + card_gap)
-        r  := rl.Rectangle{cx, cards_y, card_w, card_h}
+        r  := gfx.Rect{cx, cards_y, card_w, card_h}
         if _mm_btn_hit(r) {
             if g_mm.creating_slot >= 0 && g_mm.creating_slot != i {
                 g_mm.creating_slot = -1
@@ -229,8 +230,8 @@ _mm_update_char_select :: proc() {
     cx_base := sw * 0.5
 
     if g_mm.creating_slot >= 0 {
-        create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
-        cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        create_r := gfx.Rect{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        cancel_r := gfx.Rect{cx_base + uis(6),          btn_y, btn_w, btn_h}
         if _mm_btn_hit(create_r) { _mm_confirm_create() }
         if _mm_btn_hit(cancel_r) {
             g_mm.creating_slot = -1
@@ -239,8 +240,8 @@ _mm_update_char_select :: proc() {
             g_mm.focus = .None
         }
     } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
-        play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
-        delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        play_r   := gfx.Rect{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        delete_r := gfx.Rect{cx_base + uis(6),          btn_y, btn_w, btn_h}
         if _mm_btn_hit(play_r) {
             _mm_select_slot(g_mm.selected_slot)
             g_mm.phase = .PlayOptions
@@ -297,11 +298,11 @@ _mm_draw_char_select :: proc() {
     lsz    := rl.MeasureTextEx(g_font_body, lbl, lfs, 0.5)
     rl.DrawTextEx(g_font_body, lbl,
         {sw * 0.5 - lsz.x * 0.5, cards_y - lfs - uis(14)},
-        lfs, 0.5, rl.Color{130, 118, 82, 200})
+        lfs, 0.5, gfx.Color{130, 118, 82, 200})
 
     for i in 0..<MAX_CHAR_SLOTS {
         cx := cards_x + f32(i) * (card_w + card_gap)
-        r  := rl.Rectangle{cx, cards_y, card_w, card_h}
+        r  := gfx.Rect{cx, cards_y, card_w, card_h}
         _mm_draw_slot_card(r, i)
     }
 
@@ -312,22 +313,22 @@ _mm_draw_char_select :: proc() {
 
     if g_mm.creating_slot >= 0 {
         name_w := sw * 0.24
-        name_r := rl.Rectangle{sw * 0.5 - name_w * 0.5, btn_y - uis(52), name_w, uis(32)}
+        name_r := gfx.Rect{sw * 0.5 - name_w * 0.5, btn_y - uis(52), name_w, uis(32)}
         n_lbl  := t(.MENU_NAME_CHARACTER)
         n_lfs  := uis(12)
         n_lsz  := rl.MeasureTextEx(g_font_body, n_lbl, n_lfs, 0.5)
         rl.DrawTextEx(g_font_body, n_lbl,
             {sw * 0.5 - n_lsz.x * 0.5, name_r.y - n_lfs - uis(5)},
-            n_lfs, 0.5, rl.Color{130, 118, 82, 200})
+            n_lfs, 0.5, gfx.Color{130, 118, 82, 200})
         _mm_field_draw(name_r, g_mm.new_name[:], g_mm.focus == .NewName, t(.MENU_CHAR_DEFAULT))
 
-        create_r := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
-        cancel_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        create_r := gfx.Rect{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        cancel_r := gfx.Rect{cx_base + uis(6),          btn_y, btn_w, btn_h}
         _mm_btn_draw(create_r, t(.MENU_BTN_CREATE), false)
         _mm_btn_draw(cancel_r, t(.MENU_BTN_CANCEL), false)
     } else if g_mm.selected_slot >= 0 && g_char_save.slots[g_mm.selected_slot].exists == 1 {
-        play_r   := rl.Rectangle{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
-        delete_r := rl.Rectangle{cx_base + uis(6),          btn_y, btn_w, btn_h}
+        play_r   := gfx.Rect{cx_base - btn_w - uis(6), btn_y, btn_w, btn_h}
+        delete_r := gfx.Rect{cx_base + uis(6),          btn_y, btn_w, btn_h}
         _mm_btn_draw(play_r, t(.MENU_BTN_PLAY), false)
 
         if g_mm.confirm_delete {
@@ -339,7 +340,7 @@ _mm_draw_char_select :: proc() {
 }
 
 @(private = "file")
-_mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
+_mm_draw_slot_card :: proc(r: gfx.Rect, idx: int) {
     s       := &g_char_save.slots[idx]
     sel     := g_mm.selected_slot == idx
     creating := g_mm.creating_slot == idx
@@ -347,8 +348,8 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     over    := rl.CheckCollisionPointRec(mp, r)
     hot     := over || sel
 
-    bg     := rl.Color{52, 46, 34, 255} if hot else rl.Color{18, 16, 12, 255}
-    border := COL_BRASS                  if sel  else (rl.Color{100, 88, 58, 200} if over else COL_RULE)
+    bg     := gfx.Color{52, 46, 34, 255} if hot else gfx.Color{18, 16, 12, 255}
+    border := COL_BRASS                  if sel  else (gfx.Color{100, 88, 58, 200} if over else COL_RULE)
     rl.DrawRectangleRec(r, bg)
     rl.DrawRectangleLinesEx(r, 1, border)
 
@@ -368,7 +369,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
         sz  := rl.MeasureTextEx(g_font_body, lbl, fs, 0.5)
         rl.DrawTextEx(g_font_body, lbl,
             {r.x + (r.width - sz.x) * 0.5, r.y + (r.height - sz.y) * 0.5},
-            fs, 0.5, rl.Color{80, 72, 52, 180} if !over else rl.Color{140, 126, 82, 220})
+            fs, 0.5, gfx.Color{80, 72, 52, 180} if !over else gfx.Color{140, 126, 82, 220})
         return
     }
 
@@ -377,7 +378,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     nsz     := rl.MeasureTextEx(g_font_body, name_cs, nfs, 0.5)
     rl.DrawTextEx(g_font_body, name_cs,
         {r.x + (r.width - nsz.x) * 0.5, r.y + uis(18)},
-        nfs, 0.5, rl.Color{218, 206, 160, 255})
+        nfs, 0.5, gfx.Color{218, 206, 160, 255})
 
     num_buf: [32]u8
     lv_s   := fmt.bprintf(num_buf[:], "Lv. %d", s.level)
@@ -386,7 +387,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     lv_sz  := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), lv_fs, 0.5)
     rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
         {r.x + (r.width - lv_sz.x) * 0.5, r.y + uis(42)},
-        lv_fs, 0.5, rl.Color{160, 148, 100, 220})
+        lv_fs, 0.5, gfx.Color{160, 148, 100, 220})
 
     raid_s := fmt.bprintf(num_buf[:], "%d raids", s.raids_done)
     num_buf[len(raid_s)] = 0
@@ -394,7 +395,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
     rd_sz  := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), rd_fs, 0.5)
     rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
         {r.x + (r.width - rd_sz.x) * 0.5, r.y + uis(62)},
-        rd_fs, 0.5, rl.Color{120, 110, 76, 180})
+        rd_fs, 0.5, gfx.Color{120, 110, 76, 180})
 
     if s.deaths > 0 {
         death_s := fmt.bprintf(num_buf[:], "%d deaths", s.deaths)
@@ -403,7 +404,7 @@ _mm_draw_slot_card :: proc(r: rl.Rectangle, idx: int) {
         dt_sz := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), dt_fs, 0.5)
         rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
             {r.x + (r.width - dt_sz.x) * 0.5, r.y + uis(80)},
-            dt_fs, 0.5, rl.Color{160, 80, 70, 160})
+            dt_fs, 0.5, gfx.Color{160, 80, 70, 160})
     }
 }
 
@@ -417,13 +418,13 @@ _mm_update_play_options :: proc() {
     btn_h := uis(44)
     btn_y := sh * 0.54
 
-    play_r := rl.Rectangle{cx - btn_w * 0.5, btn_y, btn_w, btn_h}
+    play_r := gfx.Rect{cx - btn_w * 0.5, btn_y, btn_w, btn_h}
     if _mm_btn_hit(play_r) {
         fade_to_black(_on_black_singleplayer)
     }
 
     back_w := sw * 0.12
-    back_r := rl.Rectangle{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
+    back_r := gfx.Rect{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
     if _mm_btn_hit(back_r) {
         g_mm.phase    = .CharSelect
         g_mm.focus    = .None
@@ -447,13 +448,13 @@ _mm_draw_play_options :: proc() {
         ssz    := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), sfs, 0.5)
         rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
             {cx - ssz.x * 0.5, sh * 0.40},
-            sfs, 0.5, rl.Color{160, 148, 100, 200})
+            sfs, 0.5, gfx.Color{160, 148, 100, 200})
     }
 
     btn_w  := sw * 0.20
     btn_h  := uis(44)
     btn_y  := sh * 0.54
-    play_r := rl.Rectangle{cx - btn_w * 0.5, btn_y, btn_w, btn_h}
+    play_r := gfx.Rect{cx - btn_w * 0.5, btn_y, btn_w, btn_h}
     _mm_btn_draw(play_r, t(.MENU_BTN_PLAY), false)
 
     hint    := cstring("Invite friends from the Social panel once in the hub  [O]")
@@ -461,10 +462,10 @@ _mm_draw_play_options :: proc() {
     hsz     := rl.MeasureTextEx(g_font_body, hint, hint_fs, 0.5)
     rl.DrawTextEx(g_font_body, hint,
         {cx - hsz.x * 0.5, btn_y + btn_h + uis(14)},
-        hint_fs, 0.5, rl.Color{100, 92, 66, 180})
+        hint_fs, 0.5, gfx.Color{100, 92, 66, 180})
 
     back_w := sw * 0.12
-    back_r := rl.Rectangle{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
+    back_r := gfx.Rect{cx - back_w * 0.5, sh * 0.88, back_w, uis(32)}
     _mm_btn_draw(back_r, t(.MENU_BTN_BACK), false)
 }
 
@@ -503,51 +504,51 @@ draw_connecting :: proc() {
     msz := rl.MeasureTextEx(g_font, msg_cs, mfs, 0.5)
     rl.DrawTextEx(g_font, msg_cs,
         {cx - msz.x * 0.5, sh * 0.40},
-        mfs, 0.5, rl.Color{200, 182, 118, 255})
+        mfs, 0.5, gfx.Color{200, 182, 118, 255})
 
     bar_w := sw * 0.22
     bar_h := uis(3)
     prog  := clamp(g_mm.conn_timer / CONN_TIMEOUT, 0, 1)
     rl.DrawRectangleV({cx - bar_w * 0.5, sh * 0.50}, {bar_w, bar_h},
-        rl.Color{35, 33, 25, 255})
+        gfx.Color{35, 33, 25, 255})
     rl.DrawRectangleV({cx - bar_w * 0.5, sh * 0.50}, {bar_w * prog, bar_h},
-        rl.Color{140, 118, 60, 200})
+        gfx.Color{140, 118, 60, 200})
 
     cancel := t(.MENU_ESC_CANCEL)
     cfs    := uis(13)
     csz    := rl.MeasureTextEx(g_font_body, cancel, cfs, 0.5)
     rl.DrawTextEx(g_font_body, cancel,
         {cx - csz.x * 0.5, sh * 0.58},
-        cfs, 0.5, rl.Color{110, 100, 72, 180})
+        cfs, 0.5, gfx.Color{110, 100, 72, 180})
 }
 
-_mm_btn_hit :: proc(r: rl.Rectangle) -> bool {
+_mm_btn_hit :: proc(r: gfx.Rect) -> bool {
     return rl.IsMouseButtonReleased(.LEFT) &&
            rl.CheckCollisionPointRec(rl.GetMousePosition(), r)
 }
 
-_mm_btn_draw :: proc(r: rl.Rectangle, label: cstring, active: bool) {
+_mm_btn_draw :: proc(r: gfx.Rect, label: cstring, active: bool) {
     mp   := rl.GetMousePosition()
     over := rl.CheckCollisionPointRec(mp, r)
     hot  := over || active
 
-    bg     := rl.Color{52, 46, 34, 255} if hot else rl.Color{24, 21, 16, 255}
-    border := rl.Color{165, 142, 72, 255} if hot else rl.Color{62, 56, 42, 200}
+    bg     := gfx.Color{52, 46, 34, 255} if hot else gfx.Color{24, 21, 16, 255}
+    border := gfx.Color{165, 142, 72, 255} if hot else gfx.Color{62, 56, 42, 200}
     rl.DrawRectangleRec(r, bg)
     rl.DrawRectangleLinesEx(r, 1, border)
 
     fs  := uis(14)
     tsz := rl.MeasureTextEx(g_font_body, label, fs, 0.5)
-    col := rl.Color{235, 215, 145, 255} if hot else rl.Color{165, 152, 102, 215}
+    col := gfx.Color{235, 215, 145, 255} if hot else gfx.Color{165, 152, 102, 215}
     rl.DrawTextEx(g_font_body, label,
         {r.x + (r.width - tsz.x) * 0.5, r.y + (r.height - tsz.y) * 0.5},
         fs, 0.5, col)
 }
 
 @(private = "file")
-_mm_field_draw :: proc(r: rl.Rectangle, buf: []u8, focused: bool, placeholder: cstring) {
-    bg     := rl.Color{16, 14, 11, 255}
-    border := rl.Color{155, 135, 72, 255} if focused else rl.Color{52, 47, 36, 180}
+_mm_field_draw :: proc(r: gfx.Rect, buf: []u8, focused: bool, placeholder: cstring) {
+    bg     := gfx.Color{16, 14, 11, 255}
+    border := gfx.Color{155, 135, 72, 255} if focused else gfx.Color{52, 47, 36, 180}
     rl.DrawRectangleRec(r, bg)
     rl.DrawRectangleLinesEx(r, 1, border)
 
@@ -559,14 +560,14 @@ _mm_field_draw :: proc(r: rl.Rectangle, buf: []u8, focused: bool, placeholder: c
 
     if empty && !focused {
         rl.DrawTextEx(g_font_body, placeholder, {tx, ty}, fs, 0.5,
-            rl.Color{85, 78, 58, 145})
+            gfx.Color{85, 78, 58, 145})
     } else {
         rl.DrawTextEx(g_font_body, cstr, {tx, ty}, fs, 0.5,
-            rl.Color{218, 206, 160, 255})
+            gfx.Color{218, 206, 160, 255})
         if focused && (int(rl.GetTime() * 2) % 2 == 0) {
             tw := rl.MeasureTextEx(g_font_body, cstr, fs, 0.5).x
             rl.DrawRectangle(i32(tx + tw + 2), i32(ty), 2, i32(fs),
-                rl.Color{218, 206, 160, 255})
+                gfx.Color{218, 206, 160, 255})
         }
     }
 }

@@ -1,7 +1,7 @@
 package main
 
 import "core:math"
-import rl "vendor:raylib"
+import gfx "gfx"
 
 GRENADE_MAX_RANGE :: f32(560)
 
@@ -146,7 +146,7 @@ draw_grenades_and_clouds :: proc(w: ^World) {
 
         for cid in cloud_ids {
             cl  := comp_get(w, cid, .PoisonCloud, PoisonCloudComp)
-            pos := rl.Vector2{
+            pos := gfx.Vec2{
                 comp_get(w, cid, .Transform, TransformComp).position[0],
                 comp_get(w, cid, .Transform, TransformComp).position[1],
             }
@@ -156,12 +156,12 @@ draw_grenades_and_clouds :: proc(w: ^World) {
             fill_a    := u8(clamp(life_frac * pulse * 55,  0, 255))
             edge_a    := u8(clamp(life_frac * pulse * 160, 0, 255))
 
-            draw_world_circle(pos, cl.radius,        rl.Color{ cl.er, cl.eg, cl.eb, fill_a })
+            draw_world_circle(pos, cl.radius,        gfx.Color{ cl.er, cl.eg, cl.eb, fill_a })
 
-            draw_world_circle_lines(pos, cl.radius,  rl.Color{ cl.er, cl.eg, cl.eb, edge_a })
+            draw_world_circle_lines(pos, cl.radius,  gfx.Color{ cl.er, cl.eg, cl.eb, edge_a })
 
             draw_world_circle_lines(pos, cl.radius * 0.52,
-                rl.Color{ 220, 255, 180, u8(clamp(f32(edge_a) * 0.45, 0, 255)) })
+                gfx.Color{ 220, 255, 180, u8(clamp(f32(edge_a) * 0.45, 0, 255)) })
         }
     }
 
@@ -171,13 +171,13 @@ draw_grenades_and_clouds :: proc(w: ^World) {
 
         for gid in grenade_ids {
             g   := comp_get(w, gid, .Grenade, GrenadeComp)
-            pos := rl.Vector2{
+            pos := gfx.Vec2{
                 comp_get(w, gid, .Transform, TransformComp).position[0],
                 comp_get(w, gid, .Transform, TransformComp).position[1],
             }
 
-            draw_world_circle(pos, 7,  rl.Color{ g.er, g.eg, g.eb, 230 })
-            draw_world_circle(pos, 3,  rl.Color{ 230, 255, 200, 255 })
+            draw_world_circle(pos, 7,  gfx.Color{ g.er, g.eg, g.eb, 230 })
+            draw_world_circle(pos, 3,  gfx.Color{ 230, 255, 200, 255 })
         }
     }
 }

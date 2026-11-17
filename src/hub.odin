@@ -1,6 +1,7 @@
 package main
 
 import rl   "vendor:raylib"
+import gfx  "gfx"
 import      "core:fmt"
 import      "core:math"
 import clay "../clay"
@@ -55,9 +56,9 @@ draw_hub_background :: proc() {
     scale  := span * 2 / sw
     dest_h := sh * scale
 
-    src  := rl.Rectangle{ 0, 0, sw, sh }
-    dest := rl.Rectangle{ -span, span * 0.5 - dest_h, span * 2, dest_h }
-    rl.DrawTexturePro(g_hub_bg_tex, src, dest, {0, 0}, 0, rl.WHITE)
+    src  := gfx.Rect{ 0, 0, sw, sh }
+    dest := gfx.Rect{ -span, span * 0.5 - dest_h, span * 2, dest_h }
+    rl.DrawTexturePro(g_hub_bg_tex, src, dest, {0, 0}, 0, gfx.WHITE)
 }
 
 enter_hub :: proc(w: ^World, save_progress: bool = false) {
@@ -204,15 +205,15 @@ draw_hub_world :: proc(w: ^World) {
     px := HUB_PORTAL_POS[0]
     py := HUB_PORTAL_POS[1]
     tt := f32(rl.GetTime())
-    center := rl.Vector2{ px, py }
+    center := gfx.Vec2{ px, py }
     iso := world_to_iso_v(center)
 
     pulse      := 0.7 + 0.3 * math.sin(tt * 2.0)
     fill_alpha := u8(50  * pulse)
     ring_alpha := u8(200 * pulse)
 
-    draw_world_circle(center, HUB_PORTAL_RADIUS, rl.Color{40, 60, 180, fill_alpha})
-    draw_world_circle_lines(center, HUB_PORTAL_RADIUS, rl.Color{100, 140, 255, ring_alpha})
+    draw_world_circle(center, HUB_PORTAL_RADIUS, gfx.Color{40, 60, 180, fill_alpha})
+    draw_world_circle_lines(center, HUB_PORTAL_RADIUS, gfx.Color{100, 140, 255, ring_alpha})
 
     if world_is_valid(w, w.player_id) &&
        world_has_component(w, w.player_id, .Transform) {
@@ -231,7 +232,7 @@ draw_hub_world :: proc(w: ^World) {
             lsz    := rl.MeasureTextEx(g_font_body, lbl, lbl_fs, 0.5)
             rl.DrawTextEx(g_font_body, lbl,
                 {iso.x - lsz.x * 0.5, iso.y - HUB_PORTAL_RADIUS - lbl_fs - 4},
-                lbl_fs, 0.5, rl.Color{160, 200, 255, 230})
+                lbl_fs, 0.5, gfx.Color{160, 200, 255, 230})
         }
     }
 }
@@ -298,14 +299,14 @@ draw_death_screen :: proc(w: ^World) {
     pw := uis(370)
     ph := uis(300)
 
-    red_title  := rl.Color{200,  55,  55, 255}
-    red_accent := rl.Color{200,  40,  40, 200}
-    red_border := rl.Color{140,  28,  28, 200}
+    red_title  := gfx.Color{200,  55,  55, 255}
+    red_accent := gfx.Color{200,  40,  40, 200}
+    red_border := gfx.Color{140,  28,  28, 200}
 
     clay.BeginLayout()
     ui_panel_begin("DeathPanel", string(t(.DEATH_TITLE)), pw, ph, {
         anchor     = .CenterCenter,
-        bg_col     = rl.Color{14, 6, 6, 252},
+        bg_col     = gfx.Color{14, 6, 6, 252},
         border_col = red_border,
         accent_col = red_accent,
         title_col  = red_title,
@@ -341,7 +342,7 @@ draw_death_screen :: proc(w: ^World) {
 }
 
 @(private = "file")
-_hub_reward_row :: proc(base_id, label, value: string, value_col: rl.Color) {
+_hub_reward_row :: proc(base_id, label, value: string, value_col: gfx.Color) {
     ui_hstack_begin(fmt.tprintf("%sRow", base_id), 0, 0, .Center)
     ui_label(fmt.tprintf("%sLbl", base_id), label, uis(15), COL_MUTED)
     ui_grow(fmt.tprintf("%sSpc", base_id))

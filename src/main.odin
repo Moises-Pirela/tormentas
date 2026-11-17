@@ -1,6 +1,7 @@
 package main
 
 import rl       "vendor:raylib"
+import gfx      "gfx"
 import p2p      "p2p"
 import "core:fmt"
 import "core:os"
@@ -135,7 +136,7 @@ draw_invite_toast :: proc() {
     px := sw * 0.5 - pw * 0.5
     py := uis(16)
 
-    rl.DrawRectangleRec({ px, py, pw, ph }, rl.Color{ 10, 8, 6, 240 })
+    rl.DrawRectangleRec({ px, py, pw, ph }, gfx.Color{ 10, 8, 6, 240 })
     rl.DrawRectangleLinesEx({ px, py, pw, ph }, 1.5, COL_BRASS)
     rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
 
@@ -512,7 +513,7 @@ draw_playing :: proc() {
     draw_directional_shadow_mask(w)
 
     rl.BeginTextureMode(g_world_rt)
-    rl.ClearBackground(rl.BLANK)
+    rl.ClearBackground(gfx.BLANK)
     rl.BeginMode2D(g_camera^)
     if g_hub_active {
         draw_hub_background()
@@ -537,7 +538,7 @@ draw_playing :: proc() {
     rl.EndMode2D()
 
     rl.BeginTextureMode(g_sprite_rt)
-    rl.ClearBackground(rl.BLANK)
+    rl.ClearBackground(gfx.BLANK)
     rl.BeginMode2D(g_camera^)
     draw_entities(w, .Sprite)
     rl.EndMode2D()
