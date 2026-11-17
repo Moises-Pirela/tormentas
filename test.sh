@@ -31,5 +31,19 @@ run_suite() {
 }
 run_suite deps/clockwork-ecs/clockwork clockwork
 run_suite src/p2p protocol
+run_suite src/sim sim
 run_suite src game
+
+# Headless server: import boundaries, build, no graphics/audio/UI/Steam linked in, and it runs.
+log "[TEST] headless server"
+"$REPO_ROOT/build.sh" server --odin "$ODIN_BIN"
+SERVER_BIN="$REPO_ROOT/bin/tormentas_server"
+FORBIDDEN='glfw|InitWindow|raylib|ImGui|Clay_|SteamAPI|ma_device'
+# Capture first: under `set -o pipefail`, `nm | grep -q` reports failure on a match (nm gets SIGPIPE).
+SERVER_SYMS="$(nm "$SERVER_BIN")"
+if grep -qiE "$FORBIDDEN" <<<"$SERVER_SYMS"; then
+    grep -iE "$FORBIDDEN" <<<"$SERVER_SYMS" | head -5 >&2
+    die "headless server links client-only symbols (see above). Something in src/sim or src/server pulls in graphics, audio, UI or Steam."
+fi
+"$SERVER_BIN" --ticks 600
 log "[TEST] all suites passed"

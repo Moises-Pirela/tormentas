@@ -540,20 +540,6 @@ draw_tracer :: proc(pos: rl.Vector2, dir: [3]f32, speed: f32, core, glow: rl.Col
     draw_world_circle(pos, 3.5, a(core, fade, 1.00))
 }
 
-is_player_entity :: proc(w: ^World, id: int) -> bool {
-    for pid in w.player_ids {
-        if pid == id { return true }
-    }
-    return false
-}
-
-player_slot_for_id :: proc(w: ^World, id: int) -> int {
-    for slot in 0..<MAX_PLAYERS {
-        if w.player_ids[slot] == id { return slot }
-    }
-    return -1
-}
-
 draw_entity_visual_info :: proc(w: ^World, id: int) -> EntityVisualInfo {
     info := EntityVisualInfo{sprite_scale = 1.0}
 

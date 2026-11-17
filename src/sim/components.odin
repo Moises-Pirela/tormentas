@@ -1,4 +1,4 @@
-package main
+package sim
 
 ComponentType :: enum u8 {
     Transform,

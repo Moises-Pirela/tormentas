@@ -19,12 +19,13 @@ an endgame, and far more content feeding the machine.
 
 These are the features that change the game's identity, not just its volume. Roughly in order.
 
-### 1. The storm 📋
-The title mechanic isn't in the game yet. Add an encroaching storm / raid pressure that forces the
-extraction decision — a closing danger zone and/or escalating spawns over time.
-- [ ] Storm/zone state machine (safe → warning → closing → lethal)
-- [ ] Visual + audio telegraphing
-- [ ] Spawn/intensity escalation tied to storm phase
+### 1. Danger zones ❓
+Replaces the old storm/extraction-pressure mechanic (dropped — the game is now a pure ARPG).
+Areas where harder enemies spawn and loot is better: an opt-in high-risk / high-reward space.
+Shape still being designed alongside procedural levels.
+- [ ] Decide scope: sub-region within a level, whole-level modifier, and/or rotating server-wide zones
+- [ ] Enemy scaling + loot scaling inside a zone
+- [ ] Visual + audio telegraphing so players know when they've entered one
 
 ### 2. Extraction stakes 📋
 Right now death is a 2s respawn with no loss, so the core loop has no tension.
@@ -66,7 +67,7 @@ The schedule driver. Secure art/audio capacity early.
 ## Milestones to release
 
 - **M-now — foundation:** commit the large working stack; stand up a Steam "Coming Soon" page; begin devlog capture.
-- **M1 — identity:** ship pillars #1 and #2 (storm + extraction stakes). This is the make-or-break phase.
+- **M1 — identity:** ship pillars #1 and #2 (danger zones + extraction stakes). This is the make-or-break phase.
 - **M2 — retention:** crafting/item sinks (#3) + first balance pass + 1–2 new AI behaviors.
 - **M3–M4 — content production:** maps/biomes, bosses #2–3, audio fill, class balance, quest/meta verified.
 - **M5 — feature + content lock:** endgame ladder (#4), boss #4, all audio in, economy balance.
@@ -85,6 +86,8 @@ The schedule driver. Secure art/audio capacity early.
 - [ ] **Versioned binary saves** carry migration risk — add migration or an explicit wipe-on-breaking-change policy.
 - [ ] **Multiplayer lockstep is under-tested** — needs sustained live co-op playtesting.
 - [ ] **Physics:** O(n²) separation/collision with no spatial grid (deferred); single-pass resolution.
+- [ ] **Entity leak on the tag-destroy path:** projectiles and self-destructs are hidden from queries
+      but never freed until the level is cleared (details and fix: `docs/BUILD_PLAN.md`, P0).
 - [ ] Confirm the Steam join / invite flow end-to-end with two live clients.
 
 ---

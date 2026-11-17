@@ -6,13 +6,6 @@ import p2p "p2p"
 
 g_staged_input: [MAX_PLAYERS]p2p.InputFrame
 
-player_is_dead :: proc(w: ^World, id: int) -> bool {
-    if world_has_component(w, id, .Health) && comp_get(w, id, .Health, HealthComp).current <= 0 {
-        return true
-    }
-    return world_has_component(w, id, .Respawn) && comp_get(w, id, .Respawn, RespawnComp).timer > 0
-}
-
 collect_local_input :: proc() -> p2p.InputFrame {
     f: p2p.InputFrame
     f.peer = 0

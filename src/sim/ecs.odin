@@ -1,4 +1,4 @@
-package main
+package sim
 
 import ecs "cw:clockwork"
 
@@ -305,12 +305,4 @@ sim_tick :: proc(s: ^Simulation, dt: f32) {
     sim_broadcast(s, .EntityCreated, dt)
 
     s.world.tick += 1
-}
-
-make_default_simulation :: proc() -> Simulation {
-    s := make_simulation()
-    sim_register_system(&s, {.Update}, movement_system,      .Shared)
-    sim_register_system(&s, {.Update}, projectile_system,    .HostOnly)
-    sim_register_system(&s, {.Update}, self_destruct_system, .HostOnly)
-    return s
 }

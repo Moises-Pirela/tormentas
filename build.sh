@@ -1,28 +1,31 @@
 #!/usr/bin/env bash
 # macOS build for Las Tormentas. Counterpart of build.ps1.
 #
-# usage: ./build.sh [debug|release] [--odin PATH] [--enable-steam] [--steam-collection DIR]
+# usage: ./build.sh [server] [debug|release] [--odin PATH] [--enable-steam] [--steam-collection DIR]
 #
 #   debug    (default) -o:none -debug -vet            -> bin/tormentas
 #   release  -o:aggressive -vet, then packages        -> dist/macos/Tormentas.app
 #                                                        dist/tormentas-macos-release.zip
+#   server   headless sim server, no graphics/audio   -> bin/tormentas_server
 #
 # Raylib, rlgl and microui come from the pinned Odin toolchain (vendor/). The Clay UI
 # library is compiled from clay/upstream/clay.h on first use (tools/build-clay.sh).
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tools/common.sh"
 
 MODE=debug
+TARGET=game
 ODIN_PATH=""
 ENABLE_STEAM=0
 STEAM_COLLECTION="$REPO_ROOT/.local"
 while [ $# -gt 0 ]; do
     case "$1" in
         debug|release) MODE="$1"; shift ;;
+        server) TARGET=server; shift ;;
         --odin) [ $# -ge 2 ] || die "--odin needs a value"; ODIN_PATH="$2"; shift 2 ;;
         --enable-steam) ENABLE_STEAM=1; shift ;;
         --steam-collection) [ $# -ge 2 ] || die "--steam-collection needs a value"; STEAM_COLLECTION="$2"; shift 2 ;;
-        -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
-        *) die "Unknown argument: $1 (expected debug|release, --odin, --enable-steam, --steam-collection)" ;;
+        -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        *) die "Unknown argument: $1 (expected server, debug|release, --odin, --enable-steam, --steam-collection)" ;;
     esac
 done
 
@@ -30,6 +33,20 @@ done
 require_cmd python3 shasum clang
 resolve_odin "$ODIN_PATH"
 assert_clockwork_snapshot
+
+if [ "$TARGET" = server ]; then
+    # Headless: only src/server + src/sim + clockwork. No Clay, ImGui, raylib or Steam.
+    SERVER_OUT="$REPO_ROOT/bin/tormentas_server"
+    SERVER_FLAGS=(-o:none -debug -vet)
+    [ "$MODE" = release ] && SERVER_FLAGS=(-o:aggressive -vet)
+    mkdir -p "$REPO_ROOT/bin"
+    python3 -I "$TOOLS_DIR/check_boundaries.py" "$REPO_ROOT"
+    log "[BUILD] odin build src/server ($MODE) with $ODIN_BIN"
+    "$ODIN_BIN" build "$REPO_ROOT/src/server" "-out:$SERVER_OUT" "-collection:cw=$REPO_ROOT/deps/clockwork-ecs" "${SERVER_FLAGS[@]}"
+    log "[BUILD] OK -> $SERVER_OUT"
+    exit 0
+fi
+
 ensure_clay_lib
 ensure_imgui_lib
 
