@@ -1,8 +1,6 @@
 package main
 
-import rl "vendor:raylib"
 import gfx "gfx"
-import "vendor:raylib/rlgl"
 
 GREYBOX_Z :: f32(0.75)
 
@@ -14,11 +12,11 @@ gb_p :: proc(wx, wy, h: f32) -> [2]f32 {
 
 @(private = "file")
 gb_quad :: proc(a, b, c, d: [2]f32, col: gfx.Color) {
-    rlgl.Color4ub(col.r, col.g, col.b, col.a)
-    rlgl.Vertex2f(a[0], a[1])
-    rlgl.Vertex2f(b[0], b[1])
-    rlgl.Vertex2f(c[0], c[1])
-    rlgl.Vertex2f(d[0], d[1])
+    gfx.quad_color(col)
+    gfx.quad_vertex(a)
+    gfx.quad_vertex(b)
+    gfx.quad_vertex(c)
+    gfx.quad_vertex(d)
 }
 
 @(private = "file")
@@ -37,8 +35,7 @@ draw_greybox_volume :: proc(w: ^World, id: int) {
     t  := comp_get(w, id, .Transform, TransformComp)
     gb := comp_get(w, id, .Greybox, GreyboxComp)
 
-    rlgl.SetTexture(rlgl.GetTextureIdDefault())
-    rlgl.Begin(rlgl.QUADS)
+    gfx.quads_begin()
     {
         hx := max(gb.size[0], 1) * 0.5
         hy := max(gb.size[1], 1) * 0.5
@@ -87,8 +84,7 @@ draw_greybox_volume :: proc(w: ^World, id: int) {
             gb_quad(n, top_v, top_s, n, gb_shade(gb.r, gb.g, gb.b, 1.0, a))
         }
     }
-    rlgl.End()
-    rlgl.SetTexture(0)
+    gfx.quads_end()
 
     fhx := max(gb.size[0], 1) * 0.5
     fhy := max(gb.size[1], 1) * 0.5
@@ -98,8 +94,8 @@ draw_greybox_volume :: proc(w: ^World, id: int) {
     fv := gb_p(t.position[0] - fhx, t.position[1] + fhy, 0)
 
     oc := gfx.Color{18, 20, 24, 170}
-    rl.DrawLineEx({fn[0], fn[1]}, {fe[0], fe[1]}, 1.5, oc)
-    rl.DrawLineEx({fe[0], fe[1]}, {fs[0], fs[1]}, 1.5, oc)
-    rl.DrawLineEx({fs[0], fs[1]}, {fv[0], fv[1]}, 1.5, oc)
-    rl.DrawLineEx({fv[0], fv[1]}, {fn[0], fn[1]}, 1.5, oc)
+    gfx.draw_line_ex({fn[0], fn[1]}, {fe[0], fe[1]}, 1.5, oc)
+    gfx.draw_line_ex({fe[0], fe[1]}, {fs[0], fs[1]}, 1.5, oc)
+    gfx.draw_line_ex({fs[0], fs[1]}, {fv[0], fv[1]}, 1.5, oc)
+    gfx.draw_line_ex({fv[0], fv[1]}, {fn[0], fn[1]}, 1.5, oc)
 }

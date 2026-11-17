@@ -1,6 +1,6 @@
 package main
 
-import rl      "vendor:raylib"
+import snd     "snd"
 import gfx     "gfx"
 import        "core:fmt"
 import        "core:math"
@@ -56,21 +56,21 @@ AudioEventDef :: struct {
 
 @(private = "file")
 AliasVoice :: struct {
-    sound:    rl.Sound,
+    sound:    snd.Sound,
     priority: int,
     start_t:  f64,
 }
 
 @(private = "file")
 AliasPool :: struct {
-    source: rl.Sound,
+    source: snd.Sound,
     voices: [dynamic]AliasVoice,
 }
 
 @(private = "file")
 CrossfadeStream :: struct {
     bus:      AudioBus,
-    streams:  [2]rl.Music,
+    streams:  [2]snd.Music,
     loaded:   [2]bool,
     active:   int,
     cur_stem: string,
@@ -85,7 +85,7 @@ CrossfadeStream :: struct {
 @(private = "file") g_pool_index:  map[string]int
 @(private = "file") g_alias_total: int
 
-@(private = "file") g_voice_cache: map[string]rl.Sound
+@(private = "file") g_voice_cache: map[string]snd.Sound
 
 @(private = "file") g_music_cf:     CrossfadeStream
 @(private = "file") g_amb_cf:       CrossfadeStream
@@ -98,10 +98,10 @@ CrossfadeStream :: struct {
 @(private = "file") g_duck_release:  f32 = 0.3
 
 init_audio :: proc() {
-    rl.InitAudioDevice()
+    snd.device_init()
     g_event_index  = make(map[string]int)
     g_pool_index   = make(map[string]int)
-    g_voice_cache  = make(map[string]rl.Sound)
+    g_voice_cache  = make(map[string]snd.Sound)
     g_music_states = make(map[string]string)
     g_music_cf.bus = .Music
     g_amb_cf.bus   = .Ambience
@@ -112,16 +112,16 @@ init_audio :: proc() {
 
 shutdown_audio :: proc() {
     for &p in g_pools {
-        for v in p.voices { rl.UnloadSoundAlias(v.sound) }
+        for v in p.voices { snd.unload_sound_alias(v.sound) }
         delete(p.voices)
-        if p.source.frameCount > 0 { rl.UnloadSound(p.source) }
+        if p.source.frameCount > 0 { snd.unload_sound(p.source) }
     }
     delete(g_pools)
     delete(g_pool_index)
     delete(g_event_defs)
     delete(g_event_index)
 
-    for _, &s in g_voice_cache { rl.UnloadSound(s) }
+    for _, &s in g_voice_cache { snd.unload_sound(s) }
     delete(g_voice_cache)
 
     _cf_unload(&g_music_cf)
@@ -129,7 +129,7 @@ shutdown_audio :: proc() {
     _cf_unload(&g_amb_bed_cf)
     delete(g_music_states)
 
-    rl.CloseAudioDevice()
+    snd.device_close()
 }
 
 update_audio :: proc() {
@@ -152,7 +152,7 @@ play_sfx_at :: proc(name: string, world_pos: [3]f32) {
 
 @(private = "file")
 _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
-    if !rl.IsAudioDeviceReady() { return }
+    if !snd.device_ready() { return }
     idx := _event_idx(name)
     def := &g_event_defs[idx]
 
@@ -183,10 +183,10 @@ _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
     v := &g_pools[pidx].voices[vidx]
     v.priority = def.priority
     v.start_t  = now
-    rl.SetSoundVolume(v.sound, clamp(g_vol_master * _bus_volume(def.bus) * gain * dist_vol, 0, 1))
-    rl.SetSoundPan(v.sound, pan)
-    rl.SetSoundPitch(v.sound, max(pitch, 0.05))
-    rl.PlaySound(v.sound)
+    snd.sound_set_volume(v.sound, clamp(g_vol_master * _bus_volume(def.bus) * gain * dist_vol, 0, 1))
+    snd.sound_set_pan(v.sound, pan)
+    snd.sound_set_pitch(v.sound, max(pitch, 0.05))
+    snd.play_sound(v.sound)
 
     def.last_play_t = now
 }
@@ -229,7 +229,7 @@ _spatial :: proc(def: ^AudioEventDef, pos: [3]f32) -> (vol, pan: f32) {
 
 @(private = "file")
 _rand_pm :: proc(v: f32) -> f32 {
-    return (f32(rl.GetRandomValue(-1000, 1000)) / 1000.0) * v
+    return (f32(random_int(-1000, 1000)) / 1000.0) * v
 }
 
 @(private = "file")
@@ -240,7 +240,7 @@ _select_variant :: proc(def: ^AudioEventDef) -> string {
     case .First:
         return def.variants[0]
     case .Random:
-        return def.variants[rl.GetRandomValue(0, i32(n) - 1)]
+        return def.variants[random_int(0, i32(n) - 1)]
     case .RoundRobin:
         v := def.variants[def.rr_index % n]
         def.rr_index += 1
@@ -292,29 +292,29 @@ _get_or_make_pool :: proc(variant: string) -> int {
 }
 
 @(private = "file")
-_load_source :: proc(variant: string) -> rl.Sound {
+_load_source :: proc(variant: string) -> snd.Sound {
     exts := [?]string{ ".ogg", ".wav", ".mp3" }
     for ext in exts {
         p   := strings.concatenate({ AUDIO_SOUND_DIR, variant, ext }, context.temp_allocator)
         pcs := strings.clone_to_cstring(p, context.temp_allocator)
-        if rl.FileExists(pcs) {
-            return rl.LoadSound(pcs)
+        if file_exists(pcs) {
+            return snd.load_sound(pcs)
         }
     }
-    return rl.Sound{}
+    return snd.Sound{}
 }
 
 @(private = "file")
 _acquire_voice :: proc(pidx: int, priority: int, max_instances: int) -> (int, bool) {
     for &v, i in g_pools[pidx].voices {
-        if !rl.IsSoundPlaying(v.sound) { return i, true }
+        if !snd.sound_playing(v.sound) { return i, true }
     }
 
     if len(g_pools[pidx].voices) < max(max_instances, 1) {
         if g_alias_total >= AUDIO_MAX_ALIASES_TOTAL {
             if !_reclaim_global_slot(priority) { return 0, false }
         }
-        al := rl.LoadSoundAlias(g_pools[pidx].source)
+        al := snd.load_sound_alias(g_pools[pidx].source)
         append(&g_pools[pidx].voices, AliasVoice{ sound = al })
         g_alias_total += 1
         return len(g_pools[pidx].voices) - 1, true
@@ -326,7 +326,7 @@ _acquire_voice :: proc(pidx: int, priority: int, max_instances: int) -> (int, bo
         if oldest < 0 || v.start_t < oldest_t { oldest = i; oldest_t = v.start_t }
     }
     if oldest >= 0 {
-        rl.StopSound(g_pools[pidx].voices[oldest].sound)
+        snd.stop_sound(g_pools[pidx].voices[oldest].sound)
         return oldest, true
     }
     return 0, false
@@ -336,8 +336,8 @@ _acquire_voice :: proc(pidx: int, priority: int, max_instances: int) -> (int, bo
 _reclaim_global_slot :: proc(incoming_priority: int) -> bool {
     for &p in g_pools {
         for v, vi in p.voices {
-            if !rl.IsSoundPlaying(v.sound) {
-                rl.UnloadSoundAlias(v.sound)
+            if !snd.sound_playing(v.sound) {
+                snd.unload_sound_alias(v.sound)
                 unordered_remove(&p.voices, vi)
                 g_alias_total -= 1
                 return true
@@ -359,8 +359,8 @@ _reclaim_global_slot :: proc(incoming_priority: int) -> bool {
     }
     if found && low_pri < incoming_priority {
         s := g_pools[vpool].voices[vidx].sound
-        rl.StopSound(s)
-        rl.UnloadSoundAlias(s)
+        snd.stop_sound(s)
+        snd.unload_sound_alias(s)
         unordered_remove(&g_pools[vpool].voices, vidx)
         g_alias_total -= 1
         return true
@@ -435,18 +435,18 @@ _cf_set :: proc(cf: ^CrossfadeStream, stem: string, fade_ms: f32) {
 
     incoming := 1 - cf.active
     if cf.loaded[incoming] {
-        rl.StopMusicStream(cf.streams[incoming])
-        rl.UnloadMusicStream(cf.streams[incoming])
+        snd.stop_music(cf.streams[incoming])
+        snd.unload_music(cf.streams[incoming])
         cf.loaded[incoming] = false
     }
     if pcs, ok := _resolve_stream_path(stem); ok {
-        m := rl.LoadMusicStream(pcs)
+        m := snd.load_music(pcs)
         m.looping = true
         if m.frameCount > 0 {
             cf.streams[incoming] = m
             cf.loaded[incoming]  = true
-            rl.SetMusicVolume(m, 0)
-            rl.PlayMusicStream(m)
+            snd.music_set_volume(m, 0)
+            snd.play_music(m)
         }
     }
 
@@ -464,8 +464,8 @@ _cf_stop :: proc(cf: ^CrossfadeStream, fade_ms: f32) {
 
     incoming := 1 - cf.active
     if cf.loaded[incoming] {
-        rl.StopMusicStream(cf.streams[incoming])
-        rl.UnloadMusicStream(cf.streams[incoming])
+        snd.stop_music(cf.streams[incoming])
+        snd.unload_music(cf.streams[incoming])
         cf.loaded[incoming] = false
     }
     cf.active = incoming
@@ -482,8 +482,8 @@ _cf_update :: proc(cf: ^CrossfadeStream, dt: f32) {
     if cf.bus == .Music { base *= g_music_duck }
 
     for i in 0..<2 {
-        if cf.loaded[i] && rl.IsMusicStreamPlaying(cf.streams[i]) {
-            rl.UpdateMusicStream(cf.streams[i])
+        if cf.loaded[i] && snd.music_playing(cf.streams[i]) {
+            snd.update_music(cf.streams[i])
         }
     }
 
@@ -494,26 +494,26 @@ _cf_update :: proc(cf: ^CrossfadeStream, dt: f32) {
 
         in_i  := cf.active
         out_i := 1 - cf.active
-        if cf.loaded[in_i]  { rl.SetMusicVolume(cf.streams[in_i],  base * cf.fade_t) }
-        if cf.loaded[out_i] { rl.SetMusicVolume(cf.streams[out_i], base * (1 - cf.fade_t)) }
+        if cf.loaded[in_i]  { snd.music_set_volume(cf.streams[in_i],  base * cf.fade_t) }
+        if cf.loaded[out_i] { snd.music_set_volume(cf.streams[out_i], base * (1 - cf.fade_t)) }
 
         if done {
             cf.fading = false
             if cf.loaded[out_i] {
-                rl.StopMusicStream(cf.streams[out_i])
-                rl.UnloadMusicStream(cf.streams[out_i])
+                snd.stop_music(cf.streams[out_i])
+                snd.unload_music(cf.streams[out_i])
                 cf.loaded[out_i] = false
             }
         }
     } else if cf.loaded[cf.active] {
-        rl.SetMusicVolume(cf.streams[cf.active], base)
+        snd.music_set_volume(cf.streams[cf.active], base)
     }
 }
 
 @(private = "file")
 _cf_unload :: proc(cf: ^CrossfadeStream) {
     for i in 0..<2 {
-        if cf.loaded[i] { rl.UnloadMusicStream(cf.streams[i]); cf.loaded[i] = false }
+        if cf.loaded[i] { snd.unload_music(cf.streams[i]); cf.loaded[i] = false }
     }
     if len(cf.cur_stem) > 0 { delete(cf.cur_stem); cf.cur_stem = "" }
 }
@@ -525,7 +525,7 @@ _resolve_stream_path :: proc(stem: string) -> (cstring, bool) {
     for ext in exts {
         p   := strings.concatenate({ AUDIO_SOUND_DIR, stem, ext }, context.temp_allocator)
         pcs := strings.clone_to_cstring(p, context.temp_allocator)
-        if rl.FileExists(pcs) { return pcs, true }
+        if file_exists(pcs) { return pcs, true }
     }
     return nil, false
 }

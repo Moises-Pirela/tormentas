@@ -1,6 +1,5 @@
 package main
 
-import rl "vendor:raylib"
 import gfx "gfx"
 
 UIPanel :: enum {
@@ -29,7 +28,7 @@ UILayer :: struct {
     alpha: f32,
     state: UILayerState,
     dirty: bool,
-    rt:    rl.RenderTexture2D,
+    rt:    gfx.RenderTexture,
     rt_ok: bool,
 }
 
@@ -53,7 +52,7 @@ ui_init :: proc() {
 ui_destroy :: proc() {
     for i in 0..<g_ui.count {
         if g_ui.layers[i].rt_ok {
-            rl.UnloadRenderTexture(g_ui.layers[i].rt)
+            gfx.unload_render_texture(g_ui.layers[i].rt)
         }
     }
     g_ui = {}
@@ -66,8 +65,8 @@ _ui_ensure_rt :: proc() {
     if sw == g_ui.rt_w && sh == g_ui.rt_h { return }
     for i in 0..<g_ui.count {
         l := &g_ui.layers[i]
-        if l.rt_ok { rl.UnloadRenderTexture(l.rt) }
-        l.rt    = rl.LoadRenderTexture(sw, sh)
+        if l.rt_ok { gfx.unload_render_texture(l.rt) }
+        l.rt    = gfx.load_render_texture(sw, sh)
         l.rt_ok = true
         l.dirty = true
     }
@@ -95,7 +94,7 @@ ui_open :: proc(panel: UIPanel) {
         alpha = 0,
         state = .FadeIn,
         dirty = true,
-        rt    = rl.LoadRenderTexture(sw, sh),
+        rt    = gfx.load_render_texture(sw, sh),
         rt_ok = true,
     }
     g_ui.count += 1
@@ -128,7 +127,7 @@ ui_close_all :: proc() {
             _ui_on_close(l.panel)
         }
         if l.rt_ok {
-            rl.UnloadRenderTexture(l.rt)
+            gfx.unload_render_texture(l.rt)
             l.rt_ok = false
         }
     }
@@ -196,7 +195,7 @@ ui_update :: proc(dt: f32) {
             l.alpha = max(l.alpha - dt * UI_FADE_SPEED, 0)
             if l.alpha <= 0 {
                 if l.rt_ok {
-                    rl.UnloadRenderTexture(l.rt)
+                    gfx.unload_render_texture(l.rt)
                 }
                 for j in i..<(g_ui.count - 1) {
                     g_ui.layers[j] = g_ui.layers[j + 1]
@@ -221,17 +220,17 @@ ui_draw :: proc(w: ^World) {
         if !l.rt_ok { continue }
 
         if l.dirty {
-            rl.BeginTextureMode(l.rt)
-            rl.ClearBackground(gfx.BLANK)
+            gfx.target_begin(l.rt)
+            gfx.clear(gfx.BLANK)
             _ui_draw_panel(l.panel, w)
-            rl.EndTextureMode()
+            gfx.target_end()
             l.dirty = false
         }
 
         src  := gfx.Rect{ 0, f32(g_ui.rt_h), f32(g_ui.rt_w), -f32(g_ui.rt_h) }
         dst  := gfx.Rect{ 0, 0, sw, sh }
         tint := gfx.Color{ 255, 255, 255, u8(l.alpha * 255) }
-        rl.DrawTexturePro(l.rt.texture, src, dst, {0, 0}, 0, tint)
+        gfx.draw_texture_pro(l.rt.texture, src, dst, {0, 0}, 0, tint)
     }
 }
 

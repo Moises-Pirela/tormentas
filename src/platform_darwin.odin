@@ -2,7 +2,7 @@
 package main
 
 import    "core:sys/posix"
-import rl "vendor:raylib"
+import gfx "gfx"
 
 @(private = "file") g_objc:          posix.Symbol_Table
 @(private = "file") g_msg_send:      rawptr
@@ -36,7 +36,7 @@ _msg :: proc() -> rawptr { return g_msg_send }
 @(private = "file")
 _window :: proc() -> rawptr {
     if !_objc_ready() { return nil }
-    return rl.GetWindowHandle()
+    return gfx.window_handle()
 }
 
 native_fullscreen_prepare :: proc() {

@@ -1,9 +1,7 @@
 package main
 
 import "core:math"
-import rl "vendor:raylib"
 import gfx "gfx"
-import "vendor:raylib/rlgl"
 
 SHADOW_MAX_LEN   :: f32(3.2)
 SHADOW_STRIPS    :: 8
@@ -12,7 +10,7 @@ SHADOW_MIN_ELEV  :: f32(5)
 SHADOW_MAX_ELEV  :: f32(89)
 
 draw_projected_sprite_shadow :: proc(
-    tex: rl.Texture2D,
+    tex: gfx.Texture,
     src: gfx.Rect,
     feet: gfx.Vec2,
     world_size: f32,
@@ -59,8 +57,7 @@ draw_projected_sprite_shadow :: proc(
 
     flip_winding := iso_d.y < 0
 
-    rlgl.SetTexture(tex.id)
-    rlgl.Begin(rlgl.QUADS)
+    gfx.quads_begin_textured(tex)
 
     for i in 0 ..< SHADOW_STRIPS {
         fa := f32(i) / f32(SHADOW_STRIPS)
@@ -93,8 +90,7 @@ draw_projected_sprite_shadow :: proc(
         }
     }
 
-    rlgl.End()
-    rlgl.SetTexture(0)
+    gfx.quads_end()
 }
 
 @(private = "file")
@@ -111,7 +107,7 @@ _shadow_alpha :: proc(f: f32, near_a, far_a: u8) -> u8 {
 
 @(private = "file")
 _shadow_vert :: proc(p: [2]f32, u, v: f32, tint: gfx.Color, a: u8) {
-    rlgl.Color4ub(tint.r, tint.g, tint.b, a)
-    rlgl.TexCoord2f(u, v)
-    rlgl.Vertex2f(p[0], p[1])
+    gfx.quad_color({ tint.r, tint.g, tint.b, a })
+    gfx.quad_uv(u, v)
+    gfx.quad_vertex(p)
 }

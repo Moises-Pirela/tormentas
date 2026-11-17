@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import clay "../clay"
 import      "core:fmt"
@@ -259,7 +258,7 @@ draw_stats_screen :: proc(w: ^World) {
             el := clay.GetElementData(clay.ID(fmt.tprintf("CharStatBtn%d", i)))
             if !el.found { continue }
             bb := el.boundingBox
-            if !rl.CheckCollisionPointRec(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
+            if !gfx.point_in_rect(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
 
             switch i {
             case 0: st.strength  += 1

@@ -252,6 +252,26 @@ now `app_frame()` (`main.odin`), ready to become sokol_app's frame callback.
 - Still to do in step 7: the event-driven key/mouse state under sokol_app. Today these procedures
   forward to raylib's polling; their signatures are already what the sokol version needs.
 
+**Step 4 results (2026-11-17): done, and wider than planned.** Package main no longer references
+raylib at all — not just drawing, but resources, shaders, window and audio:
+- `src/gfx/draw.odin` (shapes, text, textures, the immediate-mode quad stream, and the
+  scissor/blend/shader/camera/target modes), `resources.odin` (textures, render targets, fonts,
+  images, shaders and their uniforms), `window.odin` (window, monitors, screenshot),
+  `raylib_backend.odin` (the only place reaching below raylib's public API, for `rlgl`).
+- **`src/snd`** is a new package for audio, since audio does not belong in a rendering package.
+  raylib's audio is miniaudio underneath, so step 7's swap maps across.
+- 1,125 substitutions in 36 files by script, then ~15 hand edits (the `rlgl` quad streams in
+  `greybox.odin`/`shadow.odin`, the probe screenshot, and `file_exists`/`random_int` helpers that
+  replace raylib's utilities).
+- Signatures deliberately mirror raylib's argument order, which is what made the migration a
+  rename; step 7 may tidy them once sokol is underneath.
+- `check_boundaries.py` now fails if package main imports raylib or calls it directly.
+- **Deviation from the plan:** raylib is spread across the `gfx` files rather than confined to
+  `raylib_backend.odin`. Each file is a thin pass-through, so step 7 swaps them file by file.
+- Verified: builds, tests pass, and the tools probe matches the pre-step-4 reference within the
+  same margin two runs of the new build differ by (max channel diff 18–20, animation drift).
+- **Left on raylib:** `ui/imgui_raylib/backend.odin`, which step 7 rewrites anyway.
+
 **Exit:** the current game, still isometric 2D, runs on sokol with raylib gone.
 **Verify:** reference-set comparison · input latency unchanged · all dev tools work (editor,
 inspector, console, anim editor, lighting widget).
@@ -401,7 +421,8 @@ Done so far: P0 slice 1 of the package split, the headless server target with it
 1. **Client-side sweep** (P0, above), as its own change with a two-client playtest. The
    entity-leak fix itself is committed (`72325c4`).
 2. **Finish P1a step 1:** a Windows/D3D11 run and an interactive resize/fullscreen check.
-   P1a steps 2 and 3 are done; **step 4** (draw layer on raylib) is next.
+   P1a steps 2-4 are done; **step 5** (camera layer) then **step 6** (reference screenshots) are
+   next, before the step 7 backend swap.
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.

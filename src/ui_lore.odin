@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 
 g_lore_panel_id: u8 = 0
@@ -19,7 +18,7 @@ draw_lore_panel :: proc() {
         return
     }
 
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.Color{0, 0, 0, 160})
+    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.Color{0, 0, 0, 160})
 
     page, ok := lore_get_page(g_lore_panel_id)
 
@@ -28,28 +27,28 @@ draw_lore_panel :: proc() {
     px  := (sw - PW) * 0.5
     py  := (sh - PH) * 0.5
 
-    rl.DrawRectangleRec({px + uis(6), py + uis(6), PW, PH},
+    gfx.draw_rect_rec({px + uis(6), py + uis(6), PW, PH},
         gfx.Color{0, 0, 0, 100})
 
-    rl.DrawRectangleRec({px, py, PW, PH},
+    gfx.draw_rect_rec({px, py, PW, PH},
         gfx.Color{198, 178, 128, 252})
-    rl.DrawRectangleRec({px, py, PW, uis(4)},
+    gfx.draw_rect_rec({px, py, PW, uis(4)},
         gfx.Color{160, 138, 90, 200})
-    rl.DrawRectangleRec({px, py + PH - uis(4), PW, uis(4)},
+    gfx.draw_rect_rec({px, py + PH - uis(4), PW, uis(4)},
         gfx.Color{148, 126, 82, 200})
 
     for i in 0..<6 {
         fi := f32(i)
         a  := u8(28 - i * 4)
-        rl.DrawRectangleRec({px + fi * uis(3), py, uis(3), PH},
+        gfx.draw_rect_rec({px + fi * uis(3), py, uis(3), PH},
             gfx.Color{60, 40, 18, a})
-        rl.DrawRectangleRec({px + PW - fi * uis(3) - uis(3), py, uis(3), PH},
+        gfx.draw_rect_rec({px + PW - fi * uis(3) - uis(3), py, uis(3), PH},
             gfx.Color{60, 40, 18, a})
     }
 
-    rl.DrawRectangleLinesEx({px, py, PW, PH}, uis(2),
+    gfx.draw_rect_lines({px, py, PW, PH}, uis(2),
         gfx.Color{110, 82, 36, 200})
-    rl.DrawRectangleLinesEx({px + uis(8), py + uis(8), PW - uis(16), PH - uis(16)},
+    gfx.draw_rect_lines({px + uis(8), py + uis(8), PW - uis(16), PH - uis(16)},
         uis(1), gfx.Color{140, 110, 55, 100})
 
     CORN := uis(14)
@@ -60,27 +59,27 @@ draw_lore_panel :: proc() {
         {px + PW - uis(12) - CORN, py + PH - uis(12) - CORN},
     }
     for c in corners {
-        rl.DrawLineEx({c[0] + CORN*0.5, c[1]}, {c[0] + CORN*0.5, c[1] + CORN},
+        gfx.draw_line_ex({c[0] + CORN*0.5, c[1]}, {c[0] + CORN*0.5, c[1] + CORN},
             uis(1.5), gfx.Color{100, 72, 28, 160})
-        rl.DrawLineEx({c[0], c[1] + CORN*0.5}, {c[0] + CORN, c[1] + CORN*0.5},
+        gfx.draw_line_ex({c[0], c[1] + CORN*0.5}, {c[0] + CORN, c[1] + CORN*0.5},
             uis(1.5), gfx.Color{100, 72, 28, 160})
     }
 
     if !ok {
         msg := cstring("[ Document not found ]")
-        msz := rl.MeasureTextEx(g_font_body, msg, uis(12), 1)
-        rl.DrawTextEx(g_font_body, msg,
+        msz := gfx.measure_text(g_font_body, msg, uis(12), 1)
+        gfx.draw_text(g_font_body, msg,
             {px + PW*0.5 - msz.x*0.5, py + PH*0.5 - msz.y*0.5},
             uis(12), 1, gfx.Color{100, 80, 50, 180})
     } else {
         title := loc_lookup(cstring(&page.title[0]))
         title_fs := uis(16)
-        tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
-        rl.DrawTextEx(g_font, title,
+        tsz := gfx.measure_text(g_font, title, title_fs, 1)
+        gfx.draw_text(g_font, title,
             {px + PW*0.5 - tsz.x*0.5, py + uis(28)},
             title_fs, 1, gfx.Color{80, 52, 18, 230})
 
-        rl.DrawLineEx(
+        gfx.draw_line_ex(
             {px + uis(32), py + uis(28) + title_fs + uis(4)},
             {px + PW - uis(32), py + uis(28) + title_fs + uis(4)},
             uis(1), gfx.Color{110, 80, 32, 140})
@@ -98,14 +97,14 @@ draw_lore_panel :: proc() {
     }
 
     hint := cstring("[ ESC to close ]")
-    hsz  := rl.MeasureTextEx(g_font_body, hint, uis(9), 0.5)
-    rl.DrawTextEx(g_font_body, hint,
+    hsz  := gfx.measure_text(g_font_body, hint, uis(9), 0.5)
+    gfx.draw_text(g_font_body, hint,
         {px + PW*0.5 - hsz.x*0.5, py + PH - uis(22)},
         uis(9), 0.5, gfx.Color{90, 68, 32, 160})
 
     mp := gfx.mouse_position()
     if gfx.mouse_pressed(.LEFT) &&
-       !rl.CheckCollisionPointRec(mp, {px, py, PW, PH}) {
+       !gfx.point_in_rect(mp, {px, py, PW, PH}) {
         ui_close(.Lore)
     }
 }
@@ -124,19 +123,19 @@ lore_draw_wrapped :: proc(text: string, x, y, max_w, fs, line_h: f32, col: gfx.C
         n := min(len(s), 255)
         copy(sb[:n], s[:n])
         sb[n] = 0
-        wsz := rl.MeasureTextEx(g_font_body, cstring(&sb[0]), fs, 0.5)
+        wsz := gfx.measure_text(g_font_body, cstring(&sb[0]), fs, 0.5)
         if cx^ > x0 && cx^ + wsz.x > x0 + max_w {
             cy^  += lh
             cx^   = x0
         }
-        rl.DrawTextEx(g_font_body, cstring(&sb[0]), {cx^, cy^}, fs, 0.5, col)
+        gfx.draw_text(g_font_body, cstring(&sb[0]), {cx^, cy^}, fs, 0.5, col)
         cx^ += wsz.x
     }
 
     space_w: f32
     {
         sb: [2]u8 = {' ', 0}
-        space_w = rl.MeasureTextEx(g_font_body, cstring(&sb[0]), fs, 0.5).x
+        space_w = gfx.measure_text(g_font_body, cstring(&sb[0]), fs, 0.5).x
     }
 
     for i <= len(text) {

@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import      "core:fmt"
 import      "core:math"
@@ -74,10 +73,10 @@ draw_mutation_workbench_world :: proc(w: ^World) {
 
     prompt := interact_prompt(.MUT_INTERACT)
     fs := f32(10)
-    sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
+    sz := gfx.measure_text(g_font_body, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(gfx.time() * 4.0)) * 45))
     p := world_to_iso_xy(pos[0], pos[1])
-    rl.DrawTextEx(g_font_body, prompt,
+    gfx.draw_text(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
         fs, 0.5, gfx.Color{ 220, 170, 255, pulse })
 }

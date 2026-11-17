@@ -1,6 +1,5 @@
 package main
 
-import rl  "vendor:raylib"
 import gfx "gfx"
 import     "core:math"
 
@@ -521,29 +520,29 @@ draw_barrels :: proc() {
         ix  := i32(iso.x)
         iy  := i32(iso.y)
 
-        rl.DrawEllipse(ix, iy + 5, 15, 6, gfx.Color{0, 0, 0, 65})
+        gfx.draw_ellipse(ix, iy + 5, 15, 6, gfx.Color{0, 0, 0, 65})
 
-        rl.DrawEllipse(ix, iy + 7, 13, 5, gfx.Color{55, 38, 24, 245})
+        gfx.draw_ellipse(ix, iy + 7, 13, 5, gfx.Color{55, 38, 24, 245})
 
-        rl.DrawRectangle(ix - 13, iy - 12, 26, 19, gfx.Color{70, 48, 28, 245})
+        gfx.draw_rect(ix - 13, iy - 12, 26, 19, gfx.Color{70, 48, 28, 245})
 
-        rl.DrawRectangle(ix - 13, iy - 5,  26, 3,  gfx.Color{95, 70, 44, 245})
-        rl.DrawRectangle(ix - 13, iy + 3,  26, 3,  gfx.Color{95, 70, 44, 245})
+        gfx.draw_rect(ix - 13, iy - 5,  26, 3,  gfx.Color{95, 70, 44, 245})
+        gfx.draw_rect(ix - 13, iy + 3,  26, 3,  gfx.Color{95, 70, 44, 245})
 
         top_col: gfx.Color
         switch btype {
         case .Fire:  top_col = gfx.Color{210, 72, 16, 245}
         case .Water: top_col = gfx.Color{38,  112, 195, 245}
         }
-        rl.DrawEllipse(ix, iy - 12, 13, 5, top_col)
-        rl.DrawEllipseLines(ix, iy - 12, 13, 5, gfx.Color{0, 0, 0, 160})
+        gfx.draw_ellipse(ix, iy - 12, 13, 5, top_col)
+        gfx.draw_ellipse_lines(ix, iy - 12, 13, 5, gfx.Color{0, 0, 0, 160})
 
         dot_col: gfx.Color
         switch btype {
         case .Fire:  dot_col = gfx.Color{255, 200, 60, 230}
         case .Water: dot_col = gfx.Color{180, 230, 255, 230}
         }
-        rl.DrawCircle(ix, iy - 12, 3, dot_col)
+        gfx.draw_circle(ix, iy - 12, 3, dot_col)
 
         if world_has_component(w, id, .Health) {
             h      := comp_get(w, id, .Health, HealthComp)
@@ -551,9 +550,9 @@ draw_barrels :: proc() {
             bar_w  := i32(30)
             bar_x  := ix - bar_w / 2
             bar_y  := iy - 28
-            rl.DrawRectangle(bar_x, bar_y, bar_w, 4, gfx.Color{15, 15, 15, 180})
+            gfx.draw_rect(bar_x, bar_y, bar_w, 4, gfx.Color{15, 15, 15, 180})
             hp_col := gfx.Color{220, 55, 18, 220} if pct > 0.5 else gfx.Color{200, 175, 18, 220}
-            rl.DrawRectangle(bar_x, bar_y, i32(f32(bar_w) * pct), 4, hp_col)
+            gfx.draw_rect(bar_x, bar_y, i32(f32(bar_w) * pct), 4, hp_col)
         }
     }
 }

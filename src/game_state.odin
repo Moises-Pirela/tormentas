@@ -1,6 +1,5 @@
 package main
 
-import rl  "vendor:raylib"
 import gfx "gfx"
 
 AppState :: enum {
@@ -158,6 +157,6 @@ update_fade :: proc(dt: f32) {
 draw_fade :: proc() {
     if g_fade_alpha <= 0 { return }
     a := u8(g_fade_alpha * 255)
-    rl.DrawRectangle(0, 0, gfx.screen_width(), gfx.screen_height(),
+    gfx.draw_rect(0, 0, gfx.screen_width(), gfx.screen_height(),
         gfx.Color{0, 0, 0, a})
 }

@@ -2,7 +2,6 @@ package main
 
 import "core:math/rand"
 import "core:fmt"
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import clay "../clay"
 
@@ -113,8 +112,8 @@ draw_ability_vendor_world :: proc(w: ^World) {
         rc   := comp_get(w, nid, .RenderConfig, RenderConfigComp)
         name := loc_lookup(render_config_name_cstr(rc))
         nfs  := f32(10)
-        nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.5)
-        rl.DrawTextEx(g_font_body, name,
+        nsz  := gfx.measure_text(g_font_body, name, nfs, 0.5)
+        gfx.draw_text(g_font_body, name,
             { pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2 },
             nfs, 0.5, gfx.Color{ 180, 220, 255, 220 })
 
@@ -122,10 +121,10 @@ draw_ability_vendor_world :: proc(w: ^World) {
            dist_sq <= ABILITY_VENDOR_PROMPT_DIST * ABILITY_VENDOR_PROMPT_DIST {
             prompt  := interact_prompt(.ABILITY_VENDOR_INTERACT)
             pfs     := f32(9)
-            psz     := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
+            psz     := gfx.measure_text(g_font_body, prompt, pfs, 0.5)
             t_now   := f32(gfx.time())
             pulse   := u8(180 + 60 * (t_now - f32(int(t_now))))
-            rl.DrawTextEx(g_font_body, prompt,
+            gfx.draw_text(g_font_body, prompt,
                 { pos.x - psz.x*0.5, pos.y + 18 },
                 pfs, 0.5, gfx.Color{ 180, 220, 255, pulse })
         }

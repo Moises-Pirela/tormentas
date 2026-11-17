@@ -19,11 +19,12 @@ RULES = {
     "src/sim":    ["core:", "base:", "cw:"],
     "src/server": ["core:", "base:", "cw:", "../sim"],
     # The rendering API. Its backend is raylib until P1a step 7 swaps in sokol.
-    "src/gfx":    ["core:", "base:", "vendor:raylib"],
+    "src/gfx":    ["core:", "base:", "vendor:raylib", "vendor:raylib/rlgl"],
+    "src/snd":    ["core:", "base:", "vendor:raylib"],
 }
 
-# Raylib calls package main may no longer make directly, because gfx owns them now (P1a step 3:
-# input, screen size, time). The list grows with each P1a step until raylib is gone from main.
+# Package main is off raylib entirely since P1a step 4: src/gfx owns rendering, input and the
+# window, src/snd owns audio. This pattern catches leftovers that a raylib import would reintroduce.
 MAIN_FORBIDDEN_RL = re.compile(
     r"\brl\.(Is(Key|Mouse)\w*|Get(Mouse|Key|Char)\w*|SetMouse\w*|GetScreen(Width|Height)|GetTime|"
     r"GetFrameTime|WindowShouldClose|KeyboardKey|MouseButton|Color|Rectangle|Vector2)\b")
@@ -48,6 +49,11 @@ def check(root: Path) -> list[str]:
                                   f"(allowed: {', '.join(allowed)})")
     for f in sorted((root / "src").glob("*.odin")):
         text = f.read_text()
+        for m in IMPORT.finditer(text):
+            if m.group(1).startswith("vendor:raylib"):
+                line = text.count("\n", 0, m.start()) + 1
+                errors.append(f"{f.relative_to(root)}:{line}: package main must not import raylib; "
+                              f"use src/gfx (rendering, input, window) or src/snd (audio)")
         for m in MAIN_FORBIDDEN_RL.finditer(text):
             line = text.count("\n", 0, m.start()) + 1
             errors.append(f"{f.relative_to(root)}:{line}: {m.group(0)} is owned by gfx now; use the gfx equivalent")
@@ -62,7 +68,7 @@ def main() -> int:
     if errors:
         print(f"[BOUNDARY] {len(errors)} violation(s)", file=sys.stderr)
         return 1
-    print(f"[BOUNDARY] OK: {', '.join(RULES)}, src (no direct raylib input/screen/time/value types)")
+    print(f"[BOUNDARY] OK: {', '.join(RULES)}, src (no raylib in package main)")
     return 0
 
 

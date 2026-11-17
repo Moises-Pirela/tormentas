@@ -1,7 +1,6 @@
 package main
 
 import "core:math"
-import rl "vendor:raylib"
 import gfx "gfx"
 
 ISO_TILE_W :: f32(TILE_SIZE)
@@ -26,7 +25,7 @@ iso_to_world_xy :: proc(ix, iy: f32) -> gfx.Vec2 {
 }
 
 screen_to_world_cartesian :: proc(screen: gfx.Vec2) -> gfx.Vec2 {
-    iso := rl.GetScreenToWorld2D(screen, g_camera^)
+    iso := gfx.screen_to_world(screen, g_camera^)
     return iso_to_world_xy(iso.x, iso.y)
 }
 
@@ -97,13 +96,13 @@ cartesian_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32)
 iso_draw_shadow_diamond :: proc(center: gfx.Vec2, width, height: f32, color: gfx.Color) {
     hw := width * 0.5
     hh := height * 0.5
-    rl.DrawTriangle(
+    gfx.draw_triangle(
         { center.x, center.y - hh },
         { center.x + hw, center.y },
         { center.x, center.y + hh },
         color,
     )
-    rl.DrawTriangle(
+    gfx.draw_triangle(
         { center.x, center.y - hh },
         { center.x, center.y + hh },
         { center.x - hw, center.y },

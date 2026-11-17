@@ -3,7 +3,6 @@ package main
 import      "core:fmt"
 import      "core:math"
 import im   "../deps/imgui/imgui"
-import rl   "vendor:raylib"
 import gfx  "gfx"
 
 EdStrokeKind :: enum u8 { None, Paint, Erase, EraseObjects }
@@ -151,13 +150,13 @@ _iso_quad :: proc(x0, y0, x1, y1: f32) -> [4]gfx.Vec2 {
 
 @(private = "file")
 _fill_quad :: proc(q: [4]gfx.Vec2, col: gfx.Color) {
-    rl.DrawTriangle(q[0], q[2], q[1], col)
-    rl.DrawTriangle(q[0], q[3], q[2], col)
+    gfx.draw_triangle(q[0], q[2], q[1], col)
+    gfx.draw_triangle(q[0], q[3], q[2], col)
 }
 
 @(private = "file")
 _outline_quad :: proc(q: [4]gfx.Vec2, thick: f32, col: gfx.Color) {
-    for i in 0..<4 { rl.DrawLineEx(q[i], q[(i + 1) % 4], thick, col) }
+    for i in 0..<4 { gfx.draw_line_ex(q[i], q[(i + 1) % 4], thick, col) }
 }
 
 ed_brush_cursor_visible :: proc() -> bool {
@@ -192,10 +191,10 @@ draw_editor_brush_world :: proc() {
         for i in 1..<n {
             a := world_to_iso_xy(f32(fx + i) * u, f32(fy) * u)
             b := world_to_iso_xy(f32(fx + i) * u, f32(fy + n) * u)
-            rl.DrawLineEx(a, b, lw, inner)
+            gfx.draw_line_ex(a, b, lw, inner)
             c := world_to_iso_xy(f32(fx) * u, f32(fy + i) * u)
             d := world_to_iso_xy(f32(fx + n) * u, f32(fy + i) * u)
-            rl.DrawLineEx(c, d, lw, inner)
+            gfx.draw_line_ex(c, d, lw, inner)
         }
     }
     halo := _iso_quad(f32(fx) * u - 1.5 * lw, f32(fy) * u - 1.5 * lw, f32(fx + n) * u + 1.5 * lw, f32(fy + n) * u + 1.5 * lw)
@@ -227,7 +226,7 @@ ed_screen_label :: proc(dl: ^im.DrawList, pos: im.Vec2, text: cstring, col: gfx.
 }
 
 ed_world_to_screen :: proc(wx, wy: f32) -> im.Vec2 {
-    p := rl.GetWorldToScreen2D(world_to_iso_xy(wx, wy), g_camera^)
+    p := gfx.world_to_screen(world_to_iso_xy(wx, wy), g_camera^)
     return { p.x, p.y }
 }
 

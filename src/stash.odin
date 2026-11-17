@@ -2,7 +2,6 @@ package main
 
 import "core:math"
 import "core:fmt"
-import rl "vendor:raylib"
 import gfx "gfx"
 
 STASH_INTERACT_PROMPT_DIST :: f32(85)
@@ -96,7 +95,7 @@ stash_place_item :: proc(w: ^World, item_id, col, row: int) -> bool {
 
 stash_mouse_to_cell :: proc(mx, my: f32) -> (col, row: int, ok: bool) {
     if g_stash_grid_bb.width <= 0 || g_stash_grid_bb.height <= 0 { return 0, 0, false }
-    if !rl.CheckCollisionPointRec({mx, my}, g_stash_grid_bb) { return 0, 0, false }
+    if !gfx.point_in_rect({mx, my}, g_stash_grid_bb) { return 0, 0, false }
     cs := f32(g_inv.cell_sz)
     col = int((mx - g_stash_grid_bb.x) / cs)
     row = int((my - g_stash_grid_bb.y) / cs)
@@ -235,10 +234,10 @@ draw_stash_world :: proc(w: ^World) {
 
     prompt := interact_prompt(.STASH_INTERACT)
     fs := f32(10)
-    sz := rl.MeasureTextEx(g_font_body, prompt, fs, 0.5)
+    sz := gfx.measure_text(g_font_body, prompt, fs, 0.5)
     pulse := u8(185 + i32((0.5 + 0.5 * math.sin(gfx.time() * 4.0)) * 45))
     p := world_to_iso_xy(pos[0], pos[1])
-    rl.DrawTextEx(g_font_body, prompt,
+    gfx.draw_text(g_font_body, prompt,
         { p.x - sz.x * 0.5, p.y - 48 },
         fs, 0.5, gfx.Color{ 230, 190, 120, pulse })
 }
@@ -252,17 +251,17 @@ stash_draw_grid :: proc(w: ^World, grid_r: gfx.Rect) {
         for c in 0..<STASH_COLS {
             cx := gx + i32(c) * cs
             cy := gy + i32(r) * cs
-            rl.DrawRectangle(cx, cy, cs, cs, gfx.Color{ 8, 6, 4, 255 })
-            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, gfx.Color{ 18, 14, 10, 255 })
+            gfx.draw_rect(cx, cy, cs, cs, gfx.Color{ 8, 6, 4, 255 })
+            gfx.draw_rect(cx + 1, cy + 1, cs - 2, cs - 2, gfx.Color{ 18, 14, 10, 255 })
         }
     }
     for c in 0..=STASH_COLS {
         lx := f32(gx + i32(c) * cs)
-        rl.DrawLineEx({ lx, f32(gy) }, { lx, f32(gy + STASH_ROWS * cs) }, 1, COL_RULE)
+        gfx.draw_line_ex({ lx, f32(gy) }, { lx, f32(gy + STASH_ROWS * cs) }, 1, COL_RULE)
     }
     for r in 0..=STASH_ROWS {
         ly := f32(gy + i32(r) * cs)
-        rl.DrawLineEx({ f32(gx), ly }, { f32(gx + STASH_COLS * cs), ly }, 1, COL_RULE)
+        gfx.draw_line_ex({ f32(gx), ly }, { f32(gx + STASH_COLS * cs), ly }, 1, COL_RULE)
     }
 
     if g_drag_item_id != -1 && world_is_valid(w, g_drag_item_id) {
@@ -275,7 +274,7 @@ stash_draw_grid :: proc(w: ^World, grid_r: gfx.Rect) {
             for dy in 0..<drag_item.grid_h {
                 for dx in 0..<drag_item.grid_w {
                     if col+dx < STASH_COLS && row+dy < STASH_ROWS {
-                        rl.DrawRectangle(gx + i32(col+dx) * cs, gy + i32(row+dy) * cs, cs, cs, hi_col)
+                        gfx.draw_rect(gx + i32(col+dx) * cs, gy + i32(row+dy) * cs, cs, cs, hi_col)
                     }
                 }
             }
@@ -295,14 +294,14 @@ stash_draw_grid :: proc(w: ^World, grid_r: gfx.Rect) {
             iy := gy + i32(row) * cs + 2
             iw := i32(item.grid_w) * cs - 4
             ih := i32(item.grid_h) * cs - 4
-            rl.DrawRectangle(ix, iy, iw, ih, gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
-            rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1, gfx.Color{ rc.r, rc.g, rc.b, 220 })
+            gfx.draw_rect(ix, iy, iw, ih, gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
+            gfx.draw_rect_lines({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1, gfx.Color{ rc.r, rc.g, rc.b, 220 })
 
             icon_sz := min(iw, ih) - 6
             draw_item_glyph(item.slot, ix + (iw - icon_sz) / 2, iy + 3, icon_sz, rc)
             if world_has_component(w, cell_id, .RenderConfig) {
                 name := loc_lookup(render_config_name_cstr(comp_get(w, cell_id, .RenderConfig, RenderConfigComp)))
-                rl.DrawTextEx(g_font_body, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
+                gfx.draw_text(g_font_body, name, { f32(ix) + uis(3), f32(iy + icon_sz + 6) },
                     uis(10), 0.4, gfx.Color{ rc.r, rc.g, rc.b, 200 })
             }
         }
@@ -351,21 +350,21 @@ draw_stash_hud :: proc(w: ^World) {
     py := i32((f32(gfx.screen_height()) - f32(PH)) * 0.5)
     cs := g_inv.cell_sz
 
-    rl.DrawRectangle(px, py, PW, PH, gfx.Color{ 8, 6, 4, 252 })
-    rl.DrawRectangle(px, py, PW, i32(uis(3)), COL_BRASS)
-    rl.DrawRectangleLinesEx({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
+    gfx.draw_rect(px, py, PW, PH, gfx.Color{ 8, 6, 4, 252 })
+    gfx.draw_rect(px, py, PW, i32(uis(3)), COL_BRASS)
+    gfx.draw_rect_lines({ f32(px), f32(py), f32(PW), f32(PH) }, 2, COL_RULE)
 
     title := t(.STASH_TITLE)
     title_fs := uis(17)
-    tsz := rl.MeasureTextEx(g_font, title, title_fs, 1)
-    rl.DrawTextEx(g_font, title, { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(14) }, title_fs, 1, COL_PARCH)
+    tsz := gfx.measure_text(g_font, title, title_fs, 1)
+    gfx.draw_text(g_font, title, { f32(px) + f32(PW)*0.5 - tsz.x*0.5, f32(py) + uis(14) }, title_fs, 1, COL_PARCH)
 
     count_buf: [48]u8
     count_s := fmt.bprintf(count_buf[:47], "%d / %d items", local_stash().item_count, STASH_MAX_ITEMS)
     count_buf[len(count_s)] = 0
     count_fs := uis(11)
-    count_sz := rl.MeasureTextEx(g_font_body, cstring(&count_buf[0]), count_fs, 0.5)
-    rl.DrawTextEx(g_font_body, cstring(&count_buf[0]), { f32(px) + f32(PW)*0.5 - count_sz.x*0.5, f32(py) + uis(42) },
+    count_sz := gfx.measure_text(g_font_body, cstring(&count_buf[0]), count_fs, 0.5)
+    gfx.draw_text(g_font_body, cstring(&count_buf[0]), { f32(px) + f32(PW)*0.5 - count_sz.x*0.5, f32(py) + uis(42) },
         count_fs, 0.5, COL_MUTED)
 
     grid_w := STASH_COLS * cs
@@ -382,13 +381,13 @@ draw_stash_hud :: proc(w: ^World) {
 
     mp := gfx.mouse_position()
     btn_r := gfx.Rect{ f32(px) + uis(16), f32(py + PH) - uis(54), f32(PW) - uis(32), uis(34) }
-    hot := rl.CheckCollisionPointRec(mp, btn_r)
-    rl.DrawRectangleRec(btn_r, gfx.Color{ 74, 54, 18, 245 } if hot else gfx.Color{ 42, 31, 14, 235 })
-    rl.DrawRectangleLinesEx(btn_r, 1, COL_BRASS if hot else COL_RULE)
+    hot := gfx.point_in_rect(mp, btn_r)
+    gfx.draw_rect_rec(btn_r, gfx.Color{ 74, 54, 18, 245 } if hot else gfx.Color{ 42, 31, 14, 235 })
+    gfx.draw_rect_lines(btn_r, 1, COL_BRASS if hot else COL_RULE)
     btn_lbl := t(.STASH_DEPOSIT_ALL)
     btn_fs := uis(11)
-    btn_sz := rl.MeasureTextEx(g_font_body, btn_lbl, btn_fs, 0.5)
-    rl.DrawTextEx(g_font_body, btn_lbl, { btn_r.x + (btn_r.width - btn_sz.x) * 0.5, btn_r.y + (btn_r.height - btn_fs) * 0.5 },
+    btn_sz := gfx.measure_text(g_font_body, btn_lbl, btn_fs, 0.5)
+    gfx.draw_text(g_font_body, btn_lbl, { btn_r.x + (btn_r.width - btn_sz.x) * 0.5, btn_r.y + (btn_r.height - btn_fs) * 0.5 },
         btn_fs, 0.5, COL_BRASS if hot else COL_PARCH)
     if hot && gfx.mouse_pressed(.LEFT) && g_drag_item_id == -1 {
         if stash_deposit_all_carried(w) == 0 { play_sfx("ui_deny") }

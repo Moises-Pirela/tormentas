@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import clay "../clay"
 import      "core:fmt"
@@ -250,10 +249,10 @@ draw_hud :: proc(w: ^World) {
         rail_h   := uis(10)
         rail_x   := (sw - center_w) * 0.5 - HPAD
         rail_y   := sh - VPAD - uis(80)*0.5 - rail_h*0.5 - 4
-        rl.DrawRectangle(i32(rail_x), i32(rail_y),
+        gfx.draw_rect(i32(rail_x), i32(rail_y),
             i32(center_w + HPAD * 2), i32(rail_h),
             gfx.Color{ 55, 42, 22, 200 })
-        rl.DrawRectangle(i32(rail_x), i32(rail_y),
+        gfx.draw_rect(i32(rail_x), i32(rail_y),
             i32(center_w + HPAD * 2), 1,
             gfx.Color{ 140, 100, 40, 180 })
     }
@@ -279,24 +278,24 @@ draw_interact_prompt :: proc(w: ^World) {
 
     prompt_cs := cstring(&ia.prompt[0])
     prompt_fs := uis(15)
-    psz       := rl.MeasureTextEx(g_font_body, prompt_cs, prompt_fs, 1)
+    psz       := gfx.measure_text(g_font_body, prompt_cs, prompt_fs, 1)
     px := sw * 0.5 - psz.x * 0.5
     py := sh * 0.60 - psz.y
 
-    rl.DrawTextEx(g_font_body, prompt_cs, {px + uis(1.5), py + uis(1.5)},
+    gfx.draw_text(g_font_body, prompt_cs, {px + uis(1.5), py + uis(1.5)},
         prompt_fs, 1, gfx.Color{0, 0, 0, 180})
 
-    rl.DrawTextEx(g_font_body, prompt_cs, {px, py},
+    gfx.draw_text(g_font_body, prompt_cs, {px, py},
         prompt_fs, 1, gfx.Color{255, 235, 160, 240})
 
     key_cs  := strings.clone_to_cstring(fmt.tprintf("[%s]", bound_key_label(g_binds.gameplay.interact)), context.temp_allocator)
     key_fs  := uis(13)
-    ksz     := rl.MeasureTextEx(g_font_body, key_cs, key_fs, 0.5)
+    ksz     := gfx.measure_text(g_font_body, key_cs, key_fs, 0.5)
     kx      := sw * 0.5 - ksz.x * 0.5
     ky      := py + psz.y + uis(3)
-    rl.DrawTextEx(g_font_body, key_cs, {kx + uis(1), ky + uis(1)}, key_fs, 0.5,
+    gfx.draw_text(g_font_body, key_cs, {kx + uis(1), ky + uis(1)}, key_fs, 0.5,
         gfx.Color{0, 0, 0, 150})
-    rl.DrawTextEx(g_font_body, key_cs, {kx, ky}, key_fs, 0.5,
+    gfx.draw_text(g_font_body, key_cs, {kx, ky}, key_fs, 0.5,
         gfx.Color{190, 190, 190, 210})
 }
 
@@ -428,11 +427,11 @@ _draw_flask_pip_row :: proc(
     fid := inv.equipped[int(slot)]
 
     key_fs  := uis(11)
-    rl.DrawTextEx(g_font_body, key_label, { px, py }, key_fs, 0.5,
+    gfx.draw_text(g_font_body, key_label, { px, py }, key_fs, 0.5,
         gfx.Color{ 160, 150, 130, 180 })
 
     if !world_is_valid(w, fid) || !world_has_component(w, fid, .Flask) {
-        rl.DrawTextEx(g_font_body, "empty", { px + uis(20), py }, key_fs, 0.5,
+        gfx.draw_text(g_font_body, "empty", { px + uis(20), py }, key_fs, 0.5,
             gfx.Color{ 80, 70, 60, 120 })
         return
     }
@@ -453,8 +452,8 @@ _draw_flask_pip_row :: proc(
         if active_glow && i < int(fc.charges) {
             c.a = u8(180 + 75 * 0.5 * (1 + gfx.time() * 4))
         }
-        rl.DrawCircleV({ cx, py + pip_r + uis(1) }, pip_r, c)
-        rl.DrawCircleLines(i32(cx), i32(py + pip_r + uis(1)), pip_r,
+        gfx.draw_circle_v({ cx, py + pip_r + uis(1) }, pip_r, c)
+        gfx.draw_circle_lines(i32(cx), i32(py + pip_r + uis(1)), pip_r,
             gfx.Color{ c.r, c.g, c.b, 200 })
     }
 }

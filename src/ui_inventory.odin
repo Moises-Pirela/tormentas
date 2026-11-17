@@ -2,7 +2,6 @@ package main
 
 import "core:fmt"
 import "core:math"
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import clay "../clay"
 
@@ -164,20 +163,20 @@ draw_item_glyph :: proc(slot: EquipSlot, x, y, sz: i32, tint: gfx.Color) {
 
     switch slot {
     case .Head:
-        rl.DrawCircleV({ cx, cy - r * 0.1 }, r * 0.42, dim)
-        rl.DrawCircleV({ cx, cy - r * 0.1 }, r * 0.28, col)
-        rl.DrawRectangle(x + sz/4, y + sz*3/4 - 2, sz/2, sz/8 + 1, col)
+        gfx.draw_circle_v({ cx, cy - r * 0.1 }, r * 0.42, dim)
+        gfx.draw_circle_v({ cx, cy - r * 0.1 }, r * 0.28, col)
+        gfx.draw_rect(x + sz/4, y + sz*3/4 - 2, sz/2, sz/8 + 1, col)
 
     case .Chest:
         bw := i32(r * 0.9)
         bh := i32(r * 1.1)
         bx := x + (sz - bw) / 2
         by := y + (sz - bh) / 2 + 2
-        rl.DrawRectangle(bx, by, bw, bh, dim)
-        rl.DrawRectangle(bx + 2, by + 2, bw - 4, bh - 4, col)
+        gfx.draw_rect(bx, by, bw, bh, dim)
+        gfx.draw_rect(bx + 2, by + 2, bw - 4, bh - 4, col)
         nub := i32(r * 0.25)
-        rl.DrawRectangle(bx - nub, by, nub, nub * 2, col)
-        rl.DrawRectangle(bx + bw, by, nub, nub * 2, col)
+        gfx.draw_rect(bx - nub, by, nub, nub * 2, col)
+        gfx.draw_rect(bx + bw, by, nub, nub * 2, col)
 
     case .Boots:
         bw    := i32(r * 0.38)
@@ -186,37 +185,37 @@ draw_item_glyph :: proc(slot: EquipSlot, x, y, sz: i32, tint: gfx.Color) {
         total := bw * 2 + gap
         lx    := x + (sz - total) / 2
         by    := y + (sz - bh) / 2 + i32(r * 0.15)
-        rl.DrawRectangle(lx,            by, bw, bh, col)
-        rl.DrawRectangle(lx + bw + gap, by, bw, bh, col)
-        rl.DrawRectangle(lx,            by, bw, bh / 4, dim)
-        rl.DrawRectangle(lx + bw + gap, by, bw, bh / 4, dim)
+        gfx.draw_rect(lx,            by, bw, bh, col)
+        gfx.draw_rect(lx + bw + gap, by, bw, bh, col)
+        gfx.draw_rect(lx,            by, bw, bh / 4, dim)
+        gfx.draw_rect(lx + bw + gap, by, bw, bh / 4, dim)
 
     case .WeaponPrimary:
         blen  := i32(r * 0.9)
         bx    := x + (sz - blen) / 2
         by    := y + sz / 2 - 3
-        rl.DrawRectangle(bx, by, blen, 5, col)
+        gfx.draw_rect(bx, by, blen, 5, col)
         grip_x := bx + blen / 2
-        rl.DrawRectangle(grip_x, by + 5, 6, i32(r * 0.5), dim)
+        gfx.draw_rect(grip_x, by + 5, 6, i32(r * 0.5), dim)
 
     case .WeaponOffhand:
         sw := i32(r * 0.7)
         sh := i32(r * 0.9)
         sx := x + (sz - sw) / 2
         sy := y + (sz - sh) / 2
-        rl.DrawRectangle(sx, sy, sw, sh, dim)
-        rl.DrawRectangle(sx + 2, sy + 2, sw - 4, sh - 4, col)
-        rl.DrawRectangle(sx + sw/2 - 1, sy + 4, 2, sh - 8, dim)
-        rl.DrawRectangle(sx + 4, sy + sh/3, sw - 8, 2, dim)
+        gfx.draw_rect(sx, sy, sw, sh, dim)
+        gfx.draw_rect(sx + 2, sy + 2, sw - 4, sh - 4, col)
+        gfx.draw_rect(sx + sw/2 - 1, sy + 4, 2, sh - 8, dim)
+        gfx.draw_rect(sx + 4, sy + sh/3, sw - 8, 2, dim)
 
     case .Consumable:
-        rl.DrawCircleV({ cx, cy }, r * 0.38, dim)
-        rl.DrawCircleV({ cx, cy }, r * 0.26, col)
+        gfx.draw_circle_v({ cx, cy }, r * 0.38, dim)
+        gfx.draw_circle_v({ cx, cy }, r * 0.26, col)
 
     case .Ability1, .Ability2, .Ability3, .Ability4:
         hw := i32(r * 0.28)
-        rl.DrawRectangle(x + sz/2 - hw/2, y + sz/4,    hw, i32(r * 0.6), col)
-        rl.DrawRectangle(x + sz/2,        y + sz/2 - 2, hw, i32(r * 0.6), dim)
+        gfx.draw_rect(x + sz/2 - hw/2, y + sz/4,    hw, i32(r * 0.6), col)
+        gfx.draw_rect(x + sz/2,        y + sz/2 - 2, hw, i32(r * 0.6), dim)
 
     case .Flask1, .Flask2:
 
@@ -228,11 +227,11 @@ draw_item_glyph :: proc(slot: EquipSlot, x, y, sz: i32, tint: gfx.Color) {
         ny := y + i32(r * 0.14)
         bx := x + (sz - body_w) / 2
         by := ny + neck_h
-        rl.DrawRectangle(nx, ny, neck_w, neck_h, col)
-        rl.DrawRectangle(bx, by, body_w, body_h, dim)
-        rl.DrawRectangle(bx + 2, by + 2, body_w - 4, body_h - 4, col)
+        gfx.draw_rect(nx, ny, neck_w, neck_h, col)
+        gfx.draw_rect(bx, by, body_w, body_h, dim)
+        gfx.draw_rect(bx + 2, by + 2, body_w - 4, body_h - 4, col)
 
-        rl.DrawRectangle(nx - 2, ny - i32(r * 0.12), neck_w + 4, i32(r * 0.12), col)
+        gfx.draw_rect(nx - 2, ny - i32(r * 0.12), neck_w + 4, i32(r * 0.12), col)
     }
 }
 
@@ -247,11 +246,11 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
         for c in 0..<i32(BACKPACK_COLS) {
             cx := gx + c * cs
             cy := gy + r * cs
-            rl.DrawRectangle(cx, cy, cs, cs, gfx.Color{ 8, 6, 4, 255 })
-            rl.DrawRectangle(cx + 1, cy + 1, cs - 2, cs - 2, gfx.Color{ 18, 14, 10, 255 })
-            rl.DrawLineEx({ f32(cx + 1), f32(cy + 1) }, { f32(cx + cs - 1), f32(cy + 1) },
+            gfx.draw_rect(cx, cy, cs, cs, gfx.Color{ 8, 6, 4, 255 })
+            gfx.draw_rect(cx + 1, cy + 1, cs - 2, cs - 2, gfx.Color{ 18, 14, 10, 255 })
+            gfx.draw_line_ex({ f32(cx + 1), f32(cy + 1) }, { f32(cx + cs - 1), f32(cy + 1) },
                 1, gfx.Color{ 0, 0, 0, 80 })
-            rl.DrawLineEx({ f32(cx + 1), f32(cy + 1) }, { f32(cx + 1), f32(cy + cs - 1) },
+            gfx.draw_line_ex({ f32(cx + 1), f32(cy + 1) }, { f32(cx + 1), f32(cy + cs - 1) },
                 1, gfx.Color{ 0, 0, 0, 80 })
         }
     }
@@ -260,11 +259,11 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
     grid_h := i32(BACKPACK_ROWS) * cs
     for c in 0..=i32(BACKPACK_COLS) {
         lx := f32(gx + c * cs)
-        rl.DrawLineEx({ lx, f32(gy) }, { lx, f32(gy + grid_h) }, 1, COL_RULE)
+        gfx.draw_line_ex({ lx, f32(gy) }, { lx, f32(gy + grid_h) }, 1, COL_RULE)
     }
     for r in 0..=i32(BACKPACK_ROWS) {
         ly := f32(gy + r * cs)
-        rl.DrawLineEx({ f32(gx), ly }, { f32(gx + grid_w), ly }, 1, COL_RULE)
+        gfx.draw_line_ex({ f32(gx), ly }, { f32(gx + grid_w), ly }, 1, COL_RULE)
     }
 
     if inv == nil { return }
@@ -279,7 +278,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
             for dy in 0..<drag_item.grid_h {
                 for dx in 0..<drag_item.grid_w {
                     if col+dx < BACKPACK_COLS && row+dy < BACKPACK_ROWS {
-                        rl.DrawRectangle(
+                        gfx.draw_rect(
                             gx + i32(col+dx) * cs,
                             gy + i32(row+dy) * cs,
                             cs, cs, hi_col)
@@ -305,13 +304,13 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
             iw := i32(item.grid_w) * cs - 4
             ih := i32(item.grid_h) * cs - 4
 
-            rl.DrawRectangle(ix, iy, iw, ih,
+            gfx.draw_rect(ix, iy, iw, ih,
                 gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
-            rl.DrawRectangleLinesEx({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1,
+            gfx.draw_rect_lines({ f32(ix), f32(iy), f32(iw), f32(ih) }, 1,
                 gfx.Color{ rc.r, rc.g, rc.b, 220 })
             if class_locked {
-                rl.DrawRectangle(ix, iy, iw, ih, gfx.Color{ 80, 10, 10, 150 })
-                rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(ix) + uis(3), f32(iy) + uis(3)}, uis(9), 0.4, gfx.Color{255, 100, 100, 240})
+                gfx.draw_rect(ix, iy, iw, ih, gfx.Color{ 80, 10, 10, 150 })
+                gfx.draw_text(g_font_body, cstring("CLASS"), {f32(ix) + uis(3), f32(iy) + uis(3)}, uis(9), 0.4, gfx.Color{255, 100, 100, 240})
             }
 
             icon_margin :: i32(3)
@@ -328,7 +327,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
                         src := gfx.Rect{ 0, 0, f32(tex.width), f32(tex.height) }
                         dst := gfx.Rect{ f32(iicon_x), f32(iicon_y),
                                              f32(icon_sz), f32(icon_sz) }
-                        rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
+                        gfx.draw_texture_pro(tex, src, dst, {0, 0}, 0,
                             gfx.Color{ rc.r, rc.g, rc.b, 210 })
                         icon_drawn = true
                     }
@@ -342,7 +341,7 @@ _draw_backpack_raw :: proc(w: ^World, inv: ^InventoryComp, grid_bb: clay.Boundin
             if world_has_component(w, cell_id, .RenderConfig) {
                 rcc  := comp_get(w, cell_id, .RenderConfig, RenderConfigComp)
                 name := loc_lookup(render_config_name_cstr(rcc))
-                rl.DrawTextEx(g_font_body, name,
+                gfx.draw_text(g_font_body, name,
                     { f32(ix) + uis(3), f32(iy + icon_margin + icon_sz + 2) },
                     uis(11), 0.4, gfx.Color{ rc.r, rc.g, rc.b, 200 })
             }
@@ -363,13 +362,13 @@ _draw_drag_item :: proc(w: ^World) {
 
     rc := rarity_color(item.rarity)
     class_locked := item.slot == .WeaponPrimary && item.weapon_archetype != player_class_archetype()
-    rl.DrawRectangle(fx, fy, iw, ih,
+    gfx.draw_rect(fx, fy, iw, ih,
         gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 230 })
-    rl.DrawRectangleLinesEx({ f32(fx), f32(fy), f32(iw), f32(ih) }, 1,
+    gfx.draw_rect_lines({ f32(fx), f32(fy), f32(iw), f32(ih) }, 1,
         gfx.Color{ rc.r, rc.g, rc.b, 240 })
     if class_locked {
-        rl.DrawRectangle(fx, fy, iw, ih, gfx.Color{ 80, 10, 10, 150 })
-        rl.DrawTextEx(g_font_body, cstring("CLASS"), {f32(fx) + uis(3), f32(fy) + uis(3)}, uis(9), 0.4, gfx.Color{255, 100, 100, 240})
+        gfx.draw_rect(fx, fy, iw, ih, gfx.Color{ 80, 10, 10, 150 })
+        gfx.draw_text(g_font_body, cstring("CLASS"), {f32(fx) + uis(3), f32(fy) + uis(3)}, uis(9), 0.4, gfx.Color{255, 100, 100, 240})
     }
 
     drag_icon_sz    := min(iw, ih) - 6
@@ -386,7 +385,7 @@ _draw_drag_item :: proc(w: ^World) {
                 dst := gfx.Rect{
                     f32(drag_icon_x), f32(drag_icon_y),
                     f32(drag_icon_sz), f32(drag_icon_sz) }
-                rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
+                gfx.draw_texture_pro(tex, src, dst, {0, 0}, 0,
                     gfx.Color{ rc.r, rc.g, rc.b, 210 })
                 drag_icon_drawn = true
             }
@@ -424,7 +423,7 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
                 if eid == INVALID_ENTITY { continue }
                 bb := slot_bbs[i]
                 if bb.width == 0 { continue }
-                if rl.CheckCollisionPointRec(mp, { bb.x, bb.y, bb.width, bb.height }) {
+                if gfx.point_in_rect(mp, { bb.x, bb.y, bb.width, bb.height }) {
                     stash_deposit_item(w, eid)
                     return
                 }
@@ -453,7 +452,7 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
                 if !world_has_component(w, eid, .Item)         { continue }
                 bb   := slot_bbs[i]
                 if bb.width == 0                                  { continue }
-                if !rl.CheckCollisionPointRec(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
+                if !gfx.point_in_rect(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
                 inv.equipped[i]     = INVALID_ENTITY
                 g_drag_item_id      = eid
                 g_drag_from_equip   = true
@@ -478,7 +477,7 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
             if !_item_fits_slot(item.slot, slot) { continue }
             bb := slot_bbs[i]
             if bb.width == 0                     { continue }
-            if !rl.CheckCollisionPointRec(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
+            if !gfx.point_in_rect(mp, { bb.x, bb.y, bb.width, bb.height }) { continue }
 
             if slot == .WeaponPrimary && item.weapon_archetype != player_class_archetype() { break }
 
@@ -575,7 +574,7 @@ _inv_handle_input :: proc(w: ^World, slot_bbs: []clay.BoundingBox, grid_bb: clay
                 if eid == INVALID_ENTITY { continue }
                 bb  := slot_bbs[i]
                 if bb.width == 0 { continue }
-                if rl.CheckCollisionPointRec(mp, { bb.x, bb.y, bb.width, bb.height }) {
+                if gfx.point_in_rect(mp, { bb.x, bb.y, bb.width, bb.height }) {
                     g_hover_item_id = eid
                     break
                 }

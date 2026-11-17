@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import      "core:fmt"
 import      "core:math"
@@ -20,15 +19,15 @@ HUB_QUEST_BOARD_POS        :: [3]f32{  168,    0, 0 }
 HUB_QUARTERMASTER_POS      :: [3]f32{  480,    0, 0 }
 HUB_SURGEON_POS            :: [3]f32{  480, -128, 0 }
 
-g_hub_bg_tex:    rl.Texture2D
+g_hub_bg_tex:    gfx.Texture
 g_hub_bg_loaded: bool
 
 hub_load_bg :: proc() {
     if g_hub_bg_loaded { return }
-    tex := rl.LoadTexture(HUB_BG_PATH)
+    tex := gfx.load_texture(HUB_BG_PATH)
     if tex.id > 0 {
-        rl.SetTextureFilter(tex, .BILINEAR)
-        rl.SetTextureWrap(tex, .CLAMP)
+        gfx.texture_set_filter(tex, .BILINEAR)
+        gfx.texture_set_wrap(tex, .CLAMP)
         g_hub_bg_tex    = tex
         g_hub_bg_loaded = true
     }
@@ -36,7 +35,7 @@ hub_load_bg :: proc() {
 
 hub_unload_bg :: proc() {
     if g_hub_bg_loaded {
-        rl.UnloadTexture(g_hub_bg_tex)
+        gfx.unload_texture(g_hub_bg_tex)
         g_hub_bg_tex    = {}
         g_hub_bg_loaded = false
     }
@@ -58,7 +57,7 @@ draw_hub_background :: proc() {
 
     src  := gfx.Rect{ 0, 0, sw, sh }
     dest := gfx.Rect{ -span, span * 0.5 - dest_h, span * 2, dest_h }
-    rl.DrawTexturePro(g_hub_bg_tex, src, dest, {0, 0}, 0, gfx.WHITE)
+    gfx.draw_texture_pro(g_hub_bg_tex, src, dest, {0, 0}, 0, gfx.WHITE)
 }
 
 enter_hub :: proc(w: ^World, save_progress: bool = false) {
@@ -229,8 +228,8 @@ draw_hub_world :: proc(w: ^World) {
                 lbl = interact_prompt(.HUB_INTERACT)
             }
             lbl_fs := f32(12)
-            lsz    := rl.MeasureTextEx(g_font_body, lbl, lbl_fs, 0.5)
-            rl.DrawTextEx(g_font_body, lbl,
+            lsz    := gfx.measure_text(g_font_body, lbl, lbl_fs, 0.5)
+            gfx.draw_text(g_font_body, lbl,
                 {iso.x - lsz.x * 0.5, iso.y - HUB_PORTAL_RADIUS - lbl_fs - 4},
                 lbl_fs, 0.5, gfx.Color{160, 200, 255, 230})
         }
@@ -242,12 +241,12 @@ draw_hub_hud :: proc(w: ^World) {
 
     loc    := t(.HUB_LABEL)
     loc_fs := uis(11)
-    lsz    := rl.MeasureTextEx(g_font_body, loc, loc_fs, 0.5)
-    rl.DrawTextEx(g_font_body, loc,
+    lsz    := gfx.measure_text(g_font_body, loc, loc_fs, 0.5)
+    gfx.draw_text(g_font_body, loc,
         {sw * 0.5 - lsz.x * 0.5, uis(10)},
         loc_fs, 0.5, COL_MUTED)
 
-    rl.DrawTextEx(g_font_body, tf(.HUB_STASH, local_stash().gold, local_stash().serums),
+    gfx.draw_text(g_font_body, tf(.HUB_STASH, local_stash().gold, local_stash().serums),
         {uis(14), uis(14)}, uis(11), 0.5, COL_BRASS)
 }
 

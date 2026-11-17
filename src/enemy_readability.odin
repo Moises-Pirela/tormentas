@@ -1,7 +1,6 @@
 package main
 
 import    "core:math"
-import rl "vendor:raylib"
 import gfx "gfx"
 
 HPBAR_HOLD      :: f32(2.5)
@@ -89,7 +88,7 @@ _fade :: proc(c: gfx.Color, a: f32) -> gfx.Color {
 @(private = "file")
 _tri :: proc(a, b, c: gfx.Vec2, col: gfx.Color) {
     cross := (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-    if cross >= 0 { rl.DrawTriangle(a, b, c, col) } else { rl.DrawTriangle(a, c, b, col) }
+    if cross >= 0 { gfx.draw_triangle(a, b, c, col) } else { gfx.draw_triangle(a, c, b, col) }
 }
 
 draw_world_sector :: proc(center: gfx.Vec2, radius, angle, half_spread: f32, col: gfx.Color) {
@@ -110,15 +109,15 @@ draw_world_sector_outline :: proc(center: gfx.Vec2, radius, angle, half_spread, 
     c := world_to_iso_v(center)
     first := world_to_iso_v({ center.x + math.cos(angle - half_spread) * radius,
                               center.y + math.sin(angle - half_spread) * radius })
-    rl.DrawLineEx(c, first, thick, col)
+    gfx.draw_line_ex(c, first, thick, col)
     prev := first
     for i in 1..=SEG {
         a  := angle - half_spread + 2 * half_spread * f32(i) / SEG
         nx := world_to_iso_v({ center.x + math.cos(a) * radius, center.y + math.sin(a) * radius })
-        rl.DrawLineEx(prev, nx, thick, col)
+        gfx.draw_line_ex(prev, nx, thick, col)
         prev = nx
     }
-    rl.DrawLineEx(prev, c, thick, col)
+    gfx.draw_line_ex(prev, c, thick, col)
 }
 
 draw_enemy_telegraphs :: proc(w: ^World) {
@@ -160,7 +159,7 @@ draw_enemy_telegraphs :: proc(w: ^World) {
 
 @(private = "file")
 _hovered :: proc(o: EnemyOverlayAnchor, bar_w: f32) -> bool {
-    m   := rl.GetScreenToWorld2D(gfx.mouse_position(), g_camera^)
+    m   := gfx.screen_to_world(gfx.mouse_position(), g_camera^)
     iso := world_to_iso_v(o.pos)
     hw  := max(bar_w, o.base_size * 0.5) * 0.5 + 6
     return m.x >= iso.x - hw && m.x <= iso.x + hw && m.y >= iso.y - o.top - 10 && m.y <= iso.y + 8
@@ -203,12 +202,12 @@ draw_enemy_health_bars :: proc(w: ^World, dt: f32) {
         iso := world_to_iso_v(o.pos)
         bx  := iso.x - bar_w * 0.5
         by  := iso.y - o.top - 8
-        rl.DrawRectangleRec({ bx - 1.5, by - 1.5, bar_w + 3, HPBAR_H + 3 }, _fade(border, alpha))
-        rl.DrawRectangleRec({ bx, by, bar_w, HPBAR_H }, _fade(gfx.Color{ 34, 14, 14, 235 }, alpha))
-        rl.DrawRectangleRec({ bx, by, bar_w * st.chip_frac, HPBAR_H }, _fade(gfx.Color{ 245, 225, 190, 230 }, alpha))
+        gfx.draw_rect_rec({ bx - 1.5, by - 1.5, bar_w + 3, HPBAR_H + 3 }, _fade(border, alpha))
+        gfx.draw_rect_rec({ bx, by, bar_w, HPBAR_H }, _fade(gfx.Color{ 34, 14, 14, 235 }, alpha))
+        gfx.draw_rect_rec({ bx, by, bar_w * st.chip_frac, HPBAR_H }, _fade(gfx.Color{ 245, 225, 190, 230 }, alpha))
         fill := gfx.Color{ 215, 45, 40, 255 }
         if frac <= 0.25 { fill = _mix(fill, gfx.Color{ 255, 140, 60, 255 }, 0.5 + 0.5 * math.sin(f32(gfx.time()) * 10)) }
-        rl.DrawRectangleRec({ bx, by, bar_w * frac, HPBAR_H }, _fade(fill, alpha))
+        gfx.draw_rect_rec({ bx, by, bar_w * frac, HPBAR_H }, _fade(fill, alpha))
     }
 }
 

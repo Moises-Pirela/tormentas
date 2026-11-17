@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import clay "../clay"
 import      "core:fmt"
@@ -405,7 +404,7 @@ ui_tab :: proc(id, label: string, w, h: f32, active: bool, accent := COL_BRASS, 
 }
 
 ui_scrim :: proc(a: u8) {
-    rl.DrawRectangle(0, 0, gfx.screen_width(), gfx.screen_height(), gfx.Color{ 0, 0, 0, a })
+    gfx.draw_rect(0, 0, gfx.screen_width(), gfx.screen_height(), gfx.Color{ 0, 0, 0, a })
 }
 
 UIPanelStyle :: struct {

@@ -1,6 +1,5 @@
 package main
 
-import rl       "vendor:raylib"
 import gfx      "gfx"
 import p2p      "p2p"
 import "core:fmt"
@@ -21,7 +20,7 @@ TICK_DT   :: f32(1.0 / TICK_RATE)
 
 MAX_CATCHUP_TICKS :: 5
 
-g_camera:            ^rl.Camera2D
+g_camera:            ^gfx.Camera2D
 
 g_session:    p2p.Session
 
@@ -136,9 +135,9 @@ draw_invite_toast :: proc() {
     px := sw * 0.5 - pw * 0.5
     py := uis(16)
 
-    rl.DrawRectangleRec({ px, py, pw, ph }, gfx.Color{ 10, 8, 6, 240 })
-    rl.DrawRectangleLinesEx({ px, py, pw, ph }, 1.5, COL_BRASS)
-    rl.DrawRectangle(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
+    gfx.draw_rect_rec({ px, py, pw, ph }, gfx.Color{ 10, 8, 6, 240 })
+    gfx.draw_rect_lines({ px, py, pw, ph }, 1.5, COL_BRASS)
+    gfx.draw_rect(i32(px), i32(py), i32(pw), i32(uis(3)), COL_BRASS)
 
     buf: [96]u8
     n := copy(buf[:], g_invite_host_name[:g_invite_name_len])
@@ -146,14 +145,14 @@ draw_invite_toast :: proc() {
     buf[n] = 0
     title := cstring(&buf[0])
     tfs   := uis(13)
-    tsz   := rl.MeasureTextEx(g_font_body, title, tfs, 0.5)
-    rl.DrawTextEx(g_font_body, title, { px + pw*0.5 - tsz.x*0.5, py + uis(11) }, tfs, 0.5, COL_PARCH)
+    tsz   := gfx.measure_text(g_font_body, title, tfs, 0.5)
+    gfx.draw_text(g_font_body, title, { px + pw*0.5 - tsz.x*0.5, py + uis(11) }, tfs, 0.5, COL_PARCH)
 
     can_join := (g_app_state == .Playing && g_playing_state == .Hub) || g_active_slot >= 0
     hint := cstring("[J] Join      [N] Dismiss") if can_join else cstring("Select a character to join      [N] Dismiss")
     hfs  := uis(11)
-    hsz  := rl.MeasureTextEx(g_font_body, hint, hfs, 0.5)
-    rl.DrawTextEx(g_font_body, hint, { px + pw*0.5 - hsz.x*0.5, py + ph - uis(20) }, hfs, 0.5, COL_BRASS)
+    hsz  := gfx.measure_text(g_font_body, hint, hfs, 0.5)
+    gfx.draw_text(g_font_body, hint, { px + pw*0.5 - hsz.x*0.5, py + ph - uis(20) }, hfs, 0.5, COL_BRASS)
 }
 
 init_game :: proc() {
@@ -512,9 +511,9 @@ draw_playing :: proc() {
     ensure_lighting_render_targets()
     draw_directional_shadow_mask(w)
 
-    rl.BeginTextureMode(g_world_rt)
-    rl.ClearBackground(gfx.BLANK)
-    rl.BeginMode2D(g_camera^)
+    gfx.target_begin(g_world_rt)
+    gfx.clear(gfx.BLANK)
+    gfx.camera_begin(g_camera^)
     if g_hub_active {
         draw_hub_background()
     } else if len(g_level_data.modules) > 0 {
@@ -527,22 +526,22 @@ draw_playing :: proc() {
     }
     draw_entities(w, .WorldFX)
     draw_shop_world(w)
-    rl.EndMode2D()
-    rl.EndTextureMode()
+    gfx.camera_end()
+    gfx.target_end()
 
     draw_directional_world_composite()
 
-    rl.BeginMode2D(g_camera^)
+    gfx.camera_begin(g_camera^)
     draw_entity_sprite_shadows(w)
     draw_player_projected_shadow(w)
-    rl.EndMode2D()
+    gfx.camera_end()
 
-    rl.BeginTextureMode(g_sprite_rt)
-    rl.ClearBackground(gfx.BLANK)
-    rl.BeginMode2D(g_camera^)
+    gfx.target_begin(g_sprite_rt)
+    gfx.clear(gfx.BLANK)
+    gfx.camera_begin(g_camera^)
     draw_entities(w, .Sprite)
-    rl.EndMode2D()
-    rl.EndTextureMode()
+    gfx.camera_end()
+    gfx.target_end()
 
     draw_directional_sprite_composite(w)
 
@@ -550,7 +549,7 @@ draw_playing :: proc() {
     draw_world_god_rays()
     if !g_editor_mode { draw_fog_and_lights(w) }
 
-    rl.BeginMode2D(g_camera^)
+    gfx.camera_begin(g_camera^)
     draw_editor_cell_overlay()
     draw_editor_world()
     draw_editor_brush_world()
@@ -572,7 +571,7 @@ draw_playing :: proc() {
     draw_traps(w)
     update_draw_dmg_numbers(gfx.frame_time())
     if !g_editor_mode { draw_stealth_indicators(w) }
-    rl.EndMode2D()
+    gfx.camera_end()
 
     if !g_editor_mode {
         update_entity_hover(w)
@@ -613,15 +612,15 @@ main :: proc() {
     migrate_legacy_user_files()
     load_config()
     platform_init_window("Tormentas")
-    defer rl.CloseWindow()
-    app_icon := rl.LoadImage("data/app/tormentas_icon.png")
+    defer gfx.window_close()
+    app_icon := gfx.load_image("data/app/tormentas_icon.png")
     if app_icon.data != nil {
-        rl.SetWindowIcon(app_icon)
-        rl.UnloadImage(app_icon)
+        gfx.window_set_icon(app_icon)
+        gfx.unload_image(app_icon)
     }
-    rl.SetTargetFPS(60)
+    gfx.window_set_fps(60)
 
-    rl.SetExitKey(.KEY_NULL)
+    gfx.window_set_exit_key(.KEY_NULL)
 
     g_lang = Language(min(g_binds.language, u8(LANG_COUNT - 1)))
 
@@ -666,7 +665,7 @@ main :: proc() {
 
     init_pause_menu()
 
-    camera := rl.Camera2D{
+    camera := gfx.Camera2D{
         offset   = { SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0 },
         target   = { 0, 0 },
         rotation = 0,
@@ -773,8 +772,8 @@ app_frame :: proc() -> (keep_running: bool) {
     }
     ui_update(dt)
 
-    rl.BeginDrawing()
-    rl.ClearBackground({10, 10, 14, 255})
+    gfx.frame_begin()
+    gfx.clear({10, 10, 14, 255})
 
     switch g_app_state {
     case .MainMenu:
@@ -798,7 +797,7 @@ app_frame :: proc() -> (keep_running: bool) {
     draw_editor_overlay_screen()
     devui_tools_frame()
     devui_end_frame()
-    rl.EndDrawing()
+    gfx.frame_end()
     gfx.end_input_frame()
     return true
 }

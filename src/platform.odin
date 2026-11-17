@@ -4,7 +4,6 @@ import    "core:fmt"
 import    "core:os"
 import    "core:path/filepath"
 import    "core:strings"
-import rl "vendor:raylib"
 import gfx "gfx"
 
 APP_DIR_NAME       :: "Tormentas"
@@ -76,8 +75,8 @@ _wants_fullscreen :: proc() -> bool {
 
 @(private = "file")
 _monitor_size :: proc() -> [2]i32 {
-    m := rl.GetCurrentMonitor()
-    return { rl.GetMonitorWidth(m), rl.GetMonitorHeight(m) }
+    m := gfx.monitor_current()
+    return { gfx.monitor_width(m), gfx.monitor_height(m) }
 }
 
 @(private = "file")
@@ -99,19 +98,19 @@ _fit_window :: proc(size: [2]i32) -> [2]i32 {
 
 @(private = "file")
 _center_window :: proc(size: [2]i32) {
-    m   := rl.GetCurrentMonitor()
-    pos := rl.GetMonitorPosition(m)
+    m   := gfx.monitor_current()
+    pos := gfx.monitor_position(m)
     mon := _monitor_size()
-    rl.SetWindowPosition(i32(pos.x) + (mon[0] - size[0]) / 2, i32(pos.y) + (mon[1] - size[1]) / 2)
+    gfx.window_set_position(i32(pos.x) + (mon[0] - size[0]) / 2, i32(pos.y) + (mon[1] - size[1]) / 2)
 }
 
 platform_init_window :: proc(title: cstring) {
-    rl.SetConfigFlags({ .WINDOW_RESIZABLE, .VSYNC_HINT })
-    rl.InitWindow(WINDOW_DEFAULT_W, WINDOW_DEFAULT_H, title)
-    rl.SetWindowMinSize(WINDOW_MIN_W, WINDOW_MIN_H)
+    gfx.window_set_flags({ .WINDOW_RESIZABLE, .VSYNC_HINT })
+    gfx.window_init(WINDOW_DEFAULT_W, WINDOW_DEFAULT_H, title)
+    gfx.window_set_min_size(WINDOW_MIN_W, WINDOW_MIN_H)
 
     g_windowed_size = _fit_window({ g_binds.display.window_w, g_binds.display.window_h })
-    rl.SetWindowSize(g_windowed_size[0], g_windowed_size[1])
+    gfx.window_set_size(g_windowed_size[0], g_windowed_size[1])
     _center_window(g_windowed_size)
     native_fullscreen_prepare()
 
@@ -127,14 +126,14 @@ platform_set_fullscreen :: proc(on: bool) {
     } else {
         if on == g_fullscreen { return }
         if on {
-            if !rl.IsWindowState({ .BORDERLESS_WINDOWED_MODE }) {
+            if !gfx.window_is_state({ .BORDERLESS_WINDOWED_MODE }) {
                 g_windowed_size = { gfx.screen_width(), gfx.screen_height() }
             }
-            rl.ToggleBorderlessWindowed()
+            gfx.window_toggle_fullscreen()
         } else {
-            if rl.IsWindowState({ .BORDERLESS_WINDOWED_MODE }) { rl.ToggleBorderlessWindowed() }
+            if gfx.window_is_state({ .BORDERLESS_WINDOWED_MODE }) { gfx.window_toggle_fullscreen() }
             g_windowed_size = _fit_window(g_windowed_size)
-            rl.SetWindowSize(g_windowed_size[0], g_windowed_size[1])
+            gfx.window_set_size(g_windowed_size[0], g_windowed_size[1])
             _center_window(g_windowed_size)
         }
     }
@@ -145,7 +144,7 @@ platform_set_fullscreen :: proc(on: bool) {
 platform_set_window_size :: proc(w, h: i32) {
     if g_fullscreen { return }
     g_windowed_size = _fit_window({ w, h })
-    rl.SetWindowSize(g_windowed_size[0], g_windowed_size[1])
+    gfx.window_set_size(g_windowed_size[0], g_windowed_size[1])
     _center_window(g_windowed_size)
 }
 
@@ -158,7 +157,7 @@ platform_update_window :: proc() {
     when ODIN_OS == .Darwin {
         g_fullscreen = native_is_fullscreen()
     }
-    if !g_fullscreen && rl.IsWindowResized() {
+    if !g_fullscreen && gfx.window_is_resized() {
         g_windowed_size = { gfx.screen_width(), gfx.screen_height() }
     }
     toggle := false
@@ -211,17 +210,15 @@ window_probe_from_args :: proc() {
 @(private = "file")
 _probe_log :: proc(tag: string) {
     fmt.printf("[probe] %-14s fullscreen=%v rl_fullscreen=%v screen=%dx%d render=%dx%d monitor=%dx%d dpi=%.2f resized=%v\n",
-        tag, g_fullscreen, rl.IsWindowFullscreen(), gfx.screen_width(), gfx.screen_height(),
-        rl.GetRenderWidth(), rl.GetRenderHeight(), _monitor_size()[0], _monitor_size()[1],
-        rl.GetWindowScaleDPI().x, rl.IsWindowResized())
+        tag, g_fullscreen, gfx.window_is_fullscreen(), gfx.screen_width(), gfx.screen_height(),
+        gfx.render_width(), gfx.render_height(), _monitor_size()[0], _monitor_size()[1],
+        gfx.window_scale_dpi().x, gfx.window_is_resized())
 }
 
 @(private = "file")
 _probe_shot :: proc(tag: string) {
     path := strings.clone_to_cstring(fmt.tprintf("%s/%s.png", g_window_probe_dir, tag), context.temp_allocator)
-    img  := rl.LoadImageFromScreen()
-    defer rl.UnloadImage(img)
-    rl.ExportImage(img, path)
+    gfx.screenshot(path)
 }
 
 g_tools_probe: bool

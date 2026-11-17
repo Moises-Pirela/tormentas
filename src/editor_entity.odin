@@ -3,7 +3,6 @@ package main
 import    "core:fmt"
 import    "core:math"
 import im "../deps/imgui/imgui"
-import rl "vendor:raylib"
 import gfx "gfx"
 
 EditorTool :: enum u8 {
@@ -69,7 +68,7 @@ ed_entity_pick :: proc(screen: gfx.Vec2) -> int {
 
     for &e, i in g_level_data.entities {
         iso := world_to_iso_xy(e.position[0], e.position[1])
-        p   := rl.GetWorldToScreen2D({iso.x, iso.y}, g_camera^)
+        p   := gfx.world_to_screen({iso.x, iso.y}, g_camera^)
         dx  := p.x - screen.x
         dy  := p.y - screen.y
         d2  := dx*dx + dy*dy
@@ -129,7 +128,7 @@ gizmo_handle_screen :: proc(origin: gfx.Vec2, axis: [2]f32) -> gfx.Vec2 {
 
 ed_gizmo_origin_screen :: proc(e: ^LevelEntity) -> gfx.Vec2 {
     iso := world_to_iso_xy(e.position[0], e.position[1])
-    return rl.GetWorldToScreen2D({iso.x, iso.y}, g_camera^)
+    return gfx.world_to_screen({iso.x, iso.y}, g_camera^)
 }
 
 @(private = "file")

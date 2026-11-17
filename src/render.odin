@@ -1,6 +1,5 @@
 package main
 
-import rl       "vendor:raylib"
 import gfx      "gfx"
 import          "core:math"
 import          "core:c"
@@ -10,11 +9,11 @@ import slice    "core:slice"
 import          "base:runtime"
 import clay     "../clay"
 
-g_font:      rl.Font
-g_font_body: rl.Font
+g_font:      gfx.Font
+g_font_body: gfx.Font
 
-g_hud_orb_frame : rl.Texture2D
-g_hud_hp_icon   : rl.Texture2D
+g_hud_orb_frame : gfx.Texture
+g_hud_hp_icon   : gfx.Texture
 
 @(private = "file")
 FONT_PATH      :: cstring("data/fonts/cinzel.ttf")
@@ -30,12 +29,12 @@ g_ui_scale: f32 = 1.0
 
 uis :: proc(base: f32) -> f32 { return math.round(base * g_ui_scale) }
 
-font_for :: proc(base_size: f32) -> rl.Font { return g_font_body if base_size <= 14 else g_font }
+font_for :: proc(base_size: f32) -> gfx.Font { return g_font_body if base_size <= 14 else g_font }
 
 FONT_ID_TITLE :: u16(0)
 FONT_ID_BODY  :: u16(1)
 
-clay_font :: proc "c" (font_id: u16) -> rl.Font {
+clay_font :: proc "c" (font_id: u16) -> gfx.Font {
     return g_font_body if font_id == FONT_ID_BODY else g_font
 }
 
@@ -102,8 +101,8 @@ update_draw_dmg_numbers :: proc(dt: f32) {
         num_s := fmt.bprintf(num_buf[:15], "%.0f", n.value)
         num_buf[len(num_s)] = 0
 
-        tsz := rl.MeasureTextEx(g_font_body, cstring(&num_buf[0]), fs, 0.5)
-        rl.DrawTextEx(g_font_body, cstring(&num_buf[0]),
+        tsz := gfx.measure_text(g_font_body, cstring(&num_buf[0]), fs, 0.5)
+        gfx.draw_text(g_font_body, cstring(&num_buf[0]),
             { n.x - tsz.x*0.5, n.y - tsz.y*0.5 }, fs, 0.5, col)
     }
 }
@@ -124,19 +123,19 @@ draw_loot_filter_hud :: proc() {
     _   = sw
     fs  := uis(12)
     prefix    := t(.HUD_LOOT_FILTER)
-    psz       := rl.MeasureTextEx(g_font_body, prefix, fs, 0.5)
-    lsz       := rl.MeasureTextEx(g_font_body, lbl, fs, 0.5)
+    psz       := gfx.measure_text(g_font_body, prefix, fs, 0.5)
+    lsz       := gfx.measure_text(g_font_body, lbl, fs, 0.5)
     total_w   := psz.x + lsz.x + uis(16)
     total_h   := fs + uis(10)
     bx        := i32(uis(12))
     by        := i32(uis(12))
 
-    rl.DrawRectangle(bx, by, i32(total_w), i32(total_h), gfx.Color{ 8, 6, 4, 210 })
-    rl.DrawRectangleLinesEx({ f32(bx), f32(by), total_w, total_h }, 1, COL_RULE)
-    rl.DrawTextEx(g_font_body, prefix,
+    gfx.draw_rect(bx, by, i32(total_w), i32(total_h), gfx.Color{ 8, 6, 4, 210 })
+    gfx.draw_rect_lines({ f32(bx), f32(by), total_w, total_h }, 1, COL_RULE)
+    gfx.draw_text(g_font_body, prefix,
         { f32(bx) + uis(8), f32(by) + uis(5) }, fs, 0.5, COL_MUTED)
     rc := rarity_color(g_loot_filter_rarity)
-    rl.DrawTextEx(g_font_body, lbl,
+    gfx.draw_text(g_font_body, lbl,
         { f32(bx) + uis(8) + psz.x, f32(by) + uis(5) }, fs, 0.5,
         gfx.Color{ rc.r, rc.g, rc.b, 230 })
 }
@@ -151,20 +150,20 @@ draw_boss_warning :: proc() {
     sh    := f32(gfx.screen_height())
 
     overlay_alpha := u8(35 + i32(pulse * 35))
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.Color{ 180, 0, 0, overlay_alpha })
+    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.Color{ 180, 0, 0, overlay_alpha })
 
     warn_fs := uis(22)
     warn1   := t(.HUD_WARNING)
     warn2   := t(.HUD_BOSS_APPROACHES)
-    w1sz    := rl.MeasureTextEx(g_font, warn1, warn_fs, 1)
-    w2sz    := rl.MeasureTextEx(g_font, warn2, warn_fs * 0.65, 1)
+    w1sz    := gfx.measure_text(g_font, warn1, warn_fs, 1)
+    w2sz    := gfx.measure_text(g_font, warn2, warn_fs * 0.65, 1)
     cy      := sh * 0.5 - uis(40)
 
     text_alpha := u8(160 + i32(pulse * 95))
-    rl.DrawTextEx(g_font, warn1,
+    gfx.draw_text(g_font, warn1,
         { sw * 0.5 - w1sz.x * 0.5, cy },
         warn_fs, 1, gfx.Color{ 255, 60, 60, text_alpha })
-    rl.DrawTextEx(g_font, warn2,
+    gfx.draw_text(g_font, warn2,
         { sw * 0.5 - w2sz.x * 0.5, cy + warn_fs + uis(4) },
         warn_fs * 0.65, 1, gfx.Color{ 220, 100, 100, text_alpha })
 
@@ -173,8 +172,8 @@ draw_boss_warning :: proc() {
     s := fmt.bprintf(buf[:15], "%ds", secs_left)
     buf[len(s)] = 0
     cd_fs := uis(14)
-    cd_sz := rl.MeasureTextEx(g_font_body, cstring(&buf[0]), cd_fs, 0.5)
-    rl.DrawTextEx(g_font_body, cstring(&buf[0]),
+    cd_sz := gfx.measure_text(g_font_body, cstring(&buf[0]), cd_fs, 0.5)
+    gfx.draw_text(g_font_body, cstring(&buf[0]),
         { sw * 0.5 - cd_sz.x * 0.5, cy + warn_fs + uis(4) + warn_fs * 0.65 + uis(6) },
         cd_fs, 0.5, gfx.Color{ 200, 140, 140, u8(180 + i32(pulse * 75)) })
 }
@@ -235,8 +234,8 @@ draw_entity_inspect_hud :: proc(w: ^World) {
     bx := sw * 0.5 - bw * 0.5
     by := uis(16)
 
-    rl.DrawRectangleRec({ bx - 2, by - 2, bw + 4, bh + 4 }, gfx.Color{  8,  4,  4, 220 })
-    rl.DrawRectangleRec({ bx, by, bw, bh },                  gfx.Color{ 45, 12, 12, 200 })
+    gfx.draw_rect_rec({ bx - 2, by - 2, bw + 4, bh + 4 }, gfx.Color{  8,  4,  4, 220 })
+    gfx.draw_rect_rec({ bx, by, bw, bh },                  gfx.Color{ 45, 12, 12, 200 })
     if frac > 0 {
         fill_col: gfx.Color
         if frac > 0.5 {
@@ -247,14 +246,14 @@ draw_entity_inspect_hud :: proc(w: ^World) {
             t        := f32(0.5) + f32(0.5) * math.sin(f32(gfx.time()) * 8.0)
             fill_col = gfx.Color{ 255, u8(30 + i32(t * 40)), 20, 255 }
         }
-        rl.DrawRectangleRec({ bx, by, bw * frac, bh }, fill_col)
+        gfx.draw_rect_rec({ bx, by, bw * frac, bh }, fill_col)
     }
-    rl.DrawRectangleLinesEx({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, gfx.Color{ 140, 40, 40, 200 })
+    gfx.draw_rect_lines({ bx - 2, by - 2, bw + 4, bh + 4 }, 1, gfx.Color{ 140, 40, 40, 200 })
 
-    hp_str := rl.TextFormat("%d / %d", i32(h.current), i32(h.max))
+    hp_str := fmt.ctprintf("%d / %d", i32(h.current), i32(h.max))
     hp_fs  := uis(11)
-    hp_sz  := rl.MeasureTextEx(g_font_body, hp_str, hp_fs, 0.4)
-    rl.DrawTextEx(g_font_body, hp_str,
+    hp_sz  := gfx.measure_text(g_font_body, hp_str, hp_fs, 0.4)
+    gfx.draw_text(g_font_body, hp_str,
         { bx + bw - hp_sz.x - uis(3), by + (bh - hp_fs) * 0.5 },
         hp_fs, 0.4, gfx.Color{ 220, 200, 200, 130 })
 
@@ -265,9 +264,9 @@ draw_entity_inspect_hud :: proc(w: ^World) {
         if cs != nil && len(cs) > 0 { name_lbl = cs }
     }
     name_fs := uis(13)
-    name_sz := rl.MeasureTextEx(g_font_body, name_lbl, name_fs, 0.5)
+    name_sz := gfx.measure_text(g_font_body, name_lbl, name_fs, 0.5)
     name_y  := by + bh + uis(3)
-    rl.DrawTextEx(g_font_body, name_lbl,
+    gfx.draw_text(g_font_body, name_lbl,
         { sw * 0.5 - name_sz.x * 0.5, name_y },
         name_fs, 0.5, gfx.Color{ 200, 120, 120, 200 })
 
@@ -289,7 +288,7 @@ draw_entity_inspect_hud :: proc(w: ^World) {
             if !world_has_component(w, meid, .Mut) { continue }
             mt   := comp_get(w, meid, .Mut, MutComp).type_id
             name := mutation_short_name(mt)
-            sz   := rl.MeasureTextEx(g_font_body, name, badge_fs, 0.4)
+            sz   := gfx.measure_text(g_font_body, name, badge_fs, 0.4)
             b_mt[n_b]   = mt
             b_name[n_b] = name
             b_sz[n_b]   = sz
@@ -304,10 +303,10 @@ draw_entity_inspect_hud :: proc(w: ^World) {
 
             for i in 0..<n_b {
                 col := mutation_visual_color(b_mt[i])
-                rl.DrawCircleV(
+                gfx.draw_circle_v(
                     { x + dot_r, badge_y + badge_fs * 0.5 },
                     dot_r, gfx.Color{ col.r, col.g, col.b, 230 })
-                rl.DrawTextEx(g_font_body, b_name[i],
+                gfx.draw_text(g_font_body, b_name[i],
                     { x + dot_r * 2 + uis(5), badge_y },
                     badge_fs, 0.4, gfx.Color{ col.r, col.g, col.b, 195 })
                 item_w := dot_r * 2 + uis(5) + b_sz[i].x
@@ -320,31 +319,31 @@ draw_entity_inspect_hud :: proc(w: ^World) {
 FONT_SIZE :: i32(512)
 
 init_font :: proc() {
-    if rl.FileExists(FONT_PATH) {
-        g_font = rl.LoadFontEx(FONT_PATH, FONT_SIZE, nil, 0)
-        rl.GenTextureMipmaps(&g_font.texture)
-        rl.SetTextureFilter(g_font.texture, .TRILINEAR)
+    if file_exists(FONT_PATH) {
+        g_font = gfx.load_font(FONT_PATH, FONT_SIZE)
+        gfx.texture_gen_mipmaps(&g_font.texture)
+        gfx.texture_set_filter(g_font.texture, .TRILINEAR)
     } else {
-        g_font = rl.GetFontDefault()
+        g_font = gfx.font_default()
     }
 
-    if rl.FileExists(FONT_PATH_BODY) {
-        g_font_body = rl.LoadFontEx(FONT_PATH_BODY, FONT_SIZE, nil, 0)
-        rl.GenTextureMipmaps(&g_font_body.texture)
-        rl.SetTextureFilter(g_font_body.texture, .TRILINEAR)
+    if file_exists(FONT_PATH_BODY) {
+        g_font_body = gfx.load_font(FONT_PATH_BODY, FONT_SIZE)
+        gfx.texture_gen_mipmaps(&g_font_body.texture)
+        gfx.texture_set_filter(g_font_body.texture, .TRILINEAR)
     } else {
         g_font_body = g_font
     }
 
-    if rl.FileExists(HUD_SPRITE_PATHS[0]) { g_hud_orb_frame = rl.LoadTexture(HUD_SPRITE_PATHS[0]) }
-    if rl.FileExists(HUD_SPRITE_PATHS[1]) { g_hud_hp_icon   = rl.LoadTexture(HUD_SPRITE_PATHS[1]) }
+    if file_exists(HUD_SPRITE_PATHS[0]) { g_hud_orb_frame = gfx.load_texture(HUD_SPRITE_PATHS[0]) }
+    if file_exists(HUD_SPRITE_PATHS[1]) { g_hud_hp_icon   = gfx.load_texture(HUD_SPRITE_PATHS[1]) }
 }
 
 shutdown_font :: proc() {
-    if rl.FileExists(FONT_PATH)      { rl.UnloadFont(g_font) }
-    if rl.FileExists(FONT_PATH_BODY) { rl.UnloadFont(g_font_body) }
-    if g_hud_orb_frame.id != 0 { rl.UnloadTexture(g_hud_orb_frame) }
-    if g_hud_hp_icon.id   != 0 { rl.UnloadTexture(g_hud_hp_icon) }
+    if file_exists(FONT_PATH)      { gfx.unload_font(g_font) }
+    if file_exists(FONT_PATH_BODY) { gfx.unload_font(g_font_body) }
+    if g_hud_orb_frame.id != 0 { gfx.unload_texture(g_hud_orb_frame) }
+    if g_hud_hp_icon.id   != 0 { gfx.unload_texture(g_hud_hp_icon) }
 }
 
 HIT_FLASH_DURATION :: f32(0.12)
@@ -471,7 +470,7 @@ clay_measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElement
     max_w := f32(0)
     for line in lines {
         line_cs := strings.clone_to_cstring(line, context.temp_allocator)
-        sz := rl.MeasureTextEx(fnt, line_cs, font_size, spacing)
+        sz := gfx.measure_text(fnt, line_cs, font_size, spacing)
         if sz.x > max_w { max_w = sz.x }
     }
     line_h := font_size
@@ -513,16 +512,16 @@ entity_hit_radius :: proc(w: ^World, id: int) -> f32 {
 
 draw_world_circle :: proc(pos: gfx.Vec2, radius: f32, color: gfx.Color) {
     ip := world_to_iso_v(pos)
-    rl.DrawEllipse(i32(ip.x), i32(ip.y), radius, max(radius * 0.55, 1), color)
+    gfx.draw_ellipse(i32(ip.x), i32(ip.y), radius, max(radius * 0.55, 1), color)
 }
 
 draw_world_circle_lines :: proc(pos: gfx.Vec2, radius: f32, color: gfx.Color) {
     ip := world_to_iso_v(pos)
-    rl.DrawEllipseLines(i32(ip.x), i32(ip.y), max(radius, 1), max(radius * 0.55, 1), color)
+    gfx.draw_ellipse_lines(i32(ip.x), i32(ip.y), max(radius, 1), max(radius * 0.55, 1), color)
 }
 
 draw_world_line :: proc(a, b: gfx.Vec2, thick: f32, color: gfx.Color) {
-    rl.DrawLineEx(world_to_iso_v(a), world_to_iso_v(b), thick, color)
+    gfx.draw_line_ex(world_to_iso_v(a), world_to_iso_v(b), thick, color)
 }
 
 draw_tracer :: proc(pos: gfx.Vec2, dir: [3]f32, speed: f32, core, glow: gfx.Color, fade: f32) {
@@ -741,17 +740,17 @@ draw_ground_item_labels :: proc(w: ^World) {
         pulse := (math.sin(tt * 3.2 + f32(id) * 0.37) + 1) * 0.5
 
         nfs  := uis(9)
-        nsz  := rl.MeasureTextEx(g_font_body, name, nfs, 0.4)
+        nsz  := gfx.measure_text(g_font_body, name, nfs, 0.4)
         name_a := u8(160 + pulse * 95)
-        rl.DrawTextEx(g_font_body, name,
+        gfx.draw_text(g_font_body, name,
             { iso.x - nsz.x * 0.5, iso.y - uis(20) - nsz.y },
             nfs, 0.4, gfx.Color{ rc.r, rc.g, rc.b, name_a })
 
         if item.ability_type != .None {
             tag := t(.HUD_ITEM_ACTIVE)
             tfs := uis(8)
-            tsz := rl.MeasureTextEx(g_font_body, tag, tfs, 0.4)
-            rl.DrawTextEx(g_font_body, tag,
+            tsz := gfx.measure_text(g_font_body, tag, tfs, 0.4)
+            gfx.draw_text(g_font_body, tag,
                 { iso.x - tsz.x * 0.5, iso.y - uis(20) - nsz.y - tfs - uis(1) },
                 tfs, 0.4, gfx.Color{ 200, 170, 100, u8(130 + pulse * 60) })
         }
@@ -854,8 +853,8 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
                 mt   := comp_get(w, meid, .Mut, MutComp).type_id
                 col  := mutation_visual_color(mt)
                 name := mutation_short_name(mt)
-                lsz  := rl.MeasureTextEx(g_font_body, name, label_fs, 0.4)
-                rl.DrawTextEx(g_font_body, name,
+                lsz  := gfx.measure_text(g_font_body, name, label_fs, 0.4)
+                gfx.draw_text(g_font_body, name,
                     { iso.x - lsz.x * 0.5, iso.y - sprite_top - 14 },
                     label_fs, 0.4, gfx.Color{ col.r, col.g, col.b, 175 })
                 break
@@ -870,7 +869,7 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
                 if !world_has_component(w, meid, .Mut) { continue }
                 mt  := comp_get(w, meid, .Mut, MutComp).type_id
                 col := mutation_visual_color(mt)
-                rl.DrawCircleV({ dot_x0 + f32(n) * 7, dot_y }, 2.5, col)
+                gfx.draw_circle_v({ dot_x0 + f32(n) * 7, dot_y }, 2.5, col)
                 n += 1
             }
         }
@@ -886,9 +885,9 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
         }
         iso      := world_to_iso_v(pos)
         name_fs  := f32(11)
-        name_sz  := rl.MeasureTextEx(g_font_body, name_str, name_fs, 0.5)
+        name_sz  := gfx.measure_text(g_font_body, name_str, name_fs, 0.5)
         line_col := PLAYER_SLOT_COLORS[slot][2]
-        rl.DrawTextEx(g_font_body, name_str,
+        gfx.draw_text(g_font_body, name_str,
             { iso.x - name_sz.x * 0.5, iso.y - sprite_top - name_fs - 3 },
             name_fs, 0.5, gfx.Color{ line_col.r, line_col.g, line_col.b, 210 })
 
@@ -931,10 +930,10 @@ draw_entity_sprite_overlays :: proc(w: ^World, id: int, pos: gfx.Vec2, base_size
                     bw  := f32(30);  bh := f32(4)
                     bx  := hiso.x - bw * 0.5
                     by  := hiso.y - hrad * 0.55 - 8
-                    rl.DrawRectangleRec({bx - 1, by - 1, bw + 2, bh + 2}, gfx.Color{20, 8, 10, 200})
-                    rl.DrawRectangleRec({bx, by, bw, bh},                  gfx.Color{50, 14, 18, 180})
+                    gfx.draw_rect_rec({bx - 1, by - 1, bw + 2, bh + 2}, gfx.Color{20, 8, 10, 200})
+                    gfx.draw_rect_rec({bx, by, bw, bh},                  gfx.Color{50, 14, 18, 180})
                     fill_c := gfx.Color{ u8(80 + int((1-hp_pct)*140)), u8(int(hp_pct*180)), 30, 240 }
-                    rl.DrawRectangleRec({bx, by, bw * hp_pct, bh}, fill_c)
+                    gfx.draw_rect_rec({bx, by, bw * hp_pct, bh}, fill_c)
                 }
                 break
             }
@@ -1423,13 +1422,13 @@ draw_settings_overlay :: proc() {
 }
 
 @(private = "file")
-g_icon_cache: map[string]rl.Texture2D
+g_icon_cache: map[string]gfx.Texture
 
 @(private = "file")
 EntitySpriteEntry :: struct {
-    tex:     rl.Texture2D,
+    tex:     gfx.Texture,
     src:     gfx.Rect,
-    rt:      rl.RenderTexture2D,
+    rt:      gfx.RenderTexture,
     from_rt: bool,
 }
 
@@ -1437,29 +1436,29 @@ EntitySpriteEntry :: struct {
 g_entity_sprite_cache: map[string]EntitySpriteEntry
 
 init_icon_cache :: proc() {
-    g_icon_cache = make(map[string]rl.Texture2D)
+    g_icon_cache = make(map[string]gfx.Texture)
     g_entity_sprite_cache = make(map[string]EntitySpriteEntry)
 }
 
 shutdown_icon_cache :: proc() {
     for key, tex in g_icon_cache {
-        if tex.id != 0 { rl.UnloadTexture(tex) }
+        if tex.id != 0 { gfx.unload_texture(tex) }
         delete(key)
     }
     delete(g_icon_cache)
 
     for key, entry in g_entity_sprite_cache {
         if entry.from_rt {
-            rl.UnloadRenderTexture(entry.rt)
+            gfx.unload_render_texture(entry.rt)
         } else if entry.tex.id != 0 {
-            rl.UnloadTexture(entry.tex)
+            gfx.unload_texture(entry.tex)
         }
         delete(key)
     }
     delete(g_entity_sprite_cache)
 }
 
-get_or_load_icon :: proc(stem: cstring) -> (tex: rl.Texture2D, ok: bool) {
+get_or_load_icon :: proc(stem: cstring) -> (tex: gfx.Texture, ok: bool) {
     key := string(stem)
     if cached, found := g_icon_cache[key]; found {
         return cached, cached.id != 0
@@ -1470,7 +1469,7 @@ get_or_load_icon :: proc(stem: cstring) -> (tex: rl.Texture2D, ok: bool) {
     n  += copy(path_buf[n:], ".png")
     path_buf[n] = 0
 
-    loaded := rl.LoadTexture(cstring(&path_buf[0]))
+    loaded := gfx.load_texture(cstring(&path_buf[0]))
     owned_key := strings.clone(key)
     g_icon_cache[owned_key] = loaded
     return loaded, loaded.id != 0
@@ -1490,9 +1489,9 @@ color_mix :: proc(a, b: gfx.Color, t: f32) -> gfx.Color {
 @(private = "file")
 build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
     size :: 64
-    rt := rl.LoadRenderTexture(size, size)
-    rl.BeginTextureMode(rt)
-    rl.ClearBackground(gfx.BLANK)
+    rt := gfx.load_render_texture(size, size)
+    gfx.target_begin(rt)
+    gfx.clear(gfx.BLANK)
 
     base  := gfx.Color{ 116, 38, 34, 255 }
     shade := gfx.Color{ 68, 18, 16, 255 }
@@ -1538,16 +1537,16 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         shade = gfx.Color{ 52, 36, 22, 255 }
         glow  = gfx.Color{ 212, 190, 92, 220 }
     case "mutation_workbench":
-        rl.DrawRectangle(14, 20, 36, 28, gfx.Color{ 50, 26, 58, 255 })
-        rl.DrawRectangle(18, 24, 28, 20, gfx.Color{ 84, 44, 94, 255 })
-        rl.DrawRectangle(10, 16, 44, 8, gfx.Color{ 122, 76, 50, 255 })
-        rl.DrawRectangle(16, 10, 32, 8, gfx.Color{ 90, 52, 112, 255 })
-        rl.DrawRectangle(22, 6, 20, 6, gfx.Color{ 208, 108, 255, 220 })
-        rl.DrawRectangle(24, 2, 16, 6, gfx.Color{ 255, 210, 120, 220 })
-        rl.DrawRectangle(8, 48, 10, 10, gfx.Color{ 66, 38, 24, 255 })
-        rl.DrawRectangle(46, 48, 10, 10, gfx.Color{ 66, 38, 24, 255 })
-        rl.DrawRectangle(20, 44, 24, 6, gfx.Color{ 40, 18, 46, 255 })
-        rl.EndTextureMode()
+        gfx.draw_rect(14, 20, 36, 28, gfx.Color{ 50, 26, 58, 255 })
+        gfx.draw_rect(18, 24, 28, 20, gfx.Color{ 84, 44, 94, 255 })
+        gfx.draw_rect(10, 16, 44, 8, gfx.Color{ 122, 76, 50, 255 })
+        gfx.draw_rect(16, 10, 32, 8, gfx.Color{ 90, 52, 112, 255 })
+        gfx.draw_rect(22, 6, 20, 6, gfx.Color{ 208, 108, 255, 220 })
+        gfx.draw_rect(24, 2, 16, 6, gfx.Color{ 255, 210, 120, 220 })
+        gfx.draw_rect(8, 48, 10, 10, gfx.Color{ 66, 38, 24, 255 })
+        gfx.draw_rect(46, 48, 10, 10, gfx.Color{ 66, 38, 24, 255 })
+        gfx.draw_rect(20, 44, 24, 6, gfx.Color{ 40, 18, 46, 255 })
+        gfx.target_end()
         return EntitySpriteEntry{
             tex     = rt.texture,
             src     = { 0, 0, f32(size), -f32(size) },
@@ -1556,124 +1555,124 @@ build_fallback_entity_sprite :: proc(key: string) -> EntitySpriteEntry {
         }
     case "env_door":
 
-        rl.DrawRectangle(10,  6, 44, 52, gfx.Color{ 60, 36, 14, 255})
-        rl.DrawRectangle(12,  8, 40, 48, gfx.Color{ 96, 58, 22, 255})
-        rl.DrawRectangle(14, 10, 16, 20, gfx.Color{ 80, 48, 18, 255})
-        rl.DrawRectangle(34, 10, 16, 20, gfx.Color{ 80, 48, 18, 255})
-        rl.DrawRectangle(14, 34, 16, 18, gfx.Color{ 80, 48, 18, 255})
-        rl.DrawRectangle(34, 34, 16, 18, gfx.Color{ 80, 48, 18, 255})
-        rl.DrawCircle(37, 28, 3, gfx.Color{200, 158, 50, 255})
-        rl.DrawCircle(37, 28, 2, gfx.Color{220, 180, 80, 255})
-        rl.DrawRectangle( 8, 56,  48, 4, gfx.Color{ 48, 28, 10, 255})
-        rl.EndTextureMode()
+        gfx.draw_rect(10,  6, 44, 52, gfx.Color{ 60, 36, 14, 255})
+        gfx.draw_rect(12,  8, 40, 48, gfx.Color{ 96, 58, 22, 255})
+        gfx.draw_rect(14, 10, 16, 20, gfx.Color{ 80, 48, 18, 255})
+        gfx.draw_rect(34, 10, 16, 20, gfx.Color{ 80, 48, 18, 255})
+        gfx.draw_rect(14, 34, 16, 18, gfx.Color{ 80, 48, 18, 255})
+        gfx.draw_rect(34, 34, 16, 18, gfx.Color{ 80, 48, 18, 255})
+        gfx.draw_circle(37, 28, 3, gfx.Color{200, 158, 50, 255})
+        gfx.draw_circle(37, 28, 2, gfx.Color{220, 180, 80, 255})
+        gfx.draw_rect( 8, 56,  48, 4, gfx.Color{ 48, 28, 10, 255})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_switch":
 
-        rl.DrawRectangle(18, 36, 28, 22, gfx.Color{ 50, 50, 60, 255})
-        rl.DrawRectangle(20, 38, 24, 18, gfx.Color{ 68, 68, 80, 255})
-        rl.DrawRectangle(22, 40,  8,  4, gfx.Color{ 80,180, 70, 255})
-        rl.DrawRectangle(30, 14,  4, 30, gfx.Color{130, 80, 26, 255})
-        rl.DrawCircle(32, 14, 6, gfx.Color{180, 116, 40, 255})
-        rl.DrawCircle(32, 14, 4, gfx.Color{210, 150, 60, 255})
-        rl.EndTextureMode()
+        gfx.draw_rect(18, 36, 28, 22, gfx.Color{ 50, 50, 60, 255})
+        gfx.draw_rect(20, 38, 24, 18, gfx.Color{ 68, 68, 80, 255})
+        gfx.draw_rect(22, 40,  8,  4, gfx.Color{ 80,180, 70, 255})
+        gfx.draw_rect(30, 14,  4, 30, gfx.Color{130, 80, 26, 255})
+        gfx.draw_circle(32, 14, 6, gfx.Color{180, 116, 40, 255})
+        gfx.draw_circle(32, 14, 4, gfx.Color{210, 150, 60, 255})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_chest":
 
-        rl.DrawRectangle( 8, 34, 48, 26, gfx.Color{ 88, 54, 20, 255})
-        rl.DrawRectangle(10, 36, 44, 22, gfx.Color{108, 68, 26, 255})
-        rl.DrawRectangle( 8, 22, 48, 14, gfx.Color{ 72, 44, 16, 255})
-        rl.DrawRectangle(10, 24, 44, 11, gfx.Color{ 90, 56, 20, 255})
-        rl.DrawRectangle( 8, 44, 48,  4, gfx.Color{168, 130, 50, 255})
-        rl.DrawRectangle(28, 36,  8,  8, gfx.Color{180, 148, 52, 255})
-        rl.DrawRectangle(30, 38,  4,  4, gfx.Color{220, 188, 90, 255})
-        rl.EndTextureMode()
+        gfx.draw_rect( 8, 34, 48, 26, gfx.Color{ 88, 54, 20, 255})
+        gfx.draw_rect(10, 36, 44, 22, gfx.Color{108, 68, 26, 255})
+        gfx.draw_rect( 8, 22, 48, 14, gfx.Color{ 72, 44, 16, 255})
+        gfx.draw_rect(10, 24, 44, 11, gfx.Color{ 90, 56, 20, 255})
+        gfx.draw_rect( 8, 44, 48,  4, gfx.Color{168, 130, 50, 255})
+        gfx.draw_rect(28, 36,  8,  8, gfx.Color{180, 148, 52, 255})
+        gfx.draw_rect(30, 38,  4,  4, gfx.Color{220, 188, 90, 255})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_crate":
 
-        rl.DrawRectangle( 8, 10, 48, 48, gfx.Color{ 90, 58, 24, 255})
-        rl.DrawRectangle(10, 12, 44, 44, gfx.Color{112, 72, 28, 255})
-        rl.DrawRectangle( 8, 10, 48,  4, gfx.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle( 8, 54, 48,  4, gfx.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle( 8, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle(52, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle( 8, 30, 48,  4, gfx.Color{ 70, 42, 16, 255})
-        rl.DrawRectangle(30, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
-        rl.EndTextureMode()
+        gfx.draw_rect( 8, 10, 48, 48, gfx.Color{ 90, 58, 24, 255})
+        gfx.draw_rect(10, 12, 44, 44, gfx.Color{112, 72, 28, 255})
+        gfx.draw_rect( 8, 10, 48,  4, gfx.Color{ 70, 42, 16, 255})
+        gfx.draw_rect( 8, 54, 48,  4, gfx.Color{ 70, 42, 16, 255})
+        gfx.draw_rect( 8, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
+        gfx.draw_rect(52, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
+        gfx.draw_rect( 8, 30, 48,  4, gfx.Color{ 70, 42, 16, 255})
+        gfx.draw_rect(30, 10,  4, 48, gfx.Color{ 70, 42, 16, 255})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_lore_item":
 
-        rl.DrawRectangle(14,  6, 36, 48, gfx.Color{198, 176, 126, 255})
-        rl.DrawRectangle(16,  8, 32, 44, gfx.Color{210, 192, 146, 255})
-        rl.DrawRectangle(14,  6, 12, 12, gfx.Color{180, 158, 108, 255})
-        rl.DrawRectangle(16,  8,  4,  8, gfx.Color{198, 176, 126, 255})
-        rl.DrawRectangle(19, 18, 26,  2, gfx.Color{120, 100,  60, 160})
-        rl.DrawRectangle(19, 24, 26,  2, gfx.Color{120, 100,  60, 160})
-        rl.DrawRectangle(19, 30, 26,  2, gfx.Color{120, 100,  60, 160})
-        rl.DrawRectangle(19, 36, 18,  2, gfx.Color{120, 100,  60, 160})
-        rl.EndTextureMode()
+        gfx.draw_rect(14,  6, 36, 48, gfx.Color{198, 176, 126, 255})
+        gfx.draw_rect(16,  8, 32, 44, gfx.Color{210, 192, 146, 255})
+        gfx.draw_rect(14,  6, 12, 12, gfx.Color{180, 158, 108, 255})
+        gfx.draw_rect(16,  8,  4,  8, gfx.Color{198, 176, 126, 255})
+        gfx.draw_rect(19, 18, 26,  2, gfx.Color{120, 100,  60, 160})
+        gfx.draw_rect(19, 24, 26,  2, gfx.Color{120, 100,  60, 160})
+        gfx.draw_rect(19, 30, 26,  2, gfx.Color{120, 100,  60, 160})
+        gfx.draw_rect(19, 36, 18,  2, gfx.Color{120, 100,  60, 160})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_phonograph":
 
-        rl.DrawRectangle( 8, 36, 28, 16, gfx.Color{ 72, 44, 18, 255})
-        rl.DrawRectangle(10, 38, 24, 12, gfx.Color{ 92, 56, 22, 255})
-        rl.DrawRectangle(10, 40, 24,  8, gfx.Color{ 78, 48, 20, 255})
-        rl.DrawEllipse(22, 44, 10, 4, gfx.Color{ 40, 40, 40, 220})
-        rl.DrawEllipseLines(22, 44, 10, 4, gfx.Color{100, 100,110,255})
+        gfx.draw_rect( 8, 36, 28, 16, gfx.Color{ 72, 44, 18, 255})
+        gfx.draw_rect(10, 38, 24, 12, gfx.Color{ 92, 56, 22, 255})
+        gfx.draw_rect(10, 40, 24,  8, gfx.Color{ 78, 48, 20, 255})
+        gfx.draw_ellipse(22, 44, 10, 4, gfx.Color{ 40, 40, 40, 220})
+        gfx.draw_ellipse_lines(22, 44, 10, 4, gfx.Color{100, 100,110,255})
 
-        rl.DrawTriangle(
+        gfx.draw_triangle(
             {36, 52}, {54, 10}, {54, 52},
             gfx.Color{180, 130, 50, 200})
-        rl.DrawTriangleLines(
+        gfx.draw_triangle_lines(
             {36, 52}, {54, 10}, {54, 52},
             gfx.Color{220, 170, 70, 220})
-        rl.DrawEllipse(45, 10, 9, 4, gfx.Color{200, 160, 60, 160})
-        rl.EndTextureMode()
+        gfx.draw_ellipse(45, 10, 9, 4, gfx.Color{200, 160, 60, 160})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     case "env_key":
 
-        rl.DrawCircle(20, 24, 14, gfx.Color{180, 148, 40, 255})
-        rl.DrawCircle(20, 24, 10, gfx.Color{130,  96, 22, 255})
-        rl.DrawCircle(20, 24,  5, gfx.Color{180, 148, 40, 255})
-        rl.DrawRectangle(30, 21, 26,  6, gfx.Color{200, 162, 48, 255})
-        rl.DrawRectangle(48, 27,  4,  8, gfx.Color{200, 162, 48, 255})
-        rl.DrawRectangle(42, 27,  4,  6, gfx.Color{200, 162, 48, 255})
-        rl.DrawRectangle(36, 27,  4,  4, gfx.Color{200, 162, 48, 255})
-        rl.EndTextureMode()
+        gfx.draw_circle(20, 24, 14, gfx.Color{180, 148, 40, 255})
+        gfx.draw_circle(20, 24, 10, gfx.Color{130,  96, 22, 255})
+        gfx.draw_circle(20, 24,  5, gfx.Color{180, 148, 40, 255})
+        gfx.draw_rect(30, 21, 26,  6, gfx.Color{200, 162, 48, 255})
+        gfx.draw_rect(48, 27,  4,  8, gfx.Color{200, 162, 48, 255})
+        gfx.draw_rect(42, 27,  4,  6, gfx.Color{200, 162, 48, 255})
+        gfx.draw_rect(36, 27,  4,  4, gfx.Color{200, 162, 48, 255})
+        gfx.target_end()
         return EntitySpriteEntry{
             tex = rt.texture, src = {0, 0, f32(size), -f32(size)}, rt = rt, from_rt = true,
         }
     }
 
-    rl.DrawRectangle(22, 6, 20, 8, glow)
-    rl.DrawRectangle(18, 14, 28, 12, shade)
-    rl.DrawRectangle(20, 16, 24, 10, base)
-    rl.DrawRectangle(16, 24, 32, 18, shade)
-    rl.DrawRectangle(18, 24, 28, 16, base)
-    rl.DrawRectangle(22, 40, 8, 16, shade)
-    rl.DrawRectangle(34, 40, 8, 16, shade)
-    rl.DrawRectangle(24, 40, 4, 14, base)
-    rl.DrawRectangle(36, 40, 4, 14, base)
-    rl.DrawRectangle(12, 28, 6, 10, shade)
-    rl.DrawRectangle(46, 28, 6, 10, shade)
-    rl.DrawRectangle(14, 28, 4, 8, base)
-    rl.DrawRectangle(46, 28, 4, 8, base)
-    rl.DrawRectangle(24, 18, 4, 4, eye)
-    rl.DrawRectangle(36, 18, 4, 4, eye)
-    rl.DrawRectangle(28, 22, 8, 3, gfx.Color{ 26, 18, 16, 180 })
+    gfx.draw_rect(22, 6, 20, 8, glow)
+    gfx.draw_rect(18, 14, 28, 12, shade)
+    gfx.draw_rect(20, 16, 24, 10, base)
+    gfx.draw_rect(16, 24, 32, 18, shade)
+    gfx.draw_rect(18, 24, 28, 16, base)
+    gfx.draw_rect(22, 40, 8, 16, shade)
+    gfx.draw_rect(34, 40, 8, 16, shade)
+    gfx.draw_rect(24, 40, 4, 14, base)
+    gfx.draw_rect(36, 40, 4, 14, base)
+    gfx.draw_rect(12, 28, 6, 10, shade)
+    gfx.draw_rect(46, 28, 6, 10, shade)
+    gfx.draw_rect(14, 28, 4, 8, base)
+    gfx.draw_rect(46, 28, 4, 8, base)
+    gfx.draw_rect(24, 18, 4, 4, eye)
+    gfx.draw_rect(36, 18, 4, 4, eye)
+    gfx.draw_rect(28, 22, 8, 3, gfx.Color{ 26, 18, 16, 180 })
 
-    rl.EndTextureMode()
+    gfx.target_end()
     return EntitySpriteEntry{
         tex     = rt.texture,
         src     = { 0, 0, f32(size), -f32(size) },
@@ -1694,9 +1693,9 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
     n += copy(path_buf[n:], ".png")
     path_buf[n] = 0
 
-    loaded := rl.LoadTexture(cstring(&path_buf[0]))
+    loaded := gfx.load_texture(cstring(&path_buf[0]))
     if loaded.id != 0 {
-        rl.SetTextureFilter(loaded, .BILINEAR)
+        gfx.texture_set_filter(loaded, .BILINEAR)
         entry = EntitySpriteEntry{
             tex = loaded,
             src = { 0, 0, f32(loaded.width), f32(loaded.height) },
@@ -1710,7 +1709,7 @@ get_or_load_entity_sprite :: proc(stem: cstring) -> (entry: EntitySpriteEntry, o
     return entry, true
 }
 
-get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: gfx.Rect, ok: bool) {
+get_entity_sprite_tex :: proc(stem: string) -> (tex: gfx.Texture, src: gfx.Rect, ok: bool) {
     if len(stem) == 0 { return }
     buf: [64]u8
     n   := min(len(stem), len(buf)-1)
@@ -1723,16 +1722,16 @@ get_entity_sprite_tex :: proc(stem: string) -> (tex: rl.Texture2D, src: gfx.Rect
 
 ISO_SPRITE_Y :: ISO_TILE_H / ISO_TILE_W
 
-draw_entity_sprite_quad_ex :: proc(tex: rl.Texture2D, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, rotation_rad: f32, tint: gfx.Color, y_scale: f32 = ISO_SPRITE_Y, anchor: [2]f32 = {0.5, 1.0}) {
+draw_entity_sprite_quad_ex :: proc(tex: gfx.Texture, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, rotation_rad: f32, tint: gfx.Color, y_scale: f32 = ISO_SPRITE_Y, anchor: [2]f32 = {0.5, 1.0}) {
     iso     := world_to_iso_v(pos)
     iso_h   := world_size * y_scale
     dst     := gfx.Rect{ iso.x, iso.y, world_size, iso_h }
     origin  := gfx.Vec2{ world_size * anchor[0], iso_h * anchor[1] }
     iso_rot := world_rot_to_iso(rotation_rad)
-    rl.DrawTexturePro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
+    gfx.draw_texture_pro(tex, src, dst, origin, math.to_degrees(iso_rot) + 90.0, tint)
 }
 
-draw_player_sprite :: proc(tex: rl.Texture2D, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, tint: gfx.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
+draw_player_sprite :: proc(tex: gfx.Texture, src: gfx.Rect, pos: gfx.Vec2, world_size: f32, tint: gfx.Color, anchor: [2]f32 = {0.5, 1.0}, flip_x: bool = false) {
     iso    := world_to_iso_v(pos)
     aspect := src.height / src.width
     iso_h  := world_size * aspect
@@ -1740,12 +1739,12 @@ draw_player_sprite :: proc(tex: rl.Texture2D, src: gfx.Rect, pos: gfx.Vec2, worl
     origin := gfx.Vec2{ world_size * anchor[0], iso_h * anchor[1] }
     s      := src
     if flip_x { s.width = -s.width }
-    rl.DrawTexturePro(tex, s, dst, origin, 0.0, tint)
+    gfx.draw_texture_pro(tex, s, dst, origin, 0.0, tint)
 }
 
 @(private = "file")
 draw_text_wrapped :: proc(
-    font: rl.Font, text: cstring,
+    font: gfx.Font, text: cstring,
     x, y, fs, max_w, spacing: f32,
     color: gfx.Color,
 ) -> f32 {
@@ -1759,10 +1758,10 @@ draw_text_wrapped :: proc(
         if ch == ' ' || i == len(str) {
             seg    := str[line_start:i]
             seg_cs := strings.clone_to_cstring(seg, context.temp_allocator)
-            sz     := rl.MeasureTextEx(font, seg_cs, fs, spacing)
+            sz     := gfx.measure_text(font, seg_cs, fs, spacing)
             if sz.x > max_w && last_space > line_start {
                 line := strings.clone_to_cstring(str[line_start:last_space], context.temp_allocator)
-                rl.DrawTextEx(font, line, { x, cur_y }, fs, spacing, color)
+                gfx.draw_text(font, line, { x, cur_y }, fs, spacing, color)
                 cur_y      += line_h
                 line_start  = last_space + 1
             }
@@ -1770,7 +1769,7 @@ draw_text_wrapped :: proc(
         }
     }
     if line_start < len(str) {
-        rl.DrawTextEx(font,
+        gfx.draw_text(font,
             strings.clone_to_cstring(str[line_start:], context.temp_allocator),
             { x, cur_y }, fs, spacing, color)
         cur_y += line_h
@@ -1831,17 +1830,17 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
     if ty < 4                          { ty = 4 }
     if ty + TH  > gfx.screen_height() { ty = gfx.screen_height() - TH - 4 }
 
-    rl.DrawRectangle(tx, ty, TW, TH, gfx.Color{ 6, 4, 3, 252 })
-    rl.DrawRectangle(tx, ty, TW, 3,  gfx.Color{ rc.r, rc.g, rc.b, 230 })
-    rl.DrawRectangleLinesEx({ f32(tx), f32(ty), f32(TW), f32(TH) }, 1,
+    gfx.draw_rect(tx, ty, TW, TH, gfx.Color{ 6, 4, 3, 252 })
+    gfx.draw_rect(tx, ty, TW, 3,  gfx.Color{ rc.r, rc.g, rc.b, 230 })
+    gfx.draw_rect_lines({ f32(tx), f32(ty), f32(TW), f32(TH) }, 1,
         gfx.Color{ rc.r, rc.g, rc.b, 160 })
 
     icon_x := tx + i32(uis(10))
     icon_y := ty + i32(uis(10))
 
-    rl.DrawRectangle(icon_x - 2, icon_y - 2, IS + 4, IS + 4,
+    gfx.draw_rect(icon_x - 2, icon_y - 2, IS + 4, IS + 4,
         gfx.Color{ rc.r / 5, rc.g / 5, rc.b / 5, 200 })
-    rl.DrawRectangleLinesEx(
+    gfx.draw_rect_lines(
         { f32(icon_x - 2), f32(icon_y - 2), f32(IS + 4), f32(IS + 4) }, 1,
         gfx.Color{ rc.r, rc.g, rc.b, 100 })
 
@@ -1853,7 +1852,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             if ok {
                 src := gfx.Rect{ 0, 0, f32(tex.width), f32(tex.height) }
                 dst := gfx.Rect{ f32(icon_x), f32(icon_y), f32(IS), f32(IS) }
-                rl.DrawTexturePro(tex, src, dst, {0, 0}, 0,
+                gfx.draw_texture_pro(tex, src, dst, {0, 0}, 0,
                     gfx.Color{ rc.r, rc.g, rc.b, 220 })
                 icon_drawn = true
             }
@@ -1864,7 +1863,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
     }
 
     div_x := tx + IS + i32(uis(22))
-    rl.DrawLineEx(
+    gfx.draw_line_ex(
         { f32(div_x), f32(ty) + uis(8) },
         { f32(div_x), f32(ty + TH) - uis(8) },
         1, gfx.Color{ rc.r, rc.g, rc.b, 80 })
@@ -1878,7 +1877,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
     if world_has_component(w, item_id, .RenderConfig) {
         rcc  := comp_get(w, item_id, .RenderConfig, RenderConfigComp)
         name := loc_lookup(render_config_name_cstr(rcc))
-        rl.DrawTextEx(g_font_body, name, { tx2, ty2 }, fs15, 0.5,
+        gfx.draw_text(g_font_body, name, { tx2, ty2 }, fs15, 0.5,
             gfx.Color{ rc.r, rc.g, rc.b, 245 })
     }
 
@@ -1889,17 +1888,17 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
         .Legendary = "Legendary",
         .Unique    = "Unique",
     }
-    rl.DrawTextEx(g_font_body, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
+    gfx.draw_text(g_font_body, rarity_labels[item.rarity], { tx2, ty2 + uis(22) }, fs13, 0.5,
         gfx.Color{ rc.r, rc.g, rc.b, 195 })
 
     if item.ability_type != .None && int(item.ability_type) < len(ABILITY_DEFS) {
         def := ABILITY_DEFS[item.ability_type]
-        rl.DrawTextEx(g_font_body, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
+        gfx.draw_text(g_font_body, "Active Ability", { tx2, ty2 + uis(42) }, fs13, 0.5,
             gfx.Color{ 200, 170, 100, 210 })
         cd_buf: [32]u8
         cd_s := fmt.bprintf(cd_buf[:31], "Cooldown: %.0fs", def.cd_max)
         cd_buf[len(cd_s)] = 0
-        rl.DrawTextEx(g_font_body, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+        gfx.draw_text(g_font_body, cstring(&cd_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
     } else if world_has_component(w, item_id, .Flask) {
         fc := comp_get(w, item_id, .Flask, FlaskComp)
 
@@ -1910,24 +1909,24 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             ns := fmt.bprintf(name_buf[:39], "%s %s Flask",
                 size_names[fc.size], kind_names[fc.kind])
             name_buf[len(ns)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&name_buf[0]), { tx2, ty2 }, fs15, 0.5,
+            gfx.draw_text(g_font_body, cstring(&name_buf[0]), { tx2, ty2 }, fs15, 0.5,
                 gfx.Color{ rc.r, rc.g, rc.b, 245 })
         }
         slot_label: cstring = "Health Flask [1]" if item.slot == .Flask1 else "Energy Flask [2]"
-        rl.DrawTextEx(g_font_body, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
+        gfx.draw_text(g_font_body, slot_label, { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
         stat_buf: [64]u8
         recover_what: string = "HP" if fc.kind == .Health else "Energy"
         rs := fmt.bprintf(stat_buf[:63], "Recovers %.0f %s over %.0fs",
             fc.recover_amount, recover_what, fc.recover_duration)
         stat_buf[len(rs)] = 0
-        rl.DrawTextEx(g_font_body, cstring(&stat_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_STAT)
+        gfx.draw_text(g_font_body, cstring(&stat_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_STAT)
 
         chg_buf: [32]u8
         cs := fmt.bprintf(chg_buf[:31], "Charges: %d / %d", fc.charges, fc.max_charges)
         chg_buf[len(cs)] = 0
         chg_col := COL_AFFIX if fc.charges > 0 else COL_MUTED
-        rl.DrawTextEx(g_font_body, cstring(&chg_buf[0]), { tx2, ty2 + uis(78) }, fs13, 0.5, chg_col)
+        gfx.draw_text(g_font_body, cstring(&chg_buf[0]), { tx2, ty2 + uis(78) }, fs13, 0.5, chg_col)
     } else {
         slot_labels := [EquipSlot]cstring{
             .Head          = "Slot: Head",
@@ -1943,7 +1942,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             .Flask1        = "Health Flask",
             .Flask2        = "Energy Flask",
         }
-        rl.DrawTextEx(g_font_body, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
+        gfx.draw_text(g_font_body, slot_labels[item.slot], { tx2, ty2 + uis(42) }, fs13, 0.5, COL_MUTED)
 
         archetype_labels := [WeaponArchetype]cstring{
             .None    = "",
@@ -1955,13 +1954,13 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             .Sword   = "Sword",
         }
         if item.weapon_archetype != .None {
-            rl.DrawTextEx(g_font_body, archetype_labels[item.weapon_archetype],
+            gfx.draw_text(g_font_body, archetype_labels[item.weapon_archetype],
                 { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
         } else {
             size_buf: [32]u8
             size_str := fmt.bprintf(size_buf[:31], "%d x %d", item.grid_w, item.grid_h)
             size_buf[len(size_str)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
+            gfx.draw_text(g_font_body, cstring(&size_buf[0]), { tx2, ty2 + uis(60) }, fs13, 0.5, COL_MUTED)
         }
     }
 
@@ -1972,51 +1971,51 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             if item.base_damage > 0 {
                 s := fmt.bprintf(sbuf[:47], "DMG  %.0f", item.base_damage)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.base_fire_rate > 0 {
                 s := fmt.bprintf(sbuf[:47], "RATE  %.1f/s", item.base_fire_rate)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.base_ammo_max > 0 {
                 s := fmt.bprintf(sbuf[:47], "MAG  %d", int(item.base_ammo_max))
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.base_reload_time > 0 {
                 s := fmt.bprintf(sbuf[:47], "RELOAD  %.1fs", item.base_reload_time)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
         } else if item.is_melee {
             if item.melee_damage > 0 {
                 s := fmt.bprintf(sbuf[:47], "DMG  %.0f", item.melee_damage)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
             if item.melee_cooldown_max > 0 {
                 s := fmt.bprintf(sbuf[:47], "ATK SPD  %.1f/s", 1.0 / item.melee_cooldown_max)
                 sbuf[len(s)] = 0
-                rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+                gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
                 stat_y += uis(17)
             }
         }
         if item.base_armor > 0 {
             s := fmt.bprintf(sbuf[:47], "ARMOR  %.0f%%", item.base_armor * 100)
             sbuf[len(s)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+            gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
             stat_y += uis(17)
         }
         if item.base_shield > 0 {
             s := fmt.bprintf(sbuf[:47], "SHIELD  +%.0f", item.base_shield)
             sbuf[len(s)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
+            gfx.draw_text(g_font_body, cstring(&sbuf[0]), {tx2, stat_y}, fs13, 0.5, COL_STAT)
             stat_y += uis(17)
         }
         if stat_line_count > 0 { stat_y += uis(6) }
@@ -2040,7 +2039,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             rbuf: [32]u8
             rs := fmt.bprintf(rbuf[:31], "STR %d required", item.req_str)
             rbuf[len(rs)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&rbuf[0]),
+            gfx.draw_text(g_font_body, cstring(&rbuf[0]),
                 { tx2, req_y_base + uis(17) * f32(req_row) }, fs13, 0.5, col)
             req_row += 1
         }
@@ -2049,7 +2048,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             rbuf: [32]u8
             rs := fmt.bprintf(rbuf[:31], "DEX %d required", item.req_dex)
             rbuf[len(rs)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&rbuf[0]),
+            gfx.draw_text(g_font_body, cstring(&rbuf[0]),
                 { tx2, req_y_base + uis(17) * f32(req_row) }, fs13, 0.5, col)
             req_row += 1
         }
@@ -2058,7 +2057,7 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             rbuf: [32]u8
             rs := fmt.bprintf(rbuf[:31], "SCI %d required", item.req_sci)
             rbuf[len(rs)] = 0
-            rl.DrawTextEx(g_font_body, cstring(&rbuf[0]),
+            gfx.draw_text(g_font_body, cstring(&rbuf[0]),
                 { tx2, req_y_base + uis(17) * f32(req_row) }, fs13, 0.5, col)
         }
     }
@@ -2115,11 +2114,11 @@ draw_item_tooltip :: proc(w: ^World, item_id: int, mx, my: f32) {
             as = fmt.bprintf(abuf[:31], "+%.0f%%  %s", a.value * 100, affix_type_labels[a.type])
         }
         abuf[len(as)] = 0
-        rl.DrawTextEx(g_font_body, cstring(&abuf[0]), { tx2, ay }, fs13, 0.5, COL_AFFIX)
+        gfx.draw_text(g_font_body, cstring(&abuf[0]), { tx2, ay }, fs13, 0.5, COL_AFFIX)
     }
 
     if has_desc {
-        rl.DrawLineEx(
+        gfx.draw_line_ex(
             { f32(tx) + uis(10), f32(ty + TH) - uis(36) },
             { f32(tx + TW) - uis(10), f32(ty + TH) - uis(36) },
             1, gfx.Color{ rc.r, rc.g, rc.b, 50 })
@@ -2191,16 +2190,16 @@ draw_levelup_flash :: proc() {
     alpha := u8(clamp(g_levelup_flash / LEVELUP_FLASH_TIME, 0, 1) * 230)
     fs    := uis(52)
     text  := t(.HUD_LEVELUP)
-    tsz   := rl.MeasureTextEx(g_font, text, fs, 2)
-    rl.DrawTextEx(g_font, text,
+    tsz   := gfx.measure_text(g_font, text, fs, 2)
+    gfx.draw_text(g_font, text,
         { f32(sw)*0.5 - tsz.x*0.5, f32(sh)*0.36 - tsz.y*0.5 },
         fs, 2, { 220, 196, 58, alpha })
 
     sfs  := uis(18)
     sub  := t(.HUD_STATPOINT)
-    ssz  := rl.MeasureTextEx(g_font, sub, sfs, 1)
+    ssz  := gfx.measure_text(g_font, sub, sfs, 1)
     salp := u8(clamp(g_levelup_flash / LEVELUP_FLASH_TIME, 0, 1) * 180)
-    rl.DrawTextEx(g_font, sub,
+    gfx.draw_text(g_font, sub,
         { f32(sw)*0.5 - ssz.x*0.5, f32(sh)*0.36 + tsz.y*0.5 + uis(6) },
         sfs, 1, { 200, 180, 120, salp })
 }
@@ -2275,7 +2274,7 @@ sprite_facing_flip :: proc(w: ^World, id: int, rot: f32) -> bool {
 }
 
 SpriteFrame :: struct {
-    tex:        rl.Texture2D,
+    tex:        gfx.Texture,
     src:        gfx.Rect,
     anchor:     [2]f32,
     ground:     f32,
@@ -2338,10 +2337,10 @@ sprite_ground_fraction :: proc(stem: string, frame_w, frame_h: int) -> f32 {
     ground := f32(1.0)
 
     path := fmt.tprintf("data/sprites/entities/%s.png", stem)
-    img  := rl.LoadImage(strings.clone_to_cstring(path, context.temp_allocator))
+    img  := gfx.load_image(strings.clone_to_cstring(path, context.temp_allocator))
     if img.data != nil {
         if img.format != .UNCOMPRESSED_R8G8B8A8 {
-            rl.ImageFormat(&img, .UNCOMPRESSED_R8G8B8A8)
+            gfx.image_format(&img, .UNCOMPRESSED_R8G8B8A8)
         }
         fw := min(frame_w, int(img.width))
         fh := min(frame_h, int(img.height))
@@ -2358,7 +2357,7 @@ sprite_ground_fraction :: proc(stem: string, frame_w, frame_h: int) -> f32 {
                 }
             }
         }
-        rl.UnloadImage(img)
+        gfx.unload_image(img)
     }
 
     g_sprite_ground_cache[strings.clone(stem)] = ground

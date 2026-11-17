@@ -1,6 +1,5 @@
 package main
 
-import rl "vendor:raylib"
 import gfx "gfx"
 import "core:math"
 import "core:c"
@@ -204,7 +203,7 @@ lighting_config_apply :: proc(c: LevelLightingConfig) {
     g_fog_scatter                  = c.fog_scatter
 }
 
-@(private = "file") g_cloud_shader: rl.Shader
+@(private = "file") g_cloud_shader: gfx.Shader
 @(private = "file") g_cloud_locs: struct {
     screen_size:     c.int,
     camera_target:   c.int,
@@ -223,25 +222,25 @@ lighting_config_apply :: proc(c: LevelLightingConfig) {
 }
 
 init_cloud_shader :: proc() {
-    g_cloud_shader = rl.LoadShader(nil, "data/shaders/cloud_shadow.fs")
-    g_cloud_locs.screen_size     = rl.GetShaderLocation(g_cloud_shader, "u_screen_size")
-    g_cloud_locs.camera_target   = rl.GetShaderLocation(g_cloud_shader, "u_camera_target")
-    g_cloud_locs.camera_offset   = rl.GetShaderLocation(g_cloud_shader, "u_camera_offset")
-    g_cloud_locs.camera_zoom     = rl.GetShaderLocation(g_cloud_shader, "u_camera_zoom")
-    g_cloud_locs.time            = rl.GetShaderLocation(g_cloud_shader, "u_time")
-    g_cloud_locs.cloud_freq      = rl.GetShaderLocation(g_cloud_shader, "u_cloud_freq")
-    g_cloud_locs.cloud_freq_fine = rl.GetShaderLocation(g_cloud_shader, "u_cloud_freq_fine")
-    g_cloud_locs.cloud_drift     = rl.GetShaderLocation(g_cloud_shader, "u_cloud_drift")
-    g_cloud_locs.cloud_thresh_lo = rl.GetShaderLocation(g_cloud_shader, "u_cloud_thresh_lo")
-    g_cloud_locs.cloud_thresh_hi = rl.GetShaderLocation(g_cloud_shader, "u_cloud_thresh_hi")
-    g_cloud_locs.cloud_alpha_min = rl.GetShaderLocation(g_cloud_shader, "u_cloud_alpha_min")
-    g_cloud_locs.cloud_alpha_max = rl.GetShaderLocation(g_cloud_shader, "u_cloud_alpha_max")
-    g_cloud_locs.cloud_contrast  = rl.GetShaderLocation(g_cloud_shader, "u_cloud_contrast")
-    g_cloud_locs.cloud_tint      = rl.GetShaderLocation(g_cloud_shader, "u_cloud_tint")
+    g_cloud_shader = gfx.load_shader_fs("data/shaders/cloud_shadow.fs")
+    g_cloud_locs.screen_size     = gfx.shader_location(g_cloud_shader, "u_screen_size")
+    g_cloud_locs.camera_target   = gfx.shader_location(g_cloud_shader, "u_camera_target")
+    g_cloud_locs.camera_offset   = gfx.shader_location(g_cloud_shader, "u_camera_offset")
+    g_cloud_locs.camera_zoom     = gfx.shader_location(g_cloud_shader, "u_camera_zoom")
+    g_cloud_locs.time            = gfx.shader_location(g_cloud_shader, "u_time")
+    g_cloud_locs.cloud_freq      = gfx.shader_location(g_cloud_shader, "u_cloud_freq")
+    g_cloud_locs.cloud_freq_fine = gfx.shader_location(g_cloud_shader, "u_cloud_freq_fine")
+    g_cloud_locs.cloud_drift     = gfx.shader_location(g_cloud_shader, "u_cloud_drift")
+    g_cloud_locs.cloud_thresh_lo = gfx.shader_location(g_cloud_shader, "u_cloud_thresh_lo")
+    g_cloud_locs.cloud_thresh_hi = gfx.shader_location(g_cloud_shader, "u_cloud_thresh_hi")
+    g_cloud_locs.cloud_alpha_min = gfx.shader_location(g_cloud_shader, "u_cloud_alpha_min")
+    g_cloud_locs.cloud_alpha_max = gfx.shader_location(g_cloud_shader, "u_cloud_alpha_max")
+    g_cloud_locs.cloud_contrast  = gfx.shader_location(g_cloud_shader, "u_cloud_contrast")
+    g_cloud_locs.cloud_tint      = gfx.shader_location(g_cloud_shader, "u_cloud_tint")
 }
 
 shutdown_cloud_shader :: proc() {
-    rl.UnloadShader(g_cloud_shader)
+    gfx.unload_shader(g_cloud_shader)
 }
 
 @(private = "file")
@@ -249,7 +248,7 @@ world_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
     return cartesian_view_bounds(pad)
 }
 
-@(private = "file") g_godray_shader: rl.Shader
+@(private = "file") g_godray_shader: gfx.Shader
 @(private = "file") g_godray_locs: struct {
     screen_size:      c.int,
     camera_target:    c.int,
@@ -270,41 +269,41 @@ world_view_bounds :: proc(pad: f32 = 0) -> (min_x, min_y, max_x, max_y: f32) {
 }
 
 init_godray_shader :: proc() {
-    g_godray_shader = rl.LoadShader(nil, "data/shaders/god_rays.fs")
-    g_godray_locs.screen_size   = rl.GetShaderLocation(g_godray_shader, "u_screen_size")
-    g_godray_locs.camera_target = rl.GetShaderLocation(g_godray_shader, "u_camera_target")
-    g_godray_locs.camera_offset = rl.GetShaderLocation(g_godray_shader, "u_camera_offset")
-    g_godray_locs.camera_zoom   = rl.GetShaderLocation(g_godray_shader, "u_camera_zoom")
-    g_godray_locs.time          = rl.GetShaderLocation(g_godray_shader, "u_time")
-    g_godray_locs.sun_dir       = rl.GetShaderLocation(g_godray_shader, "u_sun_dir")
-    g_godray_locs.ray_spacing   = rl.GetShaderLocation(g_godray_shader, "u_ray_spacing")
-    g_godray_locs.ray_width     = rl.GetShaderLocation(g_godray_shader, "u_ray_width")
-    g_godray_locs.ray_thresh    = rl.GetShaderLocation(g_godray_shader, "u_ray_thresh")
-    g_godray_locs.ray_alpha     = rl.GetShaderLocation(g_godray_shader, "u_ray_alpha")
-    g_godray_locs.cloud_freq      = rl.GetShaderLocation(g_godray_shader, "u_cloud_freq")
-    g_godray_locs.cloud_freq_fine = rl.GetShaderLocation(g_godray_shader, "u_cloud_freq_fine")
-    g_godray_locs.cloud_drift     = rl.GetShaderLocation(g_godray_shader, "u_cloud_drift")
-    g_godray_locs.cloud_thresh_lo = rl.GetShaderLocation(g_godray_shader, "u_cloud_thresh_lo")
-    g_godray_locs.cloud_thresh_hi = rl.GetShaderLocation(g_godray_shader, "u_cloud_thresh_hi")
-    g_godray_locs.cloud_contrast  = rl.GetShaderLocation(g_godray_shader, "u_cloud_contrast")
+    g_godray_shader = gfx.load_shader_fs("data/shaders/god_rays.fs")
+    g_godray_locs.screen_size   = gfx.shader_location(g_godray_shader, "u_screen_size")
+    g_godray_locs.camera_target = gfx.shader_location(g_godray_shader, "u_camera_target")
+    g_godray_locs.camera_offset = gfx.shader_location(g_godray_shader, "u_camera_offset")
+    g_godray_locs.camera_zoom   = gfx.shader_location(g_godray_shader, "u_camera_zoom")
+    g_godray_locs.time          = gfx.shader_location(g_godray_shader, "u_time")
+    g_godray_locs.sun_dir       = gfx.shader_location(g_godray_shader, "u_sun_dir")
+    g_godray_locs.ray_spacing   = gfx.shader_location(g_godray_shader, "u_ray_spacing")
+    g_godray_locs.ray_width     = gfx.shader_location(g_godray_shader, "u_ray_width")
+    g_godray_locs.ray_thresh    = gfx.shader_location(g_godray_shader, "u_ray_thresh")
+    g_godray_locs.ray_alpha     = gfx.shader_location(g_godray_shader, "u_ray_alpha")
+    g_godray_locs.cloud_freq      = gfx.shader_location(g_godray_shader, "u_cloud_freq")
+    g_godray_locs.cloud_freq_fine = gfx.shader_location(g_godray_shader, "u_cloud_freq_fine")
+    g_godray_locs.cloud_drift     = gfx.shader_location(g_godray_shader, "u_cloud_drift")
+    g_godray_locs.cloud_thresh_lo = gfx.shader_location(g_godray_shader, "u_cloud_thresh_lo")
+    g_godray_locs.cloud_thresh_hi = gfx.shader_location(g_godray_shader, "u_cloud_thresh_hi")
+    g_godray_locs.cloud_contrast  = gfx.shader_location(g_godray_shader, "u_cloud_contrast")
 }
 
 shutdown_godray_shader :: proc() {
-    rl.UnloadShader(g_godray_shader)
+    gfx.unload_shader(g_godray_shader)
 }
 
-g_world_rt: rl.RenderTexture2D
-g_shadow_rt: rl.RenderTexture2D
-g_sprite_rt: rl.RenderTexture2D
+g_world_rt: gfx.RenderTexture
+g_shadow_rt: gfx.RenderTexture
+g_sprite_rt: gfx.RenderTexture
 @(private = "file") g_light_rt_w: i32
 @(private = "file") g_light_rt_h: i32
 
-g_wall_mask:       rl.RenderTexture2D
+g_wall_mask:       gfx.RenderTexture
 g_wall_mask_dirty: bool = true
 @(private = "file") g_wall_mask_origin: [2]f32
 @(private = "file") g_wall_mask_size:   [2]f32
 
-@(private = "file") g_directional_shader: rl.Shader
+@(private = "file") g_directional_shader: gfx.Shader
 @(private = "file") g_directional_locs: struct {
     shadow_tex:      c.int,
     screen_size:     c.int,
@@ -315,7 +314,7 @@ g_wall_mask_dirty: bool = true
     sun_color:       c.int,
 }
 
-@(private = "file") g_spritelight_shader: rl.Shader
+@(private = "file") g_spritelight_shader: gfx.Shader
 @(private = "file") g_spritelight_locs: struct {
     shadow_tex:       c.int,
     screen_size:      c.int,
@@ -345,49 +344,49 @@ g_wall_mask_dirty: bool = true
 }
 
 init_directional_shader :: proc() {
-    g_directional_shader = rl.LoadShader(nil, "data/shaders/directional_light.fs")
-    g_directional_locs.shadow_tex    = rl.GetShaderLocation(g_directional_shader, "u_shadow_tex")
-    g_directional_locs.screen_size   = rl.GetShaderLocation(g_directional_shader, "u_screen_size")
-    g_directional_locs.sun_dir       = rl.GetShaderLocation(g_directional_shader, "u_sun_dir")
-    g_directional_locs.sun_intensity = rl.GetShaderLocation(g_directional_shader, "u_sun_intensity")
-    g_directional_locs.ambient       = rl.GetShaderLocation(g_directional_shader, "u_ambient")
-    g_directional_locs.shadow_alpha  = rl.GetShaderLocation(g_directional_shader, "u_shadow_alpha")
-    g_directional_locs.sun_color     = rl.GetShaderLocation(g_directional_shader, "u_sun_color")
+    g_directional_shader = gfx.load_shader_fs("data/shaders/directional_light.fs")
+    g_directional_locs.shadow_tex    = gfx.shader_location(g_directional_shader, "u_shadow_tex")
+    g_directional_locs.screen_size   = gfx.shader_location(g_directional_shader, "u_screen_size")
+    g_directional_locs.sun_dir       = gfx.shader_location(g_directional_shader, "u_sun_dir")
+    g_directional_locs.sun_intensity = gfx.shader_location(g_directional_shader, "u_sun_intensity")
+    g_directional_locs.ambient       = gfx.shader_location(g_directional_shader, "u_ambient")
+    g_directional_locs.shadow_alpha  = gfx.shader_location(g_directional_shader, "u_shadow_alpha")
+    g_directional_locs.sun_color     = gfx.shader_location(g_directional_shader, "u_sun_color")
 
-    g_spritelight_shader = rl.LoadShader(nil, "data/shaders/sprite_light.fs")
-    g_spritelight_locs.shadow_tex        = rl.GetShaderLocation(g_spritelight_shader, "u_shadow_tex")
-    g_spritelight_locs.screen_size       = rl.GetShaderLocation(g_spritelight_shader, "u_screen_size")
-    g_spritelight_locs.sun_dir           = rl.GetShaderLocation(g_spritelight_shader, "u_sun_dir")
-    g_spritelight_locs.sun_color         = rl.GetShaderLocation(g_spritelight_shader, "u_sun_color")
-    g_spritelight_locs.sun_intensity     = rl.GetShaderLocation(g_spritelight_shader, "u_sun_intensity")
-    g_spritelight_locs.ambient           = rl.GetShaderLocation(g_spritelight_shader, "u_ambient")
-    g_spritelight_locs.shadow_alpha      = rl.GetShaderLocation(g_spritelight_shader, "u_shadow_alpha")
-    g_spritelight_locs.min_brightness    = rl.GetShaderLocation(g_spritelight_shader, "u_min_brightness")
-    g_spritelight_locs.outline_strength  = rl.GetShaderLocation(g_spritelight_shader, "u_outline_strength")
-    g_spritelight_locs.diffuse_strength  = rl.GetShaderLocation(g_spritelight_shader, "u_diffuse_strength")
-    g_spritelight_locs.rim_strength      = rl.GetShaderLocation(g_spritelight_shader, "u_rim_strength")
-    g_spritelight_locs.shadow_response   = rl.GetShaderLocation(g_spritelight_shader, "u_shadow_response")
-    g_spritelight_locs.camera_target     = rl.GetShaderLocation(g_spritelight_shader, "u_camera_target")
-    g_spritelight_locs.camera_offset     = rl.GetShaderLocation(g_spritelight_shader, "u_camera_offset")
-    g_spritelight_locs.camera_zoom       = rl.GetShaderLocation(g_spritelight_shader, "u_camera_zoom")
-    g_spritelight_locs.fog_scatter       = rl.GetShaderLocation(g_spritelight_shader, "u_fog_scatter")
-    g_spritelight_locs.light_count       = rl.GetShaderLocation(g_spritelight_shader, "u_light_count")
-    g_spritelight_locs.light_pos         = rl.GetShaderLocation(g_spritelight_shader, "u_light_pos")
-    g_spritelight_locs.light_color       = rl.GetShaderLocation(g_spritelight_shader, "u_light_color")
-    g_spritelight_locs.light_radius      = rl.GetShaderLocation(g_spritelight_shader, "u_light_radius")
-    g_spritelight_locs.light_intensity   = rl.GetShaderLocation(g_spritelight_shader, "u_light_intensity")
-    g_spritelight_locs.wall_mask         = rl.GetShaderLocation(g_spritelight_shader, "u_wall_mask")
-    g_spritelight_locs.wall_origin       = rl.GetShaderLocation(g_spritelight_shader, "u_wall_origin")
-    g_spritelight_locs.wall_size         = rl.GetShaderLocation(g_spritelight_shader, "u_wall_size")
-    g_spritelight_locs.tile_size         = rl.GetShaderLocation(g_spritelight_shader, "u_tile_size")
+    g_spritelight_shader = gfx.load_shader_fs("data/shaders/sprite_light.fs")
+    g_spritelight_locs.shadow_tex        = gfx.shader_location(g_spritelight_shader, "u_shadow_tex")
+    g_spritelight_locs.screen_size       = gfx.shader_location(g_spritelight_shader, "u_screen_size")
+    g_spritelight_locs.sun_dir           = gfx.shader_location(g_spritelight_shader, "u_sun_dir")
+    g_spritelight_locs.sun_color         = gfx.shader_location(g_spritelight_shader, "u_sun_color")
+    g_spritelight_locs.sun_intensity     = gfx.shader_location(g_spritelight_shader, "u_sun_intensity")
+    g_spritelight_locs.ambient           = gfx.shader_location(g_spritelight_shader, "u_ambient")
+    g_spritelight_locs.shadow_alpha      = gfx.shader_location(g_spritelight_shader, "u_shadow_alpha")
+    g_spritelight_locs.min_brightness    = gfx.shader_location(g_spritelight_shader, "u_min_brightness")
+    g_spritelight_locs.outline_strength  = gfx.shader_location(g_spritelight_shader, "u_outline_strength")
+    g_spritelight_locs.diffuse_strength  = gfx.shader_location(g_spritelight_shader, "u_diffuse_strength")
+    g_spritelight_locs.rim_strength      = gfx.shader_location(g_spritelight_shader, "u_rim_strength")
+    g_spritelight_locs.shadow_response   = gfx.shader_location(g_spritelight_shader, "u_shadow_response")
+    g_spritelight_locs.camera_target     = gfx.shader_location(g_spritelight_shader, "u_camera_target")
+    g_spritelight_locs.camera_offset     = gfx.shader_location(g_spritelight_shader, "u_camera_offset")
+    g_spritelight_locs.camera_zoom       = gfx.shader_location(g_spritelight_shader, "u_camera_zoom")
+    g_spritelight_locs.fog_scatter       = gfx.shader_location(g_spritelight_shader, "u_fog_scatter")
+    g_spritelight_locs.light_count       = gfx.shader_location(g_spritelight_shader, "u_light_count")
+    g_spritelight_locs.light_pos         = gfx.shader_location(g_spritelight_shader, "u_light_pos")
+    g_spritelight_locs.light_color       = gfx.shader_location(g_spritelight_shader, "u_light_color")
+    g_spritelight_locs.light_radius      = gfx.shader_location(g_spritelight_shader, "u_light_radius")
+    g_spritelight_locs.light_intensity   = gfx.shader_location(g_spritelight_shader, "u_light_intensity")
+    g_spritelight_locs.wall_mask         = gfx.shader_location(g_spritelight_shader, "u_wall_mask")
+    g_spritelight_locs.wall_origin       = gfx.shader_location(g_spritelight_shader, "u_wall_origin")
+    g_spritelight_locs.wall_size         = gfx.shader_location(g_spritelight_shader, "u_wall_size")
+    g_spritelight_locs.tile_size         = gfx.shader_location(g_spritelight_shader, "u_tile_size")
 }
 
 shutdown_directional_shader :: proc() {
-    if g_world_rt.id != 0 { rl.UnloadRenderTexture(g_world_rt) }
-    if g_shadow_rt.id != 0 { rl.UnloadRenderTexture(g_shadow_rt) }
-    if g_sprite_rt.id != 0 { rl.UnloadRenderTexture(g_sprite_rt) }
-    rl.UnloadShader(g_directional_shader)
-    rl.UnloadShader(g_spritelight_shader)
+    if g_world_rt.id != 0 { gfx.unload_render_texture(g_world_rt) }
+    if g_shadow_rt.id != 0 { gfx.unload_render_texture(g_shadow_rt) }
+    if g_sprite_rt.id != 0 { gfx.unload_render_texture(g_sprite_rt) }
+    gfx.unload_shader(g_directional_shader)
+    gfx.unload_shader(g_spritelight_shader)
 }
 
 init_wall_mask :: proc() {
@@ -395,7 +394,7 @@ init_wall_mask :: proc() {
 }
 
 shutdown_wall_mask :: proc() {
-    if g_wall_mask.id != 0 { rl.UnloadRenderTexture(g_wall_mask) }
+    if g_wall_mask.id != 0 { gfx.unload_render_texture(g_wall_mask) }
 }
 
 rebuild_wall_mask :: proc() {
@@ -405,11 +404,11 @@ rebuild_wall_mask :: proc() {
     if len(g_tilemap) == 0 {
         g_wall_mask_origin = { 0, 0 }
         g_wall_mask_size   = { 1, 1 }
-        if g_wall_mask.id != 0 { rl.UnloadRenderTexture(g_wall_mask) }
-        g_wall_mask = rl.LoadRenderTexture(1, 1)
-        rl.BeginTextureMode(g_wall_mask)
-        rl.ClearBackground(gfx.BLACK)
-        rl.EndTextureMode()
+        if g_wall_mask.id != 0 { gfx.unload_render_texture(g_wall_mask) }
+        g_wall_mask = gfx.load_render_texture(1, 1)
+        gfx.target_begin(g_wall_mask)
+        gfx.clear(gfx.BLACK)
+        gfx.target_end()
         return
     }
 
@@ -429,22 +428,22 @@ rebuild_wall_mask :: proc() {
     th = clamp(th, 1, 1024)
 
     if g_wall_mask.id == 0 || i32(tw) != g_wall_mask.texture.width || i32(th) != g_wall_mask.texture.height {
-        if g_wall_mask.id != 0 { rl.UnloadRenderTexture(g_wall_mask) }
-        g_wall_mask = rl.LoadRenderTexture(i32(tw), i32(th))
+        if g_wall_mask.id != 0 { gfx.unload_render_texture(g_wall_mask) }
+        g_wall_mask = gfx.load_render_texture(i32(tw), i32(th))
     }
 
     g_wall_mask_origin = { f32(min_tx), f32(min_ty) }
     g_wall_mask_size   = { f32(tw), f32(th) }
 
-    rl.BeginTextureMode(g_wall_mask)
-    rl.ClearBackground(gfx.BLACK)
+    gfx.target_begin(g_wall_mask)
+    gfx.clear(gfx.BLACK)
     for k, v in g_tilemap {
         if tile_base(v) != .Wall { continue }
         px := i32(k[0] - min_tx)
         py := i32(k[1] - min_ty)
-        rl.DrawPixel(px, py, gfx.WHITE)
+        gfx.draw_pixel(px, py, gfx.WHITE)
     }
-    rl.EndTextureMode()
+    gfx.target_end()
 }
 
 ensure_lighting_render_targets :: proc() {
@@ -453,13 +452,13 @@ ensure_lighting_render_targets :: proc() {
     if sw <= 0 || sh <= 0 { return }
     if g_light_rt_w == sw && g_light_rt_h == sh && g_world_rt.id != 0 && g_shadow_rt.id != 0 && g_sprite_rt.id != 0 { return }
 
-    if g_world_rt.id != 0 { rl.UnloadRenderTexture(g_world_rt) }
-    if g_shadow_rt.id != 0 { rl.UnloadRenderTexture(g_shadow_rt) }
-    if g_sprite_rt.id != 0 { rl.UnloadRenderTexture(g_sprite_rt) }
+    if g_world_rt.id != 0 { gfx.unload_render_texture(g_world_rt) }
+    if g_shadow_rt.id != 0 { gfx.unload_render_texture(g_shadow_rt) }
+    if g_sprite_rt.id != 0 { gfx.unload_render_texture(g_sprite_rt) }
 
-    g_world_rt = rl.LoadRenderTexture(sw, sh)
-    g_shadow_rt = rl.LoadRenderTexture(sw, sh)
-    g_sprite_rt = rl.LoadRenderTexture(sw, sh)
+    g_world_rt = gfx.load_render_texture(sw, sh)
+    g_shadow_rt = gfx.load_render_texture(sw, sh)
+    g_sprite_rt = gfx.load_render_texture(sw, sh)
     g_light_rt_w = sw
     g_light_rt_h = sh
 }
@@ -470,7 +469,7 @@ g_fog_color:   [3]f32 = { 8, 10, 14 }
 g_fog_density: f32    = 0.55
 g_fog_scatter: f32    = 1.35
 
-@(private = "file") g_foglight_shader: rl.Shader
+@(private = "file") g_foglight_shader: gfx.Shader
 @(private = "file") g_foglight_locs: struct {
     screen_size:      c.int,
     camera_target:    c.int,
@@ -495,31 +494,31 @@ g_fog_scatter: f32    = 1.35
 }
 
 init_foglight_shader :: proc() {
-    g_foglight_shader = rl.LoadShader(nil, "data/shaders/fog_lights.fs")
-    g_foglight_locs.screen_size     = rl.GetShaderLocation(g_foglight_shader, "u_screen_size")
-    g_foglight_locs.camera_target   = rl.GetShaderLocation(g_foglight_shader, "u_camera_target")
-    g_foglight_locs.camera_offset   = rl.GetShaderLocation(g_foglight_shader, "u_camera_offset")
-    g_foglight_locs.camera_zoom     = rl.GetShaderLocation(g_foglight_shader, "u_camera_zoom")
-    g_foglight_locs.fog_color       = rl.GetShaderLocation(g_foglight_shader, "u_fog_color")
-    g_foglight_locs.fog_density     = rl.GetShaderLocation(g_foglight_shader, "u_fog_density")
-    g_foglight_locs.fog_scatter     = rl.GetShaderLocation(g_foglight_shader, "u_fog_scatter")
-    g_foglight_locs.player_pos      = rl.GetShaderLocation(g_foglight_shader, "u_player_pos")
-    g_foglight_locs.vision_radius   = rl.GetShaderLocation(g_foglight_shader, "u_vision_radius")
-    g_foglight_locs.vision_fade     = rl.GetShaderLocation(g_foglight_shader, "u_vision_fade")
-    g_foglight_locs.light_count     = rl.GetShaderLocation(g_foglight_shader, "u_light_count")
-    g_foglight_locs.light_pos       = rl.GetShaderLocation(g_foglight_shader, "u_light_pos")
-    g_foglight_locs.light_color     = rl.GetShaderLocation(g_foglight_shader, "u_light_color")
-    g_foglight_locs.light_radius    = rl.GetShaderLocation(g_foglight_shader, "u_light_radius")
-    g_foglight_locs.light_intensity = rl.GetShaderLocation(g_foglight_shader, "u_light_intensity")
-    g_foglight_locs.wall_mask       = rl.GetShaderLocation(g_foglight_shader, "u_wall_mask")
-    g_foglight_locs.wall_origin     = rl.GetShaderLocation(g_foglight_shader, "u_wall_origin")
-    g_foglight_locs.wall_size       = rl.GetShaderLocation(g_foglight_shader, "u_wall_size")
-    g_foglight_locs.tile_size       = rl.GetShaderLocation(g_foglight_shader, "u_tile_size")
-    g_foglight_locs.pass            = rl.GetShaderLocation(g_foglight_shader, "u_pass")
+    g_foglight_shader = gfx.load_shader_fs("data/shaders/fog_lights.fs")
+    g_foglight_locs.screen_size     = gfx.shader_location(g_foglight_shader, "u_screen_size")
+    g_foglight_locs.camera_target   = gfx.shader_location(g_foglight_shader, "u_camera_target")
+    g_foglight_locs.camera_offset   = gfx.shader_location(g_foglight_shader, "u_camera_offset")
+    g_foglight_locs.camera_zoom     = gfx.shader_location(g_foglight_shader, "u_camera_zoom")
+    g_foglight_locs.fog_color       = gfx.shader_location(g_foglight_shader, "u_fog_color")
+    g_foglight_locs.fog_density     = gfx.shader_location(g_foglight_shader, "u_fog_density")
+    g_foglight_locs.fog_scatter     = gfx.shader_location(g_foglight_shader, "u_fog_scatter")
+    g_foglight_locs.player_pos      = gfx.shader_location(g_foglight_shader, "u_player_pos")
+    g_foglight_locs.vision_radius   = gfx.shader_location(g_foglight_shader, "u_vision_radius")
+    g_foglight_locs.vision_fade     = gfx.shader_location(g_foglight_shader, "u_vision_fade")
+    g_foglight_locs.light_count     = gfx.shader_location(g_foglight_shader, "u_light_count")
+    g_foglight_locs.light_pos       = gfx.shader_location(g_foglight_shader, "u_light_pos")
+    g_foglight_locs.light_color     = gfx.shader_location(g_foglight_shader, "u_light_color")
+    g_foglight_locs.light_radius    = gfx.shader_location(g_foglight_shader, "u_light_radius")
+    g_foglight_locs.light_intensity = gfx.shader_location(g_foglight_shader, "u_light_intensity")
+    g_foglight_locs.wall_mask       = gfx.shader_location(g_foglight_shader, "u_wall_mask")
+    g_foglight_locs.wall_origin     = gfx.shader_location(g_foglight_shader, "u_wall_origin")
+    g_foglight_locs.wall_size       = gfx.shader_location(g_foglight_shader, "u_wall_size")
+    g_foglight_locs.tile_size       = gfx.shader_location(g_foglight_shader, "u_tile_size")
+    g_foglight_locs.pass            = gfx.shader_location(g_foglight_shader, "u_pass")
 }
 
 shutdown_foglight_shader :: proc() {
-    rl.UnloadShader(g_foglight_shader)
+    gfx.unload_shader(g_foglight_shader)
 }
 
 @(private = "file")
@@ -540,24 +539,24 @@ draw_cloud_shadow_field :: proc() {
     drift       := [2]f32{ g_light_cloud_drift_x, g_light_cloud_drift_y }
     tint        := [3]f32{ g_light_cloud_tint_r, g_light_cloud_tint_g, g_light_cloud_tint_b }
 
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.screen_size,     &screen_size,               .VEC2)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.camera_target,   &cam_target,                .VEC2)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.camera_offset,   &cam_offset,                .VEC2)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.camera_zoom,     &cam_zoom,                  .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.time,            &time,                      .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_freq,      &g_light_cloud_freq,        .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_freq_fine, &g_light_cloud_freq_fine,   .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_drift,     &drift,                     .VEC2)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_thresh_lo, &g_light_cloud_thresh_lo,   .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_thresh_hi, &g_light_cloud_thresh_hi,   .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_alpha_min, &g_light_cloud_alpha_min,   .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_alpha_max, &g_light_cloud_alpha_max,   .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_contrast,  &g_light_cloud_contrast,    .FLOAT)
-    rl.SetShaderValue(g_cloud_shader, g_cloud_locs.cloud_tint,      &tint,                      .VEC3)
+    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.screen_size, screen_size)
+    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.camera_target, cam_target)
+    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.camera_offset, cam_offset)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.camera_zoom, cam_zoom)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.time, time)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_freq, g_light_cloud_freq)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_freq_fine, g_light_cloud_freq_fine)
+    gfx.shader_set_vec2(g_cloud_shader, g_cloud_locs.cloud_drift, drift)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_thresh_lo, g_light_cloud_thresh_lo)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_thresh_hi, g_light_cloud_thresh_hi)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_alpha_min, g_light_cloud_alpha_min)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_alpha_max, g_light_cloud_alpha_max)
+    gfx.shader_set_f32(g_cloud_shader, g_cloud_locs.cloud_contrast, g_light_cloud_contrast)
+    gfx.shader_set_vec3(g_cloud_shader, g_cloud_locs.cloud_tint, tint)
 
-    rl.BeginShaderMode(g_cloud_shader)
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
-    rl.EndShaderMode()
+    gfx.shader_begin(g_cloud_shader)
+    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
+    gfx.shader_end()
 }
 
 draw_wall_sun_shadows :: proc() {
@@ -648,7 +647,7 @@ draw_entity_sprite_shadows :: proc(w: ^World) {
             r := radius * (0.9 - t_frac * 0.18)
             a := u8(clamp(180 * (1.0 - t_frac * 0.42), 0, 255))
             icp := world_to_iso_v(cp)
-            rl.DrawEllipse(i32(icp.x), i32(icp.y), r * 1.08, max(r * 0.42, 1), gfx.Color{ 6, 6, 4, a })
+            gfx.draw_ellipse(i32(icp.x), i32(icp.y), r * 1.08, max(r * 0.42, 1), gfx.Color{ 6, 6, 4, a })
         }
 
         entry, sprite_ok := get_or_load_entity_sprite(vis.sprite_key)
@@ -691,12 +690,12 @@ draw_directional_shadow_mask :: proc(w: ^World) {
     ensure_lighting_render_targets()
     if g_shadow_rt.id == 0 { return }
 
-    rl.BeginTextureMode(g_shadow_rt)
-    rl.ClearBackground(gfx.BLANK)
-    rl.BeginMode2D(g_camera^)
+    gfx.target_begin(g_shadow_rt)
+    gfx.clear(gfx.BLANK)
+    gfx.camera_begin(g_camera^)
     draw_wall_sun_shadows()
-    rl.EndMode2D()
-    rl.EndTextureMode()
+    gfx.camera_end()
+    gfx.target_end()
 }
 
 draw_directional_world_composite :: proc() {
@@ -707,20 +706,20 @@ draw_directional_world_composite :: proc() {
     sd := sun_dir()
     sun_color := [3]f32{ g_light_sun_color_r / 255.0, g_light_sun_color_g / 255.0, g_light_sun_color_b / 255.0 }
 
-    rl.SetShaderValue(g_directional_shader, g_directional_locs.screen_size,   &screen_size,            .VEC2)
-    rl.SetShaderValue(g_directional_shader, g_directional_locs.sun_dir,       &sd,                     .VEC2)
-    rl.SetShaderValue(g_directional_shader, g_directional_locs.sun_intensity, &g_light_sun_intensity,  .FLOAT)
-    rl.SetShaderValue(g_directional_shader, g_directional_locs.ambient,       &g_light_ambient,        .FLOAT)
-    rl.SetShaderValue(g_directional_shader, g_directional_locs.shadow_alpha,  &g_light_shadow_alpha,   .FLOAT)
-    rl.SetShaderValue(g_directional_shader, g_directional_locs.sun_color,     &sun_color,              .VEC3)
+    gfx.shader_set_vec2(g_directional_shader, g_directional_locs.screen_size, screen_size)
+    gfx.shader_set_vec2(g_directional_shader, g_directional_locs.sun_dir, sd)
+    gfx.shader_set_f32(g_directional_shader, g_directional_locs.sun_intensity, g_light_sun_intensity)
+    gfx.shader_set_f32(g_directional_shader, g_directional_locs.ambient, g_light_ambient)
+    gfx.shader_set_f32(g_directional_shader, g_directional_locs.shadow_alpha, g_light_shadow_alpha)
+    gfx.shader_set_vec3(g_directional_shader, g_directional_locs.sun_color, sun_color)
 
     world_src := gfx.Rect{ 0, 0, f32(g_world_rt.texture.width), -f32(g_world_rt.texture.height) }
     dst       := gfx.Rect{ 0, 0, screen_size[0], screen_size[1] }
 
-    rl.BeginShaderMode(g_directional_shader)
-    rl.SetShaderValueTexture(g_directional_shader, g_directional_locs.shadow_tex, g_shadow_rt.texture)
-    rl.DrawTexturePro(g_world_rt.texture, world_src, dst, { 0, 0 }, 0, gfx.WHITE)
-    rl.EndShaderMode()
+    gfx.shader_begin(g_directional_shader)
+    gfx.shader_set_texture(g_directional_shader, g_directional_locs.shadow_tex, g_shadow_rt.texture)
+    gfx.draw_texture_pro(g_world_rt.texture, world_src, dst, { 0, 0 }, 0, gfx.WHITE)
+    gfx.shader_end()
 }
 
 draw_directional_sprite_composite :: proc(w: ^World) {
@@ -757,44 +756,44 @@ draw_directional_sprite_composite :: proc(w: ^World) {
     cam_zoom    := g_camera.zoom
     lc          := c.int(light_count)
 
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.screen_size,      &screen_size,                   .VEC2)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.sun_dir,          &sd,                            .VEC2)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.sun_color,        &sun_color,                     .VEC3)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.sun_intensity,    &g_light_sun_intensity,         .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.ambient,          &g_light_ambient,               .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.shadow_alpha,     &g_light_shadow_alpha,          .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.min_brightness,   &g_light_sprite_min_brightness, .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.outline_strength, &g_light_sprite_outline,        .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.diffuse_strength, &g_light_sprite_diffuse,        .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.rim_strength,     &g_light_sprite_rim,            .FLOAT)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.shadow_response,  &g_light_sprite_shadow_response,.FLOAT)
+    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.screen_size, screen_size)
+    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.sun_dir, sd)
+    gfx.shader_set_vec3(g_spritelight_shader, g_spritelight_locs.sun_color, sun_color)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.sun_intensity, g_light_sun_intensity)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.ambient, g_light_ambient)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.shadow_alpha, g_light_shadow_alpha)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.min_brightness, g_light_sprite_min_brightness)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.outline_strength, g_light_sprite_outline)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.diffuse_strength, g_light_sprite_diffuse)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.rim_strength, g_light_sprite_rim)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.shadow_response, g_light_sprite_shadow_response)
 
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.camera_target,    &cam_target,                    .VEC2)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.camera_offset,    &cam_offset,                    .VEC2)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.camera_zoom,      &cam_zoom,                      .FLOAT)
+    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.camera_target, cam_target)
+    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.camera_offset, cam_offset)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.camera_zoom, cam_zoom)
 
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.fog_scatter,      &g_fog_scatter,                 .FLOAT)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.fog_scatter, g_fog_scatter)
 
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.light_count,      &lc,                            .INT)
+    gfx.shader_set_i32(g_spritelight_shader, g_spritelight_locs.light_count, lc)
     if light_count > 0 {
-        rl.SetShaderValueV(g_spritelight_shader, g_spritelight_locs.light_pos,       &positions,   .VEC2,  c.int(light_count))
-        rl.SetShaderValueV(g_spritelight_shader, g_spritelight_locs.light_color,     &colors,      .VEC3,  c.int(light_count))
-        rl.SetShaderValueV(g_spritelight_shader, g_spritelight_locs.light_radius,    &radii,       .FLOAT, c.int(light_count))
-        rl.SetShaderValueV(g_spritelight_shader, g_spritelight_locs.light_intensity, &intensities, .FLOAT, c.int(light_count))
+        gfx.shader_set_vec2_array(g_spritelight_shader, g_spritelight_locs.light_pos, positions[:], c.int(light_count))
+        gfx.shader_set_vec3_array(g_spritelight_shader, g_spritelight_locs.light_color, colors[:], c.int(light_count))
+        gfx.shader_set_f32_array(g_spritelight_shader, g_spritelight_locs.light_radius, radii[:], c.int(light_count))
+        gfx.shader_set_f32_array(g_spritelight_shader, g_spritelight_locs.light_intensity, intensities[:], c.int(light_count))
     }
 
     tile_size_f := f32(TILE_SIZE)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.wall_origin,  &g_wall_mask_origin, .VEC2)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.wall_size,    &g_wall_mask_size,   .VEC2)
-    rl.SetShaderValue(g_spritelight_shader, g_spritelight_locs.tile_size,    &tile_size_f,        .FLOAT)
+    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.wall_origin, g_wall_mask_origin)
+    gfx.shader_set_vec2(g_spritelight_shader, g_spritelight_locs.wall_size, g_wall_mask_size)
+    gfx.shader_set_f32(g_spritelight_shader, g_spritelight_locs.tile_size, tile_size_f)
 
-    rl.BeginShaderMode(g_spritelight_shader)
-    rl.SetShaderValueTexture(g_spritelight_shader, g_spritelight_locs.shadow_tex, g_shadow_rt.texture)
+    gfx.shader_begin(g_spritelight_shader)
+    gfx.shader_set_texture(g_spritelight_shader, g_spritelight_locs.shadow_tex, g_shadow_rt.texture)
     if g_wall_mask.id != 0 {
-        rl.SetShaderValueTexture(g_spritelight_shader, g_spritelight_locs.wall_mask, g_wall_mask.texture)
+        gfx.shader_set_texture(g_spritelight_shader, g_spritelight_locs.wall_mask, g_wall_mask.texture)
     }
-    rl.DrawTexturePro(g_sprite_rt.texture, sprite_src, dst, { 0, 0 }, 0, gfx.WHITE)
-    rl.EndShaderMode()
+    gfx.draw_texture_pro(g_sprite_rt.texture, sprite_src, dst, { 0, 0 }, 0, gfx.WHITE)
+    gfx.shader_end()
 }
 
 draw_world_god_rays :: proc() {
@@ -808,30 +807,30 @@ draw_world_god_rays :: proc() {
     cam_zoom    := g_camera.zoom
     sd          := sun_dir()
 
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.screen_size,   &screen_size,                .VEC2)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.camera_target, &cam_target,                 .VEC2)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.camera_offset, &cam_offset,                 .VEC2)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.camera_zoom,   &cam_zoom,                   .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.time,          &time,                       .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.sun_dir,       &sd,                         .VEC2)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.ray_spacing,   &g_light_god_ray_spacing,    .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.ray_width,     &g_light_god_ray_width,      .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.ray_thresh,    &g_light_god_ray_thresh,     .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.ray_alpha,     &g_light_god_ray_alpha,      .FLOAT)
+    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.screen_size, screen_size)
+    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.camera_target, cam_target)
+    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.camera_offset, cam_offset)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.camera_zoom, cam_zoom)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.time, time)
+    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.sun_dir, sd)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_spacing, g_light_god_ray_spacing)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_width, g_light_god_ray_width)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_thresh, g_light_god_ray_thresh)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.ray_alpha, g_light_god_ray_alpha)
 
     drift := [2]f32{ g_light_cloud_drift_x, g_light_cloud_drift_y }
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.cloud_freq,      &g_light_cloud_freq,        .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.cloud_freq_fine, &g_light_cloud_freq_fine,   .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.cloud_drift,     &drift,                     .VEC2)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.cloud_thresh_lo, &g_light_cloud_thresh_lo,   .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.cloud_thresh_hi, &g_light_cloud_thresh_hi,   .FLOAT)
-    rl.SetShaderValue(g_godray_shader, g_godray_locs.cloud_contrast,  &g_light_cloud_contrast,    .FLOAT)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_freq, g_light_cloud_freq)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_freq_fine, g_light_cloud_freq_fine)
+    gfx.shader_set_vec2(g_godray_shader, g_godray_locs.cloud_drift, drift)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_thresh_lo, g_light_cloud_thresh_lo)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_thresh_hi, g_light_cloud_thresh_hi)
+    gfx.shader_set_f32(g_godray_shader, g_godray_locs.cloud_contrast, g_light_cloud_contrast)
 
-    rl.BeginBlendMode(.ADDITIVE)
-    rl.BeginShaderMode(g_godray_shader)
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
-    rl.EndShaderMode()
-    rl.EndBlendMode()
+    gfx.blend_begin(.ADDITIVE)
+    gfx.shader_begin(g_godray_shader)
+    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
+    gfx.shader_end()
+    gfx.blend_end()
 }
 
 draw_fog_and_lights :: proc(w: ^World) {
@@ -880,48 +879,48 @@ draw_fog_and_lights :: proc(w: ^World) {
     rebuild_wall_mask()
 
     tile_size_f := f32(TILE_SIZE)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.wall_origin,    &g_wall_mask_origin, .VEC2)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.wall_size,      &g_wall_mask_size,   .VEC2)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.tile_size,      &tile_size_f,        .FLOAT)
+    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.wall_origin, g_wall_mask_origin)
+    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.wall_size, g_wall_mask_size)
+    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.tile_size, tile_size_f)
 
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.screen_size,    &screen_size,   .VEC2)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.camera_target,  &cam_target,    .VEC2)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.camera_offset,  &cam_offset,    .VEC2)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.camera_zoom,    &cam_zoom,      .FLOAT)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.fog_color,      &g_fog_color,   .VEC3)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.fog_density,    &g_fog_density, .FLOAT)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.fog_scatter,    &g_fog_scatter, .FLOAT)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.player_pos,     &player_pos,    .VEC2)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.vision_radius,  &vision_radius, .FLOAT)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.vision_fade,    &vision_fade,   .FLOAT)
-    rl.SetShaderValue(g_foglight_shader,  g_foglight_locs.light_count,    &light_count,   .INT)
+    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.screen_size, screen_size)
+    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.camera_target, cam_target)
+    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.camera_offset, cam_offset)
+    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.camera_zoom, cam_zoom)
+    gfx.shader_set_vec3(g_foglight_shader, g_foglight_locs.fog_color, g_fog_color)
+    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.fog_density, g_fog_density)
+    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.fog_scatter, g_fog_scatter)
+    gfx.shader_set_vec2(g_foglight_shader, g_foglight_locs.player_pos, player_pos)
+    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.vision_radius, vision_radius)
+    gfx.shader_set_f32(g_foglight_shader, g_foglight_locs.vision_fade, vision_fade)
+    gfx.shader_set_i32(g_foglight_shader, g_foglight_locs.light_count, light_count)
     if count > 0 {
-        rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_pos,       &positions,   .VEC2,  c.int(count))
-        rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_color,     &colors,      .VEC3,  c.int(count))
-        rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_radius,    &radii,       .FLOAT, c.int(count))
-        rl.SetShaderValueV(g_foglight_shader, g_foglight_locs.light_intensity, &intensities, .FLOAT, c.int(count))
+        gfx.shader_set_vec2_array(g_foglight_shader, g_foglight_locs.light_pos, positions[:], c.int(count))
+        gfx.shader_set_vec3_array(g_foglight_shader, g_foglight_locs.light_color, colors[:], c.int(count))
+        gfx.shader_set_f32_array(g_foglight_shader, g_foglight_locs.light_radius, radii[:], c.int(count))
+        gfx.shader_set_f32_array(g_foglight_shader, g_foglight_locs.light_intensity, intensities[:], c.int(count))
     }
 
     pass := c.int(0)
-    rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
-    rl.BeginShaderMode(g_foglight_shader)
+    gfx.shader_set_i32(g_foglight_shader, g_foglight_locs.pass, pass)
+    gfx.shader_begin(g_foglight_shader)
     if g_wall_mask.id != 0 {
-        rl.SetShaderValueTexture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
+        gfx.shader_set_texture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
     }
-    rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
-    rl.EndShaderMode()
+    gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
+    gfx.shader_end()
 
     if count > 0 {
         pass = c.int(1)
-        rl.SetShaderValue(g_foglight_shader, g_foglight_locs.pass, &pass, .INT)
-        rl.BeginBlendMode(.ADDITIVE)
-        rl.BeginShaderMode(g_foglight_shader)
+        gfx.shader_set_i32(g_foglight_shader, g_foglight_locs.pass, pass)
+        gfx.blend_begin(.ADDITIVE)
+        gfx.shader_begin(g_foglight_shader)
         if g_wall_mask.id != 0 {
-            rl.SetShaderValueTexture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
+            gfx.shader_set_texture(g_foglight_shader, g_foglight_locs.wall_mask, g_wall_mask.texture)
         }
-        rl.DrawRectangle(0, 0, i32(sw), i32(sh), gfx.WHITE)
-        rl.EndShaderMode()
-        rl.EndBlendMode()
+        gfx.draw_rect(0, 0, i32(sw), i32(sh), gfx.WHITE)
+        gfx.shader_end()
+        gfx.blend_end()
     }
 }
 

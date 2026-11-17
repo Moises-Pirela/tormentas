@@ -1,6 +1,5 @@
 package main
 
-import rl  "vendor:raylib"
 import gfx "gfx"
 import     "core:fmt"
 import     "core:math"
@@ -753,7 +752,7 @@ draw_editor_world :: proc() {
             for gx in gx0..=gx1 {
                 wx := -half_cw + f32(gx) * cs
                 major := tile_step > 1 && gx % tile_step == 0
-                rl.DrawLineEx(world_to_iso_xy(wx, wy_a), world_to_iso_xy(wx, wy_b), lw * (1.6 if major else 1), tile_col if major else cell_col)
+                gfx.draw_line_ex(world_to_iso_xy(wx, wy_a), world_to_iso_xy(wx, wy_b), lw * (1.6 if major else 1), tile_col if major else cell_col)
             }
 
             wx_a := -half_cw + f32(gx0) * cs
@@ -761,7 +760,7 @@ draw_editor_world :: proc() {
             for gy in gy0..=gy1 {
                 wy := -half_ch + f32(gy) * cs
                 major := tile_step > 1 && gy % tile_step == 0
-                rl.DrawLineEx(world_to_iso_xy(wx_a, wy), world_to_iso_xy(wx_b, wy), lw * (1.6 if major else 1), tile_col if major else cell_col)
+                gfx.draw_line_ex(world_to_iso_xy(wx_a, wy), world_to_iso_xy(wx_b, wy), lw * (1.6 if major else 1), tile_col if major else cell_col)
             }
         }
         if g_ed_grid_visible {
@@ -770,7 +769,7 @@ draw_editor_world :: proc() {
                 world_to_iso_xy( half_cw,  half_ch), world_to_iso_xy(-half_cw,  half_ch),
             }
             for i in 0..<4 {
-                rl.DrawLineEx(corners[i], corners[(i+1)%4], lw * 2, bnd_col)
+                gfx.draw_line_ex(corners[i], corners[(i+1)%4], lw * 2, bnd_col)
             }
         }
 
@@ -787,8 +786,8 @@ draw_editor_world :: proc() {
                     for run + 1 <= tx1 && tile_exists(run + 1, gy) { run += 1 }
                     ax := f32(gx) * ts;        bx := f32(run + 1) * ts
                     ay := f32(gy) * ts;        by := f32(gy + 1) * ts
-                    rl.DrawLineEx(world_to_iso_xy(ax, ay), world_to_iso_xy(bx, ay), lw, grid_col)
-                    rl.DrawLineEx(world_to_iso_xy(ax, by), world_to_iso_xy(bx, by), lw, grid_col)
+                    gfx.draw_line_ex(world_to_iso_xy(ax, ay), world_to_iso_xy(bx, ay), lw, grid_col)
+                    gfx.draw_line_ex(world_to_iso_xy(ax, by), world_to_iso_xy(bx, by), lw, grid_col)
                     gx = run + 1
                 }
             }
@@ -801,8 +800,8 @@ draw_editor_world :: proc() {
                     for run + 1 <= ty1 && tile_exists(gx, run + 1) { run += 1 }
                     ax := f32(gx) * ts;        bx := f32(gx + 1) * ts
                     ay := f32(gy) * ts;        by := f32(run + 1) * ts
-                    rl.DrawLineEx(world_to_iso_xy(ax, ay), world_to_iso_xy(ax, by), lw, grid_col)
-                    rl.DrawLineEx(world_to_iso_xy(bx, ay), world_to_iso_xy(bx, by), lw, grid_col)
+                    gfx.draw_line_ex(world_to_iso_xy(ax, ay), world_to_iso_xy(ax, by), lw, grid_col)
+                    gfx.draw_line_ex(world_to_iso_xy(bx, ay), world_to_iso_xy(bx, by), lw, grid_col)
                     gy = run + 1
                 }
             }
@@ -825,12 +824,12 @@ draw_editor_world :: proc() {
             cbr := gfx.Vec2{maxx, maxy}
             cbl := gfx.Vec2{minx, maxy}
             if has_y {
-                rl.DrawLineEx(ctl, ctr, lw * 2, CAM_BOUNDS_COL)
-                rl.DrawLineEx(cbl, cbr, lw * 2, CAM_BOUNDS_COL)
+                gfx.draw_line_ex(ctl, ctr, lw * 2, CAM_BOUNDS_COL)
+                gfx.draw_line_ex(cbl, cbr, lw * 2, CAM_BOUNDS_COL)
             }
             if has_x {
-                rl.DrawLineEx(ctl, cbl, lw * 2, CAM_BOUNDS_COL)
-                rl.DrawLineEx(ctr, cbr, lw * 2, CAM_BOUNDS_COL)
+                gfx.draw_line_ex(ctl, cbl, lw * 2, CAM_BOUNDS_COL)
+                gfx.draw_line_ex(ctr, cbr, lw * 2, CAM_BOUNDS_COL)
             }
         }
     }
@@ -844,10 +843,10 @@ draw_editor_world :: proc() {
         for id in anchor_ids {
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             ip := world_to_iso_xy(p[0], p[1])
-            rl.DrawCircleV(ip, cr, gfx.Color{190, 60, 60, 220})
-            rl.DrawCircleV(ip, cr * 0.65, gfx.Color{0, 0, 0, 100})
-            lsz := rl.MeasureTextEx(g_font, "Sp", fs, 0.5)
-            rl.DrawTextEx(g_font, "Sp", {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5}, fs, 0.5,
+            gfx.draw_circle_v(ip, cr, gfx.Color{190, 60, 60, 220})
+            gfx.draw_circle_v(ip, cr * 0.65, gfx.Color{0, 0, 0, 100})
+            lsz := gfx.measure_text(g_font, "Sp", fs, 0.5)
+            gfx.draw_text(g_font, "Sp", {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5}, fs, 0.5,
                 gfx.Color{255, 240, 200, 230})
         }
         delete(anchor_ids)
@@ -860,15 +859,15 @@ draw_editor_world :: proc() {
             etx, ety := world_to_tile(p[0], p[1])
             center, top, right, bottom, left := iso_tile_bounds(etx, ety)
             iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{30, 140, 60, 80})
-            rl.DrawLineEx(top, right, lw * 2.5, EXIT_COL)
-            rl.DrawLineEx(right, bottom, lw * 2.5, EXIT_COL)
-            rl.DrawLineEx(bottom, left, lw * 2.5, EXIT_COL)
-            rl.DrawLineEx(left, top, lw * 2.5, EXIT_COL)
+            gfx.draw_line_ex(top, right, lw * 2.5, EXIT_COL)
+            gfx.draw_line_ex(right, bottom, lw * 2.5, EXIT_COL)
+            gfx.draw_line_ex(bottom, left, lw * 2.5, EXIT_COL)
+            gfx.draw_line_ex(left, top, lw * 2.5, EXIT_COL)
             buf: [8]u8
             s := fmt.bprintf(buf[:7], "->%d", le.target_level)
             buf[len(s)] = 0
-            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs, 0.5)
-            rl.DrawTextEx(g_font, cstring(&buf[0]),
+            lsz := gfx.measure_text(g_font, cstring(&buf[0]), fs, 0.5)
+            gfx.draw_text(g_font, cstring(&buf[0]),
                 {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
                 fs, 0.5, gfx.Color{140, 255, 160, 230})
         }
@@ -885,10 +884,10 @@ draw_editor_world :: proc() {
             col = gfx.Color{180, 90, 220, 220}
             label = cstring("M")
         }
-        rl.DrawRectangleV({ip.x - ts * 0.18, ip.y - ts * 0.30}, {ts * 0.36, ts * 0.36}, gfx.Color{col.r, col.g, col.b, 70})
-        rl.DrawRectangleLinesEx({ip.x - ts * 0.18, ip.y - ts * 0.30, ts * 0.36, ts * 0.36}, lw * 2.0, col)
-        lsz := rl.MeasureTextEx(g_font, label, fs * 1.1, 0.5)
-        rl.DrawTextEx(g_font, label,
+        gfx.draw_rect_v({ip.x - ts * 0.18, ip.y - ts * 0.30}, {ts * 0.36, ts * 0.36}, gfx.Color{col.r, col.g, col.b, 70})
+        gfx.draw_rect_lines({ip.x - ts * 0.18, ip.y - ts * 0.30, ts * 0.36, ts * 0.36}, lw * 2.0, col)
+        lsz := gfx.measure_text(g_font, label, fs * 1.1, 0.5)
+        gfx.draw_text(g_font, label,
             {ip.x - lsz.x * 0.5, ip.y - lsz.y * 0.5},
             fs * 1.1, 0.5, col)
     }
@@ -901,11 +900,11 @@ draw_editor_world :: proc() {
             p  := comp_get(&g_sim.world, id, .Transform, TransformComp).position
             ip := world_to_iso_xy(p[0], p[1])
 
-            rl.DrawCircleV(ip, cr * 1.2, gfx.Color{u8(pl.color[0]), u8(pl.color[1]), u8(pl.color[2]), 60})
-            rl.DrawCircleV(ip, cr * 0.7, LIGHT_COL)
-            rl.DrawCircleLinesV(ip, cr * 1.2, gfx.Color{255, 220, 100, 160})
-            lsz := rl.MeasureTextEx(g_font, "L", fs * 1.1, 0.5)
-            rl.DrawTextEx(g_font, "L",
+            gfx.draw_circle_v(ip, cr * 1.2, gfx.Color{u8(pl.color[0]), u8(pl.color[1]), u8(pl.color[2]), 60})
+            gfx.draw_circle_v(ip, cr * 0.7, LIGHT_COL)
+            gfx.draw_circle_lines_v(ip, cr * 1.2, gfx.Color{255, 220, 100, 160})
+            lsz := gfx.measure_text(g_font, "L", fs * 1.1, 0.5)
+            gfx.draw_text(g_font, "L",
                 {ip.x - lsz.x*0.5, ip.y - lsz.y*0.5},
                 fs * 1.1, 0.5, gfx.Color{40, 30, 0, 240})
         }
@@ -924,24 +923,24 @@ draw_editor_world :: proc() {
         body_h := ts * 0.24
         body_w := ts * 0.22
 
-        rl.DrawRectangle(
+        gfx.draw_rect(
             i32(ip.x - body_w * 0.5), i32(ip.y - body_h * 0.75),
             i32(body_w), i32(body_h),
             gfx.Color{body_col.r, body_col.g, body_col.b, 60})
-        rl.DrawRectangleLinesEx(
+        gfx.draw_rect_lines(
             {ip.x - body_w * 0.5, ip.y - body_h * 0.75, body_w, body_h},
             lw * 2.0, body_col)
 
-        rl.DrawEllipse(i32(ip.x), i32(ip.y - body_h * 0.75),
+        gfx.draw_ellipse(i32(ip.x), i32(ip.y - body_h * 0.75),
             body_w * 0.5, body_h * 0.22, gfx.Color{ring_col.r, ring_col.g, ring_col.b, 90})
-        rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.75),
+        gfx.draw_ellipse_lines(i32(ip.x), i32(ip.y - body_h * 0.75),
             body_w * 0.5, body_h * 0.22, ring_col)
 
-        rl.DrawEllipseLines(i32(ip.x), i32(ip.y - body_h * 0.20),
+        gfx.draw_ellipse_lines(i32(ip.x), i32(ip.y - body_h * 0.20),
             body_w * 0.5, body_h * 0.12, ring_col)
 
-        lsz := rl.MeasureTextEx(g_font, label_cs, fs * 0.85, 0.5)
-        rl.DrawTextEx(g_font, label_cs,
+        lsz := gfx.measure_text(g_font, label_cs, fs * 0.85, 0.5)
+        gfx.draw_text(g_font, label_cs,
             {ip.x - lsz.x * 0.5, ip.y - body_h * 0.45 - lsz.y * 0.5},
             fs * 0.85, 0.5, gfx.Color{255, 240, 220, 240})
     }
@@ -952,20 +951,20 @@ draw_editor_world :: proc() {
         wy := f32(int(s.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
 
-        rl.DrawRectangleRec({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
+        gfx.draw_rect_rec({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
             gfx.Color{LEVER_COL.r, LEVER_COL.g, LEVER_COL.b, 60})
-        rl.DrawRectangleLinesEx({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
+        gfx.draw_rect_lines({ip.x - ts*0.14, ip.y + ts*0.02, ts*0.28, ts*0.12},
             lw * 2, LEVER_COL)
 
-        rl.DrawLineEx({ip.x, ip.y + ts*0.08}, {ip.x + ts*0.12, ip.y - ts*0.18},
+        gfx.draw_line_ex({ip.x, ip.y + ts*0.08}, {ip.x + ts*0.12, ip.y - ts*0.18},
             lw * 3, LEVER_COL)
-        rl.DrawCircleV({ip.x + ts*0.12, ip.y - ts*0.18}, ts * 0.05, LEVER_COL)
+        gfx.draw_circle_v({ip.x + ts*0.12, ip.y - ts*0.18}, ts * 0.05, LEVER_COL)
         if s.link_id != 0 {
             buf: [8]u8
             str := fmt.bprintf(buf[:7], "L%d", s.link_id)
             buf[len(str)] = 0
-            lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
-            rl.DrawTextEx(g_font, cstring(&buf[0]),
+            lsz := gfx.measure_text(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
+            gfx.draw_text(g_font, cstring(&buf[0]),
                 {ip.x - lsz.x*0.5, ip.y - ts*0.30},
                 fs * 0.8, 0.5, gfx.Color{120, 240, 120, 220})
         }
@@ -985,16 +984,16 @@ draw_editor_world :: proc() {
         }
         box_w := ts * 0.32
         box_h := ts * 0.28
-        rl.DrawRectangleRec({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
+        gfx.draw_rect_rec({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
             gfx.Color{col.r, col.g, col.b, 45})
-        rl.DrawRectangleLinesEx({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
+        gfx.draw_rect_lines({ip.x - box_w*0.5, ip.y - box_h*0.6, box_w, box_h},
             lw * 2.5, col)
 
-        rl.DrawLineEx({ip.x - box_w*0.5, ip.y - box_h*0.22},
+        gfx.draw_line_ex({ip.x - box_w*0.5, ip.y - box_h*0.22},
                       {ip.x + box_w*0.5, ip.y - box_h*0.22},
                       lw * 1.5, gfx.Color{col.r, col.g, col.b, 160})
-        lsz := rl.MeasureTextEx(g_font, lbl, fs * 0.85, 0.5)
-        rl.DrawTextEx(g_font, lbl,
+        lsz := gfx.measure_text(g_font, lbl, fs * 0.85, 0.5)
+        gfx.draw_text(g_font, lbl,
             {ip.x - lsz.x*0.5, ip.y - box_h*0.1 - lsz.y*0.5},
             fs * 0.85, 0.5, col)
     }
@@ -1007,12 +1006,12 @@ draw_editor_world :: proc() {
 
         pw := ts * 0.22
         ph := ts * 0.28
-        rl.DrawRectangleRec({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
+        gfx.draw_rect_rec({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
             gfx.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 40})
-        rl.DrawRectangleLinesEx({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
+        gfx.draw_rect_lines({ip.x - pw*0.5, ip.y - ph*0.7, pw, ph},
             lw * 2, LORE_COL)
 
-        rl.DrawLineEx({ip.x + pw*0.5 - pw*0.25, ip.y - ph*0.7},
+        gfx.draw_line_ex({ip.x + pw*0.5 - pw*0.25, ip.y - ph*0.7},
                       {ip.x + pw*0.5, ip.y - ph*0.7 + ph*0.25},
                       lw * 1.5, LORE_COL)
 
@@ -1020,13 +1019,13 @@ draw_editor_world :: proc() {
             lx0 := ip.x - pw*0.35
             lx1 := ip.x + pw*0.35 * (0.7 if row == 2 else 1.0)
             ly  := ip.y - ph*0.55 + f32(row) * ph * 0.22
-            rl.DrawLineEx({lx0, ly}, {lx1, ly}, lw, gfx.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 130})
+            gfx.draw_line_ex({lx0, ly}, {lx1, ly}, lw, gfx.Color{LORE_COL.r, LORE_COL.g, LORE_COL.b, 130})
         }
         buf: [6]u8
         s := fmt.bprintf(buf[:5], "#%d", li.lore_id)
         buf[len(s)] = 0
-        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        lsz := gfx.measure_text(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
+        gfx.draw_text(g_font, cstring(&buf[0]),
             {ip.x - lsz.x*0.5, ip.y - ph*0.7 - lsz.y - uis(2)},
             fs * 0.75, 0.5, gfx.Color{120, 200, 255, 220})
     }
@@ -1037,22 +1036,22 @@ draw_editor_world :: proc() {
         wy := f32(int(ph.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
 
-        rl.DrawEllipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, gfx.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
-        rl.DrawEllipseLines(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, PHONO_COL)
+        gfx.draw_ellipse(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, gfx.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 50})
+        gfx.draw_ellipse_lines(i32(ip.x), i32(ip.y), ts*0.20, ts*0.07, PHONO_COL)
 
-        rl.DrawTriangle(
+        gfx.draw_triangle(
             {ip.x + ts*0.22, ip.y - ts*0.26},
             {ip.x + ts*0.10, ip.y - ts*0.02},
             {ip.x + ts*0.10, ip.y + ts*0.04},
             gfx.Color{PHONO_COL.r, PHONO_COL.g, PHONO_COL.b, 60})
-        rl.DrawLineEx({ip.x + ts*0.10, ip.y - ts*0.02},
+        gfx.draw_line_ex({ip.x + ts*0.10, ip.y - ts*0.02},
                       {ip.x + ts*0.22, ip.y - ts*0.26},
                       lw * 2, PHONO_COL)
         buf: [6]u8
         s := fmt.bprintf(buf[:5], "#%d", ph.recording_id)
         buf[len(s)] = 0
-        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        lsz := gfx.measure_text(g_font, cstring(&buf[0]), fs * 0.75, 0.5)
+        gfx.draw_text(g_font, cstring(&buf[0]),
             {ip.x - lsz.x*0.5, ip.y - ts*0.38},
             fs * 0.75, 0.5, gfx.Color{220, 120, 240, 220})
     }
@@ -1063,28 +1062,28 @@ draw_editor_world :: proc() {
         wy := f32(int(kp.ty) * TILE_SIZE + TILE_SIZE / 2)
         ip := world_to_iso_xy(wx, wy)
 
-        rl.DrawCircleV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10,
+        gfx.draw_circle_v({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10,
             gfx.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 50})
-        rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10, KEY_COL)
+        gfx.draw_circle_lines_v({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.10, KEY_COL)
 
-        rl.DrawCircleLinesV({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.04,
+        gfx.draw_circle_lines_v({ip.x - ts*0.06, ip.y - ts*0.10}, ts*0.04,
             gfx.Color{KEY_COL.r, KEY_COL.g, KEY_COL.b, 180})
 
-        rl.DrawLineEx({ip.x - ts*0.06 + ts*0.10, ip.y - ts*0.10},
+        gfx.draw_line_ex({ip.x - ts*0.06 + ts*0.10, ip.y - ts*0.10},
                       {ip.x + ts*0.20, ip.y - ts*0.10},
                       lw * 2.5, KEY_COL)
 
-        rl.DrawLineEx({ip.x + ts*0.14, ip.y - ts*0.10},
+        gfx.draw_line_ex({ip.x + ts*0.14, ip.y - ts*0.10},
                       {ip.x + ts*0.14, ip.y - ts*0.03},
                       lw * 2, KEY_COL)
-        rl.DrawLineEx({ip.x + ts*0.20, ip.y - ts*0.10},
+        gfx.draw_line_ex({ip.x + ts*0.20, ip.y - ts*0.10},
                       {ip.x + ts*0.20, ip.y - ts*0.04},
                       lw * 2, KEY_COL)
         buf: [6]u8
         s := fmt.bprintf(buf[:5], "K%d", kp.key_id)
         buf[len(s)] = 0
-        lsz := rl.MeasureTextEx(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
-        rl.DrawTextEx(g_font, cstring(&buf[0]),
+        lsz := gfx.measure_text(g_font, cstring(&buf[0]), fs * 0.8, 0.5)
+        gfx.draw_text(g_font, cstring(&buf[0]),
             {ip.x - lsz.x*0.5, ip.y + ts*0.12},
             fs * 0.8, 0.5, gfx.Color{255, 230, 60, 230})
     }
@@ -1096,12 +1095,12 @@ draw_editor_world :: proc() {
             ptx, pty := world_to_tile(p[0], p[1])
             center, top, right, bottom, left := iso_tile_bounds(ptx, pty)
             iso_draw_shadow_diamond(center, ISO_TILE_W * 2, ISO_TILE_H * 2, gfx.Color{200, 160, 30, 70})
-            rl.DrawLineEx(top, right, lw * 2.5, gfx.Color{255, 200, 50, 220})
-            rl.DrawLineEx(right, bottom, lw * 2.5, gfx.Color{255, 200, 50, 220})
-            rl.DrawLineEx(bottom, left, lw * 2.5, gfx.Color{255, 200, 50, 220})
-            rl.DrawLineEx(left, top, lw * 2.5, gfx.Color{255, 200, 50, 220})
-            lsz := rl.MeasureTextEx(g_font, "P", fs*1.2, 0.5)
-            rl.DrawTextEx(g_font, "P",
+            gfx.draw_line_ex(top, right, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            gfx.draw_line_ex(right, bottom, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            gfx.draw_line_ex(bottom, left, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            gfx.draw_line_ex(left, top, lw * 2.5, gfx.Color{255, 200, 50, 220})
+            lsz := gfx.measure_text(g_font, "P", fs*1.2, 0.5)
+            gfx.draw_text(g_font, "P",
                 {center.x - lsz.x*0.5, center.y - lsz.y*0.5},
                 fs*1.2, 0.5, gfx.Color{255, 230, 100, 240})
         }
@@ -1151,8 +1150,8 @@ draw_editor_cell_overlay :: proc() {
     if !g_editor_mode { return }
 
     cell_fill :: proc(top, right, bottom, left: gfx.Vec2, col: gfx.Color) {
-        rl.DrawTriangle(top, bottom, right, col)
-        rl.DrawTriangle(top, left,   bottom, col)
+        gfx.draw_triangle(top, bottom, right, col)
+        gfx.draw_triangle(top, left,   bottom, col)
     }
 
     if g_hub_active {

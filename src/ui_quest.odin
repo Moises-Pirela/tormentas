@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import fmt  "core:fmt"
 import clay "../clay"
@@ -55,18 +54,18 @@ draw_quest_board_world :: proc(w: ^World) {
 
         nfs := f32(10)
         lbl := t(.QUEST_BOARD_NPC_NAME)
-        nsz := rl.MeasureTextEx(g_font_body, lbl, nfs, 0.5)
-        rl.DrawTextEx(g_font_body, lbl,
+        nsz := gfx.measure_text(g_font_body, lbl, nfs, 0.5)
+        gfx.draw_text(g_font_body, lbl,
             {pos.x - nsz.x*0.5, pos.y - 14 - nfs - 2},
             nfs, 0.5, gfx.Color{240, 215, 120, 220})
 
         if dist_sq <= npc.interact_radius * npc.interact_radius {
             prompt := interact_prompt(.QUEST_BOARD_INTERACT)
             pfs    := f32(9)
-            psz    := rl.MeasureTextEx(g_font_body, prompt, pfs, 0.5)
+            psz    := gfx.measure_text(g_font_body, prompt, pfs, 0.5)
             t_now  := f32(gfx.time())
             pulse  := u8(180 + 60 * (t_now - f32(int(t_now))))
-            rl.DrawTextEx(g_font_body, prompt,
+            gfx.draw_text(g_font_body, prompt,
                 {pos.x - psz.x*0.5, pos.y + 18},
                 pfs, 0.5, gfx.Color{255, 230, 100, pulse})
         }
@@ -160,17 +159,17 @@ draw_quest_flash :: proc() {
 
     hdr := cstring("QUEST COMPLETE")
     hfs := uis(14)
-    hsz := rl.MeasureTextEx(g_font_body, hdr, hfs, 1)
+    hsz := gfx.measure_text(g_font_body, hdr, hfs, 1)
     tfs := uis(22)
     ttl := g_quest_flash_title
-    tsz := rl.MeasureTextEx(g_font, ttl, tfs, 1)
+    tsz := gfx.measure_text(g_font, ttl, tfs, 1)
     cx  := f32(sw) * 0.5
     by  := f32(sh) * 0.30
 
-    rl.DrawTextEx(g_font_body, hdr,
+    gfx.draw_text(g_font_body, hdr,
         {cx - hsz.x*0.5, by - uis(20)}, hfs, 1,
         gfx.Color{140, 220, 100, u8(f32(a) * 0.72)})
-    rl.DrawTextEx(g_font, ttl,
+    gfx.draw_text(g_font, ttl,
         {cx - tsz.x*0.5, by}, tfs, 1,
         gfx.Color{220, 196, 58, a})
 }
@@ -199,6 +198,6 @@ draw_quest_hud :: proc(w: ^World) {
         cur, tgt := quest_progress(qi, w)
         cy      := py + f32(i) * row_h
         lbl     := fmt.ctprintf("%s  %d/%d", t(QUEST_DEFS[int(qi)].title_key), min(cur, tgt), tgt)
-        rl.DrawTextEx(g_font_body, lbl, {px, cy}, uis(9), 0.5, gfx.Color{200, 180, 100, 180})
+        gfx.draw_text(g_font_body, lbl, {px, cy}, uis(9), 0.5, gfx.Color{200, 180, 100, 180})
     }
 }

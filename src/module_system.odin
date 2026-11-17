@@ -1,6 +1,5 @@
 package main
 
-import rl   "vendor:raylib"
 import gfx  "gfx"
 import      "core:strings"
 import json "core:encoding/json"
@@ -10,7 +9,7 @@ MODULE_DIR :: "data/sprites/modules/"
 
 ModuleDef :: struct {
     id:    string,
-    tex:   rl.Texture2D,
+    tex:   gfx.Texture,
     w, h:  int,
     off_x: f32,
     off_y: f32,
@@ -58,9 +57,9 @@ module_registry_init :: proc() {
         file := _mj_str(o, "file", name)
         path := strings.concatenate({ MODULE_DIR, file, ".png" }, context.temp_allocator)
         pcs  := strings.clone_to_cstring(path, context.temp_allocator)
-        if rl.FileExists(pcs) {
-            def.tex = rl.LoadTexture(pcs)
-            rl.SetTextureFilter(def.tex, .BILINEAR)
+        if file_exists(pcs) {
+            def.tex = gfx.load_texture(pcs)
+            gfx.texture_set_filter(def.tex, .BILINEAR)
         } else {
             fmt.eprintfln("[modules] missing image: %s", path)
         }
@@ -71,7 +70,7 @@ module_registry_init :: proc() {
 }
 
 module_registry_destroy :: proc() {
-    for m in g_modules { if m.tex.id != 0 { rl.UnloadTexture(m.tex) } }
+    for m in g_modules { if m.tex.id != 0 { gfx.unload_texture(m.tex) } }
     delete(g_modules)
     delete(g_module_index)
 }
@@ -114,7 +113,7 @@ module_draw_ghost :: proc(def_idx, tx, ty: int) {
     def := g_modules[def_idx]
     if def.tex.id == 0 { return }
     iso := world_to_iso_xy(f32(tx * TILE_SIZE), f32(ty * TILE_SIZE))
-    rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.Color{ 255, 255, 255, 130 })
+    gfx.draw_texture_ex(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.Color{ 255, 255, 255, 130 })
 }
 
 draw_level_modules :: proc() {
@@ -140,7 +139,7 @@ draw_level_modules :: proc() {
         def := g_modules[m.def_idx]
         if def.tex.id == 0 { continue }
         iso := world_to_iso_xy(f32(int(m.tx) * TILE_SIZE), f32(int(m.ty) * TILE_SIZE))
-        rl.DrawTextureEx(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.WHITE)
+        gfx.draw_texture_ex(def.tex, { iso.x + def.off_x, iso.y + def.off_y }, 0, 1.0, gfx.WHITE)
     }
 }
 

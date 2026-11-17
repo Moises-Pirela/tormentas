@@ -4,7 +4,6 @@ import      "core:fmt"
 import      "core:path/filepath"
 import      "core:strings"
 import im   "../deps/imgui/imgui"
-import rl   "vendor:raylib"
 import gfx  "gfx"
 
 ANIM_ED_KEY_CAP :: 64
@@ -24,7 +23,7 @@ AnimEditorState :: struct {
     key_len:         int,
 
     sprite_ok:       bool,
-    sprite_tex:      rl.Texture2D,
+    sprite_tex:      gfx.Texture,
 
     sheet:           AnimSheetDef,
     dirty:           bool,
