@@ -3,3 +3,4 @@
 /clay/upstream/LICENSE.md text eol=lf
 *.sh text eol=lf
 /deps/imgui/** -text
+/deps/sokol/** -text

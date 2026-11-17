@@ -35,7 +35,7 @@ earns the swap.
 |---|---|---|---|
 | **P0** | Foundation, no behaviour change | **L** | server package builds headless; game plays as before |
 | **P1a** | raylib → sokol, 2D parity | **L** | current game runs, raylib deleted |
-| **P1b** | Top-down 3D | **XL** | same game, 3D models, free camera |
+| **P1b** | Top-down 3D | **XL** | same game, 3D primitives, free camera |
 | **P2** | Dedicated server + persistence | **XL** | 50 real + 500 simulated players |
 | **P3** | Vertical slice: the whole loop, thin | **XL** | mine → smith key → dungeon → salvage → sell |
 | **P4** | Widen systems and content | **XL** | all skills, raids, enchanting, services |
@@ -75,14 +75,30 @@ gets harder later.
         dependencies too
       - runs it with invariant checks
       Debug binary is 775 KB vs the game's 6.8 MB, with 0 forbidden symbols vs the game's 4,925.
-- [ ] **Fix the destroy-path entity leak** (found by the new `sim` tests). `world_tag_destroy` sets
-      `.ToDestroy` itself, so clockwork's `world_mark_destroy` early-returns in `world_reap_tagged`
-      and the id never reaches `pending_destroy`. Every projectile and self-destruct keeps its slot
-      until the level is cleared, and `world_is_valid` stays `true` for it. Gameplay is unaffected
-      (queries skip it); memory isn't, and a persistent server never clears. A one-line fix
-      (call `ecs.world_mark_destroy` inside `world_tag_destroy`), but it changes `world_is_valid`
-      for dead ids, so ship it **as its own change with a playtest**, then tighten
-      `self_destruct_expires_on_host_only`.
+- [~] **Fix the destroy-path entity leak** — fixed in code, **awaiting playtest**. `world_tag_destroy`
+      set `.ToDestroy` itself, so clockwork's `world_mark_destroy` early-returned and the id never
+      reached `pending_destroy`. It was worse than a memory leak: `world_reset` goes through the same
+      early return, so a leaked slot kept its component-pool bits across a level switch. Ids restart
+      at 0, and the next entity created on that slot showed up in queries for components it never
+      had, with the dead entity's data (`reset_leaves_no_ghost_components`). Fix:
+      `world_tag_destroy` now calls `ecs.world_mark_destroy`; the separate `tagged` list and
+      `world_reap_tagged` are gone. Tagged entities are freed by the end-of-tick sweep, so
+      `world_is_valid` goes false for them one tick after tagging. The headless server now asserts
+      the self-destruct entity is freed.
+      An audit of every id held across frames found no unguarded reader. These visible changes are
+      expected, and all are bug fixes:
+      - **Carrion Crown** raises servants again after its first three die (dead servants used to
+        hold their slots until the level reset).
+      - **Corpses stop collecting status effects.** Burn/wet/oil rings no longer draw over killed
+        enemies or exploded barrels.
+      - **Editor "Capture overrides"** no longer saves a killed enemy's `Health.current = 0` into
+        the level.
+      **Playtest focus:** the three above, plus kills, projectiles, pickups and level switches.
+- [ ] **Client-side destroy leak** (pre-existing, found in the same audit). A joined client runs
+      only `sim_tick_predicted` (`netcode.odin:29`), which never calls `world_sweep`. Everything a
+      client destroys, including the host's `ENTITY_SYNC_DESTROY`, keeps its slot, and the
+      ghost-components-after-reset bug still applies there. Fix: sweep at the end of
+      `sim_tick_predicted`. Ship it as its own change with a two-client playtest.
 - [ ] **`build.ps1` server target + Windows symbol check.** `test.ps1` already runs the `sim` suite;
       the server build and the `dumpbin` equivalent of the `nm` check are macOS-only so far.
 - [ ] **Spatial hash** replacing the all-pairs loop in `separation_system.odin:12`. Needed for
@@ -105,50 +121,136 @@ the compiler, in its own commit, with no behaviour changes mixed in.
 
 ---
 
+## P1 — decisions locked (2026-11-17)
+
+| Area | Decision |
+|---|---|
+| Order | **[D]** P1a started 2026-11-17, ahead of the rest of P0 (changed from "P0 first" the same day). The remaining P0 items don't touch rendering and can land in between |
+| Lighting in P1a | **[D]** Parity covers point, directional, sprite and fog/vision lighting. God rays and cloud shadows are **stubbed** (P1b replaces the whole stack anyway) |
+| GPU backends | **[D]** Metal on macOS, D3D11 on Windows, one shader source compiled by **sokol-shdc** |
+| Window modes | **[D]** Resizable window + borderless fullscreen. Windowed-size presets and monitor centering go away |
+| Camera | **[D]** Perspective, narrow FOV. *[P]* 35° FOV, pitch clamped 45–75°, default 60° |
+| Art | **[D]** No art capacity yet. P1b ships on **primitives** (capsules, boxes, cylinders); the glTF/skinning path waits for real models |
+
 ## P1a — raylib → sokol, 2D parity (size **L**)
 
-**Tasks**
-- [ ] Vendor **sokol-odin** and **sokol-shdc** into `deps/` with the provenance + SHA manifest
-      convention already used by `deps/clockwork-ecs`. Wire shader compilation into `build.sh`.
-- [ ] **Platform layer:** `sokol_app` for window, input and events; **miniaudio** for audio
-      (Odin ships it in `vendor:`); **fontstash/stb_truetype** for text.
-- [ ] **2D batcher.** About 15 calls cover nearly all of today's 2,449 `rl.` uses: filled and
-      outlined rects, lines, triangles, textured quads, text, measure-text, scissor.
-- [ ] **Port local types:** `rl.Color` (763 uses), `rl.Rectangle`, `rl.Vector2` → own types.
-      Mechanical, large, low-risk.
-- [ ] **Clay renderer backend** (`clay_renderer.odin`) onto the batcher.
-- [ ] **ImGui backend** for the dev tools (`deps/imgui` is already vendored).
-- [ ] Delete raylib and `tools/build-clay.sh` assumptions that depend on it.
+**Strategy: abstraction first, backend swap last.** There are 2,439 `rl.` uses in 47 files.
+Swapping raylib out in one pass would leave the game unplayable for weeks (rule 1). Instead,
+build our own `gfx` / `platform` / `cam` API **on top of raylib**, move every call site onto it
+while the game keeps running, and only then reimplement that API on sokol.
+
+**What the code adds to the original task list**
+- **Lighting is the hidden cost.** `lighting.odin` (~1,000 lines, 258 `rl.` uses), 6 GLSL-330
+  shaders in `data/shaders/`, and 82 `GetShaderLocation` calls. `fog_lights.fs` also draws the
+  player's vision radius, which is gameplay (stealth), not decoration.
+- **Interleaved passes.** `draw_playing` (`main.odin`) goes shadow RT → world RT → screen →
+  sprite RT → screen. sokol can't nest passes or go back to the swapchain mid-frame, so the
+  sokol backend draws into an offscreen **main target** and presents it once per frame.
+- **Y-flip audit.** raylib render textures are drawn with a negative source height, and the
+  shaders flip `gl_FragCoord` by hand. Metal and D3D put the origin top-left. Every RT draw and
+  every `gl_FragCoord` use gets checked.
+- **std140 uniforms.** `uniform vec2 u_light_pos[32]` pads each element to 16 bytes. Port
+  uniform arrays as packed `vec4` arrays.
+- **sokol_app gaps.** No window resize/position, monitor queries or mouse warp. The first two
+  disappear with the window-mode decision. `SetMousePosition` is only used by the tools probe;
+  replace it with synthetic mouse input in the platform layer.
+- **Screenshots.** The tools probe uses `LoadImageFromScreen`. Confirm in the spike whether
+  sokol_gfx can read pixels back; if not, add a small per-backend readback helper.
+- **Free wins.** sokol keycodes use the GLFW values, like raylib's, so keybinds saved as `i32`
+  in `config.odin` stay valid; mouse button numbers match too. The game uses no gamepad API,
+  so sokol having none costs nothing.
+
+**Steps** (each one ends with the game playable)
+
+| # | Step | Size | Done when |
+|---|---|---|---|
+| 1 | **Spike.** Vendor sokol-odin + sokol-shdc into `deps/` with provenance + SHA manifest (like `clockwork-ecs`). Throwaway `spike` target: window, sokol_gl rects, fontstash text, one offscreen pass, one shdc shader, a screenshot. Metal and D3D11 | S | Both platforms render; readback question answered |
+| 2 | **`src/gfx` types.** Own `Color`, `Rect`, `Vec2 = [2]f32`. Mechanical replace of `rl.Color` (763), `rl.Rectangle` (80), `rl.Vector2` (95) | M | Builds; game unchanged |
+| 3 | **Platform + input layer.** `Key` enum with GLFW values, per-frame key/mouse state, text input, synthetic mouse for the probe. Split the main loop into `frame()` so it runs from the raylib loop now and the sapp frame callback later. `input_manager.odin` moves onto it | M | No `rl.IsKey*` / `rl.GetMouse*` outside `gfx` |
+| 4 | **Draw layer on raylib.** ~15 draw calls + textures, render targets (`target_begin`/`end`), scissor, 2D camera, shader handle + uniforms. Migrate file by file: `clay_renderer` and one UI panel first; `render.odin`, `lighting.odin`, `editor.odin` last. The two `rlgl` users (`greybox`, `shadow`) become `draw_quads` | L | `rl.` only inside `src/gfx/raylib_backend.odin`, enforced by `check_boundaries.py` |
+| 5 | **Camera layer.** `cam_world_to_screen`, `cam_screen_to_ground`, `cam_dir_to_world` wrap the isometric math (73 `world_to_iso` calls in 20 files, 24 screen→world conversions) | S | No `world_to_iso` outside the camera file |
+| 6 | **Reference screenshots.** Run the tools probe (`tools_probe_tick`, `platform.odin`) plus a hub and a raid shot on the raylib build | S | Reference set committed under `tools/` |
+| 7 | **sokol backend** (`gfx/sokol_backend.odin`): sokol_app, sokol_gl batcher into the offscreen main target, stb_image textures, fontstash text, 4 shaders ported to shdc (god rays and clouds stubbed), ImGui backend rewrite (`ui/imgui_raylib`, 292 lines), audio on miniaudio's high-level engine (`audio.odin`, 795 lines), resizable window + borderless fullscreen | L | Game runs on sokol behind a build flag |
+| 8 | **Parity + delete.** Compare against the reference set by eye (fontstash metrics shift text ~1 px, so no pixel diff), input latency, every dev tool. Delete the raylib backend, `ui/imgui_raylib` and the raylib assumptions in `tools/build-clay.sh` | S | raylib gone; `test.sh` symbol check also bans raylib symbols in the game binary |
+
+**Step 1 results (2026-11-17, macOS/Metal; Windows/D3D11 not run yet)**
+
+`./build.sh spike` → `bin/tormentas_spike [--shot out.png] [--target main|world|sprite]`. It runs
+the game's real pass order (world RT → main → sprite RT → main → present) and passes every check
+in the frame it captures. Setup:
+- `deps/sokol/`: sokol-odin `ae94aa5` (sokol `93aa187`), modules app/gfx/gl/glue/log/time/shape,
+  manifest in `snapshot.json`. `tools/build-sokol.sh` builds the `.a` files on demand (gitignored).
+- **sokol-shdc** is pinned by commit + SHA-256 in the same manifest and downloaded into
+  `.local/sokol-shdc/` by `ensure_shdc` (`tools/common.sh`), only when a `.glsl` is newer than its
+  committed `.glsl.odin`. Output targets `metal_macos:hlsl5`.
+
+What it established:
+1. **This sokol is view-based.** Textures and attachments are bound through `sg.make_view`, and
+   resource updates go through staging buffers + `sg_copy_*` (no more dynamic/stream images).
+   Write against the vendored examples, not older docs.
+2. **sokol_gl silently drops alpha.** It turns a default write mask into RGB
+   (`sokol_gl.h`, `_sgl_init_pipeline`), so offscreen targets came out fully transparent and every
+   composite vanished. **Every sgl pipeline used offscreen needs `write_mask = .RGBA`.**
+3. **No y-flips anywhere.** Render targets sample upright (orientation markers), and
+   `gl_FragCoord` is top-left (a light placed at (140,140) lands top-left). The raylib shaders'
+   `screen.y - gl_FragCoord.y` flips and the negative-height RT source rects both go away.
+4. **One sgl layer per pass segment** handles the interleaved passes: record in game order with
+   `sgl.layer(n)`, replay with `sgl.context_draw_layer` inside each pass; raw `sg` draws (the
+   lights) slot in between layers. The offscreen main target is presented once.
+5. **Offscreen targets need their own sgl context** (RGBA8); the default context matches the
+   swapchain, which is BGRA8 on Metal.
+6. **Shader port pattern** (`src/spike/point_lights.glsl`): one std140 block, arrays packed as
+   `vec4`, fullscreen triangle from `gl_VertexIndex`. Additive blend = `SRC_ALPHA, ONE`, as raylib.
+7. **Text:** fontstash's 1-channel atlas is expanded to white RGBA (alpha = coverage) and uploaded
+   through a staging buffer outside any pass, so text uses sgl's stock pipeline.
+8. **Readback:** sokol_gfx has none. `src/spike/native/capture_metal.m` (~40 lines) blits the
+   target's `MTLTexture` into a shared buffer after `sg.commit()`. D3D11 needs the equivalent
+   (staging texture + `CopyResource` + `Map`) before step 8's comparisons can run on Windows.
+9. **Keycodes:** all 93 key names raylib and sokol share have identical values, and mouse buttons
+   match, so saved keybinds stay valid. raylib's `KB_MENU` (348) is sokol's `MENU`; digits and grave
+   differ only in name.
+10. **Fullscreen differs per OS.** sokol's Windows toggle is borderless (`WS_POPUP`), matching the
+    decision. On macOS it is **native fullscreen** (`toggleFullScreen`: own Space, slide
+    animation). True borderless on macOS needs a small native helper via `sapp.macos_get_window()`.
+11. **sokol_app owns the main loop** (init/frame/event callbacks), confirming step 3's `frame()` split.
+
+**Still open for step 1:** run on Windows/D3D11 (needs a `build-sokol.ps1` and the D3D11 readback
+helper), and an interactive check of resize and the fullscreen toggle.
 
 **Exit:** the current game, still isometric 2D, runs on sokol with raylib gone.
-**Verify:** side-by-side screenshots of hub and a level · input latency unchanged · all dev tools work.
-**Risks:** text rendering and the Clay backend are the fiddly parts. Do the batcher first and port
-the simplest UI panel end-to-end before touching the rest.
+**Verify:** reference-set comparison · input latency unchanged · all dev tools work (editor,
+inspector, console, anim editor, lighting widget).
+**Risks:** the lighting port and the pass/flip conventions. Step 1 exercises both an offscreen
+pass and a shdc shader before any migration starts, and step 4 ports the simplest UI panel
+end-to-end before touching the rest.
 
 ---
 
 ## P1b — Top-down 3D (size **XL**)
 
-**Tasks**
-- [ ] **Camera:** top-down orbit, free yaw, clamped pitch, zoom.
-- [ ] **Camera-relative input**, and mouse aim by ray-cast to the z=0 plane (easy: the world stays
-      a flat grid).
-- [ ] **Model pipeline:** glTF via `vendor:cgltf`, skinned meshes, an animation state machine fed
-      by the existing `AnimState` (Idle/Walk/Attack/Death). Sprite facing-flip retires.
-- [ ] **World rendering:** instanced tile and prop meshes, chunk frustum culling (same chunk grid
-      as AoI and the spatial hash — pick the numbers once).
-- [ ] **Lighting:** directional light + shadow map + fog, remapping `LevelLightingConfig`, which
-      already carries sun direction, colour and fog.
-- [ ] **Cutaway/fade** for geometry between camera and player. Free rotation makes this mandatory,
-      not polish.
-- [ ] **Placeholder art:** capsules and a few free rigged models so gameplay never waits on art.
+Art is **primitives only** (see decisions). Every entity def gets a `visual` block in
+`entities.json` (shape, size, colour, height), so swapping to glTF later is a data change.
+
+| # | Step | Size |
+|---|---|---|
+| 1 | **3D scene + camera.** Perspective orbit camera (free yaw, clamped pitch, zoom), flat-coloured tile quads, entities as primitives (sokol_shape) from the `visual` block. Replaces the implementation behind P1a's camera layer | M |
+| 2 | **Input + picking.** Camera-relative movement, mouse aim by ray-cast to z=0, editor brush picking through the same function | S |
+| 3 | **World meshes.** Instanced tile, prop and greybox-wall meshes, chunk frustum culling. Chunk size fixed once: 16×16, shared with AoI cells and spatial-hash buckets | M |
+| 4 | **Lighting.** Directional light + shadow map + fog, forward point lights (≤32), vision radius redone in 3D. Remap `LevelLightingConfig`. God rays and clouds stay out | M |
+| 5 | **Primitive animation.** `AnimState` (Idle/Walk/Attack/Death) drives procedural motion: bob, lean, swing, collapse. Sprite facing-flip and the sprite `anim_editor` retire | S |
+| 6 | **Cutaway/fade** for geometry inside the camera→player capsule | S |
+| 7 | **Screen-space overlays.** Health bars, damage numbers, labels and telegraphs drawn in the UI pass, positioned with `cam_world_to_screen` | S |
+| 8 | **Gate.** Frame time on the largest current level; camera never traps the player; go/no-go | S |
+
+**Deferred until art capacity exists (before P3 closes):** glTF via `vendor:cgltf`, GPU skinning,
+and the animation state machine on skeletal clips.
 
 **Exit:** the current content is playable top-down in 3D with a free camera.
 **Verify:** frame time at the largest current level · camera never traps the player behind geometry.
-**Risks:** this is where real **art dependency** starts. Decide early who makes rigged models;
-placeholders carry you to P3 but not past it.
-**Gate:** if 3D performance or the art pipeline looks untenable here, that's the cheapest moment
-to reconsider, before any server work.
+**Risks:** readability on primitives (enemy types must stay distinguishable by shape, colour and
+size). Art capacity is still undecided; primitives carry to P3 but not past it.
+**Gate:** if 3D performance looks untenable here, that's the cheapest moment to reconsider,
+before any server work.
 
 ---
 
@@ -243,7 +345,8 @@ pacing profiles within ±15% · a week-long bot soak showing net gold per day tr
 |---|---|---|
 | Package split churn | P0 | one mechanical commit, compiler-driven, no behaviour changes |
 | Clay/ImGui backend port | P1a | port one panel end-to-end before the rest |
-| Art pipeline (rigged models) | P1b | placeholders to P3; decide art capacity during P1a |
+| Lighting port + pass/flip conventions | P1a | spike covers an offscreen pass and a shdc shader; abstraction layer lands on raylib before the swap |
+| Art pipeline (rigged models) | P1b–P3 | **no art capacity yet**: P1b ships on primitives with a data-driven `visual` block; glTF/skinning deferred; decide art capacity before P3 closes |
 | Bandwidth at 2k players | P2 | load-test client early; measure against §4.5 before widening |
 | DB write throughput | P2/P5 | interface over SQLite from day one so Postgres is a swap |
 | Dupes and item fraud | P2 | lease epochs + escrow + ledger; adversarial tests in `test.sh` |
@@ -255,15 +358,21 @@ pacing profiles within ±15% · a week-long bot soak showing net gold per day tr
 
 ## Start here (next concrete steps)
 
-Done so far: P0 slice 1 of the package split, and the headless server target with its checks.
+Done so far: P0 slice 1 of the package split, the headless server target with its checks
+(committed in `be47646`), the P1 plan and its decisions, and the entity-leak fix in code.
 
-1. **Commit what exists**, on a `pivot/mmo` branch: the docs, `src/sim/`, `src/server/`, the
-   tools, and the script changes. The split is behaviour-neutral, so it's a clean checkpoint.
-2. **Fix the entity leak** as its own commit + playtest (P0, above).
+**P1a has started** (2026-11-17, ahead of the rest of P0). Step 1's spike passes on macOS/Metal.
+
+1. **Commit the entity-leak fix** on its own (playtested 2026-11-17). Then the client-side sweep,
+   also on its own.
+2. **Finish P1a step 1:** Windows/D3D11 run, interactive resize/fullscreen check, and decide macOS
+   fullscreen (native Space vs a borderless helper). Then **P1a step 2** (`src/gfx` types).
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.
-5. Answer the two open items that gate P3: **overworld size** and **reserve name**.
+5. The rest of P0: `ItemDef`/`ItemInstance` split + save migration, ledger skeleton, snapshot
+   fairness, `build.ps1` server target.
+6. Answer the two open items that gate P3: **overworld size** and **reserve name**.
 
 Toolchain note: on a fresh Mac, `tools/setup-macos.sh` installs the pinned Odin
 (`--dest DIR` to choose where), then `export ODIN=DIR/odin` before `./test.sh`.

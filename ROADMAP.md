@@ -86,8 +86,9 @@ The schedule driver. Secure art/audio capacity early.
 - [ ] **Versioned binary saves** carry migration risk — add migration or an explicit wipe-on-breaking-change policy.
 - [ ] **Multiplayer lockstep is under-tested** — needs sustained live co-op playtesting.
 - [ ] **Physics:** O(n²) separation/collision with no spatial grid (deferred); single-pass resolution.
-- [ ] **Entity leak on the tag-destroy path:** projectiles and self-destructs are hidden from queries
-      but never freed until the level is cleared (details and fix: `docs/BUILD_PLAN.md`, P0).
+- [~] **Entity leak on the tag-destroy path:** tagged entities were never freed, and their component
+      bits leaked into the next level after a reset. Fixed in code, awaiting playtest
+      (`docs/BUILD_PLAN.md`, P0).
 - [ ] Confirm the Steam join / invite flow end-to-end with two live clients.
 
 ---

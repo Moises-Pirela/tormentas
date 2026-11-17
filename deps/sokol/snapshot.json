@@ -1,0 +1,63 @@
+{
+  "sokol_odin": {
+    "source": "https://github.com/floooh/sokol-odin",
+    "commit": "ae94aa54d4ecbd7503e299694fa8dc328607d255",
+    "sokol_commit": "93aa187b5d387cc24b7290b3ca3f13f61e139e7c",
+    "modules": [
+      "app",
+      "gfx",
+      "gl",
+      "glue",
+      "log",
+      "time",
+      "shape"
+    ],
+    "license": "zlib, LICENSE-sokol-odin",
+    "note": "Unmodified subset of sokol-odin/sokol: the Odin bindings for the listed modules and their C headers. Static libraries are built locally by tools/build-sokol.sh and are not committed."
+  },
+  "sokol_shdc": {
+    "source": "https://github.com/floooh/sokol-tools-bin",
+    "commit": "2428a421bb4c2d765c43cb77167b6e1d6e0d498f",
+    "license": "MIT",
+    "note": "Downloaded on demand into .local/sokol-shdc/<commit>/ and checked against these hashes. Only needed when a .glsl shader changes; generated .odin shader files are committed.",
+    "platforms": {
+      "macos_arm64": {
+        "path": "bin/osx_arm64/sokol-shdc",
+        "sha256": "fb4491a0386db41944544075061e35f5dfdd960155f10ebd0a84059803ddb770"
+      },
+      "macos_x64": {
+        "path": "bin/osx/sokol-shdc",
+        "sha256": "b27a6cf91b95774829e72896bd824307efd1ad7c7ea92fd1a347f30c0f176d2e"
+      },
+      "windows_amd64": {
+        "path": "bin/win32/sokol-shdc.exe",
+        "sha256": "5faecfe8dd5efcc6e8453d2ae631aeb389e37fb0c4dcb70e5dc9178b8e20f5d9"
+      }
+    }
+  },
+  "sha256": {
+    "LICENSE-sokol-odin": "d5501d72378a0865c7896cc85cfbc8956189a0cdc3fd1e72350443cb1522f031",
+    "sokol/app/app.odin": "78934cffe40c5413ff5342dd263f7ce4d5b0540a6819b7605ab251c7f91d010f",
+    "sokol/c/sokol_app.c": "8bde6fb32264e191239a544e350eac6b3e2fbbb5c9a15c0ad9a85f60973fdbc4",
+    "sokol/c/sokol_app.h": "10391208bd09e402ade01c7776565f224b8ea218530f098cb85a9d84773fa71b",
+    "sokol/c/sokol_defines.h": "e8373c34023098e3b6d2510b6adf81a981f830368689c3ac2509b2aa2b31da69",
+    "sokol/c/sokol_gfx.c": "4058f288375090a98d50987297a875ee3672aec6caa462ddd0c0e4947c5d4939",
+    "sokol/c/sokol_gfx.h": "ae3f1035ddaf5a306d04f5bdf01cc47591c34abb268777fba0d8b172fbaba4ac",
+    "sokol/c/sokol_gl.c": "ea48364dcddd0540fe950bcea893fa04f92794c83a24ad0405c39fe192edc6b5",
+    "sokol/c/sokol_gl.h": "f34ca67d6711b8b598a93b08460408485ee93c10883eb35c87f9a44fc1b1861e",
+    "sokol/c/sokol_glue.c": "cf9bc32c344f737ac473b0d2468da5072475d5acdf655031c220d40f6ed62909",
+    "sokol/c/sokol_glue.h": "6207d08f7ea5da43154f980c7fe314429eafb75922c6b41108ce2936f8240753",
+    "sokol/c/sokol_log.c": "01da60d2a8a7428580218882f0f1b1d71f84c0a23c39996285ddd5144a03a2d7",
+    "sokol/c/sokol_log.h": "a8d55de21694410740e752ea8e57c4103d5951d20339ba9712e24232adef9a42",
+    "sokol/c/sokol_shape.c": "935f6f3e011b8812319ca96cb165b5338b4f0b88ad00c242044046300a851f62",
+    "sokol/c/sokol_shape.h": "5ca8623ae9ce3a69d19ae3881068cbe814d8779b7afc0e3822c01ed3da841954",
+    "sokol/c/sokol_time.c": "c4f604de77d91a2b20099530cdaef2a484d747f86bad2d6075b0bcb5be7a61d2",
+    "sokol/c/sokol_time.h": "0eeb8c1bc9ac2ec4438090f68e2ab0eb85d1daf10643158dec11383a8e8b1872",
+    "sokol/gfx/gfx.odin": "a85a510f48174e35f97aebacd8b903964138ee9270da97c164b26fe390e81aef",
+    "sokol/gl/gl.odin": "5d71260600206487672ec34beb3a1034d1f5b2140b5b7a9967def1ffd878b16c",
+    "sokol/glue/glue.odin": "64723616392f237c8739db7827d38786f54ab6236aff820c8cf9db3b9fc59cb4",
+    "sokol/log/log.odin": "d49d36180e3bec7b1863d8e5b8a171bbe9caf329270660f9a7290573deb8cdd6",
+    "sokol/shape/shape.odin": "fd35039422f826671251cbdbf075b86059a7c69932068e750f70fd9906d7376f",
+    "sokol/time/time.odin": "6b5e0c48de762364383becbd5e6e00cac2568f46a677210b143a465299d6ce62"
+  }
+}

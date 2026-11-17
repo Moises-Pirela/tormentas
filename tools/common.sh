@@ -131,3 +131,70 @@ ensure_clay_lib() {
         assert_clay_snapshot
     fi
 }
+
+assert_sokol_snapshot() {
+    # Every vendored binding/header must match deps/sokol/snapshot.json, and nothing unlisted may sneak in.
+    local base="$REPO_ROOT/deps/sokol" files entries
+    assert_manifest sokol "$base/snapshot.json" "$base"
+    files="$(cd "$base" && find sokol -type f \( -name '*.odin' -o -name '*.c' -o -name '*.h' \) | wc -l | tr -d ' ')"
+    entries="$(json_entries "$base/snapshot.json" sha256 | grep -c '^sokol/' | tr -d ' ')"
+    [ "$files" = "$entries" ] || die "sokol snapshot file count ($files) differs from snapshot.json ($entries)."
+}
+
+ensure_sokol_libs() {
+    # Builds the sokol static libraries for the host architecture if any is missing or stale.
+    local tag lib m stale=0
+    case "$(uname -m)" in arm64) tag=arm64 ;; *) tag=x64 ;; esac
+    for m in log gfx app glue time gl shape; do
+        for mode in debug release; do
+            lib="$REPO_ROOT/deps/sokol/sokol/$m/sokol_${m}_macos_${tag}_metal_${mode}.a"
+            if [ ! -f "$lib" ] || [ "$REPO_ROOT/deps/sokol/snapshot.json" -nt "$lib" ] || [ "$TOOLS_DIR/build-sokol.sh" -nt "$lib" ]; then
+                stale=1
+            fi
+        done
+    done
+    if [ "$stale" -eq 1 ]; then
+        "$TOOLS_DIR/build-sokol.sh" --arch "$(uname -m)"
+    else
+        assert_sokol_snapshot
+    fi
+}
+
+SHDC_BIN=""
+ensure_shdc() {
+    # Downloads the pinned sokol-shdc into .local/sokol-shdc/<commit>/ (once) and verifies its hash.
+    local manifest="$REPO_ROOT/deps/sokol/snapshot.json" plat commit path expected dest actual
+    case "$(uname -m)" in arm64) plat=macos_arm64 ;; *) plat=macos_x64 ;; esac
+    commit="$(json_get "$manifest" sokol_shdc.commit)"
+    path="$(json_get "$manifest" "sokol_shdc.platforms.$plat.path")"
+    expected="$(json_get "$manifest" "sokol_shdc.platforms.$plat.sha256")"
+    dest="$REPO_ROOT/.local/sokol-shdc/$commit/sokol-shdc"
+    if [ ! -x "$dest" ]; then
+        require_cmd curl
+        mkdir -p "$(dirname "$dest")"
+        log "[SHDC] downloading sokol-shdc $commit ($plat)"
+        curl -fsSL "https://raw.githubusercontent.com/floooh/sokol-tools-bin/$commit/$path" -o "$dest.part" \
+            || die "sokol-shdc download failed"
+        actual="$(sha256_file "$dest.part")"
+        [ "$actual" = "$expected" ] || { rm -f "$dest.part"; die "sokol-shdc hash mismatch: got $actual"; }
+        chmod +x "$dest.part"
+        mv "$dest.part" "$dest"
+    fi
+    actual="$(sha256_file "$dest")"
+    [ "$actual" = "$expected" ] || die "sokol-shdc at $dest does not match snapshot.json"
+    SHDC_BIN="$dest"
+}
+
+compile_shaders() {
+    # compile_shaders DIR -> regenerates <name>.glsl.odin next to every <name>.glsl under DIR that is
+    # newer than its output. Targets the two decided backends: Metal (macOS) and D3D11 (Windows).
+    local dir="$1" src out
+    while IFS= read -r src; do
+        out="$src.odin"
+        if [ ! -f "$out" ] || [ "$src" -nt "$out" ]; then
+            [ -n "$SHDC_BIN" ] || ensure_shdc
+            log "[SHDC] ${src#"$REPO_ROOT"/} -> ${out#"$REPO_ROOT"/}"
+            "$SHDC_BIN" -i "$src" -o "$out" -l metal_macos:hlsl5 -f sokol_odin || die "sokol-shdc failed on $src"
+        fi
+    done < <(find "$dir" -name '*.glsl' -type f | sort)
+}

@@ -29,6 +29,10 @@ top-down, with a **free-rotating camera**, on **sokol-gfx**.
 | Instances | **[D]** Keys are items, craftable or purchasable, and need materials to craft |
 | Rendering | **[D]** 2D grid terrain, 3D models, free camera rotation |
 | Rendering | **[D]** sokol-gfx; raylib removed |
+| Rendering | **[D]** Metal (macOS) + D3D11 (Windows), shaders via sokol-shdc |
+| Rendering | **[D]** Perspective camera, narrow FOV |
+| Rendering | **[D]** Window modes: resizable window + borderless fullscreen |
+| Art | **[D]** No art capacity yet: primitives through P1b, glTF/skinning deferred |
 | Art | **[D]** Most 2D art is replaced over time |
 | Tools | **[D]** New editor |
 | Skills | **[D]** Use-based, classless, **cap 100** |
@@ -785,8 +789,8 @@ data/world/<template>/
 External deps: **sokol-odin** bindings and **sokol-shdc** for shaders. Vendor them into
 `deps/` with provenance + SHA manifest, the same way as `clockwork-ecs`.
 
-**Placeholder art:** capsules/primitives + a few free rigged glTF models, so gameplay work
-never waits on art.
+**Placeholder art [D]:** primitives only (capsules, boxes, cylinders), described per entity def
+in data so glTF models can replace them without code changes. Details in `BUILD_PLAN.md`, P1.
 
 ---
 

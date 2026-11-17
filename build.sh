@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # macOS build for Las Tormentas. Counterpart of build.ps1.
 #
-# usage: ./build.sh [server] [debug|release] [--odin PATH] [--enable-steam] [--steam-collection DIR]
+# usage: ./build.sh [server|spike] [debug|release] [--odin PATH] [--enable-steam] [--steam-collection DIR]
 #
 #   debug    (default) -o:none -debug -vet            -> bin/tormentas
 #   release  -o:aggressive -vet, then packages        -> dist/macos/Tormentas.app
 #                                                        dist/tormentas-macos-release.zip
 #   server   headless sim server, no graphics/audio   -> bin/tormentas_server
+#   spike    P1a sokol spike (Metal), throwaway        -> bin/tormentas_spike
 #
 # Raylib, rlgl and microui come from the pinned Odin toolchain (vendor/). The Clay UI
 # library is compiled from clay/upstream/clay.h on first use (tools/build-clay.sh).
@@ -21,11 +22,12 @@ while [ $# -gt 0 ]; do
     case "$1" in
         debug|release) MODE="$1"; shift ;;
         server) TARGET=server; shift ;;
+        spike) TARGET=spike; shift ;;
         --odin) [ $# -ge 2 ] || die "--odin needs a value"; ODIN_PATH="$2"; shift 2 ;;
         --enable-steam) ENABLE_STEAM=1; shift ;;
         --steam-collection) [ $# -ge 2 ] || die "--steam-collection needs a value"; STEAM_COLLECTION="$2"; shift 2 ;;
         -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
-        *) die "Unknown argument: $1 (expected server, debug|release, --odin, --enable-steam, --steam-collection)" ;;
+        *) die "Unknown argument: $1 (expected server, spike, debug|release, --odin, --enable-steam, --steam-collection)" ;;
     esac
 done
 
@@ -44,6 +46,29 @@ if [ "$TARGET" = server ]; then
     log "[BUILD] odin build src/server ($MODE) with $ODIN_BIN"
     "$ODIN_BIN" build "$REPO_ROOT/src/server" "-out:$SERVER_OUT" "-collection:cw=$REPO_ROOT/deps/clockwork-ecs" "${SERVER_FLAGS[@]}"
     log "[BUILD] OK -> $SERVER_OUT"
+    exit 0
+fi
+
+if [ "$TARGET" = spike ]; then
+    # P1a step 1 (docs/BUILD_PLAN.md): sokol + shdc + native readback, isolated from the game.
+    ensure_sokol_libs
+    compile_shaders "$REPO_ROOT/src/spike"
+    case "$(uname -m)" in arm64) tag=arm64 ;; *) tag=x64 ;; esac
+    NATIVE="$REPO_ROOT/src/spike/native"
+    if [ ! -f "$NATIVE/capture_metal_$tag.a" ] || [ "$NATIVE/capture_metal.m" -nt "$NATIVE/capture_metal_$tag.a" ]; then
+        log "[BUILD] native/capture_metal.m ($tag)"
+        TMPO="$(mktemp -d)"
+        clang -c -fobjc-arc -O2 -arch "$(uname -m)" -mmacosx-version-min=11.0 "$NATIVE/capture_metal.m" -o "$TMPO/capture_metal.o"
+        rm -f "$NATIVE/capture_metal_$tag.a"
+        ar rcs "$NATIVE/capture_metal_$tag.a" "$TMPO/capture_metal.o"
+        rm -rf "$TMPO"
+    fi
+    SPIKE_FLAGS=(-o:none -debug -vet)
+    [ "$MODE" = release ] && SPIKE_FLAGS=(-o:aggressive -vet)
+    mkdir -p "$REPO_ROOT/bin"
+    log "[BUILD] odin build src/spike ($MODE) with $ODIN_BIN"
+    "$ODIN_BIN" build "$REPO_ROOT/src/spike" "-out:$REPO_ROOT/bin/tormentas_spike" "-collection:sokol=$REPO_ROOT/deps/sokol/sokol" "${SPIKE_FLAGS[@]}"
+    log "[BUILD] OK -> $REPO_ROOT/bin/tormentas_spike"
     exit 0
 fi
 
