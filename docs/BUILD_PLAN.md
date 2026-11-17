@@ -169,7 +169,7 @@ while the game keeps running, and only then reimplement that API on sokol.
 | 3 | **Platform + input layer.** `Key` enum with GLFW values, per-frame key/mouse state, text input, synthetic mouse for the probe. Split the main loop into `frame()` so it runs from the raylib loop now and the sapp frame callback later. `input_manager.odin` moves onto it | M | No `rl.IsKey*` / `rl.GetMouse*` outside `gfx` |
 | 4 | **Draw layer on raylib.** ~15 draw calls + textures, render targets (`target_begin`/`end`), scissor, 2D camera, shader handle + uniforms. Migrate file by file: `clay_renderer` and one UI panel first; `render.odin`, `lighting.odin`, `editor.odin` last. The two `rlgl` users (`greybox`, `shadow`) become `draw_quads` | L | `rl.` only inside `src/gfx/raylib_backend.odin`, enforced by `check_boundaries.py` |
 | 5 | **Camera layer.** `cam_world_to_screen`, `cam_screen_to_ground`, `cam_dir_to_world` wrap the isometric math (73 `world_to_iso` calls in 20 files, 24 screen→world conversions) | S | No `world_to_iso` outside the camera file |
-| 6 | **Reference screenshots.** Run the tools probe (`tools_probe_tick`, `platform.odin`) plus a hub and a raid shot on the raylib build | S | Reference set committed under `tools/` |
+| 6 | **Reference screenshots.** Capture the tools-probe set from the last raylib commit, and compare with `tools/probe_compare.py` | S | Procedure below; images are *not* committed (16 MB) |
 | 7 | **sokol backend** (`gfx/sokol_backend.odin`): sokol_app, sokol_gl batcher into the offscreen main target, stb_image textures, fontstash text, 4 shaders ported to shdc (god rays and clouds stubbed), ImGui backend rewrite (`ui/imgui_raylib`, 292 lines), audio on miniaudio's high-level engine (`audio.odin`, 795 lines), resizable window + borderless fullscreen | L | Game runs on sokol behind a build flag |
 | 8 | **Parity + delete.** Compare against the reference set by eye (fontstash metrics shift text ~1 px, so no pixel diff), input latency, every dev tool. Delete the raylib backend, `ui/imgui_raylib` and the raylib assumptions in `tools/build-clay.sh` | S | raylib gone; `test.sh` symbol check also bans raylib symbols in the game binary |
 
@@ -271,6 +271,32 @@ raylib at all — not just drawing, but resources, shaders, window and audio:
 - Verified: builds, tests pass, and the tools probe matches the pre-step-4 reference within the
   same margin two runs of the new build differ by (max channel diff 18–20, animation drift).
 - **Left on raylib:** `ui/imgui_raylib/backend.odin`, which step 7 rewrites anyway.
+
+**Step 5 results (2026-11-17): done.** `projection.odin` became `camera.odin` and owns the
+projection *and* the camera: `cam_world_to_view[_xy]`, `cam_view_to_world_xy`,
+`cam_world_to_screen[_xy]`, `cam_screen_to_world`, `cam_screen_to_view`, `cam_view_to_screen`,
+`cam_dir_to_world`, `cam_begin`/`cam_end`, plus state accessors (zoom, target, offset, pan, nudge)
+and `cam_init`. 147 substitutions; no `world_to_iso` or `g_camera` outside that file. P1b swaps the
+isometric camera for a 3D orbit camera there without touching call sites.
+
+**Step 6 (2026-11-17): procedure, not committed images.** The probe set is 16 MB per run and
+recompresses badly (dithered lighting), so committing it would weigh on every clone forever. The
+probe is deterministic since step 3 and the raylib build is in git history, so references are
+regenerated instead. `tools/probe_compare.py` (standard library only, runs on Windows too) reports
+differing-pixel share and max channel difference per shot.
+
+```
+git checkout <last raylib commit>      # 345692c or later, before the step 7 swap
+./build.sh && bin/tormentas --tools-probe /tmp/ref
+git checkout <sokol branch>
+./build.sh && bin/tormentas --tools-probe /tmp/new
+bin/tormentas --tools-probe /tmp/new2  # second run = the noise floor to judge against
+python3 -I tools/probe_compare.py /tmp/ref /tmp/new /tmp/new2
+```
+
+Judge against the noise floor, never against zero: two runs of one build differ by well under 1% of
+pixels with a max channel difference around 10-20 (clouds and flicker move with real time). Step 7
+will also shift text by about a pixel (fontstash vs raylib metrics), so compare by eye as well.
 
 **Exit:** the current game, still isometric 2D, runs on sokol with raylib gone.
 **Verify:** reference-set comparison · input latency unchanged · all dev tools work (editor,
@@ -421,8 +447,7 @@ Done so far: P0 slice 1 of the package split, the headless server target with it
 1. **Client-side sweep** (P0, above), as its own change with a two-client playtest. The
    entity-leak fix itself is committed (`72325c4`).
 2. **Finish P1a step 1:** a Windows/D3D11 run and an interactive resize/fullscreen check.
-   P1a steps 2-4 are done; **step 5** (camera layer) then **step 6** (reference screenshots) are
-   next, before the step 7 backend swap.
+   P1a steps 2-6 are done. **Step 7** (the sokol backend) is next: the big one.
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.
