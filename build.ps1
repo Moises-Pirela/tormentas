@@ -1,6 +1,11 @@
+# usage: .\build.ps1 [debug|release] [-Target game|spike] [-OdinPath PATH] [-EnableSteam] [-SteamCollection DIR]
+#   game   (default) -> bin\tormentas.exe; release also packages dist\tormentas-release.zip
+#   spike  P1a sokol spike (D3D11), throwaway -> bin\tormentas_spike.exe
 param(
     [ValidateSet('debug', 'release')]
     [string]$Mode = 'debug',
+    [ValidateSet('game', 'spike')]
+    [string]$Target = 'game',
     [string]$OdinPath,
     [switch]$EnableSteam,
     [string]$SteamCollection = (Join-Path $PSScriptRoot '.local')
@@ -8,6 +13,19 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'tools\common.ps1')
 $Odin = Resolve-Odin $OdinPath
+if ($Target -eq 'spike') {
+    # P1a step 1 (docs/BUILD_PLAN.md): sokol + shdc + D3D11 readback, isolated from the game.
+    Initialize-SokolLibs
+    Invoke-ShaderCompile (Join-Path $RepoRoot 'src\spike')
+    $SpikeFlags = @('-o:none', '-debug', '-vet')
+    if ($Mode -eq 'release') { $SpikeFlags = @('-o:aggressive', '-vet') }
+    $SpikeOut = Join-Path $RepoRoot 'bin\tormentas_spike.exe'
+    New-Item -ItemType Directory -Force -Path (Join-Path $RepoRoot 'bin') | Out-Null
+    & $Odin build (Join-Path $RepoRoot 'src\spike') "-out:$SpikeOut" "-collection:sokol=$(Join-Path $RepoRoot 'deps\sokol\sokol')" '-linker:lld' @SpikeFlags
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "[BUILD] OK -> $SpikeOut (run it from the repository root: it loads data\ relative to the working directory)"
+    exit 0
+}
 Assert-ClockworkSnapshot
 Assert-ImGuiSnapshot
 $Root = $RepoRoot

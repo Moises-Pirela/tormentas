@@ -128,7 +128,7 @@ the compiler, in its own commit, with no behaviour changes mixed in.
 | Order | **[D]** P1a started 2026-11-17, ahead of the rest of P0 (changed from "P0 first" the same day). The remaining P0 items don't touch rendering and can land in between |
 | Lighting in P1a | **[D]** Parity covers point, directional, sprite and fog/vision lighting. God rays and cloud shadows are **stubbed** (P1b replaces the whole stack anyway) |
 | GPU backends | **[D]** Metal on macOS, D3D11 on Windows, one shader source compiled by **sokol-shdc** |
-| Window modes | **[D]** Resizable window + borderless fullscreen. Windowed-size presets and monitor centering go away |
+| Window modes | **[D]** Resizable window + fullscreen toggle. Windows: borderless (sokol's `WS_POPUP`). macOS: **native fullscreen** (own Space), kept as sokol does it. Windowed-size presets and monitor centering go away |
 | Camera | **[D]** Perspective, narrow FOV. *[P]* 35° FOV, pitch clamped 45–75°, default 60° |
 | Art | **[D]** No art capacity yet. P1b ships on **primitives** (capsules, boxes, cylinders); the glTF/skinning path waits for real models |
 
@@ -173,7 +173,7 @@ while the game keeps running, and only then reimplement that API on sokol.
 | 7 | **sokol backend** (`gfx/sokol_backend.odin`): sokol_app, sokol_gl batcher into the offscreen main target, stb_image textures, fontstash text, 4 shaders ported to shdc (god rays and clouds stubbed), ImGui backend rewrite (`ui/imgui_raylib`, 292 lines), audio on miniaudio's high-level engine (`audio.odin`, 795 lines), resizable window + borderless fullscreen | L | Game runs on sokol behind a build flag |
 | 8 | **Parity + delete.** Compare against the reference set by eye (fontstash metrics shift text ~1 px, so no pixel diff), input latency, every dev tool. Delete the raylib backend, `ui/imgui_raylib` and the raylib assumptions in `tools/build-clay.sh` | S | raylib gone; `test.sh` symbol check also bans raylib symbols in the game binary |
 
-**Step 1 results (2026-11-17, macOS/Metal; Windows/D3D11 not run yet)**
+**Step 1 results (2026-11-17, macOS/Metal run; Windows/D3D11 compiled but not run yet)**
 
 `./build.sh spike` → `bin/tormentas_spike [--shot out.png] [--target main|world|sprite]`. It runs
 the game's real pass order (world RT → main → sprite RT → main → present) and passes every check
@@ -209,13 +209,22 @@ What it established:
 9. **Keycodes:** all 93 key names raylib and sokol share have identical values, and mouse buttons
    match, so saved keybinds stay valid. raylib's `KB_MENU` (348) is sokol's `MENU`; digits and grave
    differ only in name.
-10. **Fullscreen differs per OS.** sokol's Windows toggle is borderless (`WS_POPUP`), matching the
-    decision. On macOS it is **native fullscreen** (`toggleFullScreen`: own Space, slide
-    animation). True borderless on macOS needs a small native helper via `sapp.macos_get_window()`.
+10. **Fullscreen differs per OS.** sokol's Windows toggle is borderless (`WS_POPUP`). On macOS it
+    is native fullscreen (`toggleFullScreen`: own Space, slide animation). **Decided: keep native
+    on macOS**, so no helper is needed.
 11. **sokol_app owns the main loop** (init/frame/event callbacks), confirming step 3's `frame()` split.
 
-**Still open for step 1:** run on Windows/D3D11 (needs a `build-sokol.ps1` and the D3D11 readback
-helper), and an interactive check of resize and the fullscreen toggle.
+**Windows (2026-11-17): written, compiled, not run.** `.\build.ps1 -Target spike` builds the sokol
+`.lib`s with MSVC (`tools/build-sokol.ps1`, upstream sokol-odin's flags, `cl.exe` found through
+`vswhere`), fetches the pinned `sokol-shdc.exe`, and links with lld. Readback is
+`src/spike/capture_windows.odin`: pure Odin over `vendor:directx/d3d11` (staging texture,
+`CopyResource`, `Map`). Verified from macOS only: the spike compiles for `windows_amd64` to objects
+(`-build-mode:obj`), D3D11 readback and HLSL shader included. The PowerShell scripts have not
+been run (no PowerShell here).
+
+**Still open for step 1:** a run on a Windows machine (`.\build.ps1 -Target spike`, then
+`bin\tormentas_spike.exe --shot out.png`), and an interactive check of resize and the fullscreen
+toggle on both platforms.
 
 **Exit:** the current game, still isometric 2D, runs on sokol with raylib gone.
 **Verify:** reference-set comparison · input latency unchanged · all dev tools work (editor,
@@ -363,10 +372,10 @@ Done so far: P0 slice 1 of the package split, the headless server target with it
 
 **P1a has started** (2026-11-17, ahead of the rest of P0). Step 1's spike passes on macOS/Metal.
 
-1. **Commit the entity-leak fix** on its own (playtested 2026-11-17). Then the client-side sweep,
-   also on its own.
-2. **Finish P1a step 1:** Windows/D3D11 run, interactive resize/fullscreen check, and decide macOS
-   fullscreen (native Space vs a borderless helper). Then **P1a step 2** (`src/gfx` types).
+1. **Client-side sweep** (P0, above), as its own change with a two-client playtest. The
+   entity-leak fix itself is committed (`72325c4`).
+2. **Finish P1a step 1:** a Windows/D3D11 run and an interactive resize/fullscreen check.
+   **P1a step 2** (`src/gfx` types) is underway in parallel.
 3. **`sim.Presentation` hooks**, so `damage_system`, `ai_system` and friends can move into `sim/`.
    That's the next and biggest slice of the split.
 4. **Spatial hash** for separation/collision.

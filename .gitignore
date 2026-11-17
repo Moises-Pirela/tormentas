@@ -17,3 +17,6 @@ save/
 *.o
 *.dSYM/
 .DS_Store
+
+# sokol static libraries are built locally (tools/build-sokol.sh / tools/build-sokol.ps1)
+/deps/sokol/sokol/*/*.lib

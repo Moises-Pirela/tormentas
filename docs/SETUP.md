@@ -33,6 +33,13 @@ static library remain in `clay/`. Dear ImGui for the developer tools is vendored
 `deps/imgui` (see its `snapshot.json`); Windows links the prebuilt
 `deps/imgui/imgui/imgui_windows_x64.lib` from the pinned odin-imgui commit.
 
+**Renderer spike (P1a).** `.\build.ps1 -Target spike` builds `bin\tormentas_spike.exe`, the
+sokol/D3D11 spike from `docs/BUILD_PLAN.md`. On first use it compiles the sokol libraries in
+`deps\sokol` with the C++ build tools from step 2 (found through `vswhere`, or used directly from a
+Developer PowerShell), and downloads the pinned `sokol-shdc.exe` into `.local\` only if a `.glsl`
+shader changed. Run it from the repository root: `bin\tormentas_spike.exe --shot out.png` saves a
+screenshot and exits.
+
 The scripts select LLVM's **lld** linker. The default radlink shipped with this
 Odin release crashed linking this game's debug build locally; lld links the same
 source and resources successfully.

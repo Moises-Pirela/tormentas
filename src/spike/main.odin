@@ -12,7 +12,8 @@
 //   - fontstash text, its atlas uploaded through a staging buffer + sg_copy_buffer_to_image
 //   - a sokol-shdc shader: the port of data/shaders/point_lights.fs, drawn additively
 //   - scissor clipping
-//   - screenshot readback through the native Metal helper (sokol_gfx has no readback API)
+//   - screenshot readback per backend (sokol_gfx has no readback API): capture_darwin.odin (Metal,
+//     via native/capture_metal.m) and capture_windows.odin (D3D11, pure Odin)
 //
 // usage: bin/tormentas_spike [--shot out.png] [--frames N]
 //   --shot   save the main target as PNG after N frames (default 10) and quit
@@ -35,18 +36,6 @@ import slog  "sokol:log"
 
 import fs   "vendor:fontstash"
 import stbi "vendor:stb/image"
-
-when ODIN_OS == .Darwin {
-    when ODIN_ARCH == .arm64 {
-        foreign import native { "native/capture_metal_arm64.a", "system:Metal.framework", "system:Foundation.framework" }
-    } else {
-        foreign import native { "native/capture_metal_x64.a", "system:Metal.framework", "system:Foundation.framework" }
-    }
-    @(default_calling_convention = "c")
-    foreign native {
-        tormentas_mtl_read_rgba8 :: proc(queue, texture: rawptr, width, height: c.int, out: [^]u8) -> c.int ---
-    }
-}
 
 ATLAS_SIZE :: 512
 FONT_PATH  :: "data/fonts/body.ttf"
@@ -431,12 +420,7 @@ save_main_target :: proc(path: string) {
     w, h := t.w, t.h
     pixels := make([]u8, int(w * h * 4))
     defer delete(pixels)
-    ok := false
-    when ODIN_OS == .Darwin {
-        info := sg.mtl_query_image_info(t.img)
-        ok = tormentas_mtl_read_rgba8(sg.mtl_command_queue(), info.tex[info.active_slot], w, h, raw_data(pixels)) == 1
-    }
-    if !ok { fmt.eprintln("[spike] readback failed (Metal only so far)"); return }
+    if !read_target_rgba8(t.img, w, h, pixels) { fmt.eprintln("[spike] readback failed"); return }
     cpath := strings.clone_to_cstring(path, context.temp_allocator)
     if stbi.write_png(cpath, w, h, 4, raw_data(pixels), w * 4) == 0 {
         fmt.eprintln("[spike] failed to write", path)

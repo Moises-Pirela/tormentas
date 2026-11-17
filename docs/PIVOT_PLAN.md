@@ -31,7 +31,7 @@ top-down, with a **free-rotating camera**, on **sokol-gfx**.
 | Rendering | **[D]** sokol-gfx; raylib removed |
 | Rendering | **[D]** Metal (macOS) + D3D11 (Windows), shaders via sokol-shdc |
 | Rendering | **[D]** Perspective camera, narrow FOV |
-| Rendering | **[D]** Window modes: resizable window + borderless fullscreen |
+| Rendering | **[D]** Window modes: resizable window + fullscreen (borderless on Windows, native on macOS) |
 | Art | **[D]** No art capacity yet: primitives through P1b, glTF/skinning deferred |
 | Art | **[D]** Most 2D art is replaced over time |
 | Tools | **[D]** New editor |
