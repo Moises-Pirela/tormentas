@@ -4,7 +4,7 @@ package snd
 //
 // This is the interim runtime from docs/AUDIO_PLAN.md §7: it replaces raylib's audio (which was
 // miniaudio underneath anyway) so raylib can be removed, and keeps today's behaviour exactly.
-// docs/AUDIO_PLAN.md phase A1 replaces it with the immersive-audio runtime behind this same API.
+// docs/AUDIO_PLAN.md stage A2 replaces it with the immersive-audio runtime behind this same API.
 
 import "core:strings"
 import ma "vendor:miniaudio"

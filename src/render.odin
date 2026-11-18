@@ -1182,6 +1182,7 @@ draw_pause_menu :: proc() {
         ui_grow("PauseVolHdrR")
         ui_hstack_end()
 
+        if nv, ch := ui_slider("PauseMaster",   string(t(.SETTINGS_MASTER)),   g_vol_master);   ch { g_vol_master   = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("PauseSfx",      string(t(.SETTINGS_SFX)),      g_vol_sfx);      ch { g_vol_sfx      = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("PauseMusic",    string(t(.SETTINGS_MUSIC)),    g_vol_music);    ch { g_vol_music    = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("PauseAmbience", string(t(.SETTINGS_AMBIENCE)), g_vol_ambience); ch { g_vol_ambience = nv; apply_bus_volumes() }
@@ -1350,6 +1351,7 @@ draw_settings_overlay :: proc() {
         ui_grow("SetVolHdrR")
         ui_hstack_end()
 
+        if nv, ch := ui_slider("SetMaster",   string(t(.SETTINGS_MASTER)),   g_vol_master);   ch { g_vol_master   = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("SetSfx",      string(t(.SETTINGS_SFX)),      g_vol_sfx);      ch { g_vol_sfx      = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("SetMusic",    string(t(.SETTINGS_MUSIC)),    g_vol_music);    ch { g_vol_music    = nv; apply_bus_volumes() }
         if nv, ch := ui_slider("SetAmbience", string(t(.SETTINGS_AMBIENCE)), g_vol_ambience); ch { g_vol_ambience = nv; apply_bus_volumes() }

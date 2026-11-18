@@ -136,6 +136,45 @@ user_files_live_outside_the_app_bundle_on_macos :: proc(t: ^testing.T) {
 }
 
 @(test)
+audio_volumes_survive_a_config_round_trip :: proc(t: ^testing.T) {
+    saved := g_binds
+    defer g_binds = saved
+    g_binds = default_binds()
+
+    g_vol_master, g_vol_sfx, g_vol_music, g_vol_ambience, g_vol_voice = 0.8, 0.6, 0.4, 0.2, 0.9
+    audio_settings_changed()
+
+    data, err := json.marshal(g_binds, allocator = context.temp_allocator)
+    testing.expect(t, err == nil)
+
+    back := default_binds()
+    testing.expect(t, json.unmarshal(data, &back, allocator = context.temp_allocator) == nil)
+    testing.expect_value(t, back.audio.master, f32(0.8))
+    testing.expect_value(t, back.audio.ambience, f32(0.2))
+
+    // Loading puts them back into the live volumes the mixer reads.
+    g_vol_master, g_vol_ambience = 0, 0
+    g_binds = back
+    audio_settings_load()
+    testing.expect_value(t, g_vol_master, f32(0.8))
+    testing.expect_value(t, g_vol_ambience, f32(0.2))
+}
+
+@(test)
+missing_audio_settings_keep_the_defaults :: proc(t: ^testing.T) {
+    saved := g_binds
+    defer g_binds = saved
+
+    // A config written before volumes were saved has no audio block at all.
+    g_binds = default_binds()
+    g_binds.audio = {}
+    g_vol_master, g_vol_music = 1.0, 0.7
+    audio_settings_load()
+    testing.expect_value(t, g_vol_master, f32(1.0))
+    testing.expect_value(t, g_vol_music, f32(0.7))
+}
+
+@(test)
 display_settings_survive_a_config_round_trip :: proc(t: ^testing.T) {
     saved := g_binds
     defer g_binds = saved

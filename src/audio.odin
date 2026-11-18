@@ -7,6 +7,7 @@ import        "core:math"
 import        "core:strings"
 import json   "core:encoding/json"
 
+// The live bus volumes. They mirror g_binds.audio, which is what gets saved.
 g_vol_master:   f32 = 1.0
 g_vol_sfx:      f32 = 1.0
 g_vol_music:    f32 = 0.7
@@ -59,6 +60,10 @@ AliasVoice :: struct {
     sound:    snd.Sound,
     priority: int,
     start_t:  f64,
+    // What the voice's volume would be at full bus and master volume, so a slider moved while it
+    // plays can re-apply without replaying it.
+    base_gain: f32,
+    bus:       AudioBus,
 }
 
 @(private = "file")
@@ -98,6 +103,7 @@ CrossfadeStream :: struct {
 @(private = "file") g_duck_release:  f32 = 0.3
 
 init_audio :: proc() {
+    audio_settings_load()
     snd.device_init()
     g_event_index  = make(map[string]int)
     g_pool_index   = make(map[string]int)
@@ -134,13 +140,62 @@ shutdown_audio :: proc() {
 
 update_audio :: proc() {
     dt := gfx.frame_time()
+
+    if g_audio_save_pending {
+        g_audio_save_timer += dt
+        if g_audio_save_timer >= AUDIO_SAVE_DELAY {
+            g_audio_save_pending = false
+            save_config()
+        }
+    }
+
     _duck_update(dt)
     _cf_update(&g_music_cf, dt)
     _cf_update(&g_amb_cf, dt)
     _cf_update(&g_amb_bed_cf, dt)
 }
 
-apply_bus_volumes :: proc() {}
+// Re-applies bus and master volume to everything currently audible, and schedules a save.
+// Music and ambience recompute their own gain every frame in _cf_update, so only one-shot voices
+// need touching here.
+apply_bus_volumes :: proc() {
+    for &pool in g_pools {
+        for &v in pool.voices {
+            if !snd.sound_valid(v.sound) || !snd.sound_playing(v.sound) { continue }
+            snd.sound_set_volume(v.sound, clamp(g_vol_master * _bus_volume(v.bus) * v.base_gain, 0, 1))
+        }
+    }
+    audio_settings_changed()
+}
+
+// Volumes live in the saved bindings; a slider being dragged would otherwise write the config file
+// every frame, so the write waits until it stops moving.
+@(private = "file") g_audio_save_pending: bool
+@(private = "file") g_audio_save_timer:   f32
+
+AUDIO_SAVE_DELAY :: f32(0.75)
+
+audio_settings_changed :: proc() {
+    g_binds.audio = AudioSettings{
+        master = g_vol_master, sfx = g_vol_sfx, music = g_vol_music,
+        ambience = g_vol_ambience, voice = g_vol_voice,
+    }
+    g_audio_save_pending = true
+    g_audio_save_timer   = 0
+}
+
+// Copies the saved volumes into the live ones. Called once the config is loaded.
+audio_settings_load :: proc() {
+    a := g_binds.audio
+    if a.master <= 0 && a.sfx <= 0 && a.music <= 0 && a.ambience <= 0 && a.voice <= 0 {
+        return  // nothing saved yet: keep the defaults
+    }
+    g_vol_master   = clamp(a.master, 0, 1)
+    g_vol_sfx      = clamp(a.sfx, 0, 1)
+    g_vol_music    = clamp(a.music, 0, 1)
+    g_vol_ambience = clamp(a.ambience, 0, 1)
+    g_vol_voice    = clamp(a.voice, 0, 1)
+}
 
 play_sfx :: proc(name: string) {
     _audio_play(name, false, {})
@@ -181,9 +236,11 @@ _audio_play :: proc(name: string, has_pos: bool, pos: [3]f32) {
     if def.pitch_var > 0 { pitch += _rand_pm(def.pitch_var) }
 
     v := &g_pools[pidx].voices[vidx]
-    v.priority = def.priority
-    v.start_t  = now
-    snd.sound_set_volume(v.sound, clamp(g_vol_master * _bus_volume(def.bus) * gain * dist_vol, 0, 1))
+    v.priority  = def.priority
+    v.start_t   = now
+    v.base_gain = gain * dist_vol
+    v.bus       = def.bus
+    snd.sound_set_volume(v.sound, clamp(g_vol_master * _bus_volume(def.bus) * v.base_gain, 0, 1))
     snd.sound_set_pan(v.sound, pan)
     snd.sound_set_pitch(v.sound, max(pitch, 0.05))
     snd.play_sound(v.sound)

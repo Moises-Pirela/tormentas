@@ -343,7 +343,7 @@ fixed frame duration.
   would drop them. Replaced with `<`, `>` and `-` in `loc.csv` and the phonograph label. A symbol
   fallback font is still the nicer answer if these come back.
 - **D8 (audio):** `src/snd` moved to miniaudio (`AUDIO_PLAN.md` §7's interim port), which unblocked
-  removing raylib. Behaviour is unchanged; `AUDIO_PLAN.md` A1 replaces it.
+  removing raylib. Behaviour is unchanged; `AUDIO_PLAN.md` stage A2 replaces it.
 - **D9:** the resolution stepper is gone; the settings row now shows the current size, disabled.
 
 ### Still open

@@ -33,11 +33,21 @@ UIBinds :: struct {
     drop_item:       i32,
 }
 
+// Bus volumes, 0..1. Saved so they survive a restart (docs/AUDIO_PLAN.md A0.1).
+AudioSettings :: struct {
+    master:   f32,
+    sfx:      f32,
+    music:    f32,
+    ambience: f32,
+    voice:    f32,
+}
+
 Bindings :: struct {
     language: u8,
     gameplay: GameplayBinds,
     ui:       UIBinds,
     display:  DisplaySettings,
+    audio:    AudioSettings,
 }
 
 GAMEPLAY_BIND_COUNT :: 15
@@ -70,6 +80,9 @@ default_binds :: proc() -> Bindings {
             close_panel     = i32(gfx.Key.ESCAPE),
             compare_tooltip = i32(gfx.Key.LEFT_ALT),
             drop_item       = i32(gfx.Key.G),
+        },
+        audio = AudioSettings{
+            master = 1.0, sfx = 1.0, music = 0.7, ambience = 0.5, voice = 1.0,
         },
     }
 }

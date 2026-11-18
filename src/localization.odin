@@ -62,6 +62,7 @@ LocKey :: enum {
     SETTINGS_WINDOWED,
     SETTINGS_FULLSCREEN,
     SETTINGS_VOLUME,
+    SETTINGS_MASTER,
     SETTINGS_SFX,
     SETTINGS_MUSIC,
     SETTINGS_AMBIENCE,
@@ -433,6 +434,7 @@ _loc_key_from_name :: proc(name: string) -> (LocKey, bool) {
     case "SETTINGS_WINDOWED":      return .SETTINGS_WINDOWED, true
     case "SETTINGS_FULLSCREEN":    return .SETTINGS_FULLSCREEN, true
     case "SETTINGS_VOLUME":        return .SETTINGS_VOLUME, true
+    case "SETTINGS_MASTER":        return .SETTINGS_MASTER, true
     case "SETTINGS_SFX":           return .SETTINGS_SFX, true
     case "SETTINGS_MUSIC":         return .SETTINGS_MUSIC, true
     case "SETTINGS_AMBIENCE":      return .SETTINGS_AMBIENCE, true
